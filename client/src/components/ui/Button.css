@@ -1,0 +1,121 @@
+.btn {
+  --btn-bg: var(--color-primary);
+  --btn-bg-hover: var(--color-primary-600);
+  --btn-color: #ffffff;
+  --btn-border: transparent;
+  --btn-shadow: var(--shadow-sm);
+  --btn-padding-x: var(--space-5);
+  --btn-padding-y: var(--space-3);
+  --btn-fs: var(--fs-15);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--btn-padding-y) var(--btn-padding-x);
+  font-family: var(--font-sans);
+  font-size: var(--btn-fs);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  letter-spacing: -0.005em;
+  color: var(--btn-color);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--btn-shadow);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: background var(--transition-base), color var(--transition-base),
+    border-color var(--transition-base), transform var(--transition-fast),
+    box-shadow var(--transition-base);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--btn-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  --btn-bg: var(--color-ink-900);
+  --btn-bg-hover: #1f2937;
+  --btn-color: #ffffff;
+}
+
+.btn--accent {
+  --btn-bg: var(--color-primary);
+  --btn-bg-hover: var(--color-primary-600);
+  --btn-color: #ffffff;
+}
+
+.btn--secondary {
+  --btn-bg: var(--color-bg);
+  --btn-bg-hover: var(--color-bg-soft);
+  --btn-color: var(--color-ink-900);
+  --btn-border: var(--color-ink-100);
+  --btn-shadow: var(--shadow-xs);
+}
+
+.btn--ghost {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--color-bg-soft);
+  --btn-color: var(--color-ink-800);
+  --btn-shadow: none;
+}
+
+.btn--link {
+  --btn-bg: transparent;
+  --btn-bg-hover: transparent;
+  --btn-color: var(--color-primary);
+  --btn-shadow: none;
+  padding-inline: 0;
+}
+
+.btn--link:hover:not(:disabled) {
+  text-decoration: underline;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn--sm {
+  --btn-padding-x: var(--space-4);
+  --btn-padding-y: var(--space-2);
+  --btn-fs: var(--fs-14);
+}
+
+.btn--md {
+  --btn-padding-x: var(--space-5);
+  --btn-padding-y: var(--space-3);
+  --btn-fs: var(--fs-15);
+}
+
+.btn--lg {
+  --btn-padding-x: var(--space-6);
+  --btn-padding-y: 0.875rem;
+  --btn-fs: var(--fs-16);
+}
+
+.btn--full {
+  width: 100%;
+}
+
+.btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn__label {
+  display: inline-flex;
+  align-items: center;
+}

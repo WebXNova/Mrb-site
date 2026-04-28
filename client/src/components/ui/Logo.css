@@ -1,0 +1,60 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-primary);
+}
+
+.logo__mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.logo__mark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.logo__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.logo__name {
+  font-family: var(--font-display);
+  font-weight: var(--fw-extrabold);
+  font-size: var(--fs-18);
+  letter-spacing: -0.015em;
+  color: var(--color-ink-900);
+}
+
+.logo__subtitle {
+  font-size: var(--fs-12);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-400);
+  margin-top: 2px;
+}
+
+.logo--sm .logo__mark {
+  width: 28px;
+  height: 28px;
+}
+
+.logo--sm .logo__name {
+  font-size: var(--fs-15);
+}
+
+.logo--lg .logo__mark {
+  width: 44px;
+  height: 44px;
+}
+
+.logo--lg .logo__name {
+  font-size: var(--fs-22);
+}
