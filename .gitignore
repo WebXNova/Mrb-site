@@ -10,3 +10,7 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.mongodb_data/
+node_modules/
+.env.local
+.env 
