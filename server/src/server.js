@@ -5,6 +5,7 @@ import { app } from './app.js';
 import { env } from './config/env.js';
 import { verifyMySqlConnection, mysqlPool } from './config/mysql.js';
 import { connectMongo } from './config/mongo.js';
+import { connectRedis } from './config/redis.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,16 +24,22 @@ async function runSchema() {
 }
 
 async function startServer() {
-  await verifyMySqlConnection();
-  await connectMongo();
-  await runSchema();
-
   app.listen(env.port, () => {
     console.log(`MRB API running on http://localhost:${env.port}`);
   });
+
+  await verifyMySqlConnection()
+    .then(() => runSchema())
+    .catch((error) => {
+      console.warn('MySQL init skipped:', error.message);
+    });
+
+  await connectMongo().catch((error) => {
+    console.warn('MongoDB connection skipped:', error.message);
+  });
+  await connectRedis().catch(() => null);
 }
 
 startServer().catch((error) => {
   console.error('Failed to start server:', error);
-  process.exit(1);
 });

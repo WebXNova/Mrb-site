@@ -1,0 +1,57 @@
+.test-shell {
+  width: min(100%, 980px);
+  margin: 0 auto;
+}
+
+.test-card {
+  background: white;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+
+.test-options {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.test-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+}
+
+.test-option--selected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, white);
+}
+
+.test-nav-grid {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(34px, 34px));
+  gap: 0.35rem;
+}
+
+.test-nav-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--color-ink-200);
+  background: white;
+  font-size: 0.8rem;
+}
+
+.test-nav-dot--answered {
+  border-color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, white);
+}
+
+.test-nav-dot--active {
+  border-color: var(--color-primary);
+}

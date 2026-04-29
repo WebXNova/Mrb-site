@@ -14,6 +14,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const studentToken = localStorage.getItem('student_access_token');
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 8);
@@ -69,12 +70,20 @@ export default function Navbar() {
         </nav>
 
         <div className="navbar__actions">
-          <Button as={NavLink} to="/login" variant="ghost" size="sm">
-            Log in
-          </Button>
-          <Button as={NavLink} to="/register" variant="primary" size="sm">
-            Get started
-          </Button>
+          {studentToken ? (
+            <Button as={NavLink} to="/student" variant="primary" size="sm">
+              Student Portal
+            </Button>
+          ) : (
+            <>
+              <Button as={NavLink} to="/login" variant="ghost" size="sm">
+                Sign In
+              </Button>
+              <Button as={NavLink} to="/register" variant="primary" size="sm">
+                Get started
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -108,12 +117,20 @@ export default function Navbar() {
           ))}
         </nav>
         <div className="navbar__mobile-actions">
-          <Button as={NavLink} to="/login" variant="secondary" size="md" fullWidth>
-            Log in
-          </Button>
-          <Button as={NavLink} to="/register" variant="primary" size="md" fullWidth>
-            Get started
-          </Button>
+          {studentToken ? (
+            <Button as={NavLink} to="/student" variant="primary" size="md" fullWidth>
+              Student Portal
+            </Button>
+          ) : (
+            <>
+              <Button as={NavLink} to="/login" variant="secondary" size="md" fullWidth>
+                Sign In
+              </Button>
+              <Button as={NavLink} to="/register" variant="primary" size="md" fullWidth>
+                Get started
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>

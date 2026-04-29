@@ -24,10 +24,13 @@ import {
 import {
   getTests,
   getTestQuestions,
+  postTestQuestionsImportConfirm,
+  postTestQuestionsImportPreview,
   postTest,
   postTestQuestion,
   putTest,
   putTestPublish,
+  putTestRegenerateCode,
   putTestQuestion,
   removeTest,
   removeTestQuestion,
@@ -62,9 +65,12 @@ router.post('/tests', postTest);
 router.put('/tests/:testId', putTest);
 router.delete('/tests/:testId', removeTest);
 router.put('/tests/:testId/publish', putTestPublish);
+router.put('/tests/:testId/regenerate-code', putTestRegenerateCode);
 
 router.get('/tests/:testId/questions', getTestQuestions);
 router.post('/tests/:testId/questions', postTestQuestion);
+router.post('/tests/:testId/questions/import/preview', postTestQuestionsImportPreview);
+router.post('/tests/:testId/questions/import/confirm', postTestQuestionsImportConfirm);
 router.put('/tests/:testId/questions/:questionId', putTestQuestion);
 router.delete('/tests/:testId/questions/:questionId', removeTestQuestion);
 

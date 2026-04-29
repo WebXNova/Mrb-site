@@ -1,5 +1,4 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useMemo } from 'react';
 import { adminApi } from '../../api/adminApi';
 import '../../styles/global.css';
 import '../styles/admin.css';
@@ -17,7 +16,8 @@ const navItems = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const token = useMemo(() => localStorage.getItem('admin_access_token'), []);
+  const token = localStorage.getItem('admin_access_token');
+  const adminUser = JSON.parse(localStorage.getItem('admin_user') || 'null');
 
   async function handleLogout() {
     try {
@@ -64,6 +64,11 @@ export default function AdminLayout() {
             <p className="admin-topbar__subtitle">
               Manage courses, lectures, tests, users, logs, and access
             </p>
+            {adminUser?.email ? (
+              <p className="admin-topbar__subtitle">
+                Signed in as {adminUser.fullName || adminUser.email} ({adminUser.role})
+              </p>
+            ) : null}
           </div>
           <button className="btn btn--secondary btn--sm" onClick={handleLogout} type="button">
             Logout

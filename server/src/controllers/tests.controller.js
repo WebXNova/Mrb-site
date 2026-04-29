@@ -3,6 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { logActivity } from '../services/activityLog.service.js';
 import {
+  bulkInsertImportedQuestions,
   createTest,
   createTestQuestion,
   deleteTest,
@@ -10,7 +11,9 @@ import {
   getTestById,
   listTestQuestions,
   listTests,
+  parseAikenPayload,
   publishTest,
+  regenerateTestMrbCode,
   updateTest,
   updateTestQuestion,
 } from '../services/test.service.js';
@@ -19,6 +22,8 @@ const testSchema = z.object({
   title: z.string().min(3).max(220),
   description: z.string().max(5000).optional().nullable(),
   subject: z.string().min(2).max(80),
+  category: z.string().max(80).optional().nullable(),
+  subCategory: z.string().max(80).optional().nullable(),
   durationMinutes: z.number().int().min(1).max(600),
   passingMarks: z.number().int().min(0).optional().nullable(),
   maxAttempts: z.number().int().min(1).max(20).optional(),
@@ -26,15 +31,40 @@ const testSchema = z.object({
   shuffleOptions: z.boolean().optional(),
   showExplanations: z.boolean().optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
+  mrbCode: z.string().min(4).max(64).optional().nullable(),
+  mrbCodeExpiresAt: z.string().datetime().optional().nullable(),
+  mrbCodeMaxUses: z.number().int().min(1).max(100000).optional().nullable(),
 });
 
 const questionSchema = z.object({
   questionText: z.string().min(3),
+  questionImageUrl: z.string().url().optional().nullable(),
   options: z.array(z.object({ id: z.string().min(1), text: z.string().min(1) })).min(2),
   correctOption: z.string().min(1),
   explanation: z.string().min(1),
+  explanationImageUrl: z.string().url().optional().nullable(),
   marks: z.number().int().min(1).max(100).optional(),
   orderIndex: z.number().int().min(0).optional(),
+});
+
+const previewUploadSchema = z.object({
+  content: z.string().min(1),
+});
+
+const confirmUploadSchema = z.object({
+  items: z.array(
+    z.object({
+      sourceOrder: z.number().int().min(1),
+      questionText: z.string().min(1),
+      questionImageUrl: z.string().url().optional().nullable(),
+      options: z.array(z.object({ id: z.string().min(1), text: z.string().min(1) })),
+      correctOption: z.string().min(1),
+      explanation: z.string().optional().nullable(),
+      explanationImageUrl: z.string().url().optional().nullable(),
+      marks: z.number().int().min(1).max(100).optional(),
+      orderIndex: z.number().int().min(0).optional(),
+    })
+  ),
 });
 
 export const getTests = asyncHandler(async (req, res) => {
@@ -97,6 +127,21 @@ export const putTestPublish = asyncHandler(async (req, res) => {
     userId: req.user?.id,
     role: req.user?.role,
     action: 'admin.test.publish',
+    entityType: 'test',
+    entityId: String(testId),
+  });
+  res.json({ success: true, data: updated });
+});
+
+export const putTestRegenerateCode = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const updated = await regenerateTestMrbCode(testId);
+  if (!updated) throw new ApiError(404, 'Test not found');
+  await logActivity({
+    userId: req.user?.id,
+    role: req.user?.role,
+    action: 'admin.test.regenerate_code',
     entityType: 'test',
     entityId: String(testId),
   });
@@ -168,3 +213,68 @@ export const removeTestQuestion = asyncHandler(async (req, res) => {
   });
   res.json({ success: true, message: 'Question deleted' });
 });
+
+export const postTestQuestionsImportPreview = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const test = await getTestById(testId);
+  if (!test) throw new ApiError(404, 'Test not found');
+
+  const parsed = previewUploadSchema.safeParse(req.body);
+  if (!parsed.success) throw new ApiError(422, 'Invalid preview payload', parsed.error.flatten());
+
+  const preview = parseAikenPayload(parsed.data.content);
+  res.json({ success: true, data: preview });
+});
+
+export const postTestQuestionsImportConfirm = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const test = await getTestById(testId);
+  if (!test) throw new ApiError(404, 'Test not found');
+
+  const parsed = confirmUploadSchema.safeParse(req.body);
+  if (!parsed.success) throw new ApiError(422, 'Invalid import confirm payload', parsed.error.flatten());
+
+  if (!parsed.data.items.length) throw new ApiError(422, 'No rows provided for import');
+
+  const previewValidation = parsed.data.items.map((item, index) => {
+    const optionIds = item.options.map((option) => option.id);
+    const errors = [];
+    if (item.options.length < 2) errors.push('At least 2 options are required');
+    if (!optionIds.includes(item.correctOption)) {
+      errors.push('correctOption must match one provided option id');
+    }
+    return { index, errors };
+  });
+  const hasInvalid = previewValidation.some((row) => row.errors.length);
+  if (hasInvalid) {
+    throw new ApiError(
+      422,
+      'Invalid rows present in import payload',
+      previewValidation.filter((row) => row.errors.length)
+    );
+  }
+
+  const inserted = await bulkInsertImportedQuestions(testId, parsed.data.items);
+  await logActivity({
+    userId: req.user?.id,
+    role: req.user?.role,
+    action: 'admin.test.question.import',
+    entityType: 'test_question',
+    entityId: String(testId),
+    metadata: {
+      testId,
+      importedCount: inserted.length,
+    },
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      insertedCount: inserted.length,
+      questions: inserted,
+    },
+  });
+});
+

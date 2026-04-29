@@ -200,6 +200,60 @@
   font-size: var(--fs-13);
 }
 
+.admin-import-card {
+  border: 1px solid var(--color-ink-100);
+}
+
+.admin-import-preview {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.admin-import-row {
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: #fcfdff;
+}
+
+.admin-import-row--invalid {
+  border-color: #f8b4b4;
+  background: #fff5f5;
+}
+
+.admin-error-list {
+  margin: var(--space-2) 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.admin-workflow-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.admin-inline-image {
+  max-width: 240px;
+  max-height: 120px;
+  object-fit: cover;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-sm);
+}
+
+.admin-rich-editor .ql-editor {
+  min-height: 140px;
+  font-size: var(--fs-14);
+}
+
+.admin-rich-editor .ql-toolbar,
+.admin-rich-editor .ql-container {
+  border-color: var(--color-ink-200);
+}
+
 .admin-login {
   min-height: 100vh;
   display: grid;

@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
+import RichTextEditor from '../components/RichTextEditor';
 
 const defaultTestForm = {
   title: '',
   description: '',
   subject: '',
+  category: '',
+  subCategory: '',
   durationMinutes: 30,
   passingMarks: 0,
   maxAttempts: 1,
+  mrbCode: '',
+  mrbCodeExpiresAt: '',
+  mrbCodeMaxUses: '',
   shuffleQuestions: false,
   shuffleOptions: false,
   showExplanations: true,
@@ -16,14 +22,62 @@ const defaultTestForm = {
 
 const defaultQuestionForm = {
   questionText: '',
+  questionImageUrl: '',
   optionA: '',
   optionB: '',
   optionC: '',
   optionD: '',
   correctOption: 'A',
   explanation: '',
+  explanationImageUrl: '',
   marks: 1,
 };
+
+function normalizeOptionId(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace('.', '')
+    .replace(')', '');
+}
+
+function stripHtml(value) {
+  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function validatePreviewRow(row) {
+  const errors = [];
+  const questionText = String(row.questionText || '');
+  const normalizedQuestionText = stripHtml(questionText);
+  const options = (row.options || [])
+    .map((option) => ({
+      id: normalizeOptionId(option.id),
+      text: String(option.text || '').trim(),
+    }))
+    .filter((option) => option.id && option.text);
+  const correctOption = normalizeOptionId(row.correctOption);
+
+  if (!normalizedQuestionText) errors.push('Question text is required');
+  if (options.length < 2) errors.push('At least 2 valid options are required');
+  const uniqueOptionIds = new Set(options.map((option) => option.id));
+  if (uniqueOptionIds.size !== options.length) errors.push('Option ids must be unique');
+  if (!correctOption) errors.push('Exactly one ANSWER is required');
+  if (correctOption && !options.some((option) => option.id === correctOption)) {
+    errors.push('ANSWER must match one provided option id');
+  }
+
+  return {
+    ...row,
+    questionText,
+    options,
+    correctOption,
+    explanation: String(row.explanation || '').trim(),
+    questionImageUrl: String(row.questionImageUrl || '').trim(),
+    explanationImageUrl: String(row.explanationImageUrl || '').trim(),
+    errors,
+    valid: errors.length === 0,
+  };
+}
 
 export default function AdminTestsPage() {
   const token = localStorage.getItem('admin_access_token');
@@ -35,6 +89,13 @@ export default function AdminTestsPage() {
   const [editingTestId, setEditingTestId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [aikenRows, setAikenRows] = useState([]);
+  const [aikenSummary, setAikenSummary] = useState(null);
+  const [aikenText, setAikenText] = useState('');
+  const [isImportBusy, setIsImportBusy] = useState(false);
+  const publishedCount = tests.filter((test) => test.status === 'published').length;
+  const draftsCount = tests.filter((test) => test.status === 'draft').length;
+  const protectedCount = tests.filter((test) => test.hasMrbCode).length;
 
   async function loadTests() {
     const response = await adminApi.tests(token);
@@ -52,6 +113,12 @@ export default function AdminTestsPage() {
     }
     const response = await adminApi.testQuestions(token, testId);
     setQuestions(response?.data || []);
+  }
+
+  function clearImportState() {
+    setAikenRows([]);
+    setAikenSummary(null);
+    setAikenText('');
   }
 
   useEffect(() => {
@@ -72,6 +139,10 @@ export default function AdminTestsPage() {
     setQuestionForm((prev) => ({ ...prev, [name]: value }));
   }
 
+  function onQuestionEditorChange(field, value) {
+    setQuestionForm((prev) => ({ ...prev, [field]: value }));
+  }
+
   async function submitTest(event) {
     event.preventDefault();
     setError('');
@@ -82,6 +153,9 @@ export default function AdminTestsPage() {
         durationMinutes: Number(testForm.durationMinutes),
         passingMarks: Number(testForm.passingMarks || 0),
         maxAttempts: Number(testForm.maxAttempts || 1),
+        mrbCode: testForm.mrbCode || null,
+        mrbCodeExpiresAt: testForm.mrbCodeExpiresAt ? new Date(testForm.mrbCodeExpiresAt).toISOString() : null,
+        mrbCodeMaxUses: testForm.mrbCodeMaxUses ? Number(testForm.mrbCodeMaxUses) : null,
       };
       if (editingTestId) {
         await adminApi.updateTest(token, editingTestId, payload);
@@ -104,9 +178,14 @@ export default function AdminTestsPage() {
       title: test.title || '',
       description: test.description || '',
       subject: test.subject || '',
+      category: test.category || '',
+      subCategory: test.subCategory || '',
       durationMinutes: test.durationMinutes || 30,
       passingMarks: test.passingMarks || 0,
       maxAttempts: test.maxAttempts || 1,
+      mrbCode: '',
+      mrbCodeExpiresAt: test.mrbCodeExpiresAt ? new Date(test.mrbCodeExpiresAt).toISOString().slice(0, 16) : '',
+      mrbCodeMaxUses: test.mrbCodeMaxUses || '',
       shuffleQuestions: !!test.shuffleQuestions,
       shuffleOptions: !!test.shuffleOptions,
       showExplanations: !!test.showExplanations,
@@ -128,8 +207,15 @@ export default function AdminTestsPage() {
 
   async function publish(testId) {
     setError('');
+    setSuccess('');
     try {
-      await adminApi.publishTest(token, testId);
+      const response = await adminApi.publishTest(token, testId);
+      const link = response?.data?.publicLink;
+      const generatedCode = response?.data?.generatedMrbCode;
+      const messageParts = ['Published successfully.'];
+      if (link) messageParts.push(`Public link: ${link}`);
+      if (generatedCode) messageParts.push(`MRB code: ${generatedCode}`);
+      setSuccess(messageParts.join(' '));
       await loadTests();
     } catch (err) {
       setError(err.message || 'Failed to publish test');
@@ -141,8 +227,17 @@ export default function AdminTestsPage() {
     if (!selectedTestId) return;
     setError('');
     try {
+      if (!stripHtml(questionForm.questionText)) {
+        setError('Question text is required');
+        return;
+      }
+      if (!stripHtml(questionForm.explanation)) {
+        setError('Explanation is required');
+        return;
+      }
       const payload = {
         questionText: questionForm.questionText,
+        questionImageUrl: questionForm.questionImageUrl || null,
         options: [
           { id: 'A', text: questionForm.optionA },
           { id: 'B', text: questionForm.optionB },
@@ -151,6 +246,7 @@ export default function AdminTestsPage() {
         ].filter((item) => item.text.trim()),
         correctOption: questionForm.correctOption,
         explanation: questionForm.explanation,
+        explanationImageUrl: questionForm.explanationImageUrl || null,
         marks: Number(questionForm.marks || 1),
       };
       await adminApi.createTestQuestion(token, selectedTestId, payload);
@@ -158,6 +254,111 @@ export default function AdminTestsPage() {
       await loadQuestions(selectedTestId);
     } catch (err) {
       setError(err.message || 'Failed to add question');
+    }
+  }
+
+  async function onAikenFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (extension !== 'txt') {
+      setError('Only .txt files are allowed for AIKEN upload in MVP.');
+      return;
+    }
+    const content = await file.text();
+    setAikenText(content);
+    setError('');
+  }
+
+  async function parseAikenPreview(event) {
+    event.preventDefault();
+    if (!selectedTestId) return;
+    if (!aikenText.trim()) {
+      setError('Please upload or paste AIKEN text first.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setIsImportBusy(true);
+    try {
+      const response = await adminApi.previewAikenImport(token, selectedTestId, aikenText);
+      const previewItems = (response?.data?.items || []).map((row, index) =>
+        validatePreviewRow({
+          ...row,
+          sourceOrder: row.sourceOrder || index + 1,
+        })
+      );
+      setAikenRows(previewItems);
+      setAikenSummary({
+        total: previewItems.length,
+        valid: previewItems.filter((row) => row.valid).length,
+        invalid: previewItems.filter((row) => !row.valid).length,
+      });
+    } catch (err) {
+      setError(err.message || 'Failed to parse AIKEN upload');
+    } finally {
+      setIsImportBusy(false);
+    }
+  }
+
+  function updateAikenRow(index, updater) {
+    setAikenRows((prev) => {
+      const next = [...prev];
+      next[index] = validatePreviewRow(updater(next[index]));
+      setAikenSummary({
+        total: next.length,
+        valid: next.filter((row) => row.valid).length,
+        invalid: next.filter((row) => !row.valid).length,
+      });
+      return next;
+    });
+  }
+
+  function deleteAikenRow(index) {
+    setAikenRows((prev) => {
+      const next = prev.filter((_, idx) => idx !== index).map((row) => validatePreviewRow(row));
+      setAikenSummary({
+        total: next.length,
+        valid: next.filter((row) => row.valid).length,
+        invalid: next.filter((row) => !row.valid).length,
+      });
+      return next;
+    });
+  }
+
+  async function confirmAikenSave() {
+    if (!selectedTestId) return;
+    if (!aikenRows.length) {
+      setError('No rows available to import.');
+      return;
+    }
+    if (aikenRows.some((row) => !row.valid)) {
+      setError('Fix or delete invalid rows before confirm-save.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setIsImportBusy(true);
+    try {
+      const payload = aikenRows.map((row, index) => ({
+        sourceOrder: row.sourceOrder || index + 1,
+        questionText: row.questionText,
+        questionImageUrl: row.questionImageUrl || null,
+        options: row.options,
+        correctOption: row.correctOption,
+        explanation: row.explanation || 'No explanation provided.',
+        explanationImageUrl: row.explanationImageUrl || null,
+        marks: Number(row.marks || 1),
+        orderIndex: index,
+      }));
+      const response = await adminApi.confirmAikenImport(token, selectedTestId, payload);
+      setSuccess(`Imported ${response?.data?.insertedCount || payload.length} questions successfully.`);
+      clearImportState();
+      await loadQuestions(selectedTestId);
+    } catch (err) {
+      setError(err.message || 'Failed to save imported questions');
+    } finally {
+      setIsImportBusy(false);
     }
   }
 
@@ -172,8 +373,65 @@ export default function AdminTestsPage() {
     }
   }
 
+  async function copyPublicLink(link) {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setSuccess(`Copied link: ${link}`);
+    } catch {
+      setError('Could not copy link to clipboard.');
+    }
+  }
+
+  async function regenerateCode(testId) {
+    setError('');
+    setSuccess('');
+    try {
+      const response = await adminApi.regenerateTestCode(token, testId);
+      const generatedCode = response?.data?.generatedMrbCode;
+      setSuccess(generatedCode ? `New MRB code generated: ${generatedCode}` : 'MRB code regenerated.');
+      await loadTests();
+    } catch (err) {
+      setError(err.message || 'Failed to regenerate code');
+    }
+  }
+
   return (
     <section className="admin-page">
+      <section className="admin-grid">
+        <article className="admin-stat-card">
+          <p className="admin-stat-card__label">Total Tests</p>
+          <p className="admin-stat-card__value">{tests.length}</p>
+        </article>
+        <article className="admin-stat-card">
+          <p className="admin-stat-card__label">Published</p>
+          <p className="admin-stat-card__value">{publishedCount}</p>
+        </article>
+        <article className="admin-stat-card">
+          <p className="admin-stat-card__label">Drafts</p>
+          <p className="admin-stat-card__value">{draftsCount}</p>
+        </article>
+        <article className="admin-stat-card">
+          <p className="admin-stat-card__label">MRB Protected</p>
+          <p className="admin-stat-card__value">{protectedCount}</p>
+        </article>
+      </section>
+
+      <section className="admin-card">
+        <h2 className="heading-3">Test Builder Workflow</h2>
+        <ol className="admin-workflow-list">
+          <li>
+            <strong>Adjust settings:</strong> Configure title, subject, timer, attempts, shuffle and explanation behavior.
+          </li>
+          <li>
+            <strong>Add questions:</strong> Insert, edit, and reorder questions from one page (manual + AIKEN import).
+          </li>
+          <li>
+            <strong>Distribute URL:</strong> Publish and share test URL with students.
+          </li>
+        </ol>
+      </section>
+
       <section className="admin-card">
         <h2 className="heading-3">{editingTestId ? 'Edit Test' : 'Create Test'}</h2>
         <form className="admin-page" onSubmit={submitTest} style={{ marginTop: '1rem' }}>
@@ -185,6 +443,20 @@ export default function AdminTestsPage() {
             <div className="admin-field">
               <label htmlFor="subject">Subject</label>
               <input id="subject" name="subject" value={testForm.subject} onChange={onTestChange} required />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="category">Category</label>
+              <input id="category" name="category" value={testForm.category} onChange={onTestChange} placeholder="e.g. MDCAT" />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="subCategory">Sub Category</label>
+              <input
+                id="subCategory"
+                name="subCategory"
+                value={testForm.subCategory}
+                onChange={onTestChange}
+                placeholder="e.g. Chemistry"
+              />
             </div>
             <div className="admin-field">
               <label htmlFor="durationMinutes">Duration (minutes)</label>
@@ -207,6 +479,38 @@ export default function AdminTestsPage() {
                 min={0}
                 value={testForm.passingMarks}
                 onChange={onTestChange}
+              />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="mrbCode">MRB Code (optional override)</label>
+              <input
+                id="mrbCode"
+                name="mrbCode"
+                value={testForm.mrbCode}
+                onChange={onTestChange}
+                placeholder="Leave empty to auto-generate on publish"
+              />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="mrbCodeExpiresAt">Code Expiry (optional)</label>
+              <input
+                id="mrbCodeExpiresAt"
+                name="mrbCodeExpiresAt"
+                type="datetime-local"
+                value={testForm.mrbCodeExpiresAt}
+                onChange={onTestChange}
+              />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="mrbCodeMaxUses">Code Max Uses (optional)</label>
+              <input
+                id="mrbCodeMaxUses"
+                name="mrbCodeMaxUses"
+                type="number"
+                min={1}
+                value={testForm.mrbCodeMaxUses}
+                onChange={onTestChange}
+                placeholder="No cap if empty"
               />
             </div>
           </div>
@@ -277,8 +581,11 @@ export default function AdminTestsPage() {
               <tr>
                 <th>Title</th>
                 <th>Subject</th>
+                <th>Category</th>
                 <th>Status</th>
                 <th>Duration</th>
+                <th>Code Policy</th>
+                <th>Public Link</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -288,8 +595,37 @@ export default function AdminTestsPage() {
                   <tr key={test.id}>
                     <td>{test.title}</td>
                     <td>{test.subject}</td>
+                    <td>
+                      {[test.category, test.subCategory].filter(Boolean).join(' / ') || '-'}
+                    </td>
                     <td>{test.status}</td>
                     <td>{test.durationMinutes} min</td>
+                    <td>
+                      <div>
+                        <div>{test.mrbCodeExpiresAt ? `Expiry: ${new Date(test.mrbCodeExpiresAt).toLocaleString()}` : 'No expiry'}</div>
+                        <div>
+                          {test.mrbCodeMaxUses ? `Uses: ${test.mrbCodeUsedCount || 0}/${test.mrbCodeMaxUses}` : 'Unlimited uses'}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      {test.publicLink ? (
+                        <div className="admin-row-actions">
+                          <a href={test.publicLink} target="_blank" rel="noreferrer">
+                            Open Link
+                          </a>
+                          <button
+                            className="btn btn--secondary btn--sm"
+                            type="button"
+                            onClick={() => copyPublicLink(test.publicLink)}
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td>
                       <div className="admin-row-actions">
                         <button className="btn btn--secondary btn--sm" onClick={() => setSelectedTestId(test.id)} type="button">
@@ -303,6 +639,15 @@ export default function AdminTestsPage() {
                             Publish
                           </button>
                         ) : null}
+                        {test.status === 'published' ? (
+                          <button
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => regenerateCode(test.id)}
+                            type="button"
+                          >
+                            Regenerate Code
+                          </button>
+                        ) : null}
                         <button className="btn btn--secondary btn--sm" onClick={() => removeTest(test.id)} type="button">
                           Delete
                         </button>
@@ -312,7 +657,7 @@ export default function AdminTestsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5}>No tests yet.</td>
+                  <td colSpan={8}>No tests yet.</td>
                 </tr>
               )}
             </tbody>
@@ -328,15 +673,192 @@ export default function AdminTestsPage() {
           </p>
         ) : (
           <>
+            <section className="admin-card admin-import-card">
+              <h3 className="heading-4">AIKEN Upload (.txt)</h3>
+              <p className="body-sm" style={{ marginTop: '0.5rem' }}>
+                Flow: Upload - Parse - Preview - Edit/Delete/Fix - Confirm & Save
+              </p>
+              <form className="admin-page" style={{ marginTop: '1rem' }} onSubmit={parseAikenPreview}>
+                <div className="admin-field">
+                  <label htmlFor="aikenFile">Upload AIKEN .txt</label>
+                  <input id="aikenFile" type="file" accept=".txt,text/plain" onChange={onAikenFileChange} />
+                </div>
+                <div className="admin-field">
+                  <label htmlFor="aikenText">Or paste AIKEN content</label>
+                  <textarea
+                    id="aikenText"
+                    value={aikenText}
+                    onChange={(event) => setAikenText(event.target.value)}
+                    placeholder={'Question text\nA) Option A\nB) Option B\nANSWER: A'}
+                  />
+                </div>
+                <div className="admin-actions">
+                  <button className="btn btn--secondary" type="submit" disabled={isImportBusy}>
+                    {isImportBusy ? 'Parsing...' : 'Parse & Preview'}
+                  </button>
+                  <button className="btn btn--secondary" type="button" onClick={clearImportState}>
+                    Clear Preview
+                  </button>
+                </div>
+              </form>
+
+              {aikenSummary ? (
+                <p className="body-sm" style={{ marginTop: '0.75rem' }}>
+                  Total: {aikenSummary.total} | Valid: {aikenSummary.valid} | Invalid: {aikenSummary.invalid}
+                </p>
+              ) : null}
+
+              {aikenRows.length ? (
+                <div className="admin-import-preview">
+                  {aikenRows.map((row, index) => (
+                    <article
+                      key={`import-row-${row.sourceOrder}-${index}`}
+                      className={`admin-import-row ${row.valid ? '' : 'admin-import-row--invalid'}`}
+                    >
+                      <div className="admin-actions" style={{ justifyContent: 'space-between' }}>
+                        <p className="body-sm">
+                          Row #{index + 1} (source #{row.sourceOrder})
+                        </p>
+                        <button className="btn btn--secondary btn--sm" type="button" onClick={() => deleteAikenRow(index)}>
+                          Delete
+                        </button>
+                      </div>
+                      <div className="admin-field">
+                        <label>Question</label>
+                        <RichTextEditor
+                          value={row.questionText}
+                          onChange={(value) => updateAikenRow(index, (old) => ({ ...old, questionText: value }))}
+                          placeholder="Write question..."
+                        />
+                      </div>
+                      <div className="admin-field">
+                        <label>Question Image URL (optional)</label>
+                        <input
+                          value={row.questionImageUrl || ''}
+                          onChange={(event) =>
+                            updateAikenRow(index, (old) => ({ ...old, questionImageUrl: event.target.value }))
+                          }
+                          placeholder="https://..."
+                        />
+                      </div>
+                      <div className="admin-form-grid">
+                        {row.options.map((option, optionIndex) => (
+                          <div className="admin-field" key={`${index}-opt-${optionIndex}`}>
+                            <label>{`Option ${option.id || optionIndex + 1}`}</label>
+                            <div className="admin-actions">
+                              <input
+                                value={option.id}
+                                maxLength={2}
+                                onChange={(event) =>
+                                  updateAikenRow(index, (old) => {
+                                    const options = [...old.options];
+                                    options[optionIndex] = { ...options[optionIndex], id: event.target.value };
+                                    return { ...old, options };
+                                  })
+                                }
+                                style={{ width: '72px' }}
+                              />
+                              <input
+                                value={option.text}
+                                onChange={(event) =>
+                                  updateAikenRow(index, (old) => {
+                                    const options = [...old.options];
+                                    options[optionIndex] = { ...options[optionIndex], text: event.target.value };
+                                    return { ...old, options };
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="admin-form-grid">
+                        <div className="admin-field">
+                          <label>Correct Option</label>
+                          <input
+                            value={row.correctOption}
+                            maxLength={2}
+                            onChange={(event) =>
+                              updateAikenRow(index, (old) => ({ ...old, correctOption: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-field">
+                          <label>Marks</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={row.marks || 1}
+                            onChange={(event) =>
+                              updateAikenRow(index, (old) => ({ ...old, marks: Number(event.target.value || 1) }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="admin-field">
+                        <label>Explanation</label>
+                        <RichTextEditor
+                          value={row.explanation || ''}
+                          onChange={(value) => updateAikenRow(index, (old) => ({ ...old, explanation: value }))}
+                          placeholder="Write explanation..."
+                        />
+                      </div>
+                      <div className="admin-field">
+                        <label>Explanation Image URL (optional)</label>
+                        <input
+                          value={row.explanationImageUrl || ''}
+                          onChange={(event) =>
+                            updateAikenRow(index, (old) => ({
+                              ...old,
+                              explanationImageUrl: event.target.value,
+                            }))
+                          }
+                          placeholder="https://..."
+                        />
+                      </div>
+                      {!row.valid ? (
+                        <ul className="admin-error-list">
+                          {row.errors.map((issue, issueIndex) => (
+                            <li key={`${index}-err-${issueIndex}`} className="admin-error">
+                              {issue}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </article>
+                  ))}
+
+                  <div className="admin-actions">
+                    <button
+                      className="btn btn--primary"
+                      type="button"
+                      disabled={isImportBusy || aikenRows.some((row) => !row.valid)}
+                      onClick={confirmAikenSave}
+                    >
+                      {isImportBusy ? 'Saving...' : 'Confirm & Save Imported Questions'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
             <form className="admin-page" onSubmit={addQuestion} style={{ marginTop: '1rem' }}>
               <div className="admin-field">
                 <label htmlFor="questionText">Question</label>
-                <textarea
-                  id="questionText"
-                  name="questionText"
+                <RichTextEditor
                   value={questionForm.questionText}
+                  onChange={(value) => onQuestionEditorChange('questionText', value)}
+                  placeholder="Write question..."
+                />
+              </div>
+              <div className="admin-field">
+                <label htmlFor="questionImageUrl">Question Image URL (optional)</label>
+                <input
+                  id="questionImageUrl"
+                  name="questionImageUrl"
+                  value={questionForm.questionImageUrl}
                   onChange={onQuestionChange}
-                  required
+                  placeholder="https://..."
                 />
               </div>
               <div className="admin-form-grid">
@@ -379,12 +901,20 @@ export default function AdminTestsPage() {
               </div>
               <div className="admin-field">
                 <label htmlFor="explanation">Explanation</label>
-                <textarea
-                  id="explanation"
-                  name="explanation"
+                <RichTextEditor
                   value={questionForm.explanation}
+                  onChange={(value) => onQuestionEditorChange('explanation', value)}
+                  placeholder="Write explanation..."
+                />
+              </div>
+              <div className="admin-field">
+                <label htmlFor="explanationImageUrl">Explanation Image URL (optional)</label>
+                <input
+                  id="explanationImageUrl"
+                  name="explanationImageUrl"
+                  value={questionForm.explanationImageUrl}
                   onChange={onQuestionChange}
-                  required
+                  placeholder="https://..."
                 />
               </div>
               <button className="btn btn--primary" type="submit">
@@ -408,7 +938,14 @@ export default function AdminTestsPage() {
                     questions.map((q, idx) => (
                       <tr key={q.id}>
                         <td>{idx + 1}</td>
-                        <td>{q.questionText}</td>
+                        <td>
+                          <div dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                          {q.questionImageUrl ? (
+                            <div style={{ marginTop: '0.5rem' }}>
+                              <img src={q.questionImageUrl} alt="Question media" className="admin-inline-image" />
+                            </div>
+                          ) : null}
+                        </td>
                         <td>{q.correctOption}</td>
                         <td>{q.marks}</td>
                         <td>

@@ -24,6 +24,9 @@ export const env = {
   },
 
   mongoUri: required('MONGODB_URI', 'mongodb://127.0.0.1:27017/mrb_learning'),
+  redis: {
+    url: process.env.REDIS_URL || '',
+  },
 
   jwt: {
     accessSecret: required('JWT_ACCESS_SECRET', 'replace_access_secret'),

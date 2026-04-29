@@ -3,7 +3,7 @@ import AppRouter from './routes/AppRouter';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_relativeSplatPath: true }}>
       <AppRouter />
     </BrowserRouter>
   );

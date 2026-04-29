@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import ScrollToTop from '../components/layout/ScrollToTop';
 
 const HomePage = lazy(() => import('../pages/HomePage'));
@@ -7,6 +7,14 @@ const CoursesPage = lazy(() => import('../pages/CoursesPage'));
 const CourseDetailPage = lazy(() => import('../pages/CourseDetailPage'));
 const AboutPage = lazy(() => import('../pages/AboutPage'));
 const ContactPage = lazy(() => import('../pages/ContactPage'));
+const StudentLoginPage = lazy(() => import('../pages/StudentLoginPage'));
+const StudentRegisterPage = lazy(() => import('../pages/StudentRegisterPage'));
+const StudentPortalPage = lazy(() => import('../pages/StudentPortalPage'));
+const StudentResultDetailPage = lazy(() => import('../pages/StudentResultDetailPage'));
+const StudentLayout = lazy(() => import('../student/components/StudentLayout'));
+const PublicTestPage = lazy(() => import('../pages/PublicTestPage'));
+const TestAttemptPage = lazy(() => import('../pages/TestAttemptPage'));
+const TestResultPage = lazy(() => import('../pages/TestResultPage'));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
 const AdminLayout = lazy(() => import('../admin/components/AdminLayout'));
 const AdminLoginPage = lazy(() => import('../admin/pages/AdminLoginPage'));
@@ -34,9 +42,28 @@ function PageFallback() {
   );
 }
 
-export default function AppRouter() {
+function RequireAdmin({ children }) {
   const token = localStorage.getItem('admin_access_token');
+  const location = useLocation();
+  if (!token) {
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  }
+  return children;
+}
 
+function RedirectIfAdmin({ children }) {
+  const token = localStorage.getItem('admin_access_token');
+  if (token) return <Navigate to="/admin" replace />;
+  return children;
+}
+
+function RequireStudent({ children }) {
+  const token = localStorage.getItem('student_access_token');
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+export default function AppRouter() {
   return (
     <>
       <ScrollToTop />
@@ -47,10 +74,40 @@ export default function AppRouter() {
           <Route path="/courses/:id" element={<CourseDetailPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/login" element={<StudentLoginPage />} />
+          <Route path="/register" element={<StudentRegisterPage />} />
+          <Route
+            path="/student"
+            element={
+              <RequireStudent>
+                <StudentLayout />
+              </RequireStudent>
+            }
+          >
+            <Route index element={<StudentPortalPage />} />
+            <Route path="tests" element={<StudentPortalPage />} />
+            <Route path="lectures" element={<StudentPortalPage />} />
+            <Route path="results" element={<StudentPortalPage />} />
+            <Route path="results/:attemptId" element={<StudentResultDetailPage />} />
+          </Route>
+          <Route path="/tests/:slug" element={<PublicTestPage />} />
+          <Route path="/tests/:slug/start" element={<RequireStudent><TestAttemptPage /></RequireStudent>} />
+          <Route path="/tests/:slug/result" element={<RequireStudent><TestResultPage /></RequireStudent>} />
+          <Route
+            path="/admin/login"
+            element={
+              <RedirectIfAdmin>
+                <AdminLoginPage />
+              </RedirectIfAdmin>
+            }
+          />
           <Route
             path="/admin"
-            element={token ? <AdminLayout /> : <Navigate to="/admin/login" replace />}
+            element={
+              <RequireAdmin>
+                <AdminLayout />
+              </RequireAdmin>
+            }
           >
             <Route index element={<AdminDashboardPage />} />
             <Route path="courses" element={<AdminCoursesPage />} />
