@@ -19,7 +19,7 @@ export default function StudentLoginPage() {
       const payload = response?.data;
       localStorage.setItem('student_access_token', payload.accessToken);
       localStorage.setItem('student_user', JSON.stringify(payload.student));
-      navigate('/student', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {
@@ -54,6 +54,9 @@ export default function StudentLoginPage() {
         </form>
         <p className="auth-footer">
           New student? <Link to="/register">Create account</Link>
+        </p>
+        <p className="auth-footer" style={{ marginTop: '0.4rem' }}>
+          Forgot password? <Link to="/forgot-password">Reset it</Link>
         </p>
       </div>
     </section>

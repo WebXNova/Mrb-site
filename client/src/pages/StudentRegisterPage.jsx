@@ -20,7 +20,7 @@ export default function StudentRegisterPage() {
       const payload = response?.data;
       localStorage.setItem('student_access_token', payload.accessToken);
       localStorage.setItem('student_user', JSON.stringify(payload.student));
-      navigate('/student', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.message || 'Register failed');
     } finally {
