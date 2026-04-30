@@ -28,6 +28,9 @@ export default function StudentQuestionsPage() {
         <h2 className="heading-3">My Questions</h2>
         <Link className="btn btn--primary btn--sm" to="/dashboard/questions/ask">Ask Question</Link>
       </div>
+      <p className="admin-stat-card__label" style={{ marginTop: '0.5rem' }}>
+        Answers are posted manually by admin support.
+      </p>
       {error ? <p className="admin-error" style={{ marginTop: '0.75rem' }}>{error}</p> : null}
       <div className="admin-table-wrap" style={{ marginTop: '0.75rem' }}>
         <table className="admin-table">

@@ -73,6 +73,16 @@
   justify-content: space-between;
 }
 
+.student-topbar__title {
+  font-size: var(--fs-20);
+  font-weight: var(--fw-bold);
+}
+
+.student-topbar__subtitle {
+  color: var(--color-ink-400);
+  font-size: var(--fs-14);
+}
+
 @media (max-width: 960px) {
   .student-shell {
     grid-template-columns: 1fr;

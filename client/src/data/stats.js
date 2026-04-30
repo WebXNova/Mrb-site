@@ -40,22 +40,22 @@ export const testimonials = [
   {
     id: 't1',
     quote:
-      'The test explanations are gold. I stopped guessing and started understanding why my answer was wrong.',
-    name: 'Aarav Mehta',
-    role: 'NEET Aspirant, 2025 Batch',
+      'Sir, your platform is undoubtedly excellent. The test quality is outstanding, and I have seen improvement after every test. Your student guidance is truly commendable.',
+    name: 'Zara Fatima',
+    role: 'MDCAT Aspirants, 2025 Batch',
   },
   {
     id: 't2',
     quote:
-      'Doubt-solving is fast and serious. My Chemistry teacher explains the mechanism, not just the product.',
-    name: 'Sara Khan',
-    role: 'JEE Aspirant, Class 12',
+      'Sir, thank you. I am officially part of MRB Classes and not using other testing services. Now that I am selected, I will fully support MRB Classes.',
+    name: 'Kumar Sindh',
+    role: 'MDCAT Aspirants, 2025 Batch',
   },
   {
     id: 't3',
     quote:
-      'Clean dashboard, no clutter. I open it, take a test, and move on. That\u2019s exactly what I need.',
-    name: 'Rohan Gupta',
-    role: 'Foundation Track, Class 11',
+      'I have been following your lectures since my ninth grade. Your guidance, and constant support have literally made this possible. Keep it up sir, one day, everyone will realize the hard work and dedication you put in to shape our success.',
+    name: 'Sheeraz Hussain',
+    role: 'MDCAT Aspirants, 2025 Batch',
   },
 ];

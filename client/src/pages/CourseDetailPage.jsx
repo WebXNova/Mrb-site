@@ -120,8 +120,20 @@ export default function CourseDetailPage() {
                 className="course-detail-hero__card-cover"
                 style={{ '--cover-accent': course.accentColor }}
               >
+                {course.coverImage ? (
+                  <img
+                    className="course-detail-hero__card-cover-image"
+                    src={course.coverImage}
+                    alt={`${course.title} cover`}
+                    loading="eager"
+                    decoding="async"
+                    sizes="(max-width: 1024px) 100vw, 360px"
+                  />
+                ) : null}
                 <div className="course-detail-hero__card-pattern" aria-hidden="true" />
-                <span className="course-detail-hero__card-subject">{course.subject}</span>
+                {!course.coverImage ? (
+                  <span className="course-detail-hero__card-subject">{course.subject}</span>
+                ) : null}
               </div>
 
               <div className="course-detail-hero__card-body">

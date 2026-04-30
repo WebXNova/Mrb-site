@@ -4,10 +4,13 @@ import '../../admin/styles/admin.css';
 import '../styles/student.css';
 
 const navItems = [
-  { to: '/student', label: 'Dashboard', end: true },
-  { to: '/student/tests', label: 'Tests' },
-  { to: '/student/lectures', label: 'Lectures' },
-  { to: '/student/results', label: 'Results' },
+  { to: '/dashboard', label: 'Dashboard', end: true },
+  { to: '/dashboard/tests', label: 'Tests' },
+  { to: '/dashboard/lectures', label: 'Lectures' },
+  { to: '/dashboard/questions', label: 'Questions' },
+  { to: '/dashboard/results', label: 'Results' },
+  { to: '/dashboard/notifications', label: 'Notifications' },
+  { to: '/dashboard/profile', label: 'Profile' },
 ];
 
 export default function StudentLayout() {
@@ -47,10 +50,10 @@ export default function StudentLayout() {
       <section className="student-content">
         <header className="student-topbar">
           <div>
-            <p className="admin-topbar__title">Student Portal</p>
-            <p className="admin-topbar__subtitle">Access lectures, tests, and your results.</p>
+            <p className="student-topbar__title">Student Portal</p>
+            <p className="student-topbar__subtitle">Access lectures, tests, questions, and your results.</p>
             {student?.fullName ? (
-              <p className="admin-topbar__subtitle">Signed in as {student.fullName}</p>
+              <p className="student-topbar__subtitle">Signed in as {student.fullName}</p>
             ) : null}
           </div>
           <button className="btn btn--secondary btn--sm" type="button" onClick={handleLogout}>

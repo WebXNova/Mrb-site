@@ -203,6 +203,7 @@
 .course-card__stats {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding-block: var(--space-3);
   border-top: 1px solid var(--color-ink-100);
@@ -304,4 +305,10 @@
   color: var(--color-ink-400);
   text-decoration: line-through;
   line-height: 1;
+}
+
+@media (max-width: 420px) {
+  .course-card__stat-divider {
+    display: none;
+  }
 }

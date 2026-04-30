@@ -10,8 +10,7 @@ export const courses = [
     subject: 'MDCAT',
     subjectId: 'mdcat',
     accentColor: '#d90915',
-    coverImage:
-      'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1920&q=90',
+    coverImage: '/images/mdcat-preparation-course.png',
     summary:
       'Master MDCAT with focused practice, smart revision, and high-yield concepts.',
     summaryBullets: [

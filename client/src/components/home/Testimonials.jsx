@@ -6,9 +6,9 @@ export default function Testimonials() {
     <section className="section testimonials">
       <div className="container">
         <div className="testimonials__head">
-          <span className="eyebrow">Student voices</span>
+          <span className="eyebrow">MDCAT qualifiers</span>
           <h2 className="heading-1 text-balance">
-            Real students. Real progress.
+            Remarks of MDCAT Qualifiers
           </h2>
         </div>
 

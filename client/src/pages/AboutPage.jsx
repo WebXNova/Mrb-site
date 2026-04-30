@@ -10,7 +10,7 @@ export default function AboutPage() {
             A focused classroom for serious students.
           </h1>
           <p className="body-lg text-pretty" style={{ marginTop: '1.5rem' }}>
-            MRB Learning is built around one idea — students do their best work in a
+            MRB Classes is built around one idea — students do their best work in a
             calm, distraction-free environment. We give MRB students structured
             lectures, a test engine that explains every answer, and direct access to
             their teachers for doubts.

@@ -47,7 +47,7 @@ export default function AdminDashboardPage() {
       <div className="admin-grid">
         <StatCard label="Total Users" value={stats.totalUsers || 0} />
         <StatCard label="Students" value={stats.totalStudents || 0} />
-        <StatCard label="Teachers" value={stats.totalTeachers || 0} />
+        <StatCard label="Pending Questions" value={stats.pendingQuestions || 0} />
         <StatCard label="Admins" value={stats.totalAdmins || 0} />
         <StatCard label="Courses" value={stats.totalCourses || 0} />
         <StatCard label="Lectures" value={stats.totalLectures || 0} />

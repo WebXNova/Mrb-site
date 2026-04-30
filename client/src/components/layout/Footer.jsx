@@ -39,7 +39,7 @@ export default function Footer() {
           <Logo />
           <p className="footer__tagline">
             A focused learning platform for serious MRB students. Lectures, tests, and
-            real teacher answers — in one calm dashboard.
+            manual admin-reviewed answers — in one calm dashboard.
           </p>
         </div>
 
@@ -64,7 +64,7 @@ export default function Footer() {
       <div className="footer__bottom">
         <div className="container footer__bottom-inner">
           <span className="footer__copy">
-            &copy; {new Date().getFullYear()} MRB Learning. All rights reserved.
+            &copy; {new Date().getFullYear()} MRB Classes. All rights reserved.
           </span>
           <span className="footer__made">Made for the MRB classroom.</span>
         </div>
