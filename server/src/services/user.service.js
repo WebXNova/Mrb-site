@@ -2,7 +2,7 @@ import { mysqlPool } from '../config/mysql.js';
 
 export async function listUsers() {
   const [rows] = await mysqlPool.query(
-    `SELECT id, email, full_name, role, status, created_at
+    `SELECT id, email, username, full_name, role, status, created_at
      FROM users
      ORDER BY created_at DESC`
   );
@@ -10,6 +10,7 @@ export async function listUsers() {
   return rows.map((row) => ({
     id: row.id,
     email: row.email,
+    username: row.username,
     fullName: row.full_name,
     role: row.role,
     status: row.status,
@@ -56,7 +57,7 @@ export async function updateUserStatus(userId, status) {
     [status, userId]
   );
   const [rows] = await mysqlPool.query(
-    `SELECT id, email, full_name, role, status, created_at
+    `SELECT id, email, username, full_name, role, status, created_at
      FROM users
      WHERE id = ?
      LIMIT 1`,
@@ -67,6 +68,7 @@ export async function updateUserStatus(userId, status) {
   return {
     id: row.id,
     email: row.email,
+    username: row.username,
     fullName: row.full_name,
     role: row.role,
     status: row.status,

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useMemo } from 'react';
 import { adminApi } from '../../api/adminApi';
+import { clearAdminAuth, getAdminToken, getStoredUser } from '../../auth/session';
 import '../../styles/global.css';
 import '../styles/admin.css';
 
@@ -17,7 +17,8 @@ const navItems = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const token = useMemo(() => localStorage.getItem('admin_access_token'), []);
+  const token = getAdminToken();
+  const adminUser = getStoredUser('admin_user');
 
   async function handleLogout() {
     try {
@@ -25,8 +26,7 @@ export default function AdminLayout() {
     } catch {
       // Ignore logout API failure and proceed locally.
     }
-    localStorage.removeItem('admin_access_token');
-    localStorage.removeItem('admin_user');
+    clearAdminAuth();
     navigate('/admin/login');
   }
 
@@ -64,6 +64,11 @@ export default function AdminLayout() {
             <p className="admin-topbar__subtitle">
               Manage courses, lectures, tests, users, logs, and access
             </p>
+            {adminUser?.email ? (
+              <p className="admin-topbar__subtitle">
+                Signed in as {adminUser.fullName || adminUser.email} ({adminUser.role})
+              </p>
+            ) : null}
           </div>
           <button className="btn btn--secondary btn--sm" onClick={handleLogout} type="button">
             Logout

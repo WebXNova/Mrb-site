@@ -1,13 +1,12 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { dashboardStats, listUsers, updateUserStatus } from '../services/user.service.js';
 import { listCodes, generateCodes, deleteUnusedCode } from '../services/mrbCode.service.js';
-import { ActivityLog } from '../models/activityLog.model.js';
 import { ApiError } from '../utils/apiError.js';
-import { logActivity } from '../services/activityLog.service.js';
+import { listRecentActivityLogs, logActivity } from '../services/activityLog.service.js';
 
 export const getDashboard = asyncHandler(async (req, res) => {
   const stats = await dashboardStats();
-  const recentLogs = await ActivityLog.find().sort({ createdAt: -1 }).limit(10).lean();
+  const recentLogs = await listRecentActivityLogs(10);
   res.json({ success: true, data: { stats, recentLogs } });
 });
 
@@ -58,7 +57,7 @@ export const removeMrbCode = asyncHandler(async (req, res) => {
 });
 
 export const getLogs = asyncHandler(async (req, res) => {
-  const logs = await ActivityLog.find().sort({ createdAt: -1 }).limit(100).lean();
+  const logs = await listRecentActivityLogs(100);
   res.json({ success: true, data: logs });
 });
 

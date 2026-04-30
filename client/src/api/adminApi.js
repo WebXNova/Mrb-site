@@ -29,10 +29,15 @@ export const adminApi = {
   updateTest: (token, testId, payload) => http.put(`/admin/tests/${testId}`, payload, { token }),
   deleteTest: (token, testId) => http.delete(`/admin/tests/${testId}`, { token }),
   publishTest: (token, testId) => http.put(`/admin/tests/${testId}/publish`, {}, { token }),
+  regenerateTestCode: (token, testId) => http.put(`/admin/tests/${testId}/regenerate-code`, {}, { token }),
 
   testQuestions: (token, testId) => http.get(`/admin/tests/${testId}/questions`, { token }),
   createTestQuestion: (token, testId, payload) =>
     http.post(`/admin/tests/${testId}/questions`, payload, { token }),
+  previewAikenImport: (token, testId, content) =>
+    http.post(`/admin/tests/${testId}/questions/import/preview`, { content }, { token }),
+  confirmAikenImport: (token, testId, items) =>
+    http.post(`/admin/tests/${testId}/questions/import/confirm`, { items }, { token }),
   updateTestQuestion: (token, testId, questionId, payload) =>
     http.put(`/admin/tests/${testId}/questions/${questionId}`, payload, { token }),
   deleteTestQuestion: (token, testId, questionId) =>
@@ -41,4 +46,32 @@ export const adminApi = {
   mrbCodes: (token) => http.get('/admin/mrb-codes', { token }),
   generateMrbCodes: (token, payload) => http.post('/admin/mrb-codes', payload, { token }),
   deleteMrbCode: (token, codeId) => http.delete(`/admin/mrb-codes/${codeId}`, { token }),
+};
+
+export const testsApi = {
+  verifyCode: (slug, payload, studentToken) =>
+    http.post(`/tests/${slug}/verify-code`, payload, {
+      token: null,
+      headers: { Authorization: `Bearer ${studentToken}` },
+    }),
+  getStartData: (slug, attemptId, attemptToken) =>
+    http.get(`/tests/${slug}/attempts/${attemptId}/start`, {
+      token: null,
+      headers: { Authorization: `Bearer ${attemptToken}` },
+    }),
+  saveAnswer: (slug, attemptId, attemptToken, payload) =>
+    http.patch(`/tests/${slug}/attempts/${attemptId}/answers`, payload, {
+      token: null,
+      headers: { Authorization: `Bearer ${attemptToken}` },
+    }),
+  submitAttempt: (slug, attemptId, attemptToken) =>
+    http.post(`/tests/${slug}/attempts/${attemptId}/submit`, {}, {
+      token: null,
+      headers: { Authorization: `Bearer ${attemptToken}` },
+    }),
+  getResult: (slug, attemptId, attemptToken) =>
+    http.get(`/tests/${slug}/attempts/${attemptId}/result`, {
+      token: null,
+      headers: { Authorization: `Bearer ${attemptToken}` },
+    }),
 };

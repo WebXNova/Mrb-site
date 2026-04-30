@@ -5,17 +5,42 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import authRoutes from './routes/auth.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import testsRoutes from './routes/tests.routes.js';
+import studentRoutes from './routes/student.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 export const app = express();
 
+const allowedOrigins = [env.clientUrl, 'http://localhost:5173', 'http://localhost:5174'];
+
 app.use(
   cors({
-    origin: env.clientUrl,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      reportOnly: true,
+      directives: {
+        "default-src": ["'self'"],
+        "connect-src": ["'self'", env.clientUrl, 'http://localhost:5173', 'http://localhost:5174'],
+        "img-src": ["'self'", 'data:', 'https:'],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+      },
+    },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
@@ -25,6 +50,8 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/tests', testsRoutes);
+app.use('/api/student', studentRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

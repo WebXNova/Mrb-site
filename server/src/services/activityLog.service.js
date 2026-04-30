@@ -1,4 +1,27 @@
-import { ActivityLog } from '../models/activityLog.model.js';
+import { mysqlPool } from '../config/mysql.js';
+
+function parseMetadata(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function toActivityLog(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    role: row.role,
+    action: row.action,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    metadata: parseMetadata(row.metadata_json),
+    createdAt: row.created_at,
+  };
+}
 
 export async function logActivity({
   userId = null,
@@ -9,16 +32,21 @@ export async function logActivity({
   metadata = {},
 }) {
   try {
-    await ActivityLog.create({
-      userId,
-      role,
-      action,
-      entityType,
-      entityId,
-      metadata,
-    });
+    await mysqlPool.query(
+      `INSERT INTO activity_logs (user_id, role, action, entity_type, entity_id, metadata_json)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, role, action, entityType, entityId, JSON.stringify(metadata || {})]
+    );
   } catch (error) {
     // Swallow logging failures to avoid blocking primary flow.
     console.error('ActivityLog error:', error.message);
   }
+}
+
+export async function listRecentActivityLogs(limit) {
+  const [rows] = await mysqlPool.query(
+    `SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT ?`,
+    [limit]
+  );
+  return rows.map(toActivityLog);
 }

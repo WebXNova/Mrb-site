@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
+import { getAdminToken, setAdminAuth } from '../../auth/session';
 import '../styles/admin.css';
 
 export default function AdminLoginPage() {
@@ -8,6 +9,11 @@ export default function AdminLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const token = getAdminToken();
+    if (token) navigate('/admin', { replace: true });
+  }, [navigate]);
 
   function onChange(event) {
     const { name, value } = event.target;
@@ -18,22 +24,14 @@ export default function AdminLoginPage() {
     event.preventDefault();
     setError('');
     setIsSubmitting(true);
-    const runId = `login-${Date.now()}`;
-    // #region agent log
-    fetch('http://127.0.0.1:7905/ingest/eaded629-97a7-47cb-9dfd-e65da1eb1aed',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'02d6a5'},body:JSON.stringify({sessionId:'02d6a5',runId,hypothesisId:'H5',location:'client/src/admin/pages/AdminLoginPage.jsx:20',message:'Admin login submit triggered',data:{emailDomain:form.email.includes('@')?form.email.split('@')[1]:null,passwordProvided:Boolean(form.password)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     try {
       const response = await adminApi.login(form);
       const token = response?.data?.accessToken;
       const admin = response?.data?.admin;
       if (!token) throw new Error('Login failed');
-      localStorage.setItem('admin_access_token', token);
-      if (admin) localStorage.setItem('admin_user', JSON.stringify(admin));
-      navigate('/admin');
+      setAdminAuth(token, admin);
+      navigate('/admin', { replace: true });
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7905/ingest/eaded629-97a7-47cb-9dfd-e65da1eb1aed',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'02d6a5'},body:JSON.stringify({sessionId:'02d6a5',runId,hypothesisId:'H5',location:'client/src/admin/pages/AdminLoginPage.jsx:33',message:'Admin login failed in UI catch',data:{errorName:err?.name||null,errorMessage:err?.message||'unknown'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setError(err.message || 'Unable to login');
     } finally {
       setIsSubmitting(false);

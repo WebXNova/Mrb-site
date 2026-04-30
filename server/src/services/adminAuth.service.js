@@ -11,7 +11,7 @@ function hashToken(value) {
 
 export async function loginAdmin(email, password) {
   const [rows] = await mysqlPool.query(
-    `SELECT id, email, full_name, role, password_hash, status
+    `SELECT id, email, full_name, role, password_hash, status, token_version
      FROM users
      WHERE email = ? AND role IN ('admin', 'super_admin')
      LIMIT 1`,
@@ -26,15 +26,30 @@ export async function loginAdmin(email, password) {
   if (!validPassword) throw new ApiError(401, 'Invalid credentials');
 
   const accessToken = jwt.sign(
-    { id: admin.id, email: admin.email, role: admin.role, name: admin.full_name },
+    {
+      id: admin.id,
+      email: admin.email,
+      role: admin.role,
+      name: admin.full_name,
+      type: 'access',
+      tokenVersion: Number(admin.token_version || 0),
+    },
     env.jwt.accessSecret,
-    { expiresIn: env.jwt.accessExpiresIn }
+    {
+      expiresIn: env.jwt.accessExpiresIn,
+      issuer: env.jwt.issuer,
+      audience: env.jwt.audience,
+    }
   );
 
   const refreshToken = jwt.sign(
     { id: admin.id, role: admin.role, type: 'refresh' },
     env.jwt.refreshSecret,
-    { expiresIn: env.jwt.refreshExpiresIn }
+    {
+      expiresIn: env.jwt.refreshExpiresIn,
+      issuer: env.jwt.issuer,
+      audience: env.jwt.audience,
+    }
   );
 
   const decodedRefresh = jwt.decode(refreshToken);
