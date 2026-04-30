@@ -10,13 +10,26 @@ const AboutPage = lazy(() => import('../pages/AboutPage'));
 const ContactPage = lazy(() => import('../pages/ContactPage'));
 const StudentLoginPage = lazy(() => import('../pages/StudentLoginPage'));
 const StudentRegisterPage = lazy(() => import('../pages/StudentRegisterPage'));
+const StudentForgotPasswordPage = lazy(() => import('../pages/StudentForgotPasswordPage'));
+const StudentVerifyOtpPage = lazy(() => import('../pages/StudentVerifyOtpPage'));
+const StudentVerifyMrbPage = lazy(() => import('../pages/StudentVerifyMrbPage'));
 const StudentPortalPage = lazy(() => import('../pages/StudentPortalPage'));
+const StudentTestsPage = lazy(() => import('../pages/StudentTestsPage'));
+const StudentLecturesPage = lazy(() => import('../pages/StudentLecturesPage'));
+const StudentResultsPage = lazy(() => import('../pages/StudentResultsPage'));
+const StudentQuestionsPage = lazy(() => import('../pages/StudentQuestionsPage'));
+const StudentAskQuestionPage = lazy(() => import('../pages/StudentAskQuestionPage'));
+const StudentProfilePage = lazy(() => import('../pages/StudentProfilePage'));
+const StudentNotificationsPage = lazy(() => import('../pages/StudentNotificationsPage'));
 const StudentResultDetailPage = lazy(() => import('../pages/StudentResultDetailPage'));
 const StudentLayout = lazy(() => import('../student/components/StudentLayout'));
 const PublicTestPage = lazy(() => import('../pages/PublicTestPage'));
 const TestAttemptPage = lazy(() => import('../pages/TestAttemptPage'));
 const TestResultPage = lazy(() => import('../pages/TestResultPage'));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
+const PrivacyPage = lazy(() => import('../pages/PrivacyPage'));
+const TermsPage = lazy(() => import('../pages/TermsPage'));
+const RefundPage = lazy(() => import('../pages/RefundPage'));
 const AdminLayout = lazy(() => import('../admin/components/AdminLayout'));
 const AdminLoginPage = lazy(() => import('../admin/pages/AdminLoginPage'));
 const AdminDashboardPage = lazy(() => import('../admin/pages/AdminDashboardPage'));
@@ -27,6 +40,7 @@ const AdminMrbCodesPage = lazy(() => import('../admin/pages/AdminMrbCodesPage'))
 const AdminLogsPage = lazy(() => import('../admin/pages/AdminLogsPage'));
 const AdminTestsPage = lazy(() => import('../admin/pages/AdminTestsPage'));
 const AdminSettingsPage = lazy(() => import('../admin/pages/AdminSettingsPage'));
+const AdminQuestionsPage = lazy(() => import('../admin/pages/AdminQuestionsPage'));
 
 function PageFallback() {
   return (
@@ -95,8 +109,15 @@ export default function AppRouter() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<StudentLoginPage />} />
           <Route path="/register" element={<StudentRegisterPage />} />
+          <Route path="/forgot-password" element={<StudentForgotPasswordPage />} />
+          <Route path="/verify-email" element={<StudentVerifyOtpPage />} />
+          <Route path="/verify-mrb" element={<StudentVerifyMrbPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/refund" element={<RefundPage />} />
+          <Route path="/student" element={<Navigate to="/dashboard" replace />} />
           <Route
-            path="/student"
+            path="/dashboard"
             element={
               <RequireStudent>
                 <StudentLayout />
@@ -104,10 +125,14 @@ export default function AppRouter() {
             }
           >
             <Route index element={<StudentPortalPage />} />
-            <Route path="tests" element={<StudentPortalPage />} />
-            <Route path="lectures" element={<StudentPortalPage />} />
-            <Route path="results" element={<StudentPortalPage />} />
+            <Route path="tests" element={<StudentTestsPage />} />
+            <Route path="lectures" element={<StudentLecturesPage />} />
+            <Route path="results" element={<StudentResultsPage />} />
             <Route path="results/:attemptId" element={<StudentResultDetailPage />} />
+            <Route path="questions" element={<StudentQuestionsPage />} />
+            <Route path="questions/ask" element={<StudentAskQuestionPage />} />
+            <Route path="profile" element={<StudentProfilePage />} />
+            <Route path="notifications" element={<StudentNotificationsPage />} />
           </Route>
           <Route path="/tests/:slug" element={<PublicTestPage />} />
           <Route path="/tests/:slug/start" element={<RequireStudent><TestAttemptPage /></RequireStudent>} />
@@ -129,9 +154,13 @@ export default function AppRouter() {
             }
           >
             <Route index element={<AdminDashboardPage />} />
+            <Route path="questions" element={<AdminQuestionsPage />} />
             <Route path="courses" element={<AdminCoursesPage />} />
+            <Route path="courses/:id" element={<AdminCoursesPage />} />
             <Route path="lectures" element={<AdminLecturesPage />} />
+            <Route path="lectures/:id" element={<AdminLecturesPage />} />
             <Route path="tests" element={<AdminTestsPage />} />
+            <Route path="tests/:id" element={<AdminTestsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="mrb-codes" element={<AdminMrbCodesPage />} />
             <Route path="logs" element={<AdminLogsPage />} />

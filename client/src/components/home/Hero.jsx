@@ -13,13 +13,13 @@ export default function Hero() {
           </span>
 
           <h1 className="hero__title heading-display text-balance">
-            Where serious students
+            Where An Average Students
             <br />
-            become <span className="hero__highlight">toppers</span>.
+            Become <span className="hero__highlight">Toppers</span>.
           </h1>
 
           <p className="hero__lead body-lg text-pretty">
-            Structured lectures, a test engine that actually teaches, and real teacher
+            Structured lectures, a test engine that actually teaches, and manual admin
             answers — all in one calm, focused dashboard for your MRB journey.
           </p>
 
@@ -56,7 +56,7 @@ export default function Hero() {
             </div>
             <div className="hero__card-status">
               <span className="hero__dot hero__dot--green" />
-              Answered by Dr. Sameer Khan
+              Answered by MRB Admin Support
             </div>
             <div className="hero__card-answer">
               "The induced current always flows in a direction that opposes the change

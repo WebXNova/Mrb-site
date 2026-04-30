@@ -78,7 +78,7 @@ export default function Navbar() {
 
         <div className="navbar__actions">
           {studentToken ? (
-            <Button as={NavLink} to="/student" variant="primary" size="sm">
+            <Button as={NavLink} to="/dashboard" variant="primary" size="sm">
               Student Portal
             </Button>
           ) : (
@@ -125,7 +125,7 @@ export default function Navbar() {
         </nav>
         <div className="navbar__mobile-actions">
           {studentToken ? (
-            <Button as={NavLink} to="/student" variant="primary" size="md" fullWidth>
+            <Button as={NavLink} to="/dashboard" variant="primary" size="md" fullWidth>
               Student Portal
             </Button>
           ) : (

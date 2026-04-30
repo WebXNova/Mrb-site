@@ -6,6 +6,7 @@ import '../styles/admin.css';
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', end: true },
+  { to: '/admin/questions', label: 'Questions' },
   { to: '/admin/courses', label: 'Courses' },
   { to: '/admin/lectures', label: 'Lectures' },
   { to: '/admin/tests', label: 'Tests' },
@@ -34,7 +35,7 @@ export default function AdminLayout() {
     <div className="admin-shell">
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <img src="/brand/mrb-logo-icon.png" alt="MRB" className="admin-brand__icon" />
+          <img src="/brand/mrb-logo-wordmark-official.png" alt="MRB Classes" className="admin-brand__logo" />
           <div>
             <p className="admin-brand__title">MRB Admin</p>
             <p className="admin-brand__subtitle">Control Center</p>
@@ -62,7 +63,7 @@ export default function AdminLayout() {
           <div>
             <p className="admin-topbar__title">Admin Panel</p>
             <p className="admin-topbar__subtitle">
-              Manage courses, lectures, tests, users, logs, and access
+              Manage questions, courses, lectures, tests, users, logs, and access
             </p>
             {adminUser?.email ? (
               <p className="admin-topbar__subtitle">

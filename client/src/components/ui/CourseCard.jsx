@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Badge from './Badge';
 import './CourseCard.css';
@@ -11,6 +12,7 @@ function formatPrice(price) {
 }
 
 export default function CourseCard({ course }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const {
     id,
     title,
@@ -34,29 +36,32 @@ export default function CourseCard({ course }) {
       ? Math.round(((originalPrice - price) / originalPrice) * 100)
       : 0;
 
+  const showCoverImage = Boolean(coverImage) && !imageFailed;
+
   return (
     <article className="course-card">
       <Link to={`/courses/${id}`} className="course-card__link">
         <div
-          className={`course-card__cover ${coverImage ? 'course-card__cover--with-image' : ''}`}
+          className={`course-card__cover ${showCoverImage ? 'course-card__cover--with-image' : ''}`}
           style={{ '--cover-accent': accentColor || 'var(--color-primary)' }}
         >
-          {coverImage ? (
+          {showCoverImage ? (
             <img
               className="course-card__cover-image"
               src={coverImage}
               alt={`${title} cover`}
-              loading="lazy"
+              loading="eager"
               decoding="async"
-              referrerPolicy="no-referrer"
+              sizes="(max-width: 768px) 100vw, 33vw"
+              onError={() => setImageFailed(true)}
             />
           ) : null}
           <div className="course-card__cover-bg" aria-hidden="true" />
-          <span className="course-card__subject">{subject}</span>
-          {discount > 0 ? (
+          {!showCoverImage ? <span className="course-card__subject">{subject}</span> : null}
+          {!showCoverImage && discount > 0 ? (
             <span className="course-card__discount">-{discount}%</span>
           ) : null}
-          <div className="course-card__cover-title">{title}</div>
+          {!showCoverImage ? <div className="course-card__cover-title">{title}</div> : null}
         </div>
 
         <div className="course-card__body">

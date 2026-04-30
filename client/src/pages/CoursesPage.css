@@ -84,7 +84,8 @@
   border: 1px solid var(--color-ink-100);
   border-radius: var(--radius-full);
   padding: 0.5rem 0.875rem;
-  min-width: 240px;
+  min-width: min(240px, 100%);
+  width: 100%;
   transition: border-color var(--transition-base), background var(--transition-base);
 }
 
@@ -112,6 +113,12 @@
 
 .courses-toolbar__search input::placeholder {
   color: var(--color-ink-400);
+}
+
+@media (min-width: 768px) {
+  .courses-toolbar__search {
+    width: auto;
+  }
 }
 
 .courses-list__count {

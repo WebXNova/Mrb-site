@@ -28,5 +28,7 @@ export const studentApi = {
   login: (payload) => studentRequest('/auth/student/login', { method: 'POST', body: payload }),
   me: (token) => studentRequest('/auth/student/me', { token }),
   dashboard: () => studentRequest('/student/dashboard'),
+  questions: () => studentRequest('/student/questions'),
+  notifications: () => studentRequest('/student/notifications'),
   resultDetail: (attemptId) => studentRequest(`/student/results/${attemptId}`),
 };

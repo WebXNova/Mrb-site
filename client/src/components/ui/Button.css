@@ -1,6 +1,6 @@
 .btn {
-  --btn-bg: var(--color-primary);
-  --btn-bg-hover: var(--color-primary-600);
+  --btn-bg: var(--color-ink-900);
+  --btn-bg-hover: #1f2937;
   --btn-color: #ffffff;
   --btn-border: transparent;
   --btn-shadow: var(--shadow-sm);
@@ -25,7 +25,8 @@
   box-shadow: var(--btn-shadow);
   cursor: pointer;
   user-select: none;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
   transition: background var(--transition-base), color var(--transition-base),
     border-color var(--transition-base), transform var(--transition-fast),
     box-shadow var(--transition-base);
@@ -53,8 +54,8 @@
 }
 
 .btn--accent {
-  --btn-bg: var(--color-primary);
-  --btn-bg-hover: var(--color-primary-600);
+  --btn-bg: var(--color-ink-900);
+  --btn-bg-hover: #1f2937;
   --btn-color: #ffffff;
 }
 
@@ -76,7 +77,7 @@
 .btn--link {
   --btn-bg: transparent;
   --btn-bg-hover: transparent;
-  --btn-color: var(--color-primary);
+  --btn-color: var(--color-ink-900);
   --btn-shadow: none;
   padding-inline: 0;
 }

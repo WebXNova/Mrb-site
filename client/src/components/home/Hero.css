@@ -71,9 +71,9 @@
 }
 
 .hero__highlight {
-  color: var(--color-primary);
+  color: var(--color-ink-900);
   position: relative;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .hero__highlight::after {
@@ -83,7 +83,7 @@
   right: 0;
   bottom: 0.05em;
   height: 0.18em;
-  background: var(--color-primary-100);
+  background: #d1d5db;
   z-index: -1;
   border-radius: 2px;
 }

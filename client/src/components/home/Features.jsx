@@ -32,7 +32,7 @@ export default function Features() {
     <section className="section features">
       <div className="container">
         <div className="features__head">
-          <span className="eyebrow">Why MRB Learning</span>
+          <span className="eyebrow">Why MRB Classes</span>
           <h2 className="heading-1 text-balance">
             Built for the way you actually study.
           </h2>
