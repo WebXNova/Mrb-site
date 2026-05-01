@@ -1,10 +1,27 @@
 import { z } from 'zod';
+import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { loginAdmin, logoutAdmin } from '../services/adminAuth.service.js';
 import { loginStudent, registerStudent } from '../services/studentAuth.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { assertLoginNotLocked, recordLoginResult } from '../middleware/rateLimit.js';
+
+function refreshCookieMaxAgeMs(refreshToken) {
+  const decoded = jwt.decode(refreshToken);
+  const expMs = decoded?.exp ? decoded.exp * 1000 - Date.now() : null;
+  if (expMs != null && expMs > 0) return Math.ceil(expMs);
+  return 7 * 24 * 60 * 60 * 1000;
+}
+
+function setRefreshCookie(res, name, refreshToken, isProd) {
+  res.cookie(name, refreshToken, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    maxAge: refreshCookieMaxAgeMs(refreshToken),
+  });
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -65,19 +82,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     throw error;
   }
   const isProd = process.env.NODE_ENV === 'production';
-
-  res.cookie('admin_access_token', result.accessToken, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: isProd,
-    maxAge: 15 * 60 * 1000,
-  });
-  res.cookie('admin_refresh_token', result.refreshToken, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: isProd,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  setRefreshCookie(res, 'admin_refresh_token', result.refreshToken, isProd);
 
   await logActivity({
     userId: result.admin.id,
@@ -102,7 +107,12 @@ export const studentRegister = asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid registration details', parsed.error.flatten());
   const result = await registerStudent(parsed.data);
-  res.status(201).json({ success: true, data: result });
+  const isProd = process.env.NODE_ENV === 'production';
+  setRefreshCookie(res, 'student_refresh_token', result.refreshToken, isProd);
+  res.status(201).json({
+    success: true,
+    data: { student: result.student, accessToken: result.accessToken },
+  });
 });
 
 export const studentLogin = asyncHandler(async (req, res) => {
@@ -121,5 +131,10 @@ export const studentLogin = asyncHandler(async (req, res) => {
     }
     throw error;
   }
-  res.json({ success: true, data: result });
+  const isProd = process.env.NODE_ENV === 'production';
+  setRefreshCookie(res, 'student_refresh_token', result.refreshToken, isProd);
+  res.json({
+    success: true,
+    data: { student: result.student, accessToken: result.accessToken },
+  });
 });

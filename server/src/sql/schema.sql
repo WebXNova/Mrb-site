@@ -67,6 +67,24 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   CONSTRAINT fk_admin_session_admin FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  role_snapshot VARCHAR(32) NOT NULL,
+  jti VARCHAR(64) NOT NULL,
+  refresh_token_hash CHAR(64) NOT NULL,
+  token_version_snapshot INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  revoked_at TIMESTAMP NULL,
+  CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_auth_sessions_jti (jti),
+  KEY idx_auth_sessions_user_id (user_id),
+  KEY idx_auth_sessions_expires_at (expires_at),
+  KEY idx_auth_sessions_revoked_at (revoked_at)
+);
+
 CREATE TABLE IF NOT EXISTS tests (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   title VARCHAR(220) NOT NULL,

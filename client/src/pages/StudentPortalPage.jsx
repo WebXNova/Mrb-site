@@ -6,6 +6,8 @@ export default function StudentPortalPage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const latestResult = useMemo(() => data?.results?.[0] || null, [data]);
+  const latestTest = useMemo(() => data?.tests?.[0] || null, [data]);
 
   useEffect(() => {
     const token = localStorage.getItem('student_access_token');
@@ -35,23 +37,20 @@ export default function StudentPortalPage() {
     );
   }
 
-  const latestResult = useMemo(() => data.results?.[0] || null, [data.results]);
-  const latestTest = useMemo(() => data.tests?.[0] || null, [data.tests]);
-
   return (
     <section className="admin-page">
       <section className="admin-grid">
         <article className="admin-stat-card">
           <p className="admin-stat-card__label">Available Tests</p>
-          <p className="admin-stat-card__value">{data.tests.length}</p>
+          <p className="admin-stat-card__value">{data?.tests?.length ?? 0}</p>
         </article>
         <article className="admin-stat-card">
           <p className="admin-stat-card__label">Lectures</p>
-          <p className="admin-stat-card__value">{data.lectures.length}</p>
+          <p className="admin-stat-card__value">{data?.lectures?.length ?? 0}</p>
         </article>
         <article className="admin-stat-card">
           <p className="admin-stat-card__label">Completed Attempts</p>
-          <p className="admin-stat-card__value">{data.results.length}</p>
+          <p className="admin-stat-card__value">{data?.results?.length ?? 0}</p>
         </article>
       </section>
 

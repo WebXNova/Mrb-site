@@ -1,9 +1,8 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 import { mysqlPool } from '../config/mysql.js';
-import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
+import { createAuthSessionTokens, deleteAuthSessionsForUser } from './authSession.service.js';
 
 function hashToken(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -25,39 +24,16 @@ export async function loginAdmin(email, password) {
   const validPassword = await bcrypt.compare(password, admin.password_hash);
   if (!validPassword) throw new ApiError(401, 'Invalid credentials');
 
-  const accessToken = jwt.sign(
-    {
-      id: admin.id,
-      email: admin.email,
-      role: admin.role,
-      name: admin.full_name,
-      type: 'access',
-      tokenVersion: Number(admin.token_version || 0),
-    },
-    env.jwt.accessSecret,
-    {
-      expiresIn: env.jwt.accessExpiresIn,
-      issuer: env.jwt.issuer,
-      audience: env.jwt.audience,
-    }
-  );
+  await deleteAuthSessionsForUser(admin.id);
 
-  const refreshToken = jwt.sign(
-    { id: admin.id, role: admin.role, type: 'refresh' },
-    env.jwt.refreshSecret,
-    {
-      expiresIn: env.jwt.refreshExpiresIn,
-      issuer: env.jwt.issuer,
-      audience: env.jwt.audience,
-    }
-  );
-
-  const decodedRefresh = jwt.decode(refreshToken);
-  await mysqlPool.query(
-    `INSERT INTO admin_sessions (admin_id, refresh_token_hash, expires_at)
-     VALUES (?, ?, FROM_UNIXTIME(?))`,
-    [admin.id, hashToken(refreshToken), decodedRefresh.exp]
-  );
+  const { accessToken, refreshToken } = await createAuthSessionTokens({
+    userId: admin.id,
+    role: admin.role,
+    roleSnapshot: admin.role,
+    tokenVersion: admin.token_version,
+    email: admin.email,
+    fullName: admin.full_name,
+  });
 
   return {
     admin: {

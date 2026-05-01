@@ -1,8 +1,7 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { mysqlPool } from '../config/mysql.js';
-import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
+import { createAuthSessionTokens, deleteAuthSessionsForUser } from './authSession.service.js';
 
 const RESERVED_USERNAMES = new Set(['admin', 'support', 'root', 'system']);
 
@@ -64,22 +63,17 @@ export async function loginStudent({ email, password, expectedId = null }) {
   const validPassword = await bcrypt.compare(password, student.password_hash);
   if (!validPassword) throw new ApiError(401, 'Invalid credentials');
 
-  const accessToken = jwt.sign(
-    {
-      id: student.id,
-      email: student.email,
-      role: student.role,
-      name: student.full_name,
-      type: 'access',
-      tokenVersion: Number(student.token_version || 0),
-    },
-    env.jwt.accessSecret,
-    {
-      expiresIn: env.jwt.accessExpiresIn,
-      issuer: env.jwt.issuer,
-      audience: env.jwt.audience,
-    }
-  );
+  await deleteAuthSessionsForUser(student.id);
+
+  const { accessToken, refreshToken } = await createAuthSessionTokens({
+    userId: student.id,
+    role: student.role,
+    roleSnapshot: 'student',
+    tokenVersion: student.token_version,
+    email: student.email,
+    fullName: student.full_name,
+  });
+
   return {
     student: {
       id: student.id,
@@ -89,5 +83,6 @@ export async function loginStudent({ email, password, expectedId = null }) {
       role: student.role,
     },
     accessToken,
+    refreshToken,
   };
 }
