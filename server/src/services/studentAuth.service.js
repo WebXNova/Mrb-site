@@ -10,6 +10,29 @@ function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
+async function fetchStudentByEmail(email) {
+  try {
+    const [rows] = await mysqlPool.query(
+      `SELECT id, email, username, full_name, role, password_hash, status, token_version
+       FROM users
+       WHERE email = ? AND role = 'student'
+       LIMIT 1`,
+      [email]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (error?.code !== 'ER_BAD_FIELD_ERROR') throw error;
+    const [rows] = await mysqlPool.query(
+      `SELECT id, email, username, full_name, role, password_hash, status
+       FROM users
+       WHERE email = ? AND role = 'student'
+       LIMIT 1`,
+      [email]
+    );
+    return rows[0] ? { ...rows[0], token_version: 0 } : null;
+  }
+}
+
 export async function registerStudent({ fullName, username, email, password }) {
   const normalizedUsername = normalizeUsername(username);
   if (normalizedUsername.length < 3 || normalizedUsername.length > 30) {
@@ -50,14 +73,7 @@ export async function registerStudent({ fullName, username, email, password }) {
 }
 
 export async function loginStudent({ email, password, expectedId = null }) {
-  const [rows] = await mysqlPool.query(
-    `SELECT id, email, username, full_name, role, password_hash, status, token_version
-     FROM users
-     WHERE email = ? AND role = 'student'
-     LIMIT 1`,
-    [email]
-  );
-  const student = rows[0];
+  const student = await fetchStudentByEmail(email);
   if (!student) throw new ApiError(401, 'Invalid credentials');
   if (expectedId && Number(student.id) !== Number(expectedId)) throw new ApiError(401, 'Invalid credentials');
   if (student.status !== 'active') throw new ApiError(403, 'Student account is suspended');

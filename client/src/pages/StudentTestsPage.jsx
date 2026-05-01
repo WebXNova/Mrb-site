@@ -1,9 +1,35 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { studentApi } from '../api/studentApi';
+import { mockStudentDashboard } from '../student/data/mockStudentData';
 
-export default function StudentTestsPage({ tests = [] }) {
+export default function StudentTestsPage() {
+  const [tests, setTests] = useState(mockStudentDashboard.tests);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const response = await studentApi.dashboard();
+        if (mounted && response?.data?.tests?.length) {
+          setTests(response.data.tests);
+        }
+      } catch {
+        // Preview mode with frontend data.
+      }
+    }
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <section className="admin-card">
-      <h2 className="heading-3">Available Tests</h2>
+      <div className="admin-row-actions" style={{ justifyContent: 'space-between' }}>
+        <h2 className="heading-3">Available Tests</h2>
+        <Link className="btn btn--secondary btn--sm" to="/dashboard/tests/history">Test History</Link>
+      </div>
       <div className="admin-table-wrap" style={{ marginTop: '0.75rem' }}>
         <table className="admin-table">
           <thead>

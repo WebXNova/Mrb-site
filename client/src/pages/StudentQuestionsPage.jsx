@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
+import { mockStudentDashboard } from '../student/data/mockStudentData';
 
 export default function StudentQuestionsPage() {
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(mockStudentDashboard.questions);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -11,9 +12,9 @@ export default function StudentQuestionsPage() {
     async function load() {
       try {
         const response = await studentApi.questions();
-        if (mounted) setItems(response?.data || []);
+        if (mounted && response?.data?.length) setItems(response.data);
       } catch (err) {
-        if (mounted) setError(err.message || 'Failed to load questions');
+        if (mounted) setError(err.message || '');
       }
     }
     load();
@@ -35,7 +36,7 @@ export default function StudentQuestionsPage() {
       <div className="admin-table-wrap" style={{ marginTop: '0.75rem' }}>
         <table className="admin-table">
           <thead>
-            <tr><th>Subject</th><th>Question</th><th>Status</th><th>Updated</th></tr>
+            <tr><th>Subject</th><th>Question</th><th>Status</th><th>Updated</th><th>View</th></tr>
           </thead>
           <tbody>
             {items.length ? items.map((item) => (
@@ -44,8 +45,9 @@ export default function StudentQuestionsPage() {
                 <td>{item.title || item.body || '-'}</td>
                 <td>{item.status || 'pending'}</td>
                 <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-'}</td>
+                <td><Link to={`/dashboard/questions/${item.id}`}>Open</Link></td>
               </tr>
-            )) : <tr><td colSpan={4}>No questions yet.</td></tr>}
+            )) : <tr><td colSpan={5}>No questions yet.</td></tr>}
           </tbody>
         </table>
       </div>

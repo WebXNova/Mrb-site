@@ -30,6 +30,11 @@
   width: min(100%, 520px);
 }
 
+.auth-card--reset,
+.auth-card--verify {
+  width: min(100%, 520px);
+}
+
 .auth-subtitle {
   color: var(--color-ink-500);
   margin-top: var(--space-2);

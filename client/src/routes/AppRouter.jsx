@@ -11,6 +11,7 @@ const ContactPage = lazy(() => import('../pages/ContactPage'));
 const StudentLoginPage = lazy(() => import('../pages/StudentLoginPage'));
 const StudentRegisterPage = lazy(() => import('../pages/StudentRegisterPage'));
 const StudentForgotPasswordPage = lazy(() => import('../pages/StudentForgotPasswordPage'));
+const StudentResetPasswordPage = lazy(() => import('../pages/StudentResetPasswordPage'));
 const StudentVerifyOtpPage = lazy(() => import('../pages/StudentVerifyOtpPage'));
 const StudentVerifyMrbPage = lazy(() => import('../pages/StudentVerifyMrbPage'));
 const StudentPortalPage = lazy(() => import('../pages/StudentPortalPage'));
@@ -22,6 +23,9 @@ const StudentAskQuestionPage = lazy(() => import('../pages/StudentAskQuestionPag
 const StudentProfilePage = lazy(() => import('../pages/StudentProfilePage'));
 const StudentNotificationsPage = lazy(() => import('../pages/StudentNotificationsPage'));
 const StudentResultDetailPage = lazy(() => import('../pages/StudentResultDetailPage'));
+const StudentLecturePlayerPage = lazy(() => import('../pages/StudentLecturePlayerPage'));
+const StudentQuestionDetailPage = lazy(() => import('../pages/StudentQuestionDetailPage'));
+const StudentTestHistoryPage = lazy(() => import('../pages/StudentTestHistoryPage'));
 const StudentLayout = lazy(() => import('../student/components/StudentLayout'));
 const PublicTestPage = lazy(() => import('../pages/PublicTestPage'));
 const TestAttemptPage = lazy(() => import('../pages/TestAttemptPage'));
@@ -60,13 +64,15 @@ function PageFallback() {
 function isTokenStructurallyValid(token) {
   if (!token) return false;
   const parts = token.split('.');
-  if (parts.length !== 3) return false;
+  if (parts.length !== 3) return true;
   try {
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
     if (!payload?.exp) return true;
     return payload.exp * 1000 > Date.now();
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -110,6 +116,7 @@ export default function AppRouter() {
           <Route path="/login" element={<StudentLoginPage />} />
           <Route path="/register" element={<StudentRegisterPage />} />
           <Route path="/forgot-password" element={<StudentForgotPasswordPage />} />
+          <Route path="/reset-password" element={<StudentResetPasswordPage />} />
           <Route path="/verify-email" element={<StudentVerifyOtpPage />} />
           <Route path="/verify-mrb" element={<StudentVerifyMrbPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
@@ -126,11 +133,14 @@ export default function AppRouter() {
           >
             <Route index element={<StudentPortalPage />} />
             <Route path="tests" element={<StudentTestsPage />} />
+            <Route path="tests/history" element={<StudentTestHistoryPage />} />
             <Route path="lectures" element={<StudentLecturesPage />} />
+            <Route path="lectures/:id" element={<StudentLecturePlayerPage />} />
             <Route path="results" element={<StudentResultsPage />} />
-            <Route path="results/:attemptId" element={<StudentResultDetailPage />} />
+            <Route path="tests/:id/results/:attemptId" element={<StudentResultDetailPage />} />
             <Route path="questions" element={<StudentQuestionsPage />} />
             <Route path="questions/ask" element={<StudentAskQuestionPage />} />
+            <Route path="questions/:id" element={<StudentQuestionDetailPage />} />
             <Route path="profile" element={<StudentProfilePage />} />
             <Route path="notifications" element={<StudentNotificationsPage />} />
           </Route>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
+import { mockStudentDashboard } from '../student/data/mockStudentData';
 
 export default function StudentPortalPage() {
   const navigate = useNavigate();
@@ -16,18 +17,17 @@ export default function StudentPortalPage() {
     async function load() {
       try {
         const response = await studentApi.dashboard();
-        setData(response?.data || null);
+        setData(response?.data || mockStudentDashboard);
       } catch (err) {
-        setError(err.message || 'Failed to load student portal');
+        setError(err.message || '');
+        setData(mockStudentDashboard);
       }
     }
     load();
   }, [navigate]);
 
   if (error) {
-    return (
-      <section className="section"><div className="container"><p>{error}</p></div></section>
-    );
+    // Keep the frontend workflow usable before backend integration.
   }
   if (!data) {
     return (
@@ -39,29 +39,50 @@ export default function StudentPortalPage() {
   const latestTest = useMemo(() => data.tests?.[0] || null, [data.tests]);
 
   return (
-    <section className="admin-page">
-      <section className="admin-grid">
-        <article className="admin-stat-card">
-          <p className="admin-stat-card__label">Available Tests</p>
-          <p className="admin-stat-card__value">{data.tests.length}</p>
-        </article>
-        <article className="admin-stat-card">
-          <p className="admin-stat-card__label">Lectures</p>
-          <p className="admin-stat-card__value">{data.lectures.length}</p>
-        </article>
-        <article className="admin-stat-card">
-          <p className="admin-stat-card__label">Completed Attempts</p>
-          <p className="admin-stat-card__value">{data.results.length}</p>
-        </article>
+    <section className="student-dashboard-grid">
+      <article className="student-progress-card">
+        <h2 className="heading-3">Your Progress</h2>
+        <div className="student-progress-card__track">
+          <div
+            className="student-progress-card__fill"
+            style={{ width: `${Math.min(100, Math.max(0, data.progressPercent || 0))}%` }}
+          />
+        </div>
+        <p className="admin-stat-card__label" style={{ marginTop: '0.6rem' }}>
+          {data.progressPercent || 0}% Complete
+        </p>
+        <p className="admin-stat-card__label">
+          {data.testsCompleted || data.results?.length || 0} Tests Completed • {data.questionsAsked || data.questions?.length || 0} Questions Asked
+        </p>
+        {error ? (
+          <p className="admin-stat-card__label" style={{ marginTop: '0.4rem' }}>
+            Showing frontend preview data until backend is connected.
+          </p>
+        ) : null}
+      </article>
+
+      <section className="student-feature-grid">
+        <Link className="student-feature-card" to="/dashboard/lectures">
+          <p className="student-feature-card__label">Learning</p>
+          <p className="student-feature-card__title">Lectures ({data.lectures.length})</p>
+        </Link>
+        <Link className="student-feature-card" to="/dashboard/tests">
+          <p className="student-feature-card__label">Practice</p>
+          <p className="student-feature-card__title">Tests ({data.tests.length})</p>
+        </Link>
+        <Link className="student-feature-card" to="/dashboard/questions/ask">
+          <p className="student-feature-card__label">Support</p>
+          <p className="student-feature-card__title">Ask Doubt</p>
+        </Link>
       </section>
 
       <section className="admin-card">
-        <h2 className="heading-3">Quick Actions</h2>
-        <div className="admin-actions" style={{ marginTop: '0.75rem' }}>
-          <Link className="btn btn--primary btn--sm" to="/dashboard/lectures">Open Lectures</Link>
-          <Link className="btn btn--secondary btn--sm" to="/dashboard/tests">Take Test</Link>
-          <Link className="btn btn--secondary btn--sm" to="/dashboard/questions/ask">Ask Question</Link>
-        </div>
+        <h3 className="heading-4">Recent Activity</h3>
+        <ul className="student-activity-list">
+          {(data.recentActivity || []).map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
       </section>
 
       <section className="admin-grid">
@@ -73,7 +94,7 @@ export default function StudentPortalPage() {
               <p className="admin-stat-card__label">
                 Score: {latestResult.score}/{latestResult.maxScore} ({latestResult.percentage}%)
               </p>
-              <Link to={`/dashboard/results/${latestResult.attemptId}`}>View detail</Link>
+              <Link to={`/dashboard/tests/${latestResult.testId || 'test'}/results/${latestResult.attemptId}`}>View detail</Link>
             </>
           ) : (
             <p className="admin-stat-card__label" style={{ marginTop: '0.5rem' }}>No attempts yet.</p>

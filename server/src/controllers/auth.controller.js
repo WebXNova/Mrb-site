@@ -45,6 +45,14 @@ const registerSchema = z.object({
   password: strongPasswordSchema,
 });
 
+function getClientIp(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || null;
+}
+
 export const adminLogin = asyncHandler(async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -102,6 +110,36 @@ export const studentRegister = asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid registration details', parsed.error.flatten());
   const result = await registerStudent(parsed.data);
+
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+  await logActivity({
+    userId: result.student.id,
+    role: 'student',
+    action: 'student.register',
+    entityType: 'auth',
+    metadata: {
+      email: result.student.email,
+      username: result.student.username,
+      fullName: result.student.fullName,
+      ipAddress: clientIp,
+      userAgent,
+    },
+  });
+  await logActivity({
+    userId: result.student.id,
+    role: 'student',
+    action: 'student.login',
+    entityType: 'auth',
+    metadata: {
+      email: result.student.email,
+      username: result.student.username,
+      ipAddress: clientIp,
+      userAgent,
+      source: 'signup_auto_login',
+    },
+  });
+
   res.status(201).json({ success: true, data: result });
 });
 
@@ -121,5 +159,20 @@ export const studentLogin = asyncHandler(async (req, res) => {
     }
     throw error;
   }
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+  await logActivity({
+    userId: result.student.id,
+    role: result.student.role,
+    action: 'student.login',
+    entityType: 'auth',
+    metadata: {
+      email: result.student.email,
+      username: result.student.username,
+      ipAddress: clientIp,
+      userAgent,
+      source: 'direct_login',
+    },
+  });
   res.json({ success: true, data: result });
 });

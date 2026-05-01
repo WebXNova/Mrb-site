@@ -1,5 +1,5 @@
 import { clearStudentAuth, getStudentToken } from '../auth/session';
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 async function studentRequest(path, { method = 'GET', body, token } = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -26,6 +26,9 @@ async function studentRequest(path, { method = 'GET', body, token } = {}) {
 export const studentApi = {
   register: (payload) => studentRequest('/auth/student/register', { method: 'POST', body: payload }),
   login: (payload) => studentRequest('/auth/student/login', { method: 'POST', body: payload }),
+  forgotPassword: (payload) => studentRequest('/auth/student/forgot-password', { method: 'POST', body: payload }),
+  resetPassword: (payload) => studentRequest('/auth/student/reset-password', { method: 'POST', body: payload }),
+  verifyEmail: (payload) => studentRequest('/auth/student/verify-email', { method: 'POST', body: payload }),
   me: (token) => studentRequest('/auth/student/me', { token }),
   dashboard: () => studentRequest('/student/dashboard'),
   questions: () => studentRequest('/student/questions'),

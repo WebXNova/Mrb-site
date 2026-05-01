@@ -9,7 +9,7 @@ export async function getStudentDashboard(studentId) {
   );
 
   const [lectures] = await mysqlPool.query(
-    `SELECT l.id, l.course_id, l.title, l.youtube_url, l.topic, l.sort_order, c.title AS course_title
+    `SELECT l.id, l.course_id, l.title, l.youtube_url, l.topic, l.sort_order, c.title AS course_title, c.subject AS course_subject
      FROM lectures l
      INNER JOIN courses c ON c.id = l.course_id
      WHERE l.is_active = TRUE AND c.is_active = TRUE
@@ -50,6 +50,7 @@ export async function getStudentDashboard(studentId) {
       title: row.title,
       youtubeUrl: row.youtube_url,
       topic: row.topic,
+      courseSubject: row.course_subject,
       sortOrder: row.sort_order,
     })),
     tests: tests.map((row) => ({

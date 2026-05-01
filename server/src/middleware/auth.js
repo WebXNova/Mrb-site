@@ -24,7 +24,16 @@ async function assertTokenVersion(payload) {
   if (payload.tokenVersion === undefined) {
     throw new ApiError(401, 'Invalid token payload');
   }
-  const [rows] = await mysqlPool.query(`SELECT token_version FROM users WHERE id = ? LIMIT 1`, [payload.id]);
+  let rows;
+  try {
+    [rows] = await mysqlPool.query(`SELECT token_version FROM users WHERE id = ? LIMIT 1`, [payload.id]);
+  } catch (error) {
+    if (error?.code === 'ER_BAD_FIELD_ERROR') {
+      if (Number(payload.tokenVersion || 0) === 0) return;
+      throw new ApiError(401, 'Session expired. Please sign in again.');
+    }
+    throw error;
+  }
   const user = rows[0];
   if (!user) throw new ApiError(401, 'Authentication required');
   if (Number(user.token_version || 0) !== Number(payload.tokenVersion || 0)) {

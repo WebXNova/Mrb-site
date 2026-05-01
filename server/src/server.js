@@ -53,7 +53,11 @@ async function startServer() {
   });
 
   await verifyMySqlConnection();
-  await runSchema();
+  if (String(process.env.SKIP_SCHEMA_SYNC).toLowerCase() !== 'true') {
+    await runSchema();
+  } else {
+    console.warn('Schema sync skipped (SKIP_SCHEMA_SYNC=true)');
+  }
 
   try {
     await connectRedis();
