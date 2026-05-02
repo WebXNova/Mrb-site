@@ -14,7 +14,13 @@ async function studentRequest(path, { method = 'GET', body, token } = {}) {
   if (!response.ok) {
     if (response.status === 401) {
       clearStudentAuth();
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/student')) {
+      if (
+        typeof window !== 'undefined' &&
+        ['/dashboard', '/student'].some((prefix) =>
+          window.location.pathname === prefix ||
+          window.location.pathname.startsWith(`${prefix}/`)
+        )
+      ) {
         window.location.href = '/login';
       }
     }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 import { mockStudentDashboard } from '../student/data/mockStudentData';
+import { normaliseStudentDashboard } from '../student/utils/normaliseStudentDashboard';
 
 function getEmbedUrl(url) {
   if (!url) return '';
@@ -21,8 +22,9 @@ export default function StudentLecturePlayerPage() {
     async function load() {
       try {
         const response = await studentApi.dashboard();
-        if (mounted && response?.data?.lectures?.length) {
-          setLectures(response.data.lectures);
+        const norm = normaliseStudentDashboard(response?.data || mockStudentDashboard);
+        if (mounted && norm.lectures.length) {
+          setLectures(norm.lectures);
         }
       } catch {
         // fallback to mock data
@@ -51,7 +53,12 @@ export default function StudentLecturePlayerPage() {
     <section className="admin-card">
       <h2 className="heading-3">{lecture.title}</h2>
       <p className="admin-stat-card__label" style={{ marginTop: '0.5rem' }}>
-        {lecture.courseTitle} • {lecture.subject} • {lecture.durationMinutes} min
+        {[lecture.courseTitle || 'Course', lecture.courseSubject || lecture.subject]
+          .filter(Boolean)
+          .join(' • ')}
+        {lecture.durationMinutes != null && Number.isFinite(Number(lecture.durationMinutes))
+          ? ` • ${lecture.durationMinutes} min`
+          : ''}
       </p>
       <div style={{ marginTop: '1rem', aspectRatio: '16 / 9' }}>
         <iframe

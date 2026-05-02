@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 import { mockStudentDashboard } from '../student/data/mockStudentData';
+import { normaliseStudentDashboard } from '../student/utils/normaliseStudentDashboard';
 
 export default function StudentPortalPage() {
   const navigate = useNavigate();
@@ -17,10 +18,10 @@ export default function StudentPortalPage() {
     async function load() {
       try {
         const response = await studentApi.dashboard();
-        setData(response?.data || mockStudentDashboard);
+        setData(normaliseStudentDashboard(response?.data || mockStudentDashboard));
       } catch (err) {
         setError(err.message || '');
-        setData(mockStudentDashboard);
+        setData(normaliseStudentDashboard(mockStudentDashboard));
       }
     }
     load();
