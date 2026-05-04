@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { clearAdminAuth, clearStudentAuth, getAdminToken, getStudentToken } from '../auth/session';
+import { isRefreshAuthRevokedError, refreshAdminAccessToken, shouldAttemptAccessRefresh } from '../api/authRefresh';
+import { clearAdminAuth, getAdminToken } from '../auth/session';
 import ScrollToTop from '../components/layout/ScrollToTop';
 
 const HomePage = lazy(() => import('../pages/HomePage'));
@@ -57,42 +58,78 @@ function PageFallback() {
   );
 }
 
-function isTokenStructurallyValid(token) {
-  if (!token) return false;
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-  try {
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    if (!payload?.exp) return true;
-    return payload.exp * 1000 > Date.now();
-  } catch {
-    return false;
-  }
+function initialRedirectIfAdminPhase() {
+  const t = getAdminToken();
+  if (!t) return 'guest';
+  if (!shouldAttemptAccessRefresh(t)) return 'redirect';
+  return 'checking';
 }
 
 function RequireAdmin({ children }) {
-  const token = getAdminToken();
+  const [gate, setGate] = useState('pending');
   const location = useLocation();
-  if (!token || !isTokenStructurallyValid(token)) {
-    clearAdminAuth();
-    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
-  }
+
+  useEffect(() => {
+    let cancelled = false;
+    setGate('pending');
+    (async () => {
+      try {
+        const token = getAdminToken();
+        if (!token || shouldAttemptAccessRefresh(token)) {
+          await refreshAdminAccessToken();
+        }
+        if (!cancelled) setGate('allow');
+      } catch (e) {
+        if (cancelled) return;
+        if (isRefreshAuthRevokedError(e)) {
+          clearAdminAuth();
+          setGate('deny');
+        } else {
+          setGate('allow');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
+
+  if (gate === 'pending') return <PageFallback />;
+  if (gate === 'deny') return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
   return children;
 }
 
 function RedirectIfAdmin({ children }) {
-  const token = getAdminToken();
-  if (token && isTokenStructurallyValid(token)) return <Navigate to="/admin" replace />;
-  if (token) clearAdminAuth();
+  const [phase, setPhase] = useState(initialRedirectIfAdminPhase);
+
+  useEffect(() => {
+    if (phase !== 'checking') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await refreshAdminAccessToken();
+        if (!cancelled) setPhase('redirect');
+      } catch (e) {
+        if (cancelled) return;
+        if (isRefreshAuthRevokedError(e)) {
+          clearAdminAuth();
+          setPhase('guest');
+        } else {
+          setPhase('guest');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
+
+  if (phase === 'redirect') return <Navigate to="/admin" replace />;
   return children;
 }
 
+/** Student refresh runs once from App bootstrap (`bootstrapStudentSession`); no /auth/refresh here (avoids duplicate in-flight refresh on reload). */
 function RequireStudent({ children }) {
-  const token = getStudentToken();
-  if (!token || !isTokenStructurallyValid(token)) {
-    clearStudentAuth();
-    return <Navigate to="/login" replace />;
-  }
   return children;
 }
 

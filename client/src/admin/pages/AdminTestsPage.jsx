@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
+import { getAdminToken } from '../../auth/session';
 import RichTextEditor from '../components/RichTextEditor';
 
 const defaultTestForm = {
@@ -80,7 +81,7 @@ function validatePreviewRow(row) {
 }
 
 export default function AdminTestsPage() {
-  const token = localStorage.getItem('admin_access_token');
+  const token = getAdminToken();
   const [tests, setTests] = useState([]);
   const [selectedTestId, setSelectedTestId] = useState(null);
   const [questions, setQuestions] = useState([]);

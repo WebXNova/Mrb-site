@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
+import { getAdminToken } from '../../auth/session';
 
 const initialForm = {
   courseId: '',
@@ -11,7 +12,7 @@ const initialForm = {
 };
 
 export default function AdminLecturesPage() {
-  const token = localStorage.getItem('admin_access_token');
+  const token = getAdminToken();
   const [courses, setCourses] = useState([]);
   const [lectures, setLectures] = useState([]);
   const [form, setForm] = useState(initialForm);

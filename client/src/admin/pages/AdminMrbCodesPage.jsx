@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
+import { getAdminToken } from '../../auth/session';
 
 export default function AdminMrbCodesPage() {
-  const token = localStorage.getItem('admin_access_token');
+  const token = getAdminToken();
   const [codes, setCodes] = useState([]);
   const [count, setCount] = useState(10);
   const [batchLabel, setBatchLabel] = useState('');

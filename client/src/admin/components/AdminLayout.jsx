@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
-import { clearAdminAuth, getAdminToken, getStoredUser } from '../../auth/session';
+import { clearAdminAuth, getStoredUser } from '../../auth/session';
 import '../../styles/global.css';
 import '../styles/admin.css';
 
@@ -18,7 +18,6 @@ const navItems = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const token = getAdminToken();
   const adminUser = getStoredUser('admin_user');
 
   async function handleLogout() {
@@ -76,14 +75,7 @@ export default function AdminLayout() {
           </button>
         </header>
 
-        {!token ? (
-          <div className="admin-empty-state">
-            <h2 className="heading-3">Session expired</h2>
-            <p className="body-md">Please sign in again.</p>
-          </div>
-        ) : (
-          <Outlet />
-        )}
+        <Outlet />
       </section>
     </div>
   );

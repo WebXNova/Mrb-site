@@ -1,20 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 
 export default function StudentPortalPage() {
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const latestResult = useMemo(() => data?.results?.[0] || null, [data]);
   const latestTest = useMemo(() => data?.tests?.[0] || null, [data]);
 
   useEffect(() => {
-    const token = localStorage.getItem('student_access_token');
-    if (!token) {
-      navigate('/login', { replace: true });
-      return;
-    }
     async function load() {
       try {
         const response = await studentApi.dashboard();
@@ -24,7 +18,7 @@ export default function StudentPortalPage() {
       }
     }
     load();
-  }, [navigate]);
+  }, []);
 
   if (error) {
     return (

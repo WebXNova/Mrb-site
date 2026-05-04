@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
-import { createAuthSessionTokens, deleteAuthSessionsForUser } from './authSession.service.js';
+import { createAuthSessionTokens, deleteAuthSessionsForUser, revokeAuthSessionByRefreshToken } from './authSession.service.js';
 
 const RESERVED_USERNAMES = new Set(['admin', 'support', 'root', 'system']);
 
@@ -63,26 +63,41 @@ export async function loginStudent({ email, password, expectedId = null }) {
   const validPassword = await bcrypt.compare(password, student.password_hash);
   if (!validPassword) throw new ApiError(401, 'Invalid credentials');
 
-  await deleteAuthSessionsForUser(student.id);
+  const connection = await mysqlPool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await deleteAuthSessionsForUser(student.id, connection);
+    const { accessToken, refreshToken } = await createAuthSessionTokens(
+      {
+        userId: student.id,
+        role: student.role,
+        roleSnapshot: 'student',
+        tokenVersion: student.token_version,
+        email: student.email,
+        fullName: student.full_name,
+      },
+      connection
+    );
+    await connection.commit();
+    return {
+      student: {
+        id: student.id,
+        email: student.email,
+        username: student.username,
+        fullName: student.full_name,
+        role: student.role,
+      },
+      accessToken,
+      refreshToken,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
 
-  const { accessToken, refreshToken } = await createAuthSessionTokens({
-    userId: student.id,
-    role: student.role,
-    roleSnapshot: 'student',
-    tokenVersion: student.token_version,
-    email: student.email,
-    fullName: student.full_name,
-  });
-
-  return {
-    student: {
-      id: student.id,
-      email: student.email,
-      username: student.username,
-      fullName: student.full_name,
-      role: student.role,
-    },
-    accessToken,
-    refreshToken,
-  };
+export async function logoutStudent(refreshToken) {
+  await revokeAuthSessionByRefreshToken(refreshToken);
 }

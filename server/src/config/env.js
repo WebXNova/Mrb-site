@@ -40,10 +40,27 @@ function parseBoolean(value, defaultValue = false) {
   return String(value).toLowerCase() === 'true';
 }
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+
+function buildTrustedOrigins() {
+  const origins = new Set([clientUrl]);
+  const extra = String(process.env.TRUSTED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const o of extra) origins.add(o);
+  if (nodeEnv !== 'production') {
+    origins.add('http://localhost:5173');
+    origins.add('http://localhost:5174');
+  }
+  return [...origins];
+}
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: Number(process.env.PORT || 4000),
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl,
 
   mysql: {
     host: required('MYSQL_HOST', '127.0.0.1'),
@@ -66,7 +83,9 @@ export const env = {
   },
   security: {
     requireRedisInProduction: parseBoolean(process.env.REQUIRE_REDIS_IN_PRODUCTION, true),
-    allowLegacyTokenVersion: parseBoolean(process.env.ALLOW_LEGACY_TOKEN_VERSION, true),
+    allowLegacyTokenVersion: parseBoolean(process.env.ALLOW_LEGACY_TOKEN_VERSION, false),
+    /** Origins allowed for cookie-auth endpoints (Origin header). Add production frontends via TRUSTED_ORIGINS (comma-separated). */
+    trustedOrigins: buildTrustedOrigins(),
   },
 };
 

@@ -9,6 +9,7 @@ export const mysqlPool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  connectTimeout: Number(process.env.MYSQL_CONNECT_TIMEOUT_MS || 8000),
 });
 
 export async function verifyMySqlConnection() {

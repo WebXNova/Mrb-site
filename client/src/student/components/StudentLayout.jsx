@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { studentApi } from '../../api/studentApi';
 import { clearStudentAuth, getStoredUser } from '../../auth/session';
 import '../../styles/global.css';
 import '../../admin/styles/admin.css';
@@ -19,7 +20,12 @@ export default function StudentLayout() {
   const student = getStoredUser('student_user');
   const displayName = student?.username || student?.fullName;
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      await studentApi.logout();
+    } catch {
+      // Ignore logout API failures and still clear local auth state.
+    }
     clearStudentAuth();
     navigate('/login', { replace: true });
   }

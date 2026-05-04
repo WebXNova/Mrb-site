@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
-import { setStudentAuth } from '../auth/session';
+import { getStoredUser, setStudentAuth } from '../auth/session';
 import PageLayout from '../components/layout/PageLayout';
 import '../styles/auth-pages.css';
 
@@ -20,7 +20,7 @@ export default function StudentLoginPage() {
     try {
       const response = await studentApi.login({ email, password });
       const payload = response?.data;
-      const existingStudent = JSON.parse(localStorage.getItem('student_user') || 'null');
+      const existingStudent = getStoredUser('student_user');
       const studentUser = {
         ...payload.student,
         username: payload?.student?.username || existingStudent?.username || username || '',

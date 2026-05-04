@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { refreshStudentAccessToken } from '../api/authRefresh';
 import { testsApi } from '../api/adminApi';
+import { getStudentToken } from '../auth/session';
 
 export default function PublicTestPage() {
   const { slug } = useParams();
@@ -9,21 +11,29 @@ export default function PublicTestPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
-  const studentToken = localStorage.getItem('student_access_token');
 
   async function onUnlock(event) {
     event.preventDefault();
     setError('');
     setIsBusy(true);
     try {
-      if (!studentToken) {
+      let token = getStudentToken();
+      if (!token) {
+        try {
+          await refreshStudentAccessToken();
+        } catch {
+          // non-fatal; may still have no token below
+        }
+        token = getStudentToken();
+      }
+      if (!token) {
         navigate('/login', { replace: true });
         return;
       }
       const response = await testsApi.verifyCode(slug, {
         code: code.trim(),
         studentName: studentName.trim() || null,
-      }, studentToken);
+      }, token);
       const data = response?.data;
       if (!data?.attemptToken || !data?.attemptId) {
         throw new Error('Could not start attempt. Please try again.');
@@ -77,11 +87,9 @@ export default function PublicTestPage() {
             {isBusy ? 'Verifying...' : 'Unlock Test'}
           </button>
           </form>
-          {!studentToken ? (
-            <p className="body-sm" style={{ marginTop: '0.75rem', color: 'var(--color-ink-500)' }}>
-              Sign in first to access this test, then enter your MRB code.
-            </p>
-          ) : null}
+          <p className="body-sm" style={{ marginTop: '0.75rem', color: 'var(--color-ink-500)' }}>
+            Sign in with your student account to unlock tests with your MRB code.
+          </p>
           <p className="body-sm" style={{ marginTop: '0.35rem', color: 'var(--color-ink-500)' }}>
             Test URL identifies the paper, and MRB code unlocks it securely.
           </p>

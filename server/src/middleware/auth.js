@@ -32,8 +32,21 @@ async function assertTokenVersion(payload) {
   }
 }
 
+async function assertAccessSessionActive(payload) {
+  if (!payload?.sid) {
+    throw new ApiError(401, 'Invalid token payload');
+  }
+  const [rows] = await mysqlPool.query(
+    `SELECT id FROM auth_sessions WHERE id = ? AND user_id = ? AND revoked_at IS NULL LIMIT 1`,
+    [payload.sid, payload.id]
+  );
+  if (!rows[0]) {
+    throw new ApiError(401, 'Session expired. Please sign in again.');
+  }
+}
+
 export async function requireAdmin(req, res, next) {
-  const token = readAuthToken(req) || req.cookies?.admin_access_token;
+  const token = readAuthToken(req);
 
   if (!token) {
     return next(new ApiError(401, 'Authentication required'));
@@ -51,6 +64,7 @@ export async function requireAdmin(req, res, next) {
       throw new ApiError(403, 'Admin access required');
     }
     await assertTokenVersion(payload);
+    await assertAccessSessionActive(payload);
     req.user = payload;
     next();
   } catch (error) {
@@ -77,6 +91,7 @@ export async function requireStudent(req, res, next) {
       throw new ApiError(401, 'Invalid token payload');
     }
     await assertTokenVersion(payload);
+    await assertAccessSessionActive(payload);
     if (payload.role !== 'student') throw new ApiError(403, 'Student access required');
     req.user = payload;
     next();

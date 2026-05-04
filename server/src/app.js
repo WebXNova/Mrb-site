@@ -11,7 +11,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 export const app = express();
 
-const allowedOrigins = [env.clientUrl, 'http://localhost:5173', 'http://localhost:5174'];
+const allowedOrigins = env.security.trustedOrigins;
 
 app.use(
   cors({
@@ -32,7 +32,7 @@ app.use(
       reportOnly: true,
       directives: {
         "default-src": ["'self'"],
-        "connect-src": ["'self'", env.clientUrl, 'http://localhost:5173', 'http://localhost:5174'],
+        "connect-src": ["'self'", ...allowedOrigins],
         "img-src": ["'self'", 'data:', 'https:'],
         "script-src": ["'self'"],
         "style-src": ["'self'", "'unsafe-inline'"],

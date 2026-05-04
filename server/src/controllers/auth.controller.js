@@ -2,8 +2,14 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
+import { env } from '../config/env.js';
 import { loginAdmin, logoutAdmin } from '../services/adminAuth.service.js';
-import { loginStudent, registerStudent } from '../services/studentAuth.service.js';
+import { loginStudent, logoutStudent, registerStudent } from '../services/studentAuth.service.js';
+import {
+  pickActiveRefreshContext,
+  refreshContextFromToken,
+  rotateAuthSessionByRefreshToken,
+} from '../services/authSession.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { assertLoginNotLocked, recordLoginResult } from '../middleware/rateLimit.js';
 
@@ -19,8 +25,62 @@ function setRefreshCookie(res, name, refreshToken, isProd) {
     httpOnly: true,
     sameSite: 'lax',
     secure: isProd,
+    path: '/api/auth',
     maxAge: refreshCookieMaxAgeMs(refreshToken),
   });
+}
+
+function clearRefreshCookie(res, name, isProd) {
+  res.clearCookie(name, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    path: '/api/auth',
+  });
+}
+
+async function readRefreshContext(req) {
+  const adminRefreshToken = req.cookies?.admin_refresh_token;
+  const studentRefreshToken = req.cookies?.student_refresh_token;
+  const requestedRole = String(req.get('x-auth-role') || '').trim().toLowerCase();
+  if (!adminRefreshToken && !studentRefreshToken) {
+    throw new ApiError(401, 'Refresh token required');
+  }
+  if (requestedRole === 'admin') {
+    if (!adminRefreshToken) throw new ApiError(401, 'Admin refresh token required');
+    const ctx = await refreshContextFromToken(adminRefreshToken, 'admin_refresh_token');
+    if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
+    if (ctx.role !== 'admin') throw new ApiError(403, 'Admin refresh token required');
+    return ctx;
+  }
+  if (requestedRole === 'student') {
+    if (!studentRefreshToken) throw new ApiError(401, 'Student refresh token required');
+    const ctx = await refreshContextFromToken(studentRefreshToken, 'student_refresh_token');
+    if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
+    if (ctx.role !== 'student') throw new ApiError(403, 'Student refresh token required');
+    return ctx;
+  }
+  if (adminRefreshToken && studentRefreshToken) {
+    return pickActiveRefreshContext(adminRefreshToken, studentRefreshToken);
+  }
+  if (adminRefreshToken) {
+    const ctx = await refreshContextFromToken(adminRefreshToken, 'admin_refresh_token');
+    if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
+    return ctx;
+  }
+  const ctx = await refreshContextFromToken(studentRefreshToken, 'student_refresh_token');
+  if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
+  return ctx;
+}
+
+function assertTrustedOrigin(req) {
+  const origin = req.get('origin');
+  if (!origin || !String(origin).trim()) {
+    throw new ApiError(403, 'Origin header required');
+  }
+  if (!env.security.trustedOrigins.includes(origin)) {
+    throw new ApiError(403, 'Origin not allowed');
+  }
 }
 
 const loginSchema = z.object({
@@ -63,6 +123,7 @@ const registerSchema = z.object({
 });
 
 export const adminLogin = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     throw new ApiError(422, 'Invalid login payload', parsed.error.flatten());
@@ -82,6 +143,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     throw error;
   }
   const isProd = process.env.NODE_ENV === 'production';
+  clearRefreshCookie(res, 'student_refresh_token', isProd);
   setRefreshCookie(res, 'admin_refresh_token', result.refreshToken, isProd);
 
   await logActivity({
@@ -96,18 +158,32 @@ export const adminLogin = asyncHandler(async (req, res) => {
 });
 
 export const adminLogout = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
   const refreshToken = req.cookies?.admin_refresh_token;
   await logoutAdmin(refreshToken);
-  res.clearCookie('admin_access_token');
-  res.clearCookie('admin_refresh_token');
+  const isProd = process.env.NODE_ENV === 'production';
+  clearRefreshCookie(res, 'admin_refresh_token', isProd);
+  await logActivity({ role: 'admin', action: 'admin.logout', entityType: 'auth' });
+  res.json({ success: true, message: 'Logged out' });
+});
+
+export const studentLogout = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  const refreshToken = req.cookies?.student_refresh_token;
+  await logoutStudent(refreshToken);
+  const isProd = process.env.NODE_ENV === 'production';
+  clearRefreshCookie(res, 'student_refresh_token', isProd);
+  await logActivity({ role: 'student', action: 'student.logout', entityType: 'auth' });
   res.json({ success: true, message: 'Logged out' });
 });
 
 export const studentRegister = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid registration details', parsed.error.flatten());
   const result = await registerStudent(parsed.data);
   const isProd = process.env.NODE_ENV === 'production';
+  clearRefreshCookie(res, 'admin_refresh_token', isProd);
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken, isProd);
   res.status(201).json({
     success: true,
@@ -116,6 +192,7 @@ export const studentRegister = asyncHandler(async (req, res) => {
 });
 
 export const studentLogin = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid login payload', parsed.error.flatten());
   const loginIdentifier = parsed.data.email.toLowerCase();
@@ -132,9 +209,50 @@ export const studentLogin = asyncHandler(async (req, res) => {
     throw error;
   }
   const isProd = process.env.NODE_ENV === 'production';
+  clearRefreshCookie(res, 'admin_refresh_token', isProd);
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken, isProd);
   res.json({
     success: true,
     data: { student: result.student, accessToken: result.accessToken },
+  });
+});
+
+export const refreshAuth = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  const isProd = process.env.NODE_ENV === 'production';
+  const refreshContext = await readRefreshContext(req);
+  let rotated;
+  try {
+    rotated = await rotateAuthSessionByRefreshToken(refreshContext.token);
+  } catch (error) {
+    await logActivity({
+      role: refreshContext.role,
+      action: 'auth.refresh_failed',
+      entityType: 'auth',
+      metadata: { reason: error.message },
+    });
+    throw error;
+  }
+  if (refreshContext.role === 'admin' && rotated.role !== 'admin' && rotated.role !== 'super_admin') {
+    throw new ApiError(403, 'Admin refresh token required');
+  }
+  if (refreshContext.role === 'student' && rotated.role !== 'student') {
+    throw new ApiError(403, 'Student refresh token required');
+  }
+  setRefreshCookie(res, refreshContext.cookieName, rotated.refreshToken, isProd);
+  await logActivity({
+    userId: rotated.user.id,
+    role: rotated.role === 'student' ? 'student' : 'admin',
+    action: 'auth.refresh',
+    entityType: 'auth',
+    metadata: { role: rotated.role },
+  });
+  res.json({
+    success: true,
+    data: {
+      accessToken: rotated.accessToken,
+      user: rotated.user,
+      role: rotated.role,
+    },
   });
 });

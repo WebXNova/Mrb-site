@@ -1,19 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 
 export default function StudentResultDetailPage() {
   const { attemptId } = useParams();
-  const navigate = useNavigate();
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('student_access_token');
-    if (!token) {
-      navigate('/login', { replace: true });
-      return;
-    }
     async function load() {
       try {
         const response = await studentApi.resultDetail(attemptId);
@@ -23,7 +17,7 @@ export default function StudentResultDetailPage() {
       }
     }
     load();
-  }, [attemptId, navigate]);
+  }, [attemptId]);
 
   if (error) return <section className="section"><div className="container"><p>{error}</p></div></section>;
   if (!result) return <section className="section"><div className="container"><p>Loading...</p></div></section>;

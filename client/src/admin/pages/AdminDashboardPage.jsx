@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
+import { getAdminToken } from '../../auth/session';
 
 function StatCard({ label, value }) {
   return (
@@ -11,7 +12,7 @@ function StatCard({ label, value }) {
 }
 
 export default function AdminDashboardPage() {
-  const token = localStorage.getItem('admin_access_token');
+  const token = getAdminToken();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState({});

@@ -6,7 +6,9 @@
   "description": "MRB Learning Platform backend API",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "cleanup:auth-sessions": "node scripts/cleanup-revoked-auth-sessions.js",
+    "test:auth": "node scripts/verify-auth-flow.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

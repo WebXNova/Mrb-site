@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
+import { getAdminToken } from '../../auth/session';
 
 export default function AdminLogsPage() {
-  const token = localStorage.getItem('admin_access_token');
+  const token = getAdminToken();
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState('');
 

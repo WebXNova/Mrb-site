@@ -1,12 +1,7 @@
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
-import { createAuthSessionTokens, deleteAuthSessionsForUser } from './authSession.service.js';
-
-function hashToken(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
+import { createAuthSessionTokens, deleteAuthSessionsForUser, revokeAuthSessionByRefreshToken } from './authSession.service.js';
 
 export async function loginAdmin(email, password) {
   const [rows] = await mysqlPool.query(
@@ -24,31 +19,41 @@ export async function loginAdmin(email, password) {
   const validPassword = await bcrypt.compare(password, admin.password_hash);
   if (!validPassword) throw new ApiError(401, 'Invalid credentials');
 
-  await deleteAuthSessionsForUser(admin.id);
-
-  const { accessToken, refreshToken } = await createAuthSessionTokens({
-    userId: admin.id,
-    role: admin.role,
-    roleSnapshot: admin.role,
-    tokenVersion: admin.token_version,
-    email: admin.email,
-    fullName: admin.full_name,
-  });
-
-  return {
-    admin: {
-      id: admin.id,
-      email: admin.email,
-      fullName: admin.full_name,
-      role: admin.role,
-    },
-    accessToken,
-    refreshToken,
-  };
+  const connection = await mysqlPool.getConnection();
+  try {
+    await connection.beginTransaction();
+    // Single active session: revoke prior rows (soft), then insert new session — atomic to prevent concurrent double-active rows.
+    await deleteAuthSessionsForUser(admin.id, connection);
+    const { accessToken, refreshToken } = await createAuthSessionTokens(
+      {
+        userId: admin.id,
+        role: admin.role,
+        roleSnapshot: admin.role,
+        tokenVersion: admin.token_version,
+        email: admin.email,
+        fullName: admin.full_name,
+      },
+      connection
+    );
+    await connection.commit();
+    return {
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        fullName: admin.full_name,
+        role: admin.role,
+      },
+      accessToken,
+      refreshToken,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function logoutAdmin(refreshToken) {
-  if (!refreshToken) return;
-  const tokenHash = hashToken(refreshToken);
-  await mysqlPool.query(`DELETE FROM admin_sessions WHERE refresh_token_hash = ?`, [tokenHash]);
+  await revokeAuthSessionByRefreshToken(refreshToken);
 }

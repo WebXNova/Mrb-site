@@ -1,5 +1,7 @@
+import { getStoredUser } from '../auth/session';
+
 export default function StudentProfilePage() {
-  const student = JSON.parse(localStorage.getItem('student_user') || '{}');
+  const student = getStoredUser('student_user') || {};
 
   return (
     <section className="admin-card">

@@ -1,8 +1,8 @@
 import { http } from './http';
 
 export const adminApi = {
-  login: (payload) => http.post('/auth/login', payload),
-  logout: () => http.post('/auth/logout'),
+  login: (payload) => http.post('/auth/login', payload, { retryOnUnauthorized: false }),
+  logout: () => http.post('/auth/logout', {}, { retryOnUnauthorized: false }),
   me: (token) => http.get('/auth/me', { token }),
 
   dashboard: (token) => http.get('/admin/dashboard', { token }),

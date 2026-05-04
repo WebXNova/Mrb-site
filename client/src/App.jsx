@@ -1,9 +1,26 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { adminApi } from './api/adminApi';
+import { bootstrapAdminSession, bootstrapStudentSession } from './api/authRefresh';
 import { studentApi } from './api/studentApi';
-import { clearAdminAuth, clearStudentAuth, getAdminToken, getStoredUser, getStudentToken, onAuthChanged } from './auth/session';
+import { getAdminToken, getStoredUser, getStudentToken, onAuthChanged } from './auth/session';
 import AppRouter from './routes/AppRouter';
+
+function shouldBootstrapStudent(path) {
+  return (
+    path.startsWith('/dashboard') ||
+    path.startsWith('/student') ||
+    /^\/tests\/[^/]+\/(start|result)$/.test(path) ||
+    Boolean(getStoredUser('student_user'))
+  );
+}
+
+function shouldBootstrapAdmin(path) {
+  return (path.startsWith('/admin') && !path.startsWith('/admin/login')) || Boolean(getStoredUser('admin_user'));
+}
+
+/** Serializes validateAuthState so onAuthChanged cannot run parallel /me races. */
+let validateAuthChain = Promise.resolve();
 
 export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -11,27 +28,34 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
 
-    async function validateAuthState() {
-      const checks = [];
-      const studentToken = getStudentToken();
-      const adminToken = getAdminToken();
-      getStoredUser('student_user');
-      getStoredUser('admin_user');
+    function enqueueValidateAuthState() {
+      validateAuthChain = validateAuthChain.then(async () => {
+        if (cancelled) return;
 
-      if (studentToken) {
-        checks.push(studentApi.me(studentToken).catch(() => clearStudentAuth()));
-      }
-      if (adminToken) {
-        checks.push(adminApi.me(adminToken).catch(() => clearAdminAuth()));
-      }
+        const path = typeof window !== 'undefined' ? window.location.pathname : '';
 
-      await Promise.all(checks);
-      if (!cancelled) setIsAuthReady(true);
+        if (shouldBootstrapAdmin(path) && !getAdminToken()) {
+          await bootstrapAdminSession();
+        }
+        if (shouldBootstrapStudent(path) && !getStudentToken()) {
+          await bootstrapStudentSession();
+        }
+
+        const checks = [];
+        if (getAdminToken()) {
+          checks.push(adminApi.me().catch(() => {}));
+        }
+        if (getStudentToken()) {
+          checks.push(studentApi.me().catch(() => {}));
+        }
+        await Promise.all(checks);
+        if (!cancelled) setIsAuthReady(true);
+      });
     }
 
-    validateAuthState();
+    enqueueValidateAuthState();
     const unsubscribe = onAuthChanged(() => {
-      validateAuthState();
+      enqueueValidateAuthState();
     });
     return () => {
       cancelled = true;

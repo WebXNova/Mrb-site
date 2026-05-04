@@ -1,4 +1,16 @@
 const AUTH_EVENT = 'mrb-auth-changed';
+let adminAccessToken = null;
+let studentAccessToken = null;
+
+function purgeLegacyTokenKeys() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('admin_access_token');
+    localStorage.removeItem('student_access_token');
+  } catch {
+    // ignore
+  }
+}
 
 function notifyAuthChanged() {
   if (typeof window !== 'undefined') {
@@ -9,43 +21,44 @@ function notifyAuthChanged() {
 export function onAuthChanged(handler) {
   if (typeof window === 'undefined') return () => {};
   window.addEventListener(AUTH_EVENT, handler);
-  window.addEventListener('storage', handler);
   return () => {
     window.removeEventListener(AUTH_EVENT, handler);
-    window.removeEventListener('storage', handler);
   };
 }
 
 export function clearStudentAuth() {
-  localStorage.removeItem('student_access_token');
+  studentAccessToken = null;
   localStorage.removeItem('student_user');
   notifyAuthChanged();
 }
 
 export function clearAdminAuth() {
-  localStorage.removeItem('admin_access_token');
+  adminAccessToken = null;
   localStorage.removeItem('admin_user');
   notifyAuthChanged();
 }
 
 export function setStudentAuth(token, student) {
-  localStorage.setItem('student_access_token', token);
+  studentAccessToken = token || null;
   localStorage.setItem('student_user', JSON.stringify(student || {}));
   notifyAuthChanged();
 }
 
 export function setAdminAuth(token, admin) {
-  localStorage.setItem('admin_access_token', token);
+  adminAccessToken = token || null;
   if (admin) localStorage.setItem('admin_user', JSON.stringify(admin));
+  else localStorage.removeItem('admin_user');
   notifyAuthChanged();
 }
 
 export function getStudentToken() {
-  return localStorage.getItem('student_access_token');
+  purgeLegacyTokenKeys();
+  return studentAccessToken;
 }
 
 export function getAdminToken() {
-  return localStorage.getItem('admin_access_token');
+  purgeLegacyTokenKeys();
+  return adminAccessToken;
 }
 
 export function getStoredUser(key) {
