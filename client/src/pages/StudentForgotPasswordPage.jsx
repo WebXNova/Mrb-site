@@ -33,7 +33,11 @@ export default function StudentForgotPasswordPage() {
               Send Reset Link
             </button>
           </form>
-          {sent ? <p className="admin-success auth-form__status">Reset link request captured.</p> : null}
+          {sent ? (
+            <p className="admin-success auth-form__status">
+              Reset link request captured. Continue to <Link to="/reset-password">Reset Password</Link>.
+            </p>
+          ) : null}
           <p className="auth-footer">
             Back to <Link to="/login">Sign in</Link>
           </p>

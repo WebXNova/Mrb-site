@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 
+function formatDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString();
+}
+
 export default function AdminUsersPage() {
   const token = getAdminToken();
   const [users, setUsers] = useState([]);
@@ -35,10 +42,14 @@ export default function AdminUsersPage() {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Username</th>
               <th>Email</th>
               <th>Role</th>
               <th>Status</th>
-              <th>Created</th>
+              <th>Registered</th>
+              <th>Last Login</th>
+              <th>Last Login IP</th>
+              <th>Login Count</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -47,10 +58,14 @@ export default function AdminUsersPage() {
               users.map((user) => (
                 <tr key={user.id}>
                   <td>{user.fullName}</td>
+                  <td>{user.username || '-'}</td>
                   <td>{user.email}</td>
                   <td>{user.role}</td>
                   <td>{user.status}</td>
-                  <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                  <td title={user.registeredUserAgent || ''}>{formatDateTime(user.registeredAt || user.createdAt)}</td>
+                  <td title={user.lastLoginUserAgent || ''}>{formatDateTime(user.lastLoginAt)}</td>
+                  <td>{user.lastLoginIpAddress || '-'}</td>
+                  <td>{user.loginCount ?? 0}</td>
                   <td>
                     {user.role === 'admin' || user.role === 'super_admin' ? (
                       '-'
@@ -72,7 +87,7 @@ export default function AdminUsersPage() {
               ))
             ) : (
               <tr>
-                <td colSpan={6}>No users found.</td>
+                <td colSpan={10}>No users found.</td>
               </tr>
             )}
           </tbody>

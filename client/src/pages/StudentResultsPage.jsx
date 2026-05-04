@@ -1,6 +1,9 @@
+import { mockStudentDashboard } from '../student/data/mockStudentData';
 import { Link } from 'react-router-dom';
 
-export default function StudentResultsPage({ results = [] }) {
+export default function StudentResultsPage() {
+  const results = mockStudentDashboard.results;
+
   return (
     <section className="admin-card">
       <h2 className="heading-3">My Results</h2>
@@ -16,7 +19,7 @@ export default function StudentResultsPage({ results = [] }) {
                 <td>{result.score}/{result.maxScore}</td>
                 <td>{result.percentage}%</td>
                 <td>{result.submittedAt ? new Date(result.submittedAt).toLocaleString() : '-'}</td>
-                <td><Link to={`/student/results/${result.attemptId}`}>Review</Link></td>
+                <td><Link to={`/dashboard/tests/${result.testId || 'test'}/results/${result.attemptId}`}>Review</Link></td>
               </tr>
             )) : <tr><td colSpan={5}>No attempts yet.</td></tr>}
           </tbody>

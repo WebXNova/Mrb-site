@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 import { getStoredUser, setStudentAuth } from '../auth/session';
 import PageLayout from '../components/layout/PageLayout';
+import AuthBrandHeader from '../components/auth/AuthBrandHeader';
+import { safeRedirectPath } from '../utils/authRedirect';
 import '../styles/auth-pages.css';
 
 export default function StudentLoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,7 +21,15 @@ export default function StudentLoginPage() {
     setIsBusy(true);
     setError('');
     try {
-      const response = await studentApi.login({ email, password });
+      const identifier = `${email}`.trim() || `${username}`.trim();
+      if (!identifier) {
+        setError('Enter your email or username.');
+        return;
+      }
+      const response = await studentApi.login({
+        ...(identifier.includes('@') ? { email: identifier } : { username: identifier }),
+        password,
+      });
       const payload = response?.data;
       const existingStudent = getStoredUser('student_user');
       const studentUser = {
@@ -26,7 +37,8 @@ export default function StudentLoginPage() {
         username: payload?.student?.username || existingStudent?.username || username || '',
       };
       setStudentAuth(payload.accessToken, studentUser);
-      navigate('/dashboard', { replace: true });
+      const next = safeRedirectPath(searchParams.get('from')) || '/dashboard';
+      navigate(next, { replace: true });
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {
@@ -38,18 +50,20 @@ export default function StudentLoginPage() {
     <PageLayout>
       <section className="auth-shell">
         <div className="auth-card auth-card--login">
+          <AuthBrandHeader subtitle="Student sign in" compact />
           <h1 className="heading-2">Student Login</h1>
           <p className="auth-subtitle">
-            Sign in to access your portal, lectures, tests, and results.
+            Sign in with your email or username and password.
           </p>
           <form onSubmit={onSubmit} className="auth-form">
             <div className="admin-field">
-              <label htmlFor="username">Username (optional)</label>
+              <label htmlFor="username">Username</label>
               <input
                 id="username"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder="Not used for login yet"
+                placeholder="Or sign in with username"
+                autoComplete="username"
               />
             </div>
             <div className="admin-field">
@@ -59,7 +73,8 @@ export default function StudentLoginPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                required
+                placeholder="Or sign in with email"
+                autoComplete="email"
               />
             </div>
             <div className="admin-field">

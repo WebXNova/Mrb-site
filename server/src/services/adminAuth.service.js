@@ -3,16 +3,31 @@ import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { createAuthSessionTokens, deleteAuthSessionsForUser, revokeAuthSessionByRefreshToken } from './authSession.service.js';
 
-export async function loginAdmin(email, password) {
-  const [rows] = await mysqlPool.query(
-    `SELECT id, email, full_name, role, password_hash, status, token_version
-     FROM users
-     WHERE email = ? AND role IN ('admin', 'super_admin')
-     LIMIT 1`,
-    [email]
-  );
+async function fetchAdminByEmail(email) {
+  try {
+    const [rows] = await mysqlPool.query(
+      `SELECT id, email, full_name, role, password_hash, status, token_version
+       FROM users
+       WHERE email = ? AND role IN ('admin', 'super_admin')
+       LIMIT 1`,
+      [email]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (error?.code !== 'ER_BAD_FIELD_ERROR') throw error;
+    const [rows] = await mysqlPool.query(
+      `SELECT id, email, full_name, role, password_hash, status
+       FROM users
+       WHERE email = ? AND role IN ('admin', 'super_admin')
+       LIMIT 1`,
+      [email]
+    );
+    return rows[0] ? { ...rows[0], token_version: 0 } : null;
+  }
+}
 
-  const admin = rows[0];
+export async function loginAdmin(email, password) {
+  const admin = await fetchAdminByEmail(email);
   if (!admin) throw new ApiError(401, 'Invalid credentials');
   if (admin.status !== 'active') throw new ApiError(403, 'Admin account is suspended');
 

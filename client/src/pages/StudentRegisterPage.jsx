@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 import { setStudentAuth } from '../auth/session';
 import PageLayout from '../components/layout/PageLayout';
+import AuthBrandHeader from '../components/auth/AuthBrandHeader';
+import { safeRedirectPath } from '../utils/authRedirect';
 import '../styles/auth-pages.css';
 
 export default function StudentRegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -38,6 +41,7 @@ export default function StudentRegisterPage() {
     <PageLayout>
       <section className="auth-shell">
         <div className="auth-card auth-card--register">
+          <AuthBrandHeader subtitle="Join MRB Classes" compact />
           <h1 className="heading-2">Create Student Account</h1>
           <p className="auth-subtitle">
             Register once and access all MRB lectures, tests, and student tools.

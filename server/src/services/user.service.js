@@ -1,5 +1,22 @@
 import { mysqlPool } from '../config/mysql.js';
 
+function parseMetadata(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function toIsoOrNull(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
 export async function listUsers() {
   const [rows] = await mysqlPool.query(
     `SELECT id, email, username, full_name, role, status, created_at
@@ -7,15 +24,70 @@ export async function listUsers() {
      ORDER BY created_at DESC`
   );
 
-  return rows.map((row) => ({
-    id: row.id,
-    email: row.email,
-    username: row.username,
-    fullName: row.full_name,
-    role: row.role,
-    status: row.status,
-    createdAt: row.created_at,
-  }));
+  if (!rows.length) return [];
+
+  const userIds = rows.map((row) => Number(row.id));
+  const placeholders = userIds.map(() => '?').join(',');
+  const [authRows] = await mysqlPool.query(
+    `SELECT user_id, action, metadata_json, created_at
+     FROM activity_logs
+     WHERE user_id IN (${placeholders})
+       AND action IN ('student.register', 'student.login')
+     ORDER BY created_at DESC`,
+    userIds
+  );
+
+  const authMetaByUserId = new Map();
+  for (const entry of authRows) {
+    const userId = Number(entry.user_id);
+    const existing = authMetaByUserId.get(userId) || {
+      registeredAt: null,
+      registeredIpAddress: null,
+      registeredUserAgent: null,
+      lastLoginAt: null,
+      lastLoginIpAddress: null,
+      lastLoginUserAgent: null,
+      loginCount: 0,
+    };
+    const metadata = parseMetadata(entry.metadata_json);
+
+    if (entry.action === 'student.register' && !existing.registeredAt) {
+      existing.registeredAt = toIsoOrNull(entry.created_at);
+      existing.registeredIpAddress = metadata.ipAddress || null;
+      existing.registeredUserAgent = metadata.userAgent || null;
+    }
+
+    if (entry.action === 'student.login') {
+      existing.loginCount += 1;
+      if (!existing.lastLoginAt) {
+        existing.lastLoginAt = toIsoOrNull(entry.created_at);
+        existing.lastLoginIpAddress = metadata.ipAddress || null;
+        existing.lastLoginUserAgent = metadata.userAgent || null;
+      }
+    }
+
+    authMetaByUserId.set(userId, existing);
+  }
+
+  return rows.map((row) => {
+    const authMeta = authMetaByUserId.get(Number(row.id)) || {};
+    return {
+      id: row.id,
+      email: row.email,
+      username: row.username,
+      fullName: row.full_name,
+      role: row.role,
+      status: row.status,
+      createdAt: row.created_at,
+      registeredAt: authMeta.registeredAt || toIsoOrNull(row.created_at),
+      registeredIpAddress: authMeta.registeredIpAddress || null,
+      registeredUserAgent: authMeta.registeredUserAgent || null,
+      lastLoginAt: authMeta.lastLoginAt || null,
+      lastLoginIpAddress: authMeta.lastLoginIpAddress || null,
+      lastLoginUserAgent: authMeta.lastLoginUserAgent || null,
+      loginCount: authMeta.loginCount || 0,
+    };
+  });
 }
 
 export async function dashboardStats() {

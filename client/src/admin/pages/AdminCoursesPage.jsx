@@ -4,7 +4,7 @@ import { getAdminToken } from '../../auth/session';
 
 const initialForm = {
   title: '',
-  subject: '',
+  subject: 'MDCAT',
   description: '',
   price: 0,
   originalPrice: '',
@@ -101,7 +101,9 @@ export default function AdminCoursesPage() {
             </div>
             <div className="admin-field">
               <label htmlFor="subject">Subject</label>
-              <input id="subject" name="subject" value={form.subject} onChange={onChange} required />
+              <select id="subject" name="subject" value={form.subject} onChange={onChange} required>
+                <option value="MDCAT">MDCAT</option>
+              </select>
             </div>
             <div className="admin-field">
               <label htmlFor="price">Price</label>

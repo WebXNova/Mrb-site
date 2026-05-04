@@ -9,10 +9,17 @@ import {
 } from '../services/lecture.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 
+const YOUTUBE_URL_REGEX =
+  /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=[\w-]{11}(&.*)?|youtu\.be\/[\w-]{11}(\?.*)?)$/i;
+
 const lectureSchema = z.object({
-  courseId: z.number().int().positive(),
+  courseId: z.number().int().positive().optional(),
+  courseCategory: z.string().min(2).max(80).optional(),
   title: z.string().min(3).max(220),
-  youtubeUrl: z.string().url(),
+  youtubeUrl: z
+    .string()
+    .url()
+    .refine((value) => YOUTUBE_URL_REGEX.test(value), 'youtubeUrl must be a valid YouTube watch URL'),
   topic: z.string().max(120).optional().nullable(),
   sortOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),

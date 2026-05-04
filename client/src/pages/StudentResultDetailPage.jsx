@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
+import { mockStudentDashboard } from '../student/data/mockStudentData';
 
 export default function StudentResultDetailPage() {
   const { attemptId } = useParams();
@@ -11,15 +12,15 @@ export default function StudentResultDetailPage() {
     async function load() {
       try {
         const response = await studentApi.resultDetail(attemptId);
-        setResult(response?.data || null);
+        setResult(response?.data || mockStudentDashboard.results.find((item) => item.attemptId === attemptId) || null);
       } catch (err) {
-        setError(err.message || 'Failed to load result');
+        setError(err.message || '');
+        setResult(mockStudentDashboard.results.find((item) => item.attemptId === attemptId) || null);
       }
     }
     load();
   }, [attemptId]);
 
-  if (error) return <section className="section"><div className="container"><p>{error}</p></div></section>;
   if (!result) return <section className="section"><div className="container"><p>Loading...</p></div></section>;
 
   return (
@@ -29,6 +30,11 @@ export default function StudentResultDetailPage() {
         <p className="body-md" style={{ marginTop: '0.5rem' }}>
           Score {result.score}/{result.maxScore} ({result.percentage}%)
         </p>
+        {error ? (
+          <p className="admin-stat-card__label" style={{ marginTop: '0.4rem' }}>
+            Showing preview result data until backend is connected.
+          </p>
+        ) : null}
         <p className="body-md">
           Correct {result.correctCount} | Wrong {result.wrongCount} | Unanswered {result.skippedCount}
         </p>

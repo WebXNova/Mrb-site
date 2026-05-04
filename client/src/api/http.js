@@ -2,7 +2,7 @@ import { clearAdminAuth, getAdminToken } from '../auth/session';
 import { AuthRefreshError, isRefreshAuthRevokedError, refreshAdminAccessToken } from './authRefresh.js';
 import { createHttpError } from './apiErrors.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 const REFRESH_PATH = '/auth/refresh';
 
 function redirectAdminToLogin() {
@@ -63,7 +63,7 @@ async function request(path, { method = 'GET', body, token, headers = {}, retryO
     return data;
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error('Cannot connect to API server. Please ensure backend is running on http://localhost:4000.');
+      throw new Error('Cannot connect to API server. Please check backend availability or set VITE_API_BASE_URL correctly.');
     }
     throw error;
   }

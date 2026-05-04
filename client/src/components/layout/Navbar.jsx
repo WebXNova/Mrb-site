@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation, Link } from 'react-router-dom';
-import { getStudentToken, onAuthChanged } from '../../auth/session';
 import Button from '../ui/Button';
 import './Navbar.css';
 
@@ -14,7 +13,6 @@ const navLinks = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [studentToken, setStudentToken] = useState(() => getStudentToken());
   const location = useLocation();
 
   useEffect(() => {
@@ -38,12 +36,6 @@ export default function Navbar() {
       document.body.style.overflow = '';
     };
   }, [menuOpen]);
-
-  useEffect(() => {
-    return onAuthChanged(() => {
-      setStudentToken(getStudentToken());
-    });
-  }, []);
 
   return (
     <header className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
@@ -77,20 +69,12 @@ export default function Navbar() {
         </nav>
 
         <div className="navbar__actions">
-          {studentToken ? (
-            <Button as={NavLink} to="/dashboard" variant="primary" size="sm">
-              Student Portal
-            </Button>
-          ) : (
-            <>
-              <Button as={NavLink} to="/login" variant="ghost" size="sm">
-                Sign In
-              </Button>
-              <Button as={NavLink} to="/register" variant="primary" size="sm">
-                Get started
-              </Button>
-            </>
-          )}
+          <Button as={NavLink} to="/login" variant="ghost" size="sm">
+            Sign In
+          </Button>
+          <Button as={NavLink} to="/register" variant="primary" size="sm">
+            Create Account
+          </Button>
         </div>
 
         <button
@@ -124,20 +108,12 @@ export default function Navbar() {
           ))}
         </nav>
         <div className="navbar__mobile-actions">
-          {studentToken ? (
-            <Button as={NavLink} to="/dashboard" variant="primary" size="md" fullWidth>
-              Student Portal
-            </Button>
-          ) : (
-            <>
-              <Button as={NavLink} to="/login" variant="secondary" size="md" fullWidth>
-                Sign In
-              </Button>
-              <Button as={NavLink} to="/register" variant="primary" size="md" fullWidth>
-                Get started
-              </Button>
-            </>
-          )}
+          <Button as={NavLink} to="/login" variant="secondary" size="md" fullWidth>
+            Sign In
+          </Button>
+          <Button as={NavLink} to="/register" variant="primary" size="md" fullWidth>
+            Create Account
+          </Button>
         </div>
       </div>
     </header>

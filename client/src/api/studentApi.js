@@ -2,7 +2,7 @@ import { clearStudentAuth, getStudentToken } from '../auth/session';
 import { AuthRefreshError, isRefreshAuthRevokedError, refreshStudentAccessToken } from './authRefresh.js';
 import { createHttpError } from './apiErrors.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 const REFRESH_PATH = '/auth/refresh';
 
 function redirectStudentToLogin() {
@@ -72,6 +72,12 @@ export const studentApi = {
     studentRequest('/auth/student/register', { method: 'POST', body: payload, retryOnUnauthorized: false }),
   login: (payload) =>
     studentRequest('/auth/student/login', { method: 'POST', body: payload, retryOnUnauthorized: false }),
+  forgotPassword: (payload) =>
+    studentRequest('/auth/student/forgot-password', { method: 'POST', body: payload, retryOnUnauthorized: false }),
+  resetPassword: (payload) =>
+    studentRequest('/auth/student/reset-password', { method: 'POST', body: payload, retryOnUnauthorized: false }),
+  verifyEmail: (payload) =>
+    studentRequest('/auth/student/verify-email', { method: 'POST', body: payload, retryOnUnauthorized: false }),
   logout: () => studentRequest('/auth/student/logout', { method: 'POST', retryOnUnauthorized: false }),
   me: () => studentRequest('/auth/student/me', { retryOnUnauthorized: true }),
   dashboard: () => studentRequest('/student/dashboard'),

@@ -1,20 +1,40 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import PageLayout from '../components/layout/PageLayout';
 import { refreshStudentAccessToken } from '../api/authRefresh';
 import { testsApi } from '../api/adminApi';
 import { getStudentToken } from '../auth/session';
+import '../styles/auth-pages.css';
+
+function normaliseCode(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '');
+}
 
 export default function PublicTestPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const [studentToken, setStudentToken] = useState(() => getStudentToken());
   const [studentName, setStudentName] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
+  useEffect(() => {
+    setStudentToken(getStudentToken());
+  }, [slug]);
+
+  const displaySlug = String(slug || '').replace(/-/g, ' ') || 'this test';
+
   async function onUnlock(event) {
     event.preventDefault();
     setError('');
+    const trimmed = code.trim();
+    if (trimmed.length < 4) {
+      setError('Please enter your full MRB access code.');
+      return;
+    }
     setIsBusy(true);
     try {
       let token = getStudentToken();
@@ -27,13 +47,18 @@ export default function PublicTestPage() {
         token = getStudentToken();
       }
       if (!token) {
-        navigate('/login', { replace: true });
+        navigate(`/login?from=${encodeURIComponent(`/tests/${slug}`)}`, { replace: true });
         return;
       }
-      const response = await testsApi.verifyCode(slug, {
-        code: code.trim(),
-        studentName: studentName.trim() || null,
-      }, token);
+      setStudentToken(token);
+      const response = await testsApi.verifyCode(
+        slug,
+        {
+          code: trimmed,
+          studentName: studentName.trim() || null,
+        },
+        token
+      );
       const data = response?.data;
       if (!data?.attemptToken || !data?.attemptId) {
         throw new Error('Could not start attempt. Please try again.');
@@ -51,50 +76,95 @@ export default function PublicTestPage() {
   }
 
   return (
-    <section className="section">
-      <div className="container" style={{ display: 'grid', placeItems: 'center' }}>
-        <article className="admin-card" style={{ width: 'min(100%, 520px)' }}>
-          <h1 className="heading-2">Enter MRB Code</h1>
-          <p className="body-md" style={{ marginTop: '0.5rem' }}>
-            This test is protected. Enter your access code to unlock.
+    <PageLayout>
+      <section className="auth-shell auth-shell--verify">
+        <div className="auth-card auth-card--verify auth-card--public-test">
+          <p className="auth-card__eyebrow">MRB assessment</p>
+          <h1 className="heading-2">Enter MRB code</h1>
+          <p className="auth-subtitle">
+            This session is unlocked with your official MRB access code after you sign in. The web address selects the
+            paper (for example{' '}
+            <span className="auth-slug-chip" translate="no">
+              /tests/{slug}
+            </span>
+            ); your code authorizes access.
           </p>
-          <form onSubmit={onUnlock} style={{ marginTop: '1rem' }}>
-          <div className="admin-field">
-            <label htmlFor="studentName">Student Name (optional)</label>
-            <input
-              id="studentName"
-              value={studentName}
-              onChange={(event) => setStudentName(event.target.value)}
-              placeholder="Your name"
-            />
-          </div>
-          <div className="admin-field" style={{ marginTop: '0.75rem' }}>
-            <label htmlFor="mrbCode">MRB Code</label>
-            <input
-              id="mrbCode"
-              value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
-              placeholder="Enter code"
-              required
-            />
-          </div>
-          {error ? (
-            <p className="admin-error" style={{ marginTop: '0.75rem' }}>
-              {error}
-            </p>
-          ) : null}
-          <button className="btn btn--primary" type="submit" style={{ marginTop: '0.9rem' }} disabled={isBusy}>
-            {isBusy ? 'Verifying...' : 'Unlock Test'}
-          </button>
+
+          <form onSubmit={onUnlock} className="auth-form auth-form--verify" noValidate>
+            {!studentToken ? (
+              <p className="auth-callout auth-callout--warn">
+                Sign in with your student account first, then enter your code below.
+                <Link to={`/login?from=${encodeURIComponent(`/tests/${slug}`)}`}> Go to sign in</Link>
+              </p>
+            ) : null}
+
+            <div className="admin-field">
+              <label htmlFor="studentName">Your name (optional)</label>
+              <input
+                id="studentName"
+                value={studentName}
+                onChange={(event) => setStudentName(event.target.value)}
+                placeholder="Shows on results if provided"
+                autoComplete="name"
+              />
+            </div>
+
+            <div className="admin-field">
+              <label htmlFor="mrbCode">MRB access code</label>
+              <input
+                id="mrbCode"
+                className="auth-mrb-code-input"
+                value={code}
+                onChange={(event) => setCode(normaliseCode(event.target.value))}
+                placeholder="Enter code"
+                autoComplete="one-time-code"
+                inputMode="text"
+                autoCapitalize="characters"
+                spellCheck={false}
+                maxLength={40}
+                aria-invalid={Boolean(error)}
+                aria-describedby="public-test-code-hint"
+                disabled={!studentToken}
+              />
+              <span id="public-test-code-hint" className="auth-field-hint">
+                Same style of code used across MRB — letters and digits, hyphens ok. Applies to{' '}
+                <strong translate="no">{displaySlug}</strong>.
+              </span>
+            </div>
+
+            {error ? <p className="admin-error auth-form__error">{error}</p> : null}
+
+            <button
+              className="btn btn--primary auth-form__submit"
+              type="submit"
+              disabled={isBusy || !studentToken}
+            >
+              {isBusy ? 'Unlocking…' : 'Unlock test'}
+            </button>
           </form>
-          <p className="body-sm" style={{ marginTop: '0.75rem', color: 'var(--color-ink-500)' }}>
-            Sign in with your student account to unlock tests with your MRB code.
+
+          <div className="auth-verify-tip" role="note">
+            <p className="auth-verify-tip__title">How this works</p>
+            <ul className="auth-verify-tip__list">
+              <li>Teachers share a link like yours; each student uses their own MRB code.</li>
+              <li>After deployment, links work on any device with your live site URL.</li>
+              <li>Problems with the code usually mean typo, expiry, or max uses — contact MRB support.</li>
+            </ul>
+          </div>
+
+          <p className="auth-footer">
+            New student? <Link to={`/register?from=${encodeURIComponent(`/tests/${slug}`)}`}>Create account</Link>
           </p>
-          <p className="body-sm" style={{ marginTop: '0.35rem', color: 'var(--color-ink-500)' }}>
-            Test URL identifies the paper, and MRB code unlocks it securely.
+          <p className="auth-footer auth-footer--compact">
+            Have an account? <Link to={`/login?from=${encodeURIComponent(`/tests/${slug}`)}`}>Sign in</Link>
           </p>
-        </article>
-      </div>
-    </section>
+          <p className="auth-footer auth-footer--compact">
+            <Link to="/" className="auth-footer-link--muted">
+              Back to website
+            </Link>
+          </p>
+        </div>
+      </section>
+    </PageLayout>
   );
 }

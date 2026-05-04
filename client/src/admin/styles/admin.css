@@ -209,6 +209,42 @@
   flex-wrap: wrap;
 }
 
+.admin-lectures-form {
+  margin-top: var(--space-4);
+}
+
+.admin-lectures-form__grid {
+  align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.admin-lectures-form__field {
+  min-width: 0;
+}
+
+.admin-lectures-form__hint {
+  margin-top: 0;
+}
+
+.admin-lectures-form__toggle {
+  margin-top: var(--space-1);
+  display: flex;
+  align-items: center;
+  grid-auto-flow: column;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+.admin-lectures-table__head {
+  justify-content: flex-start;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.admin-lectures-table {
+  margin-top: var(--space-4);
+}
+
 .admin-muted {
   color: var(--color-ink-500);
 }
@@ -369,5 +405,13 @@
   .admin-topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .admin-lectures-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-actions {
+    width: 100%;
   }
 }
