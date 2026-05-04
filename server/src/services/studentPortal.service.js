@@ -1,4 +1,5 @@
 import { mysqlPool } from '../config/mysql.js';
+import { countStudentQuestions } from './studentQuestions.service.js';
 
 async function loadCourses() {
   const [courses] = await mysqlPool.query(
@@ -65,11 +66,12 @@ async function loadStudentResults(studentId) {
 }
 
 export async function getStudentDashboard(studentId) {
-  const [courses, lecturesRows, tests, results] = await Promise.all([
+  const [courses, lecturesRows, tests, results, questionsAsked] = await Promise.all([
     loadCourses().catch(() => []),
     loadStudentLectures().catch(() => []),
     loadPublishedTests().catch(() => []),
     loadStudentResults(studentId).catch(() => []),
+    countStudentQuestions(studentId).catch(() => 0),
   ]);
 
   const coursesList = courses || [];
@@ -114,6 +116,7 @@ export async function getStudentDashboard(studentId) {
       maxScore: row.max_score,
       percentage: row.percentage,
     })),
+    questionsAsked: Number(questionsAsked) || 0,
   };
 }
 

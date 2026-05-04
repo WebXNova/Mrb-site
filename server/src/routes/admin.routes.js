@@ -35,6 +35,11 @@ import {
   removeTest,
   removeTestQuestion,
 } from '../controllers/tests.controller.js';
+import {
+  deleteAdminStudentQuestion,
+  getAdminStudentQuestions,
+  putAdminStudentQuestionAnswer,
+} from '../controllers/adminStudentQuestions.controller.js';
 
 const router = Router();
 
@@ -73,5 +78,9 @@ router.post('/tests/:testId/questions/import/preview', postTestQuestionsImportPr
 router.post('/tests/:testId/questions/import/confirm', postTestQuestionsImportConfirm);
 router.put('/tests/:testId/questions/:questionId', putTestQuestion);
 router.delete('/tests/:testId/questions/:questionId', removeTestQuestion);
+
+router.get('/student-questions', getAdminStudentQuestions);
+router.put('/student-questions/:id', putAdminStudentQuestionAnswer);
+router.delete('/student-questions/:id', deleteAdminStudentQuestion);
 
 export default router;

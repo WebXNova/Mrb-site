@@ -29,7 +29,11 @@ export default function StudentRegisterPage() {
         username: payload?.student?.username || username || '',
       };
       setStudentAuth(payload.accessToken, studentUser);
-      navigate('/dashboard', { replace: true });
+      if (payload?.student?.mrbEnrollmentVerified === true) {
+        navigate('/dashboard', { replace: true });
+      } else {
+        navigate('/verify-mrb', { replace: true, state: { from: '/dashboard' } });
+      }
     } catch (err) {
       setError(err.message || 'Register failed');
     } finally {

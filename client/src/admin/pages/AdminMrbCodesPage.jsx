@@ -47,6 +47,10 @@ export default function AdminMrbCodesPage() {
     <section className="admin-page">
       <section className="admin-card">
         <h2 className="heading-3">Generate MRB Codes</h2>
+        <p className="admin-stat-card__label" style={{ marginTop: '0.5rem' }}>
+          These codes unlock the <strong>student portal</strong> after sign-in. Each unused code can be redeemed once
+          by a student on the <strong>Enter MRB code</strong> screen (codes are created here, not by students).
+        </p>
         <form className="admin-actions" style={{ marginTop: '1rem' }} onSubmit={generate}>
           <input type="number" min={1} max={500} value={count} onChange={(e) => setCount(e.target.value)} required />
           <input

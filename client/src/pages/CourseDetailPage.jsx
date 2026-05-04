@@ -7,11 +7,10 @@ import './CourseDetailPage.css';
 
 function formatPrice(price) {
   if (price === 0) return 'Free';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+  const formatted = new Intl.NumberFormat('en-IN', {
     maximumFractionDigits: 0,
   }).format(price);
+  return `Rs ${formatted}`;
 }
 
 export default function CourseDetailPage() {

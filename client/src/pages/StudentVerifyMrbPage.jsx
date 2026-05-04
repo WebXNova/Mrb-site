@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { studentApi } from '../api/studentApi';
+import { getStudentToken, setStudentAuth } from '../auth/session';
 import PageLayout from '../components/layout/PageLayout';
 import AuthBrandHeader from '../components/auth/AuthBrandHeader';
 import '../styles/auth-pages.css';
@@ -11,6 +13,13 @@ export default function StudentVerifyMrbPage() {
   const [error, setError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!getStudentToken()) {
+      navigate(`/login?from=${encodeURIComponent('/verify-mrb')}`, { replace: true });
+    }
+  }, [navigate]);
 
   function normaliseInput(value) {
     return String(value || '')
@@ -18,7 +27,7 @@ export default function StudentVerifyMrbPage() {
       .replace(/[^A-Z0-9-]/g, '');
   }
 
-  function onSubmit(event) {
+  async function onSubmit(event) {
     event.preventDefault();
     setError('');
     const trimmed = code.trim();
@@ -26,10 +35,22 @@ export default function StudentVerifyMrbPage() {
       setError('Please enter your full MRB code.');
       return;
     }
+    if (!getStudentToken()) {
+      navigate(`/login?from=${encodeURIComponent('/verify-mrb')}`, { replace: true });
+      return;
+    }
     setIsBusy(true);
     try {
-      // Placeholder until backend verification is wired; keeps navigation behavior.
-      navigate('/dashboard', { replace: true });
+      await studentApi.verifyMrbEnrollment({ code: trimmed });
+      const me = await studentApi.me();
+      const token = getStudentToken();
+      if (me?.data && token) {
+        setStudentAuth(token, me.data);
+      }
+      const from = location.state?.from;
+      navigate(typeof from === 'string' && from.startsWith('/') ? from : '/dashboard', { replace: true });
+    } catch (err) {
+      setError(err.message || 'Verification failed.');
     } finally {
       setIsBusy(false);
     }
@@ -41,10 +62,10 @@ export default function StudentVerifyMrbPage() {
         <div className="auth-card auth-card--verify">
           <AuthBrandHeader subtitle="Official MRB Classes student access" compact />
           <p className="auth-card__eyebrow">Student access</p>
-          <h1 className="heading-2">Enter MRB code</h1>
+          <h1 className="heading-2">MRB enrollment code</h1>
           <p className="auth-subtitle">
-            Use the enrollment code from MRB Classes to activate your materials. Paste or type carefully—letters are
-            not case-sensitive.
+            Sign in is not enough: enter the one-time code generated in <strong>Admin → MRB Codes</strong> to open your
+            student portal (lectures, tests, doubts). Each code can be used once.
           </p>
 
           <form onSubmit={onSubmit} className="auth-form auth-form--verify" noValidate>
@@ -56,7 +77,7 @@ export default function StudentVerifyMrbPage() {
                 name="mrbCode"
                 value={code}
                 onChange={(event) => setCode(normaliseInput(event.target.value))}
-                placeholder="e.g. MRB-A1B2-C3D4"
+                placeholder="e.g. from admin panel"
                 autoComplete="one-time-code"
                 inputMode="text"
                 autoCapitalize="characters"
@@ -66,23 +87,23 @@ export default function StudentVerifyMrbPage() {
                 aria-describedby="mrb-hint"
               />
               <span id="mrb-hint" className="auth-field-hint">
-                Alphanumeric characters and hyphen only. Spaces are removed automatically.
+                Letters and digits only (hyphens allowed while typing). Must match an unused admin-generated code.
               </span>
             </div>
 
             {error ? <p className="admin-error auth-form__error">{error}</p> : null}
 
             <button className="btn btn--primary auth-form__submit" type="submit" disabled={isBusy}>
-              {isBusy ? 'Verifying…' : 'Verify & continue'}
+              {isBusy ? 'Verifying…' : 'Verify & open portal'}
             </button>
           </form>
 
           <div className="auth-verify-tip" role="note">
             <p className="auth-verify-tip__title">Where to find your code</p>
             <ul className="auth-verify-tip__list">
+              <li>Ask your coordinator for a code from the admin MRB Codes page</li>
               <li>Printed on your MRB enrollment or welcome message</li>
-              <li>Sent by email when you enroll in a programme</li>
-              <li>Ask support if your code expired or fails here</li>
+              <li>If the code fails, it may already be used or expired — request a new one</li>
             </ul>
           </div>
 

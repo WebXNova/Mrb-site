@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { isRefreshAuthRevokedError, refreshAdminAccessToken, shouldAttemptAccessRefresh } from '../api/authRefresh';
-import { clearAdminAuth, getAdminToken } from '../auth/session';
+import { clearAdminAuth, getAdminToken, getStoredUser, getStudentToken } from '../auth/session';
 import ScrollToTop from '../components/layout/ScrollToTop';
 
 const HomePage = lazy(() => import('../pages/HomePage'));
@@ -132,8 +132,18 @@ function RedirectIfAdmin({ children }) {
   return children;
 }
 
-/** Student refresh runs once from App bootstrap (`bootstrapStudentSession`); no /auth/refresh here (avoids duplicate in-flight refresh on reload). */
+/** Requires student session cookie + access token and a redeemed admin MRB enrollment code before opening the portal. */
 function RequireStudent({ children }) {
+  const location = useLocation();
+  const token = getStudentToken();
+  const student = getStoredUser('student_user');
+  if (!token || !student?.id) {
+    const from = encodeURIComponent(`${location.pathname}${location.search || ''}`);
+    return <Navigate to={`/login?from=${from}`} replace />;
+  }
+  if (student.mrbEnrollmentVerified !== true) {
+    return <Navigate to="/verify-mrb" replace state={{ from: `${location.pathname}${location.search || ''}` }} />;
+  }
   return children;
 }
 

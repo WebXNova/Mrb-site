@@ -392,6 +392,52 @@
   padding: var(--space-8);
 }
 
+.admin-qa-question-cell {
+  max-width: min(320px, 100%);
+  vertical-align: top;
+}
+
+.admin-qa-thread-preview {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-100);
+}
+
+.admin-qa-attach {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-qa-attach a {
+  font-size: var(--fs-13);
+}
+
+.admin-qa-thumb {
+  max-width: 100%;
+  width: 200px;
+  height: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-ink-100);
+  object-fit: cover;
+}
+
+.admin-qa-attach--large img {
+  max-width: min(480px, 100%);
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-100);
+}
+
+.admin-qa-row-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 960px) {
   .admin-shell {
     grid-template-columns: 1fr;

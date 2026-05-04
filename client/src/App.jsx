@@ -3,7 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { adminApi } from './api/adminApi';
 import { bootstrapAdminSession, bootstrapStudentSession } from './api/authRefresh';
 import { studentApi } from './api/studentApi';
-import { getAdminToken, getStoredUser, getStudentToken, onAuthChanged } from './auth/session';
+import { getAdminToken, getStoredUser, getStudentToken, onAuthChanged, setStudentAuth } from './auth/session';
 import AppRouter from './routes/AppRouter';
 
 function shouldBootstrapStudent(path) {
@@ -46,7 +46,18 @@ export default function App() {
           checks.push(adminApi.me().catch(() => {}));
         }
         if (getStudentToken()) {
-          checks.push(studentApi.me().catch(() => {}));
+          checks.push(
+            studentApi
+              .me()
+              .then((me) => {
+                if (me?.data) {
+                  const prev = getStoredUser('student_user') || {};
+                  const token = getStudentToken();
+                  setStudentAuth(token, { ...prev, ...me.data });
+                }
+              })
+              .catch(() => {})
+          );
         }
         await Promise.all(checks);
         if (!cancelled) setIsAuthReady(true);

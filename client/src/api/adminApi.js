@@ -46,6 +46,13 @@ export const adminApi = {
   mrbCodes: (token) => http.get('/admin/mrb-codes', { token }),
   generateMrbCodes: (token, payload) => http.post('/admin/mrb-codes', payload, { token }),
   deleteMrbCode: (token, codeId) => http.delete(`/admin/mrb-codes/${codeId}`, { token }),
+
+  studentQuestions: (token, subject = 'all') =>
+    http.get(`/admin/student-questions?subject=${encodeURIComponent(subject)}`, { token }),
+  answerStudentQuestion: (token, questionId, payload) =>
+    http.put(`/admin/student-questions/${questionId}`, payload, { token }),
+  deleteStudentQuestion: (token, questionId) =>
+    http.delete(`/admin/student-questions/${questionId}`, { token }),
 };
 
 export const testsApi = {

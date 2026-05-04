@@ -4,7 +4,13 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { env } from '../config/env.js';
 import { loginAdmin, logoutAdmin } from '../services/adminAuth.service.js';
-import { loginStudent, logoutStudent, registerStudent } from '../services/studentAuth.service.js';
+import {
+  getStudentMePayload,
+  loginStudent,
+  logoutStudent,
+  registerStudent,
+  verifyStudentMrbEnrollment,
+} from '../services/studentAuth.service.js';
 import {
   pickActiveRefreshContext,
   refreshContextFromToken,
@@ -87,6 +93,38 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
 });
+
+const studentLoginSchema = z
+  .object({
+    email: z.string().max(255).optional(),
+    username: z.string().max(50).optional(),
+    password: z.string().min(8),
+  })
+  .superRefine((data, ctx) => {
+    const email = data.email?.trim() || '';
+    const username = data.username?.trim() || '';
+    if (!email && !username) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Email or username is required',
+        path: ['email'],
+      });
+    }
+    if (email && !z.string().email().safeParse(email).success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid email address',
+        path: ['email'],
+      });
+    }
+    if (username && username.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Username must be at least 3 characters',
+        path: ['username'],
+      });
+    }
+  });
 
 const COMMON_WEAK_PASSWORDS = new Set([
   'password',
@@ -229,13 +267,20 @@ export const studentRegister = asyncHandler(async (req, res) => {
 
 export const studentLogin = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
-  const parsed = loginSchema.safeParse(req.body);
+  const parsed = studentLoginSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid login payload', parsed.error.flatten());
-  const loginIdentifier = parsed.data.email.toLowerCase();
+  const email = parsed.data.email?.trim() || '';
+  const username = parsed.data.username?.trim() || '';
+  const loginPayload = {
+    email: email || undefined,
+    username: username || undefined,
+    password: parsed.data.password,
+  };
+  const loginIdentifier = String(email ? email.toLowerCase() : username.toLowerCase());
   await assertLoginNotLocked(loginIdentifier);
   let result;
   try {
-    result = await loginStudent(parsed.data);
+    result = await loginStudent(loginPayload);
     await recordLoginResult({ identifier: loginIdentifier, success: true, role: 'student', source: 'student.login' });
   } catch (error) {
     await recordLoginResult({ identifier: loginIdentifier, success: false, role: 'student', source: 'student.login' });
@@ -266,6 +311,24 @@ export const studentLogin = asyncHandler(async (req, res) => {
     success: true,
     data: { student: result.student, accessToken: result.accessToken },
   });
+});
+
+export const studentMe = asyncHandler(async (req, res) => {
+  const profile = await getStudentMePayload(req.user.id);
+  if (!profile) throw new ApiError(404, 'Student not found');
+  res.json({ success: true, data: profile });
+});
+
+const verifyMrbBodySchema = z.object({
+  code: z.string().min(4).max(64),
+});
+
+export const studentVerifyMrbEnrollment = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  const parsed = verifyMrbBodySchema.safeParse(req.body);
+  if (!parsed.success) throw new ApiError(422, 'Invalid code payload', parsed.error.flatten());
+  const out = await verifyStudentMrbEnrollment(req.user.id, parsed.data.code);
+  res.json({ success: true, data: out });
 });
 
 export const refreshAuth = asyncHandler(async (req, res) => {

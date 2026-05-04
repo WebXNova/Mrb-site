@@ -11,6 +11,9 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Student Q&A image uploads (keep empty dir in git)
+server/uploads/student-qa/*
+!server/uploads/student-qa/.gitkeep
 .mongodb_data/
 node_modules/
 .env.local

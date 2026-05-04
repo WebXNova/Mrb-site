@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   token_version INT NOT NULL DEFAULT 0,
   role ENUM('student', 'teacher', 'admin', 'super_admin') NOT NULL DEFAULT 'student',
   status ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
+  mrb_enrollment_verified_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -178,6 +179,58 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   INDEX idx_activity_logs_created_at (created_at),
   INDEX idx_activity_logs_action_created_at (action, created_at)
 );
+
+CREATE TABLE IF NOT EXISTS student_questions (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  subject VARCHAR(32) NOT NULL,
+  title VARCHAR(220) NOT NULL,
+  body TEXT NOT NULL,
+  attachment_url VARCHAR(1000) NULL,
+  answer TEXT NULL,
+  status ENUM('pending', 'answered') NOT NULL DEFAULT 'pending',
+  answered_by BIGINT NULL,
+  answered_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_student_questions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_student_questions_answered_by FOREIGN KEY (answered_by) REFERENCES users(id) ON DELETE SET NULL,
+  KEY idx_student_questions_user_created (user_id, created_at DESC),
+  KEY idx_student_questions_status_subject (status, subject),
+  KEY idx_student_questions_updated (updated_at DESC)
+);
+
+SET @sq_attach_url_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'student_questions'
+    AND COLUMN_NAME = 'attachment_url'
+);
+SET @sq_attach_url_sql = IF(
+  @sq_attach_url_exists = 0,
+  'ALTER TABLE student_questions ADD COLUMN attachment_url VARCHAR(1000) NULL',
+  'SELECT 1'
+);
+PREPARE sq_attach_url_stmt FROM @sq_attach_url_sql;
+EXECUTE sq_attach_url_stmt;
+DEALLOCATE PREPARE sq_attach_url_stmt;
+
+SET @users_mrb_enrollment_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND COLUMN_NAME = 'mrb_enrollment_verified_at'
+);
+SET @users_mrb_enrollment_sql = IF(
+  @users_mrb_enrollment_exists = 0,
+  'ALTER TABLE users ADD COLUMN mrb_enrollment_verified_at TIMESTAMP NULL DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE users_mrb_enrollment_stmt FROM @users_mrb_enrollment_sql;
+EXECUTE users_mrb_enrollment_stmt;
+DEALLOCATE PREPARE users_mrb_enrollment_stmt;
 
 SET @users_username_col_exists = (
   SELECT COUNT(1)

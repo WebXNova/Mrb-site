@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -10,6 +12,9 @@ import studentRoutes from './routes/student.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 export const app = express();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const uploadsRoot = path.resolve(__dirname, '../uploads');
 
 const allowedOrigins = env.security.trustedOrigins;
 
@@ -43,6 +48,7 @@ app.use(
 );
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+app.use('/api/uploads', express.static(uploadsRoot));
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Server healthy' });
