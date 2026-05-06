@@ -3,6 +3,8 @@ import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { createAuthSessionTokens, deleteAuthSessionsForUser, revokeAuthSessionByRefreshToken } from './authSession.service.js';
 
+const FAKE_BCRYPT_HASH = '$2b$10$8fN0fSpA6W2VYJvA3pD6Guzf1u0lydBcbgQ9f7Q6w6v3zM4fM6x8S';
+
 async function fetchAdminByEmail(email) {
   try {
     const [rows] = await mysqlPool.query(
@@ -26,13 +28,12 @@ async function fetchAdminByEmail(email) {
   }
 }
 
-export async function loginAdmin(email, password) {
+export async function loginAdmin(email, password, authContext = {}) {
   const admin = await fetchAdminByEmail(email);
-  if (!admin) throw new ApiError(401, 'Invalid credentials');
+  const compareHash = admin?.password_hash || FAKE_BCRYPT_HASH;
+  const validPassword = await bcrypt.compare(String(password || ''), compareHash);
+  if (!admin || !validPassword) throw new ApiError(401, 'Invalid credentials');
   if (admin.status !== 'active') throw new ApiError(403, 'Admin account is suspended');
-
-  const validPassword = await bcrypt.compare(password, admin.password_hash);
-  if (!validPassword) throw new ApiError(401, 'Invalid credentials');
 
   const connection = await mysqlPool.getConnection();
   try {
@@ -47,6 +48,8 @@ export async function loginAdmin(email, password) {
         tokenVersion: admin.token_version,
         email: admin.email,
         fullName: admin.full_name,
+        clientIp: authContext.clientIp || null,
+        userAgent: authContext.userAgent || null,
       },
       connection
     );

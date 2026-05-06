@@ -12,16 +12,17 @@ import {
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { requireAdmin, requireStudent } from '../middleware/auth.js';
 import { authRateLimit } from '../middleware/rateLimit.js';
+import { requireCsrf } from '../middleware/csrf.js';
 
 const router = Router();
 
 router.post('/login', authRateLimit, adminLogin);
-router.post('/logout', adminLogout);
-router.post('/refresh', refreshAuth);
+router.post('/logout', requireCsrf, adminLogout);
+router.post('/refresh', requireCsrf, refreshAuth);
 router.post('/student/register', authRateLimit, studentRegister);
 router.post('/student/login', authRateLimit, studentLogin);
 router.post('/student/verify-mrb-enrollment', authRateLimit, requireStudent, studentVerifyMrbEnrollment);
-router.post('/student/logout', studentLogout);
+router.post('/student/logout', requireCsrf, studentLogout);
 router.get(
   '/me',
   requireAdmin,

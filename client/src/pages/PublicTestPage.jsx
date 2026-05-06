@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
-import { refreshStudentAccessToken } from '../api/authRefresh';
 import { testsApi } from '../api/adminApi';
 import { getStudentToken } from '../auth/session';
 import '../styles/auth-pages.css';
@@ -37,15 +36,7 @@ export default function PublicTestPage() {
     }
     setIsBusy(true);
     try {
-      let token = getStudentToken();
-      if (!token) {
-        try {
-          await refreshStudentAccessToken();
-        } catch {
-          // non-fatal; may still have no token below
-        }
-        token = getStudentToken();
-      }
+      const token = getStudentToken();
       if (!token) {
         navigate(`/login?from=${encodeURIComponent(`/tests/${slug}`)}`, { replace: true });
         return;

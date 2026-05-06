@@ -58,26 +58,31 @@ export const adminApi = {
 export const testsApi = {
   verifyCode: (slug, payload, studentToken) =>
     http.post(`/tests/${slug}/verify-code`, payload, {
+      authScope: null,
       token: null,
       headers: { Authorization: `Bearer ${studentToken}` },
     }),
   getStartData: (slug, attemptId, attemptToken) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/start`, {
+      authScope: null,
       token: null,
       headers: { Authorization: `Bearer ${attemptToken}` },
     }),
   saveAnswer: (slug, attemptId, attemptToken, payload) =>
     http.patch(`/tests/${slug}/attempts/${attemptId}/answers`, payload, {
+      authScope: null,
       token: null,
       headers: { Authorization: `Bearer ${attemptToken}` },
     }),
   submitAttempt: (slug, attemptId, attemptToken) =>
     http.post(`/tests/${slug}/attempts/${attemptId}/submit`, {}, {
+      authScope: null,
       token: null,
       headers: { Authorization: `Bearer ${attemptToken}` },
     }),
   getResult: (slug, attemptId, attemptToken) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/result`, {
+      authScope: null,
       token: null,
       headers: { Authorization: `Bearer ${attemptToken}` },
     }),

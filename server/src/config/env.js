@@ -40,6 +40,12 @@ function parseBoolean(value, defaultValue = false) {
   return String(value).toLowerCase() === 'true';
 }
 
+function parseSameSite(value, fallback = 'lax') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'strict' || normalized === 'lax' || normalized === 'none') return normalized;
+  return fallback;
+}
+
 const nodeEnv = process.env.NODE_ENV || 'development';
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
@@ -86,6 +92,9 @@ export const env = {
     allowLegacyTokenVersion: parseBoolean(process.env.ALLOW_LEGACY_TOKEN_VERSION, false),
     /** Origins allowed for cookie-auth endpoints (Origin header). Add production frontends via TRUSTED_ORIGINS (comma-separated). */
     trustedOrigins: buildTrustedOrigins(),
+    refreshCookieSameSite: parseSameSite(process.env.REFRESH_COOKIE_SAMESITE, 'lax'),
+    refreshCookieSecure: parseBoolean(process.env.REFRESH_COOKIE_SECURE, nodeEnv === 'production'),
+    refreshCookiePath: process.env.REFRESH_COOKIE_PATH || '/api/auth',
   },
 };
 

@@ -1,6 +1,7 @@
 import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
 import bcrypt from 'bcryptjs';
+import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 
 function slugify(value) {
   return String(value || '')
@@ -58,11 +59,11 @@ function toQuestion(row) {
   return {
     id: row.id,
     testId: row.test_id,
-    questionText: row.question_text,
+    questionText: sanitizeRichHtml(row.question_text),
     questionImageUrl: row.question_image_url,
     options: JSON.parse(row.options_json || '[]'),
     correctOption: row.correct_option,
-    explanation: row.explanation,
+    explanation: sanitizeRichHtml(row.explanation),
     explanationImageUrl: row.explanation_image_url,
     marks: row.marks,
     orderIndex: row.order_index,
@@ -73,7 +74,7 @@ function toPublicQuestion(row) {
   return {
     id: row.id,
     testId: row.test_id,
-    questionText: row.question_text,
+    questionText: sanitizeRichHtml(row.question_text),
     questionImageUrl: row.question_image_url,
     options: JSON.parse(row.options_json || '[]').map((option) => ({
       id: option.id,
@@ -240,6 +241,8 @@ export async function listTestQuestions(testId) {
 }
 
 export async function createTestQuestion(testId, payload) {
+  const safeQuestionText = sanitizeRichHtml(payload.questionText);
+  const safeExplanation = sanitizeRichHtml(payload.explanation);
   const [orderRows] = await mysqlPool.query(
     `SELECT COALESCE(MAX(order_index), -1) AS max_order FROM test_questions WHERE test_id = ?`,
     [testId]
@@ -251,11 +254,11 @@ export async function createTestQuestion(testId, payload) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       testId,
-      payload.questionText,
+      safeQuestionText,
       payload.questionImageUrl || null,
       JSON.stringify(payload.options),
       payload.correctOption,
-      payload.explanation,
+      safeExplanation,
       payload.explanationImageUrl || null,
       payload.marks || 1,
       payload.orderIndex ?? nextOrder,
@@ -266,16 +269,18 @@ export async function createTestQuestion(testId, payload) {
 }
 
 export async function updateTestQuestion(questionId, payload) {
+  const safeQuestionText = sanitizeRichHtml(payload.questionText);
+  const safeExplanation = sanitizeRichHtml(payload.explanation);
   await mysqlPool.query(
     `UPDATE test_questions
      SET question_text = ?, question_image_url = ?, options_json = ?, correct_option = ?, explanation = ?, explanation_image_url = ?, marks = ?, order_index = ?
      WHERE id = ?`,
     [
-      payload.questionText,
+      safeQuestionText,
       payload.questionImageUrl || null,
       JSON.stringify(payload.options),
       payload.correctOption,
-      payload.explanation,
+      safeExplanation,
       payload.explanationImageUrl || null,
       payload.marks || 1,
       payload.orderIndex ?? 0,
@@ -305,7 +310,7 @@ function stripHtml(value) {
 
 function validateImportedQuestion(item) {
   const errors = [];
-  const rawQuestion = String(item.questionText || '').trim();
+  const rawQuestion = sanitizeRichHtml(item.questionText);
   const normalizedQuestion = stripHtml(rawQuestion);
   const normalizedOptions = Array.isArray(item.options)
     ? item.options
@@ -316,7 +321,7 @@ function validateImportedQuestion(item) {
         .filter((option) => option.id && option.text)
     : [];
   const correctOption = normalizeOptionId(item.correctOption);
-  const explanation = String(item.explanation || '').trim();
+  const explanation = sanitizeRichHtml(item.explanation);
 
   if (!normalizedQuestion) {
     errors.push('Question text is required');

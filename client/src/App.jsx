@@ -1,90 +1,168 @@
 import { useEffect, useState } from 'react';
+
 import { BrowserRouter } from 'react-router-dom';
-import { adminApi } from './api/adminApi';
-import { bootstrapAdminSession, bootstrapStudentSession } from './api/authRefresh';
-import { studentApi } from './api/studentApi';
-import { getAdminToken, getStoredUser, getStudentToken, onAuthChanged, setStudentAuth } from './auth/session';
+
+import {
+
+  getAuthSnapshot,
+
+  setAuthAuthenticated,
+
+  setAuthGuest,
+
+  subscribeAuthState,
+
+} from './auth/authStateMachine';
+
+import {
+
+  clearAdminAuth,
+
+  clearStudentAuth,
+
+  getAdminToken,
+
+  getStoredUser,
+
+  getStudentToken,
+
+  onAuthChanged,
+
+} from './auth/session';
+
+import { isRefreshAuthRevokedError, refreshAccessToken } from './api/requestClient';
+
 import AppRouter from './routes/AppRouter';
 
-function shouldBootstrapStudent(path) {
-  return (
-    path.startsWith('/dashboard') ||
-    path.startsWith('/student') ||
-    /^\/tests\/[^/]+\/(start|result)$/.test(path) ||
-    Boolean(getStoredUser('student_user'))
-  );
+
+
+function syncAuthStateFromTokens() {
+
+  if (getAdminToken() || getStudentToken()) setAuthAuthenticated();
+
+  else setAuthGuest('no-active-session');
+
 }
 
-function shouldBootstrapAdmin(path) {
-  return (path.startsWith('/admin') && !path.startsWith('/admin/login')) || Boolean(getStoredUser('admin_user'));
-}
 
-/** Serializes validateAuthState so onAuthChanged cannot run parallel /me races. */
-let validateAuthChain = Promise.resolve();
 
-export default function App() {
-  const [isAuthReady, setIsAuthReady] = useState(false);
+/** After full page reload, access tokens are empty but httpOnly refresh cookies may still exist. */
 
-  useEffect(() => {
-    let cancelled = false;
+async function rehydrateSessionFromCookies() {
 
-    function enqueueValidateAuthState() {
-      validateAuthChain = validateAuthChain.then(async () => {
-        if (cancelled) return;
+  if (!getStudentToken() && getStoredUser('student_user')?.id) {
 
-        const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    try {
 
-        if (shouldBootstrapAdmin(path) && !getAdminToken()) {
-          await bootstrapAdminSession();
-        }
-        if (shouldBootstrapStudent(path) && !getStudentToken()) {
-          await bootstrapStudentSession();
-        }
+      await refreshAccessToken('student');
 
-        const checks = [];
-        if (getAdminToken()) {
-          checks.push(adminApi.me().catch(() => {}));
-        }
-        if (getStudentToken()) {
-          checks.push(
-            studentApi
-              .me()
-              .then((me) => {
-                if (me?.data) {
-                  const prev = getStoredUser('student_user') || {};
-                  const token = getStudentToken();
-                  setStudentAuth(token, { ...prev, ...me.data });
-                }
-              })
-              .catch(() => {})
-          );
-        }
-        await Promise.all(checks);
-        if (!cancelled) setIsAuthReady(true);
-      });
+    } catch (e) {
+
+      if (isRefreshAuthRevokedError(e)) clearStudentAuth();
+
     }
 
-    enqueueValidateAuthState();
-    const unsubscribe = onAuthChanged(() => {
-      enqueueValidateAuthState();
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
-
-  if (!isAuthReady) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        Verifying session...
-      </div>
-    );
   }
 
-  return (
-    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-      <AppRouter />
-    </BrowserRouter>
-  );
+  if (!getAdminToken() && getStoredUser('admin_user')?.id) {
+
+    try {
+
+      await refreshAccessToken('admin');
+
+    } catch (e) {
+
+      if (isRefreshAuthRevokedError(e)) clearAdminAuth();
+
+    }
+
+  }
+
 }
+
+
+
+export default function App() {
+
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  const [authStatus, setAuthStatus] = useState(getAuthSnapshot().status);
+
+
+
+  useEffect(() => {
+
+    // Subscribe before emitting transitions — RequireStudent must not stay on "resolving"
+
+    const unsubscribeAuthState = subscribeAuthState((next) => setAuthStatus(next.status));
+
+    const unsubscribe = onAuthChanged(() => {
+
+      syncAuthStateFromTokens();
+
+    });
+
+
+
+    let cancelled = false;
+
+
+
+    (async () => {
+
+      await rehydrateSessionFromCookies();
+
+      if (cancelled) return;
+
+      syncAuthStateFromTokens();
+
+      setAuthStatus(getAuthSnapshot().status);
+
+      setIsAuthReady(true);
+
+    })();
+
+
+
+    return () => {
+
+      cancelled = true;
+
+      unsubscribe();
+
+      unsubscribeAuthState();
+
+    };
+
+  }, []);
+
+
+
+  if (!isAuthReady) {
+
+    return (
+
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+
+        Verifying session...
+
+      </div>
+
+    );
+
+  }
+
+
+
+  return (
+
+    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+
+      <AppRouter authStatus={authStatus} />
+
+    </BrowserRouter>
+
+  );
+
+}
+

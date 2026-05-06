@@ -1,7 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { isRefreshAuthRevokedError, refreshAdminAccessToken, shouldAttemptAccessRefresh } from '../api/authRefresh';
-import { clearAdminAuth, getAdminToken, getStoredUser, getStudentToken } from '../auth/session';
+import { getAdminToken, getStoredUser, getStudentToken } from '../auth/session';
 import ScrollToTop from '../components/layout/ScrollToTop';
 
 const HomePage = lazy(() => import('../pages/HomePage'));
@@ -62,79 +61,22 @@ function PageFallback() {
   );
 }
 
-function initialRedirectIfAdminPhase() {
-  const t = getAdminToken();
-  if (!t) return 'guest';
-  if (!shouldAttemptAccessRefresh(t)) return 'redirect';
-  return 'checking';
-}
-
 function RequireAdmin({ children }) {
-  const [gate, setGate] = useState('pending');
   const location = useLocation();
-
-  useEffect(() => {
-    let cancelled = false;
-    setGate('pending');
-    (async () => {
-      try {
-        const token = getAdminToken();
-        if (!token || shouldAttemptAccessRefresh(token)) {
-          await refreshAdminAccessToken();
-        }
-        if (!cancelled) setGate('allow');
-      } catch (e) {
-        if (cancelled) return;
-        if (isRefreshAuthRevokedError(e)) {
-          clearAdminAuth();
-          setGate('deny');
-        } else {
-          setGate('allow');
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [location.pathname]);
-
-  if (gate === 'pending') return <PageFallback />;
-  if (gate === 'deny') return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  const token = getAdminToken();
+  if (!token) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
   return children;
 }
 
 function RedirectIfAdmin({ children }) {
-  const [phase, setPhase] = useState(initialRedirectIfAdminPhase);
-
-  useEffect(() => {
-    if (phase !== 'checking') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        await refreshAdminAccessToken();
-        if (!cancelled) setPhase('redirect');
-      } catch (e) {
-        if (cancelled) return;
-        if (isRefreshAuthRevokedError(e)) {
-          clearAdminAuth();
-          setPhase('guest');
-        } else {
-          setPhase('guest');
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [phase]);
-
-  if (phase === 'redirect') return <Navigate to="/admin" replace />;
+  if (getAdminToken()) return <Navigate to="/admin" replace />;
   return children;
 }
 
 /** Requires student session cookie + access token and a redeemed admin MRB enrollment code before opening the portal. */
-function RequireStudent({ children }) {
+function RequireStudent({ children, authStatus }) {
   const location = useLocation();
+  if (authStatus === 'resolving') return <PageFallback />;
   const token = getStudentToken();
   const student = getStoredUser('student_user');
   if (!token || !student?.id) {
@@ -147,7 +89,7 @@ function RequireStudent({ children }) {
   return children;
 }
 
-export default function AppRouter() {
+export default function AppRouter({ authStatus }) {
   return (
     <>
       <ScrollToTop />
@@ -171,7 +113,7 @@ export default function AppRouter() {
           <Route
             path="/dashboard"
             element={
-              <RequireStudent>
+              <RequireStudent authStatus={authStatus}>
                 <StudentLayout />
               </RequireStudent>
             }
@@ -190,8 +132,22 @@ export default function AppRouter() {
             <Route path="notifications" element={<StudentNotificationsPage />} />
           </Route>
           <Route path="/tests/:slug" element={<PublicTestPage />} />
-          <Route path="/tests/:slug/start" element={<RequireStudent><TestAttemptPage /></RequireStudent>} />
-          <Route path="/tests/:slug/result" element={<RequireStudent><TestResultPage /></RequireStudent>} />
+          <Route
+            path="/tests/:slug/start"
+            element={
+              <RequireStudent authStatus={authStatus}>
+                <TestAttemptPage />
+              </RequireStudent>
+            }
+          />
+          <Route
+            path="/tests/:slug/result"
+            element={
+              <RequireStudent authStatus={authStatus}>
+                <TestResultPage />
+              </RequireStudent>
+            }
+          />
           <Route
             path="/admin/login"
             element={

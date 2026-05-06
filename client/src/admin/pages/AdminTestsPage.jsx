@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import RichTextEditor from '../components/RichTextEditor';
@@ -940,7 +941,11 @@ export default function AdminTestsPage() {
                       <tr key={q.id}>
                         <td>{idx + 1}</td>
                         <td>
-                          <div dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                          <div
+                            dangerouslySetInnerHTML={{
+                              __html: DOMPurify.sanitize(q.questionText || ''),
+                            }}
+                          />
                           {q.questionImageUrl ? (
                             <div style={{ marginTop: '0.5rem' }}>
                               <img src={q.questionImageUrl} alt="Question media" className="admin-inline-image" />

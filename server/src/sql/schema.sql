@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   role_snapshot VARCHAR(32) NOT NULL,
   jti VARCHAR(64) NOT NULL,
   refresh_token_hash CHAR(64) NOT NULL,
+  previous_refresh_hash CHAR(64) NULL,
   token_version_snapshot INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -308,3 +309,83 @@ SET @username_unique_idx_sql = IF(
 PREPARE username_unique_idx_stmt FROM @username_unique_idx_sql;
 EXECUTE username_unique_idx_stmt;
 DEALLOCATE PREPARE username_unique_idx_stmt;
+
+SET @users_risk_level_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND COLUMN_NAME = 'risk_level'
+);
+SET @users_risk_level_col_sql = IF(
+  @users_risk_level_col_exists = 0,
+  'ALTER TABLE users ADD COLUMN risk_level ENUM(''normal'', ''elevated'', ''critical'') NOT NULL DEFAULT ''normal''',
+  'SELECT 1'
+);
+PREPARE users_risk_level_col_stmt FROM @users_risk_level_col_sql;
+EXECUTE users_risk_level_col_stmt;
+DEALLOCATE PREPARE users_risk_level_col_stmt;
+
+SET @auth_sessions_last_ip_hash_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'auth_sessions'
+    AND COLUMN_NAME = 'last_ip_hash'
+);
+SET @auth_sessions_last_ip_hash_col_sql = IF(
+  @auth_sessions_last_ip_hash_col_exists = 0,
+  'ALTER TABLE auth_sessions ADD COLUMN last_ip_hash CHAR(64) NULL',
+  'SELECT 1'
+);
+PREPARE auth_sessions_last_ip_hash_col_stmt FROM @auth_sessions_last_ip_hash_col_sql;
+EXECUTE auth_sessions_last_ip_hash_col_stmt;
+DEALLOCATE PREPARE auth_sessions_last_ip_hash_col_stmt;
+
+SET @auth_sessions_ua_fingerprint_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'auth_sessions'
+    AND COLUMN_NAME = 'ua_fingerprint'
+);
+SET @auth_sessions_ua_fingerprint_col_sql = IF(
+  @auth_sessions_ua_fingerprint_col_exists = 0,
+  'ALTER TABLE auth_sessions ADD COLUMN ua_fingerprint CHAR(64) NULL',
+  'SELECT 1'
+);
+PREPARE auth_sessions_ua_fingerprint_col_stmt FROM @auth_sessions_ua_fingerprint_col_sql;
+EXECUTE auth_sessions_ua_fingerprint_col_stmt;
+DEALLOCATE PREPARE auth_sessions_ua_fingerprint_col_stmt;
+
+SET @auth_sessions_previous_refresh_hash_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'auth_sessions'
+    AND COLUMN_NAME = 'previous_refresh_hash'
+);
+SET @auth_sessions_previous_refresh_hash_col_sql = IF(
+  @auth_sessions_previous_refresh_hash_col_exists = 0,
+  'ALTER TABLE auth_sessions ADD COLUMN previous_refresh_hash CHAR(64) NULL AFTER refresh_token_hash',
+  'SELECT 1'
+);
+PREPARE auth_sessions_previous_refresh_hash_col_stmt FROM @auth_sessions_previous_refresh_hash_col_sql;
+EXECUTE auth_sessions_previous_refresh_hash_col_stmt;
+DEALLOCATE PREPARE auth_sessions_previous_refresh_hash_col_stmt;
+
+SET @auth_sessions_user_revoked_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'auth_sessions'
+    AND INDEX_NAME = 'idx_auth_sessions_user_revoked'
+);
+SET @auth_sessions_user_revoked_idx_sql = IF(
+  @auth_sessions_user_revoked_idx_exists = 0,
+  'CREATE INDEX idx_auth_sessions_user_revoked ON auth_sessions(user_id, revoked_at)',
+  'SELECT 1'
+);
+PREPARE auth_sessions_user_revoked_idx_stmt FROM @auth_sessions_user_revoked_idx_sql;
+EXECUTE auth_sessions_user_revoked_idx_stmt;
+DEALLOCATE PREPARE auth_sessions_user_revoked_idx_stmt;

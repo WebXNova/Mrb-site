@@ -32,15 +32,19 @@ app.use(
 );
 app.use(
   helmet({
+    hsts: env.nodeEnv === 'production' ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
     contentSecurityPolicy: {
       useDefaults: true,
-      reportOnly: true,
+      reportOnly: env.nodeEnv !== 'production',
       directives: {
         "default-src": ["'self'"],
         "connect-src": ["'self'", ...allowedOrigins],
         "img-src": ["'self'", 'data:', 'https:'],
         "script-src": ["'self'"],
-        "style-src": ["'self'", "'unsafe-inline'"],
+        "style-src": ["'self'"],
+        "object-src": ["'none'"],
+        "base-uri": ["'self'"],
+        "frame-ancestors": ["'none'"],
       },
     },
     crossOriginResourcePolicy: { policy: 'cross-origin' },

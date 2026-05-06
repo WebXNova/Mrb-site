@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { studentApi } from '../api/studentApi';
 import { mockStudentDashboard } from '../student/data/mockStudentData';
 
@@ -41,7 +42,11 @@ export default function StudentResultDetailPage() {
         <ol style={{ marginTop: '1rem', paddingLeft: '1.2rem' }}>
           {(result.details || []).map((item) => (
             <li key={item.questionId} style={{ marginBottom: '0.8rem' }}>
-              <div dangerouslySetInnerHTML={{ __html: item.questionText }} />
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(item.questionText || ''),
+                }}
+              />
               <div>Your answer: {item.selectedOption || '-'}</div>
               <div>Correct: {item.correctOption}</div>
               <div>Explanation: {item.explanation}</div>

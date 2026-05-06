@@ -41,6 +41,10 @@ export default function StudentRegisterPage() {
     }
   }
 
+  function onSocialSignup(provider) {
+    setError(`${provider} sign up is coming soon.`);
+  }
+
   return (
     <PageLayout>
       <section className="auth-shell">
@@ -50,7 +54,6 @@ export default function StudentRegisterPage() {
           <p className="auth-subtitle">
             Register once and access all MRB lectures, tests, and student tools.
           </p>
-
           <form onSubmit={onSubmit} className="auth-form">
             <div className="admin-field">
               <label htmlFor="username">Username</label>
@@ -100,6 +103,50 @@ export default function StudentRegisterPage() {
           <p className="auth-footer">
             Already have an account? <Link to="/login">Sign in</Link>
           </p>
+          <div className="auth-social auth-social--footer">
+            <button
+              type="button"
+              className="btn btn--secondary auth-social__button"
+              onClick={() => onSocialSignup('Google')}
+            >
+              <span className="auth-social__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img">
+                  <path
+                    fill="#EA4335"
+                    d="M12 10.2v3.9h5.5c-.2 1.2-.9 2.3-1.9 3l3 2.3c1.8-1.7 2.9-4.2 2.9-7.2 0-.7-.1-1.4-.2-2H12z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 22c2.6 0 4.8-.9 6.4-2.5l-3-2.3c-.8.6-2 .9-3.4.9-2.6 0-4.7-1.7-5.4-4H3.5v2.4A10 10 0 0 0 12 22z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M6.6 14.1A6 6 0 0 1 6.3 12c0-.7.1-1.4.3-2V7.6H3.5A10 10 0 0 0 2 12c0 1.6.4 3.1 1.2 4.5l3.4-2.4z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M12 5.9c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9.9 9.9 0 0 0 12 2a10 10 0 0 0-8.5 5.6L6.6 10c.7-2.3 2.8-4.1 5.4-4.1z"
+                  />
+                </svg>
+              </span>
+              Sign up with Google
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary auth-social__button"
+              onClick={() => onSocialSignup('Facebook')}
+            >
+              <span className="auth-social__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img">
+                  <path
+                    fill="#1877F2"
+                    d="M24 12a12 12 0 1 0-13.9 11.8v-8.3H7.1V12h3V9.4c0-3 1.8-4.7 4.6-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.3A12 12 0 0 0 24 12z"
+                  />
+                </svg>
+              </span>
+              Sign up with Facebook
+            </button>
+          </div>
         </div>
       </section>
     </PageLayout>

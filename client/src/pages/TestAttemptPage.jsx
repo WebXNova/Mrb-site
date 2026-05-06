@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { testsApi } from '../api/adminApi';
+import DOMPurify from 'dompurify';
 import '../styles/test-attempt.css';
 
 function getAttemptSession(slug) {
@@ -156,7 +157,11 @@ export default function TestAttemptPage() {
 
         {currentQuestion ? (
           <article className="test-card" style={{ marginTop: '1rem' }}>
-            <div dangerouslySetInnerHTML={{ __html: currentQuestion.questionText }} />
+            <div
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(currentQuestion.questionText || ''),
+              }}
+            />
             <div className="test-options">
               {currentQuestion.options.map((option) => (
                 <label
