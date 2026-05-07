@@ -17,6 +17,7 @@ import {
 } from '../services/authSession.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { assertLoginNotLocked, recordLoginResult } from '../middleware/rateLimit.js';
+import { CSRF_COOKIE_NAME, issueCsrfToken } from '../middleware/csrf.js';
 
 function refreshCookieMaxAgeMs(refreshToken) {
   const decoded = jwt.decode(refreshToken);
@@ -25,22 +26,41 @@ function refreshCookieMaxAgeMs(refreshToken) {
   return 7 * 24 * 60 * 60 * 1000;
 }
 
-function setRefreshCookie(res, name, refreshToken, isProd) {
+function setRefreshCookie(res, name, refreshToken) {
   res.cookie(name, refreshToken, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: isProd,
-    path: '/api/auth',
+    sameSite: env.security.refreshCookieSameSite,
+    secure: env.security.refreshCookieSecure,
+    path: env.security.refreshCookiePath,
     maxAge: refreshCookieMaxAgeMs(refreshToken),
   });
 }
 
-function clearRefreshCookie(res, name, isProd) {
+function clearRefreshCookie(res, name) {
   res.clearCookie(name, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: isProd,
-    path: '/api/auth',
+    sameSite: env.security.refreshCookieSameSite,
+    secure: env.security.refreshCookieSecure,
+    path: env.security.refreshCookiePath,
+  });
+}
+
+function setCsrfCookie(res, token = issueCsrfToken()) {
+  res.cookie(CSRF_COOKIE_NAME, token, {
+    httpOnly: false,
+    sameSite: env.security.refreshCookieSameSite,
+    secure: env.security.refreshCookieSecure,
+    path: env.security.refreshCookiePath,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearCsrfCookie(res) {
+  res.clearCookie(CSRF_COOKIE_NAME, {
+    httpOnly: false,
+    sameSite: env.security.refreshCookieSameSite,
+    secure: env.security.refreshCookieSecure,
+    path: env.security.refreshCookiePath,
   });
 }
 
@@ -95,35 +115,10 @@ const loginSchema = z.object({
 
 const studentLoginSchema = z
   .object({
-    email: z.string().max(255).optional(),
-    username: z.string().max(50).optional(),
-    password: z.string().min(8),
+    identifier: z.string().trim().min(3).max(255),
+    password: z.string().trim().min(8).max(128),
   })
-  .superRefine((data, ctx) => {
-    const email = data.email?.trim() || '';
-    const username = data.username?.trim() || '';
-    if (!email && !username) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Email or username is required',
-        path: ['email'],
-      });
-    }
-    if (email && !z.string().email().safeParse(email).success) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Invalid email address',
-        path: ['email'],
-      });
-    }
-    if (username && username.length < 3) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Username must be at least 3 characters',
-        path: ['username'],
-      });
-    }
-  });
+  .strict();
 
 const COMMON_WEAK_PASSWORDS = new Set([
   'password',
@@ -175,21 +170,23 @@ export const adminLogin = asyncHandler(async (req, res) => {
   }
 
   const loginIdentifier = parsed.data.email.toLowerCase();
-  await assertLoginNotLocked(loginIdentifier);
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+  await assertLoginNotLocked(loginIdentifier, clientIp);
   let result;
   try {
-    result = await loginAdmin(parsed.data.email, parsed.data.password);
-    await recordLoginResult({ identifier: loginIdentifier, success: true, role: 'admin', source: 'admin.login' });
+    result = await loginAdmin(parsed.data.email, parsed.data.password, { clientIp, userAgent });
+    await recordLoginResult({ identifier: loginIdentifier, ipAddress: clientIp, success: true, role: 'admin', source: 'admin.login' });
   } catch (error) {
-    await recordLoginResult({ identifier: loginIdentifier, success: false, role: 'admin', source: 'admin.login' });
+    await recordLoginResult({ identifier: loginIdentifier, ipAddress: clientIp, success: false, role: 'admin', source: 'admin.login' });
     if (error instanceof ApiError && error.statusCode === 401) {
       throw new ApiError(401, 'Invalid credentials');
     }
     throw error;
   }
-  const isProd = process.env.NODE_ENV === 'production';
-  clearRefreshCookie(res, 'student_refresh_token', isProd);
-  setRefreshCookie(res, 'admin_refresh_token', result.refreshToken, isProd);
+  clearRefreshCookie(res, 'student_refresh_token');
+  setRefreshCookie(res, 'admin_refresh_token', result.refreshToken);
+  setCsrfCookie(res);
 
   await logActivity({
     userId: result.admin.id,
@@ -206,8 +203,8 @@ export const adminLogout = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
   const refreshToken = req.cookies?.admin_refresh_token;
   await logoutAdmin(refreshToken);
-  const isProd = process.env.NODE_ENV === 'production';
-  clearRefreshCookie(res, 'admin_refresh_token', isProd);
+  clearRefreshCookie(res, 'admin_refresh_token');
+  clearCsrfCookie(res);
   await logActivity({ role: 'admin', action: 'admin.logout', entityType: 'auth' });
   res.json({ success: true, message: 'Logged out' });
 });
@@ -216,8 +213,8 @@ export const studentLogout = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
   const refreshToken = req.cookies?.student_refresh_token;
   await logoutStudent(refreshToken);
-  const isProd = process.env.NODE_ENV === 'production';
-  clearRefreshCookie(res, 'student_refresh_token', isProd);
+  clearRefreshCookie(res, 'student_refresh_token');
+  clearCsrfCookie(res);
   await logActivity({ role: 'student', action: 'student.logout', entityType: 'auth' });
   res.json({ success: true, message: 'Logged out' });
 });
@@ -255,9 +252,9 @@ export const studentRegister = asyncHandler(async (req, res) => {
       source: 'signup_auto_login',
     },
   });
-  const isProd = process.env.NODE_ENV === 'production';
-  clearRefreshCookie(res, 'admin_refresh_token', isProd);
-  setRefreshCookie(res, 'student_refresh_token', result.refreshToken, isProd);
+  clearRefreshCookie(res, 'admin_refresh_token');
+  setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
+  setCsrfCookie(res);
   res.status(201).json({
     success: true,
     data: { student: result.student, accessToken: result.accessToken },
@@ -268,28 +265,27 @@ export const studentLogin = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
   const parsed = studentLoginSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid login payload', parsed.error.flatten());
-  const email = parsed.data.email?.trim() || '';
-  const username = parsed.data.username?.trim() || '';
+  const identifier = parsed.data.identifier.trim();
+  if (!identifier) throw new ApiError(422, 'Invalid login payload');
   const loginPayload = {
-    email: email || undefined,
-    username: username || undefined,
+    identifier,
     password: parsed.data.password,
   };
-  const loginIdentifier = String(email ? email.toLowerCase() : username.toLowerCase());
-  await assertLoginNotLocked(loginIdentifier);
+  const loginIdentifier = identifier.toLowerCase();
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+  await assertLoginNotLocked(loginIdentifier, clientIp);
   let result;
   try {
-    result = await loginStudent(loginPayload);
-    await recordLoginResult({ identifier: loginIdentifier, success: true, role: 'student', source: 'student.login' });
+    result = await loginStudent({ ...loginPayload, authContext: { clientIp, userAgent } });
+    await recordLoginResult({ identifier: loginIdentifier, ipAddress: clientIp, success: true, role: 'student', source: 'student.login' });
   } catch (error) {
-    await recordLoginResult({ identifier: loginIdentifier, success: false, role: 'student', source: 'student.login' });
+    await recordLoginResult({ identifier: loginIdentifier, ipAddress: clientIp, success: false, role: 'student', source: 'student.login' });
     if (error instanceof ApiError && error.statusCode === 401) {
       throw new ApiError(401, 'Invalid credentials');
     }
     throw error;
   }
-  const clientIp = getClientIp(req);
-  const userAgent = req.get('user-agent') || null;
   await logActivity({
     userId: result.student.id,
     role: result.student.role,
@@ -303,9 +299,9 @@ export const studentLogin = asyncHandler(async (req, res) => {
       source: 'direct_login',
     },
   });
-  const isProd = process.env.NODE_ENV === 'production';
-  clearRefreshCookie(res, 'admin_refresh_token', isProd);
-  setRefreshCookie(res, 'student_refresh_token', result.refreshToken, isProd);
+  clearRefreshCookie(res, 'admin_refresh_token');
+  setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
+  setCsrfCookie(res);
   res.json({
     success: true,
     data: { student: result.student, accessToken: result.accessToken },
@@ -320,11 +316,12 @@ export const studentMe = asyncHandler(async (req, res) => {
 
 export const refreshAuth = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
-  const isProd = process.env.NODE_ENV === 'production';
   const refreshContext = await readRefreshContext(req);
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
   let rotated;
   try {
-    rotated = await rotateAuthSessionByRefreshToken(refreshContext.token);
+    rotated = await rotateAuthSessionByRefreshToken(refreshContext.token, { clientIp, userAgent });
   } catch (error) {
     await logActivity({
       role: refreshContext.role,
@@ -340,7 +337,7 @@ export const refreshAuth = asyncHandler(async (req, res) => {
   if (refreshContext.role === 'student' && rotated.role !== 'student') {
     throw new ApiError(403, 'Student refresh token required');
   }
-  setRefreshCookie(res, refreshContext.cookieName, rotated.refreshToken, isProd);
+  setRefreshCookie(res, refreshContext.cookieName, rotated.refreshToken);
   await logActivity({
     userId: rotated.user.id,
     role: rotated.role === 'student' ? 'student' : 'admin',

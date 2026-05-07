@@ -1,5 +1,6 @@
 import { mysqlPool } from '../config/mysql.js';
 import { countStudentQuestions } from './studentQuestions.service.js';
+import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 
 async function loadCourses() {
   const [courses] = await mysqlPool.query(
@@ -144,6 +145,10 @@ export async function getStudentResultByAttempt(studentId, attemptId) {
     wrongCount: row.wrong_count,
     skippedCount: row.skipped_count,
     timeTakenSeconds: row.time_taken_seconds,
-    details: JSON.parse(row.detail_json || '[]'),
+    details: JSON.parse(row.detail_json || '[]').map((item) => ({
+      ...item,
+      questionText: sanitizeRichHtml(item.questionText),
+      explanation: sanitizeRichHtml(item.explanation),
+    })),
   };
 }

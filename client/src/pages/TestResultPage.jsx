@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { testsApi } from '../api/adminApi';
+import DOMPurify from 'dompurify';
 
 function getAttemptSession(slug) {
   try {
@@ -82,7 +83,11 @@ export default function TestResultPage() {
           <ol style={{ marginTop: '0.75rem', paddingLeft: '1.2rem' }}>
             {(result.details || []).map((item) => (
               <li key={item.questionId} style={{ marginBottom: '1rem' }}>
-                <div dangerouslySetInnerHTML={{ __html: item.questionText }} />
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(item.questionText || ''),
+                  }}
+                />
                 <p className="body-sm">Your answer: {item.selectedOption || '-'}</p>
                 <p className="body-sm">Correct answer: {item.correctOption}</p>
                 <p className="body-sm">Explanation: {item.explanation}</p>

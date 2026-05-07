@@ -29,6 +29,37 @@ async function runSchema() {
   }
 }
 
+async function assertRequiredAuthSchema() {
+  const required = [
+    ['users', 'token_version'],
+    ['users', 'risk_level'],
+    ['auth_sessions', 'jti'],
+    ['auth_sessions', 'refresh_token_hash'],
+    ['auth_sessions', 'previous_refresh_hash'],
+    ['auth_sessions', 'revoked_at'],
+    ['auth_sessions', 'last_used_at'],
+    ['auth_sessions', 'last_ip_hash'],
+    ['auth_sessions', 'ua_fingerprint'],
+  ];
+  const [rows] = await mysqlPool.query(
+    `SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND (
+         (TABLE_NAME = 'users' AND COLUMN_NAME IN ('token_version', 'risk_level'))
+         OR
+         (TABLE_NAME = 'auth_sessions' AND COLUMN_NAME IN ('jti', 'refresh_token_hash', 'previous_refresh_hash', 'revoked_at', 'last_used_at', 'last_ip_hash', 'ua_fingerprint'))
+       )`
+  );
+  const existing = new Set(rows.map((r) => `${r.table_name}.${r.column_name}`));
+  const missing = required
+    .map(([table, column]) => `${table}.${column}`)
+    .filter((key) => !existing.has(key));
+  if (missing.length) {
+    throw new Error(`Missing required auth schema columns: ${missing.join(', ')}`);
+  }
+}
+
 function ensurePortAvailable(port) {
   return new Promise((resolve, reject) => {
     const tester = net.createServer();
@@ -59,6 +90,7 @@ async function startServer() {
   } else {
     console.warn('Schema sync skipped (SKIP_SCHEMA_SYNC=true)');
   }
+  await assertRequiredAuthSchema();
 
   try {
     await connectRedis();

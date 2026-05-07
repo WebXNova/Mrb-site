@@ -1,77 +1,73 @@
 import { useEffect, useState } from 'react';
+
 import { BrowserRouter } from 'react-router-dom';
-import { adminApi } from './api/adminApi';
-import { bootstrapAdminSession, bootstrapStudentSession } from './api/authRefresh';
-import { studentApi } from './api/studentApi';
-import { getAdminToken, getStoredUser, getStudentToken, onAuthChanged, setStudentAuth } from './auth/session';
+
+import {
+  getAuthSnapshot,
+  setAuthAuthenticated,
+  setAuthGuest,
+  subscribeAuthState,
+} from './auth/authStateMachine';
+import {
+  clearAdminAuth,
+  clearStudentAuth,
+  getAdminToken,
+  getStoredUser,
+  getStudentToken,
+  onAuthChanged,
+} from './auth/session';
+import { isRefreshAuthRevokedError, refreshAccessToken } from './api/requestClient';
 import MobileWhatsAppButton from './components/ui/MobileWhatsAppButton';
 import AppRouter from './routes/AppRouter';
 
-function shouldBootstrapStudent(path) {
-  return (
-    path.startsWith('/dashboard') ||
-    path.startsWith('/student') ||
-    /^\/tests\/[^/]+\/(start|result)$/.test(path) ||
-    Boolean(getStoredUser('student_user'))
-  );
+function syncAuthStateFromTokens() {
+  if (getAdminToken() || getStudentToken()) setAuthAuthenticated();
+  else setAuthGuest('no-active-session');
 }
 
-function shouldBootstrapAdmin(path) {
-  return (path.startsWith('/admin') && !path.startsWith('/admin/login')) || Boolean(getStoredUser('admin_user'));
+/** After full page reload, access tokens are empty but httpOnly refresh cookies may still exist. */
+async function rehydrateSessionFromCookies() {
+  if (!getStudentToken() && getStoredUser('student_user')?.id) {
+    try {
+      await refreshAccessToken('student');
+    } catch (e) {
+      if (isRefreshAuthRevokedError(e)) clearStudentAuth();
+    }
+  }
+  if (!getAdminToken() && getStoredUser('admin_user')?.id) {
+    try {
+      await refreshAccessToken('admin');
+    } catch (e) {
+      if (isRefreshAuthRevokedError(e)) clearAdminAuth();
+    }
+  }
 }
-
-/** Serializes validateAuthState so onAuthChanged cannot run parallel /me races. */
-let validateAuthChain = Promise.resolve();
 
 export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [authStatus, setAuthStatus] = useState(getAuthSnapshot().status);
 
   useEffect(() => {
+    // Subscribe before emitting transitions — RequireStudent must not stay on "resolving"
+    const unsubscribeAuthState = subscribeAuthState((next) => setAuthStatus(next.status));
+    const unsubscribe = onAuthChanged(() => {
+      syncAuthStateFromTokens();
+    });
+
     let cancelled = false;
 
-    function enqueueValidateAuthState() {
-      validateAuthChain = validateAuthChain.then(async () => {
-        if (cancelled) return;
+    (async () => {
+      await rehydrateSessionFromCookies();
+      if (cancelled) return;
+      syncAuthStateFromTokens();
+      setAuthStatus(getAuthSnapshot().status);
+      setIsAuthReady(true);
+    })();
 
-        const path = typeof window !== 'undefined' ? window.location.pathname : '';
-
-        if (shouldBootstrapAdmin(path) && !getAdminToken()) {
-          await bootstrapAdminSession();
-        }
-        if (shouldBootstrapStudent(path) && !getStudentToken()) {
-          await bootstrapStudentSession();
-        }
-
-        const checks = [];
-        if (getAdminToken()) {
-          checks.push(adminApi.me().catch(() => {}));
-        }
-        if (getStudentToken()) {
-          checks.push(
-            studentApi
-              .me()
-              .then((me) => {
-                if (me?.data) {
-                  const prev = getStoredUser('student_user') || {};
-                  const token = getStudentToken();
-                  setStudentAuth(token, { ...prev, ...me.data });
-                }
-              })
-              .catch(() => {})
-          );
-        }
-        await Promise.all(checks);
-        if (!cancelled) setIsAuthReady(true);
-      });
-    }
-
-    enqueueValidateAuthState();
-    const unsubscribe = onAuthChanged(() => {
-      enqueueValidateAuthState();
-    });
     return () => {
       cancelled = true;
       unsubscribe();
+      unsubscribeAuthState();
     };
   }, []);
 
@@ -85,7 +81,7 @@ export default function App() {
 
   return (
     <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-      <AppRouter />
+      <AppRouter authStatus={authStatus} />
       <MobileWhatsAppButton />
     </BrowserRouter>
   );

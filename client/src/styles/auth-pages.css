@@ -196,6 +196,35 @@
   margin-top: var(--space-2);
 }
 
+.auth-social {
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.auth-social--footer {
+  margin-top: var(--space-5);
+}
+
+.auth-social__button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.auth-social__icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.auth-social__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
 .auth-form {
   margin-top: var(--space-5);
   display: grid;

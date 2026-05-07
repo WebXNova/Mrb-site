@@ -5,6 +5,7 @@ import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
 import { getRedisClient } from '../config/redis.js';
 import { ApiError } from '../utils/apiError.js';
+import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 
 const attemptRateMap = new Map();
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -197,7 +198,7 @@ export async function getAttemptTestForStart({ slug, attemptId }) {
       questionCount: questions.length,
       questions: questions.map((row) => ({
         id: row.id,
-        questionText: row.question_text,
+        questionText: sanitizeRichHtml(row.question_text),
         questionImageUrl: row.question_image_url,
         options: JSON.parse(row.options_json || '[]').map((option) => ({ id: option.id, text: option.text })),
         marks: row.marks,
@@ -273,11 +274,11 @@ export async function submitAttempt({ attemptId }) {
       }
       return {
         questionId: question.id,
-        questionText: question.question_text,
+        questionText: sanitizeRichHtml(question.question_text),
         options: JSON.parse(question.options_json || '[]'),
         selectedOption,
         correctOption: question.correct_option,
-        explanation: question.explanation,
+        explanation: sanitizeRichHtml(question.explanation),
         isCorrect,
         marks,
       };
@@ -341,6 +342,10 @@ export async function getAttemptResult({ slug, attemptId }) {
     wrongCount: row.wrong_count,
     skippedCount: row.skipped_count,
     timeTakenSeconds: row.time_taken_seconds,
-    details: JSON.parse(row.detail_json || '[]'),
+    details: JSON.parse(row.detail_json || '[]').map((item) => ({
+      ...item,
+      questionText: sanitizeRichHtml(item.questionText),
+      explanation: sanitizeRichHtml(item.explanation),
+    })),
   };
 }
