@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  getPublicTestMeta,
   getStartTest,
   getTestResult,
   patchSaveAnswer,
@@ -10,6 +11,7 @@ import { requireStudent } from '../middleware/auth.js';
 
 const router = Router();
 
+router.get('/:slug', getPublicTestMeta);
 router.post('/:slug/verify-code', requireStudent, postVerifyTestCode);
 router.get('/:slug/attempts/:attemptId/start', getStartTest);
 router.patch('/:slug/attempts/:attemptId/answers', patchSaveAnswer);

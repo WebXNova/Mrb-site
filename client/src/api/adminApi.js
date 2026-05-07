@@ -1,4 +1,5 @@
 import { http } from './http';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const adminApi = {
   login: (payload) => http.post('/auth/login', payload, { retryOnUnauthorized: false }),
@@ -29,13 +30,26 @@ export const adminApi = {
   updateTest: (token, testId, payload) => http.put(`/admin/tests/${testId}`, payload, { token }),
   deleteTest: (token, testId) => http.delete(`/admin/tests/${testId}`, { token }),
   publishTest: (token, testId) => http.put(`/admin/tests/${testId}/publish`, {}, { token }),
-  regenerateTestCode: (token, testId) => http.put(`/admin/tests/${testId}/regenerate-code`, {}, { token }),
+  duplicateTest: (token, testId) => http.post(`/admin/tests/${testId}/duplicate`, {}, { token }),
 
   testQuestions: (token, testId) => http.get(`/admin/tests/${testId}/questions`, { token }),
   createTestQuestion: (token, testId, payload) =>
     http.post(`/admin/tests/${testId}/questions`, payload, { token }),
   previewAikenImport: (token, testId, content) =>
     http.post(`/admin/tests/${testId}/questions/import/preview`, { content }, { token }),
+  previewImportFile: async (token, testId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/admin/tests/${testId}/questions/import/preview-file`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || 'File import preview failed');
+    return data;
+  },
   confirmAikenImport: (token, testId, items) =>
     http.post(`/admin/tests/${testId}/questions/import/confirm`, { items }, { token }),
   updateTestQuestion: (token, testId, questionId, payload) =>
@@ -43,19 +57,34 @@ export const adminApi = {
   deleteTestQuestion: (token, testId, questionId) =>
     http.delete(`/admin/tests/${testId}/questions/${questionId}`, { token }),
 
-  mrbCodes: (token) => http.get('/admin/mrb-codes', { token }),
-  generateMrbCodes: (token, payload) => http.post('/admin/mrb-codes', payload, { token }),
-  deleteMrbCode: (token, codeId) => http.delete(`/admin/mrb-codes/${codeId}`, { token }),
-
   studentQuestions: (token, subject = 'all') =>
     http.get(`/admin/student-questions?subject=${encodeURIComponent(subject)}`, { token }),
   answerStudentQuestion: (token, questionId, payload) =>
     http.put(`/admin/student-questions/${questionId}`, payload, { token }),
   deleteStudentQuestion: (token, questionId) =>
     http.delete(`/admin/student-questions/${questionId}`, { token }),
+  remarks: (token) => http.get('/admin/remarks', { token }),
+  markRemarkRead: (token, remarkId) => http.put(`/admin/remarks/${remarkId}/read`, {}, { token }),
+  exportTestResults: async (token, testId) => {
+    const response = await fetch(`${API_BASE}/admin/tests/${testId}/results/export`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) throw new Error('Failed to export results');
+    const blob = await response.blob();
+    const header = response.headers.get('content-disposition') || '';
+    const match = header.match(/filename="([^"]+)"/i);
+    return { blob, filename: match?.[1] || 'test-results.xlsx' };
+  },
 };
 
 export const testsApi = {
+  getPublicTestMeta: (slug) =>
+    http.get(`/tests/${slug}`, {
+      token: null,
+      retryOnUnauthorized: false,
+    }),
   verifyCode: (slug, payload, studentToken) =>
     http.post(`/tests/${slug}/verify-code`, payload, {
       token: null,

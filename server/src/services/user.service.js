@@ -104,10 +104,6 @@ export async function dashboardStats() {
   const [[adminsCount]] = await mysqlPool.query(
     `SELECT COUNT(*) AS value FROM users WHERE role IN ('admin', 'super_admin')`
   );
-  const [[codesCount]] = await mysqlPool.query(
-    `SELECT COUNT(*) AS total, SUM(CASE WHEN is_used = FALSE THEN 1 ELSE 0 END) AS available FROM mrb_codes`
-  );
-
   return {
     totalUsers: usersCount.value || 0,
     totalStudents: studentsCount.value || 0,
@@ -116,8 +112,6 @@ export async function dashboardStats() {
     totalCourses: coursesCount.value || 0,
     totalLectures: lecturesCount.value || 0,
     totalTests: testsCount.value || 0,
-    availableCodes: codesCount.available || 0,
-    totalCodes: codesCount.total || 0,
   };
 }
 

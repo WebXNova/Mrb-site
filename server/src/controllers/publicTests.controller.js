@@ -10,9 +10,9 @@ import {
   verifyAttemptToken,
   verifyMrbCodeAndCreateAttempt,
 } from '../services/testAttempt.service.js';
+import { getPublishedTestBySlug } from '../services/test.service.js';
 
 const verifyCodeSchema = z.object({
-  code: z.string().min(3).max(64),
   studentName: z.string().min(2).max(120).optional().nullable(),
 });
 
@@ -36,7 +36,6 @@ export const postVerifyTestCode = asyncHandler(async (req, res) => {
 
   const result = await verifyMrbCodeAndCreateAttempt({
     slug,
-    code: parsed.data.code,
     studentName: parsed.data.studentName || null,
     ipAddress: req.ip,
     userAgent: req.get('user-agent') || null,
@@ -44,6 +43,28 @@ export const postVerifyTestCode = asyncHandler(async (req, res) => {
   });
 
   res.json({ success: true, data: result });
+});
+
+export const getPublicTestMeta = asyncHandler(async (req, res) => {
+  const slug = String(req.params.slug || '').trim();
+  if (!slug) throw new ApiError(400, 'Invalid test link');
+  const test = await getPublishedTestBySlug(slug);
+  if (!test) throw new ApiError(404, 'Published test not found');
+
+  res.json({
+    success: true,
+    data: {
+      slug,
+      title: test.title,
+      description: test.description || '',
+      subject: test.subject,
+      durationMinutes: Number(test.durationMinutes || 0),
+      questionCount: Number(test.questions?.length || 0),
+      tags: Array.isArray(test.tags) ? test.tags : [],
+      requiresCode: false,
+      accessMode: 'public',
+    },
+  });
 });
 
 export const getStartTest = asyncHandler(async (req, res) => {

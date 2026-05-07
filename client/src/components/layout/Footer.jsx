@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Logo from '../ui/Logo';
+import SocialMediaLinks from '../ui/SocialMediaLinks';
 import './Footer.css';
 
 const footerSections = [
@@ -41,6 +42,10 @@ export default function Footer() {
             A focused learning platform for serious MRB students. Lectures, tests, and
             manual admin-reviewed answers — in one calm dashboard.
           </p>
+          <div className="footer__social">
+            <h4 className="footer__section-title">Follow MRB</h4>
+            <SocialMediaLinks />
+          </div>
         </div>
 
         <div className="footer__links">

@@ -13,12 +13,12 @@ export default function CTASection() {
               Stop scrolling. Start studying.
             </h2>
             <p className="body-lg text-pretty cta-card__lead">
-              Enter your MRB code, set up your profile, and open your first lecture in
+              Create your account, set up your profile, and open your first lecture in
               under two minutes.
             </p>
             <div className="cta-card__actions">
               <Button as={Link} to="/register" variant="accent" size="lg">
-                Activate my MRB code
+                Start learning now
               </Button>
               <Button as={Link} to="/contact" variant="ghost" size="lg">
                 Talk to us

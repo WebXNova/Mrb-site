@@ -4,6 +4,7 @@ import { adminApi } from './api/adminApi';
 import { bootstrapAdminSession, bootstrapStudentSession } from './api/authRefresh';
 import { studentApi } from './api/studentApi';
 import { getAdminToken, getStoredUser, getStudentToken, onAuthChanged, setStudentAuth } from './auth/session';
+import MobileWhatsAppButton from './components/ui/MobileWhatsAppButton';
 import AppRouter from './routes/AppRouter';
 
 function shouldBootstrapStudent(path) {
@@ -85,6 +86,7 @@ export default function App() {
   return (
     <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <AppRouter />
+      <MobileWhatsAppButton />
     </BrowserRouter>
   );
 }

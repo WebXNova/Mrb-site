@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS users (
   token_version INT NOT NULL DEFAULT 0,
   role ENUM('student', 'teacher', 'admin', 'super_admin') NOT NULL DEFAULT 'student',
   status ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
-  mrb_enrollment_verified_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -48,17 +47,6 @@ CREATE TABLE IF NOT EXISTS lectures (
   CONSTRAINT fk_lectures_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS mrb_codes (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  code VARCHAR(40) NOT NULL UNIQUE,
-  batch_label VARCHAR(80) NULL,
-  is_used BOOLEAN DEFAULT FALSE,
-  used_by BIGINT NULL,
-  used_at TIMESTAMP NULL,
-  expires_at TIMESTAMP NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS auth_sessions (
   id CHAR(36) NOT NULL PRIMARY KEY,
   user_id BIGINT NOT NULL,
@@ -87,19 +75,66 @@ CREATE TABLE IF NOT EXISTS tests (
   duration_minutes INT NOT NULL,
   passing_marks INT NULL,
   max_attempts INT DEFAULT 1,
+  negative_marking DECIMAL(6,2) NOT NULL DEFAULT 0,
   shuffle_questions BOOLEAN DEFAULT FALSE,
   shuffle_options BOOLEAN DEFAULT FALSE,
   show_explanations BOOLEAN DEFAULT TRUE,
+  access_mode ENUM('private', 'public') NOT NULL DEFAULT 'private',
+  tags_json JSON NULL,
   status ENUM('draft', 'published', 'archived') DEFAULT 'draft',
   public_slug VARCHAR(180) NULL UNIQUE,
-  mrb_code_hash VARCHAR(255) NULL,
-  mrb_code_expires_at TIMESTAMP NULL,
-  mrb_code_max_uses INT NULL,
-  mrb_code_used_count INT NOT NULL DEFAULT 0,
   created_by BIGINT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+SET @tests_negative_marking_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'tests'
+    AND COLUMN_NAME = 'negative_marking'
+);
+SET @tests_negative_marking_sql = IF(
+  @tests_negative_marking_exists = 0,
+  'ALTER TABLE tests ADD COLUMN negative_marking DECIMAL(6,2) NOT NULL DEFAULT 0 AFTER max_attempts',
+  'SELECT 1'
+);
+PREPARE tests_negative_marking_stmt FROM @tests_negative_marking_sql;
+EXECUTE tests_negative_marking_stmt;
+DEALLOCATE PREPARE tests_negative_marking_stmt;
+
+SET @tests_access_mode_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'tests'
+    AND COLUMN_NAME = 'access_mode'
+);
+SET @tests_access_mode_sql = IF(
+  @tests_access_mode_exists = 0,
+  "ALTER TABLE tests ADD COLUMN access_mode ENUM('private', 'public') NOT NULL DEFAULT 'private' AFTER show_explanations",
+  'SELECT 1'
+);
+PREPARE tests_access_mode_stmt FROM @tests_access_mode_sql;
+EXECUTE tests_access_mode_stmt;
+DEALLOCATE PREPARE tests_access_mode_stmt;
+
+SET @tests_tags_json_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'tests'
+    AND COLUMN_NAME = 'tags_json'
+);
+SET @tests_tags_json_sql = IF(
+  @tests_tags_json_exists = 0,
+  'ALTER TABLE tests ADD COLUMN tags_json JSON NULL AFTER access_mode',
+  'SELECT 1'
+);
+PREPARE tests_tags_json_stmt FROM @tests_tags_json_sql;
+EXECUTE tests_tags_json_stmt;
+DEALLOCATE PREPARE tests_tags_json_stmt;
 
 CREATE TABLE IF NOT EXISTS test_questions (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -180,6 +215,19 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   INDEX idx_activity_logs_action_created_at (action, created_at)
 );
 
+CREATE TABLE IF NOT EXISTS contact_remarks (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(120) NULL,
+  email VARCHAR(255) NULL,
+  message TEXT NOT NULL,
+  page_url VARCHAR(255) NULL,
+  status ENUM('new', 'read') NOT NULL DEFAULT 'new',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_contact_remarks_status_created (status, created_at DESC),
+  KEY idx_contact_remarks_created (created_at DESC)
+);
+
 CREATE TABLE IF NOT EXISTS student_questions (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   user_id BIGINT NOT NULL,
@@ -215,22 +263,6 @@ SET @sq_attach_url_sql = IF(
 PREPARE sq_attach_url_stmt FROM @sq_attach_url_sql;
 EXECUTE sq_attach_url_stmt;
 DEALLOCATE PREPARE sq_attach_url_stmt;
-
-SET @users_mrb_enrollment_exists = (
-  SELECT COUNT(1)
-  FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE()
-    AND TABLE_NAME = 'users'
-    AND COLUMN_NAME = 'mrb_enrollment_verified_at'
-);
-SET @users_mrb_enrollment_sql = IF(
-  @users_mrb_enrollment_exists = 0,
-  'ALTER TABLE users ADD COLUMN mrb_enrollment_verified_at TIMESTAMP NULL DEFAULT NULL',
-  'SELECT 1'
-);
-PREPARE users_mrb_enrollment_stmt FROM @users_mrb_enrollment_sql;
-EXECUTE users_mrb_enrollment_stmt;
-DEALLOCATE PREPARE users_mrb_enrollment_stmt;
 
 SET @users_username_col_exists = (
   SELECT COUNT(1)

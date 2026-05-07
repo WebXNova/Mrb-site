@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import multer from 'multer';
+import mammoth from 'mammoth';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { logActivity } from '../services/activityLog.service.js';
 import {
   bulkInsertImportedQuestions,
   createTest,
+  duplicateTest,
   createTestQuestion,
   deleteTest,
   deleteTestQuestion,
@@ -13,7 +16,9 @@ import {
   listTests,
   parseAikenPayload,
   publishTest,
-  regenerateTestMrbCode,
+  parseSpreadsheetRows,
+  parseWordRows,
+  exportTestResultsWorkbook,
   updateTest,
   updateTestQuestion,
 } from '../services/test.service.js';
@@ -27,13 +32,13 @@ const testSchema = z.object({
   durationMinutes: z.number().int().min(1).max(600),
   passingMarks: z.number().int().min(0).optional().nullable(),
   maxAttempts: z.number().int().min(1).max(20).optional(),
+  negativeMarking: z.number().min(0).max(100).optional(),
   shuffleQuestions: z.boolean().optional(),
   shuffleOptions: z.boolean().optional(),
   showExplanations: z.boolean().optional(),
+  accessMode: z.enum(['private', 'public']).optional(),
+  tags: z.array(z.string().min(1).max(40)).max(30).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
-  mrbCode: z.string().min(4).max(64).optional().nullable(),
-  mrbCodeExpiresAt: z.string().datetime().optional().nullable(),
-  mrbCodeMaxUses: z.number().int().min(1).max(100000).optional().nullable(),
 });
 
 const questionSchema = z.object({
@@ -50,6 +55,13 @@ const questionSchema = z.object({
 const previewUploadSchema = z.object({
   content: z.string().min(1),
 });
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+export const importFileUpload = upload.single('file');
 
 const confirmUploadSchema = z.object({
   items: z.array(
@@ -133,19 +145,12 @@ export const putTestPublish = asyncHandler(async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
-export const putTestRegenerateCode = asyncHandler(async (req, res) => {
+export const postDuplicateTest = asyncHandler(async (req, res) => {
   const testId = Number(req.params.testId);
   if (!testId) throw new ApiError(400, 'Invalid test id');
-  const updated = await regenerateTestMrbCode(testId);
-  if (!updated) throw new ApiError(404, 'Test not found');
-  await logActivity({
-    userId: req.user?.id,
-    role: req.user?.role,
-    action: 'admin.test.regenerate_code',
-    entityType: 'test',
-    entityId: String(testId),
-  });
-  res.json({ success: true, data: updated });
+  const copied = await duplicateTest(testId, req.user?.id || null);
+  if (!copied) throw new ApiError(404, 'Test not found');
+  res.status(201).json({ success: true, data: copied });
 });
 
 export const getTestQuestions = asyncHandler(async (req, res) => {
@@ -227,6 +232,54 @@ export const postTestQuestionsImportPreview = asyncHandler(async (req, res) => {
   res.json({ success: true, data: preview });
 });
 
+export const postTestQuestionsImportPreviewFile = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const test = await getTestById(testId);
+  if (!test) throw new ApiError(404, 'Test not found');
+  if (!req.file) throw new ApiError(400, 'No file uploaded');
+
+  const fileName = String(req.file.originalname || '').toLowerCase();
+  let preview;
+
+  if (fileName.endsWith('.txt')) {
+    preview = parseAikenPayload(req.file.buffer.toString('utf8'));
+  } else if (fileName.endsWith('.xlsx')) {
+    const rows = parseSpreadsheetRows(req.file.buffer);
+    const content = rows
+      .map((row) => {
+        const options = (row.options || []).filter((option) => String(option.text || '').trim());
+        const aikenOptions = options.map((option) => `${option.id}. ${option.text}`).join('\n');
+        return `${row.questionText}\n${aikenOptions}\nANSWER: ${row.correctOption}`;
+      })
+      .join('\n\n');
+    preview = parseAikenPayload(content);
+    preview.items = preview.items.map((item, idx) => ({
+      ...item,
+      explanation: String(rows[idx]?.explanation || '').trim(),
+    }));
+  } else if (fileName.endsWith('.docx')) {
+    const extracted = await mammoth.extractRawText({ buffer: req.file.buffer });
+    const rows = parseWordRows(extracted.value || '');
+    const content = rows
+      .map((row) => {
+        const options = (row.options || []).filter((option) => String(option.text || '').trim());
+        const aikenOptions = options.map((option) => `${option.id}. ${option.text}`).join('\n');
+        return `${row.questionText}\n${aikenOptions}\nANSWER: ${row.correctOption}`;
+      })
+      .join('\n\n');
+    preview = parseAikenPayload(content);
+    preview.items = preview.items.map((item, idx) => ({
+      ...item,
+      explanation: String(rows[idx]?.explanation || '').trim(),
+    }));
+  } else {
+    throw new ApiError(422, 'Unsupported file format. Use .txt, .xlsx or .docx');
+  }
+
+  res.json({ success: true, data: preview });
+});
+
 export const postTestQuestionsImportConfirm = asyncHandler(async (req, res) => {
   const testId = Number(req.params.testId);
   if (!testId) throw new ApiError(400, 'Invalid test id');
@@ -276,5 +329,15 @@ export const postTestQuestionsImportConfirm = asyncHandler(async (req, res) => {
       questions: inserted,
     },
   });
+});
+
+export const getTestResultsExport = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const exported = await exportTestResultsWorkbook(testId);
+  if (!exported) throw new ApiError(404, 'Test not found');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
+  res.send(exported.buffer);
 });
 

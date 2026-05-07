@@ -9,7 +9,6 @@ import {
   loginStudent,
   logoutStudent,
   registerStudent,
-  verifyStudentMrbEnrollment,
 } from '../services/studentAuth.service.js';
 import {
   pickActiveRefreshContext,
@@ -317,18 +316,6 @@ export const studentMe = asyncHandler(async (req, res) => {
   const profile = await getStudentMePayload(req.user.id);
   if (!profile) throw new ApiError(404, 'Student not found');
   res.json({ success: true, data: profile });
-});
-
-const verifyMrbBodySchema = z.object({
-  code: z.string().min(4).max(64),
-});
-
-export const studentVerifyMrbEnrollment = asyncHandler(async (req, res) => {
-  assertTrustedOrigin(req);
-  const parsed = verifyMrbBodySchema.safeParse(req.body);
-  if (!parsed.success) throw new ApiError(422, 'Invalid code payload', parsed.error.flatten());
-  const out = await verifyStudentMrbEnrollment(req.user.id, parsed.data.code);
-  res.json({ success: true, data: out });
 });
 
 export const refreshAuth = asyncHandler(async (req, res) => {

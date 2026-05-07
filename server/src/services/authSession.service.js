@@ -303,29 +303,6 @@ export async function rotateAuthSessionByRefreshToken(refreshToken) {
       role,
     };
 
-    if (role === 'student') {
-      try {
-        const [mrbRows] = await mysqlPool.query(
-          `SELECT mrb_enrollment_verified_at FROM users WHERE id = ? LIMIT 1`,
-          [session.user_id]
-        );
-        return {
-          accessToken,
-          refreshToken: rotatedRefreshToken,
-          role,
-          user: {
-            ...baseUser,
-            mrbEnrollmentVerified: Boolean(mrbRows[0]?.mrb_enrollment_verified_at),
-          },
-        };
-      } catch (error) {
-        if (error?.code === 'ER_BAD_FIELD_ERROR') {
-          return { accessToken, refreshToken: rotatedRefreshToken, role, user: { ...baseUser, mrbEnrollmentVerified: false } };
-        }
-        throw error;
-      }
-    }
-
     return {
       accessToken,
       refreshToken: rotatedRefreshToken,

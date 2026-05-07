@@ -1,4 +1,3 @@
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
@@ -19,7 +18,7 @@ async function checkVerifyRateLimit(slug, ipAddress) {
   const key = `${slug}:${ipAddress || 'unknown'}`;
   const redis = getRedisClient();
   if (redis) {
-    const redisKey = `ratelimit:test-code:${key}`;
+    const redisKey = `ratelimit:test-start:${key}`;
     const count = await redis.incr(redisKey);
     if (count === 1) {
       await redis.expire(redisKey, Math.floor(RATE_WINDOW_MS / 1000));
@@ -93,11 +92,11 @@ export async function consumeAttemptNonce({ slug, attemptId, tokenNonce }) {
   });
 }
 
-export async function verifyMrbCodeAndCreateAttempt({ slug, code, studentName, ipAddress, userAgent, studentUser }) {
+export async function verifyMrbCodeAndCreateAttempt({ slug, studentName, ipAddress, userAgent, studentUser }) {
   await checkVerifyRateLimit(slug, ipAddress);
 
   const [rows] = await mysqlPool.query(
-    `SELECT id, title, duration_minutes, max_attempts, status, mrb_code_hash, mrb_code_expires_at, mrb_code_max_uses, mrb_code_used_count
+    `SELECT id, title, duration_minutes, max_attempts, status
      FROM tests
      WHERE public_slug = ?
      LIMIT 1`,
@@ -105,22 +104,6 @@ export async function verifyMrbCodeAndCreateAttempt({ slug, code, studentName, i
   );
   const test = rows[0];
   if (!test || test.status !== 'published') throw new ApiError(404, 'Published test not found');
-  if (!test.mrb_code_hash) throw new ApiError(403, 'Access code is not configured for this test');
-
-  if (test.mrb_code_expires_at && new Date(test.mrb_code_expires_at).getTime() < Date.now()) {
-    throw new ApiError(403, 'Access code has expired');
-  }
-
-  if (
-    Number.isInteger(test.mrb_code_max_uses) &&
-    test.mrb_code_max_uses > 0 &&
-    Number(test.mrb_code_used_count || 0) >= test.mrb_code_max_uses
-  ) {
-    throw new ApiError(403, 'Access code usage limit reached');
-  }
-
-  const isValid = await bcrypt.compare(String(code || '').trim(), test.mrb_code_hash);
-  if (!isValid) throw new ApiError(401, 'Incorrect MRB code');
 
   const normalizedStudent = normalizeStudentKey(studentName || studentUser?.name);
   const deviceFingerprint = buildDeviceFingerprint(ipAddress, userAgent);
@@ -155,23 +138,16 @@ export async function verifyMrbCodeAndCreateAttempt({ slug, code, studentName, i
       test.id,
       studentUser?.id || null,
       studentName || studentUser?.name || null,
-      'MRB',
+      'DIRECT',
       expiresAt,
       ipAddress || null,
       userAgent || null,
       deviceFingerprint,
-      test.mrb_code_hash,
+      null,
       attemptNonce,
     ]
   );
   const attemptId = insertResult.insertId;
-
-  await mysqlPool.query(
-    `UPDATE tests
-     SET mrb_code_used_count = COALESCE(mrb_code_used_count, 0) + 1, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [test.id]
-  );
 
   const token = signAttemptToken({ type: 'test_attempt', attemptId, testId: test.id, slug, nonce: attemptNonce });
   return {
@@ -255,8 +231,9 @@ export async function submitAttempt({ attemptId }) {
   try {
     await connection.beginTransaction();
     const [attemptRows] = await connection.query(
-      `SELECT a.id, a.status, a.started_at, a.expires_at, a.test_id
+      `SELECT a.id, a.status, a.started_at, a.expires_at, a.test_id, t.negative_marking
        FROM test_attempts a
+       INNER JOIN tests t ON t.id = a.test_id
        WHERE a.id = ?
        FOR UPDATE`,
       [attemptId]
@@ -281,6 +258,8 @@ export async function submitAttempt({ attemptId }) {
     let score = 0;
     let maxScore = 0;
     let correctCount = 0;
+    const negativeMarking = Number(attempt.negative_marking || 0);
+    let totalPenalty = 0;
     const details = questionRows.map((question) => {
       const marks = Number(question.marks || 1);
       maxScore += marks;
@@ -289,6 +268,8 @@ export async function submitAttempt({ attemptId }) {
       if (isCorrect) {
         score += marks;
         correctCount += 1;
+      } else if (selectedOption && negativeMarking > 0) {
+        totalPenalty += negativeMarking;
       }
       return {
         questionId: question.id,
@@ -301,6 +282,8 @@ export async function submitAttempt({ attemptId }) {
         marks,
       };
     });
+
+    score = Math.max(0, score - totalPenalty);
 
     const wrongCount = details.filter((item) => item.selectedOption && !item.isCorrect).length;
     const skippedCount = details.filter((item) => !item.selectedOption).length;

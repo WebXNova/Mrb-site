@@ -53,7 +53,6 @@ export default function AdminDashboardPage() {
         <StatCard label="Courses" value={stats.totalCourses || 0} />
         <StatCard label="Lectures" value={stats.totalLectures || 0} />
         <StatCard label="Tests" value={stats.totalTests || 0} />
-        <StatCard label="Available MRB Codes" value={stats.availableCodes || 0} />
       </div>
 
       <section className="admin-card">

@@ -14,7 +14,6 @@ const StudentRegisterPage = lazy(() => import('../pages/StudentRegisterPage'));
 const StudentForgotPasswordPage = lazy(() => import('../pages/StudentForgotPasswordPage'));
 const StudentResetPasswordPage = lazy(() => import('../pages/StudentResetPasswordPage'));
 const StudentVerifyOtpPage = lazy(() => import('../pages/StudentVerifyOtpPage'));
-const StudentVerifyMrbPage = lazy(() => import('../pages/StudentVerifyMrbPage'));
 const StudentPortalPage = lazy(() => import('../pages/StudentPortalPage'));
 const StudentTestsPage = lazy(() => import('../pages/StudentTestsPage'));
 const StudentLecturesPage = lazy(() => import('../pages/StudentLecturesPage'));
@@ -41,11 +40,11 @@ const AdminDashboardPage = lazy(() => import('../admin/pages/AdminDashboardPage'
 const AdminCoursesPage = lazy(() => import('../admin/pages/AdminCoursesPage'));
 const AdminLecturesPage = lazy(() => import('../admin/pages/AdminLecturesPage'));
 const AdminUsersPage = lazy(() => import('../admin/pages/AdminUsersPage'));
-const AdminMrbCodesPage = lazy(() => import('../admin/pages/AdminMrbCodesPage'));
 const AdminLogsPage = lazy(() => import('../admin/pages/AdminLogsPage'));
 const AdminTestsPage = lazy(() => import('../admin/pages/AdminTestsPage'));
 const AdminSettingsPage = lazy(() => import('../admin/pages/AdminSettingsPage'));
 const AdminQuestionsPage = lazy(() => import('../admin/pages/AdminQuestionsPage'));
+const AdminRemarksPage = lazy(() => import('../admin/pages/AdminRemarksPage'));
 
 function PageFallback() {
   return (
@@ -132,7 +131,6 @@ function RedirectIfAdmin({ children }) {
   return children;
 }
 
-/** Requires student session cookie + access token and a redeemed admin MRB enrollment code before opening the portal. */
 function RequireStudent({ children }) {
   const location = useLocation();
   const token = getStudentToken();
@@ -140,9 +138,6 @@ function RequireStudent({ children }) {
   if (!token || !student?.id) {
     const from = encodeURIComponent(`${location.pathname}${location.search || ''}`);
     return <Navigate to={`/login?from=${from}`} replace />;
-  }
-  if (student.mrbEnrollmentVerified !== true) {
-    return <Navigate to="/verify-mrb" replace state={{ from: `${location.pathname}${location.search || ''}` }} />;
   }
   return children;
 }
@@ -163,7 +158,6 @@ export default function AppRouter() {
           <Route path="/forgot-password" element={<StudentForgotPasswordPage />} />
           <Route path="/reset-password" element={<StudentResetPasswordPage />} />
           <Route path="/verify-email" element={<StudentVerifyOtpPage />} />
-          <Route path="/verify-mrb" element={<StudentVerifyMrbPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/refund" element={<RefundPage />} />
@@ -217,7 +211,7 @@ export default function AppRouter() {
             <Route path="tests" element={<AdminTestsPage />} />
             <Route path="tests/:id" element={<AdminTestsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
-            <Route path="mrb-codes" element={<AdminMrbCodesPage />} />
+            <Route path="remarks" element={<AdminRemarksPage />} />
             <Route path="logs" element={<AdminLogsPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>

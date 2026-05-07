@@ -11,7 +11,7 @@ const navItems = [
   { to: '/admin/lectures', label: 'Lectures' },
   { to: '/admin/tests', label: 'Tests' },
   { to: '/admin/users', label: 'Users' },
-  { to: '/admin/mrb-codes', label: 'MRB Codes' },
+  { to: '/admin/remarks', label: 'Remarks' },
   { to: '/admin/logs', label: 'Logs' },
   { to: '/admin/settings', label: 'Settings' },
 ];

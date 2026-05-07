@@ -9,16 +9,10 @@ function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
-function mapMrbVerified(row) {
-  if (!row) return false;
-  return Boolean(row.mrb_enrollment_verified_at);
-}
-
 async function fetchStudentRow(whereClause, params) {
   try {
     const [rows] = await mysqlPool.query(
-      `SELECT id, email, username, full_name, role, password_hash, status, token_version,
-              mrb_enrollment_verified_at
+      `SELECT id, email, username, full_name, role, password_hash, status, token_version
        FROM users
        WHERE ${whereClause} AND role = 'student'
        LIMIT 1`,
@@ -35,7 +29,7 @@ async function fetchStudentRow(whereClause, params) {
       params
     );
     const r = rows[0];
-    return r ? { ...r, token_version: 0, mrb_enrollment_verified_at: null } : null;
+    return r ? { ...r, token_version: 0 } : null;
   }
 }
 
@@ -104,8 +98,6 @@ export async function loginStudent({ email, username, password, expectedId = nul
   const validPassword = await bcrypt.compare(password, student.password_hash);
   if (!validPassword) throw new ApiError(401, 'Invalid credentials');
 
-  const mrbEnrollmentVerified = mapMrbVerified(student);
-
   const connection = await mysqlPool.getConnection();
   try {
     await connection.beginTransaction();
@@ -129,87 +121,12 @@ export async function loginStudent({ email, username, password, expectedId = nul
         username: student.username,
         fullName: student.full_name,
         role: student.role,
-        mrbEnrollmentVerified,
       },
       accessToken,
       refreshToken,
     };
   } catch (error) {
     await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
-
-function normalizeMrbCodeInput(raw) {
-  return String(raw || '')
-    .replace(/[^A-Za-z0-9]/g, '')
-    .toUpperCase();
-}
-
-export async function verifyStudentMrbEnrollment(userId, rawCode) {
-  const normalized = normalizeMrbCodeInput(rawCode);
-  if (normalized.length < 4) {
-    throw new ApiError(400, 'Enter the full MRB code from your admin panel.');
-  }
-
-  const connection = await mysqlPool.getConnection();
-  try {
-    await connection.beginTransaction();
-    let userRow;
-    try {
-      const [urows] = await connection.query(
-        `SELECT id, mrb_enrollment_verified_at FROM users WHERE id = ? FOR UPDATE`,
-        [userId]
-      );
-      userRow = urows[0];
-    } catch (error) {
-      if (error?.code === 'ER_BAD_FIELD_ERROR') {
-        await connection.rollback();
-        throw new ApiError(
-          503,
-          'MRB enrollment is not available yet. Run the latest database schema migration and restart the server.',
-        );
-      }
-      throw error;
-    }
-    if (!userRow) {
-      await connection.rollback();
-      throw new ApiError(404, 'User not found');
-    }
-    if (userRow.mrb_enrollment_verified_at) {
-      await connection.commit();
-      return { mrbEnrollmentVerified: true, alreadyVerified: true };
-    }
-
-    const [codeRows] = await connection.query(
-      `SELECT id, code FROM mrb_codes
-       WHERE code = ? AND is_used = FALSE
-         AND (expires_at IS NULL OR expires_at > NOW())
-       LIMIT 1
-       FOR UPDATE`,
-      [normalized]
-    );
-    const codeRow = codeRows[0];
-    if (!codeRow) {
-      await connection.rollback();
-      throw new ApiError(400, 'Invalid, expired, or already used MRB code. Use a code from Admin → MRB Codes.');
-    }
-
-    await connection.query(
-      `UPDATE mrb_codes SET is_used = TRUE, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [userId, codeRow.id]
-    );
-    await connection.query(`UPDATE users SET mrb_enrollment_verified_at = CURRENT_TIMESTAMP WHERE id = ?`, [userId]);
-    await connection.commit();
-    return { mrbEnrollmentVerified: true, alreadyVerified: false };
-  } catch (error) {
-    try {
-      await connection.rollback();
-    } catch {
-      // ignore
-    }
     throw error;
   } finally {
     connection.release();
@@ -229,6 +146,5 @@ export async function getStudentMePayload(userId) {
     username: row.username,
     fullName: row.full_name,
     role: row.role,
-    mrbEnrollmentVerified: mapMrbVerified(row),
   };
 }

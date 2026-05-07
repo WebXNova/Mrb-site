@@ -9,7 +9,7 @@ export default function StudentVerifyOtpPage() {
 
   function onSubmit(event) {
     event.preventDefault();
-    navigate('/verify-mrb');
+    navigate('/dashboard');
   }
 
   return (

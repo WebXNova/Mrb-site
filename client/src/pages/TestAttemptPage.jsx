@@ -67,7 +67,7 @@ export default function TestAttemptPage() {
 
   useEffect(() => {
     if (timeLeft === 0) {
-      submitNow();
+      submitNow(true);
     }
   }, [timeLeft]);
 
@@ -97,8 +97,8 @@ export default function TestAttemptPage() {
     }
   }
 
-  async function submitNow() {
-    if (!window.confirm('Submit attempt now?')) return;
+  async function submitNow(force = false) {
+    if (!force && !window.confirm('Submit attempt now?')) return;
     setIsBusy(true);
     setError('');
     try {

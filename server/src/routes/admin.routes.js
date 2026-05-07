@@ -3,11 +3,8 @@ import { requireAdmin } from '../middleware/auth.js';
 import {
   getDashboard,
   getLogs,
-  getMrbCodes,
   getUsers,
   putUserStatus,
-  postMrbCodes,
-  removeMrbCode,
 } from '../controllers/admin.controller.js';
 import {
   getCourses,
@@ -24,13 +21,16 @@ import {
 import {
   getTests,
   getTestQuestions,
+  getTestResultsExport,
+  importFileUpload,
+  postDuplicateTest,
   postTestQuestionsImportConfirm,
+  postTestQuestionsImportPreviewFile,
   postTestQuestionsImportPreview,
   postTest,
   postTestQuestion,
   putTest,
   putTestPublish,
-  putTestRegenerateCode,
   putTestQuestion,
   removeTest,
   removeTestQuestion,
@@ -40,6 +40,10 @@ import {
   getAdminStudentQuestions,
   putAdminStudentQuestionAnswer,
 } from '../controllers/adminStudentQuestions.controller.js';
+import {
+  getAdminContactRemarks,
+  putAdminContactRemarkRead,
+} from '../controllers/contactRemarks.controller.js';
 
 const router = Router();
 
@@ -50,10 +54,6 @@ router.get('/logs', getLogs);
 
 router.get('/users', getUsers);
 router.put('/users/:userId/status', putUserStatus);
-
-router.get('/mrb-codes', getMrbCodes);
-router.post('/mrb-codes', postMrbCodes);
-router.delete('/mrb-codes/:codeId', removeMrbCode);
 
 router.get('/courses', getCourses);
 router.post('/courses', postCourse);
@@ -70,11 +70,13 @@ router.post('/tests', postTest);
 router.put('/tests/:testId', putTest);
 router.delete('/tests/:testId', removeTest);
 router.put('/tests/:testId/publish', putTestPublish);
-router.put('/tests/:testId/regenerate-code', putTestRegenerateCode);
+router.post('/tests/:testId/duplicate', postDuplicateTest);
+router.get('/tests/:testId/results/export', getTestResultsExport);
 
 router.get('/tests/:testId/questions', getTestQuestions);
 router.post('/tests/:testId/questions', postTestQuestion);
 router.post('/tests/:testId/questions/import/preview', postTestQuestionsImportPreview);
+router.post('/tests/:testId/questions/import/preview-file', importFileUpload, postTestQuestionsImportPreviewFile);
 router.post('/tests/:testId/questions/import/confirm', postTestQuestionsImportConfirm);
 router.put('/tests/:testId/questions/:questionId', putTestQuestion);
 router.delete('/tests/:testId/questions/:questionId', removeTestQuestion);
@@ -82,5 +84,7 @@ router.delete('/tests/:testId/questions/:questionId', removeTestQuestion);
 router.get('/student-questions', getAdminStudentQuestions);
 router.put('/student-questions/:id', putAdminStudentQuestionAnswer);
 router.delete('/student-questions/:id', deleteAdminStudentQuestion);
+router.get('/remarks', getAdminContactRemarks);
+router.put('/remarks/:remarkId/read', putAdminContactRemarkRead);
 
 export default router;

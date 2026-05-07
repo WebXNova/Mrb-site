@@ -1,0 +1,36 @@
+.contact-block {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-ink-100);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.contact-block__text {
+  color: var(--color-ink-500);
+}
+
+.contact-remark-form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.contact-remark-form__label {
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-700);
+}
+
+.contact-remark-form input,
+.contact-remark-form textarea {
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  font-size: var(--fs-14);
+  background: #fff;
+}
+
+.contact-remark-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}

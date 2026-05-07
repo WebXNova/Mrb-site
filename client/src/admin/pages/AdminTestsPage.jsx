@@ -12,12 +12,11 @@ const defaultTestForm = {
   durationMinutes: 30,
   passingMarks: 0,
   maxAttempts: 1,
-  mrbCode: '',
-  mrbCodeExpiresAt: '',
-  mrbCodeMaxUses: '',
+  negativeMarking: 0,
   shuffleQuestions: false,
   shuffleOptions: false,
   showExplanations: true,
+  tagsInput: '',
   status: 'draft',
 };
 
@@ -93,10 +92,16 @@ export default function AdminTestsPage() {
   const [aikenRows, setAikenRows] = useState([]);
   const [aikenSummary, setAikenSummary] = useState(null);
   const [aikenText, setAikenText] = useState('');
+  const [importFile, setImportFile] = useState(null);
   const [isImportBusy, setIsImportBusy] = useState(false);
+  const [activeTag, setActiveTag] = useState('all');
   const publishedCount = tests.filter((test) => test.status === 'published').length;
   const draftsCount = tests.filter((test) => test.status === 'draft').length;
-  const protectedCount = tests.filter((test) => test.hasMrbCode).length;
+  const allTags = [...new Set(tests.flatMap((test) => (Array.isArray(test.tags) ? test.tags : [])))].sort((a, b) =>
+    a.localeCompare(b)
+  );
+  const visibleTests =
+    activeTag === 'all' ? tests : tests.filter((test) => Array.isArray(test.tags) && test.tags.includes(activeTag));
 
   async function loadTests() {
     const response = await adminApi.tests(token);
@@ -120,6 +125,7 @@ export default function AdminTestsPage() {
     setAikenRows([]);
     setAikenSummary(null);
     setAikenText('');
+    setImportFile(null);
   }
 
   useEffect(() => {
@@ -154,9 +160,11 @@ export default function AdminTestsPage() {
         durationMinutes: Number(testForm.durationMinutes),
         passingMarks: Number(testForm.passingMarks || 0),
         maxAttempts: Number(testForm.maxAttempts || 1),
-        mrbCode: testForm.mrbCode || null,
-        mrbCodeExpiresAt: testForm.mrbCodeExpiresAt ? new Date(testForm.mrbCodeExpiresAt).toISOString() : null,
-        mrbCodeMaxUses: testForm.mrbCodeMaxUses ? Number(testForm.mrbCodeMaxUses) : null,
+        negativeMarking: Number(testForm.negativeMarking || 0),
+        tags: testForm.tagsInput
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
       };
       if (editingTestId) {
         await adminApi.updateTest(token, editingTestId, payload);
@@ -184,12 +192,11 @@ export default function AdminTestsPage() {
       durationMinutes: test.durationMinutes || 30,
       passingMarks: test.passingMarks || 0,
       maxAttempts: test.maxAttempts || 1,
-      mrbCode: '',
-      mrbCodeExpiresAt: test.mrbCodeExpiresAt ? new Date(test.mrbCodeExpiresAt).toISOString().slice(0, 16) : '',
-      mrbCodeMaxUses: test.mrbCodeMaxUses || '',
+      negativeMarking: Number(test.negativeMarking || 0),
       shuffleQuestions: !!test.shuffleQuestions,
       shuffleOptions: !!test.shuffleOptions,
       showExplanations: !!test.showExplanations,
+      tagsInput: (test.tags || []).join(', '),
       status: test.status || 'draft',
     });
   }
@@ -212,10 +219,8 @@ export default function AdminTestsPage() {
     try {
       const response = await adminApi.publishTest(token, testId);
       const link = response?.data?.publicLink;
-      const generatedCode = response?.data?.generatedMrbCode;
       const messageParts = ['Published successfully.'];
       if (link) messageParts.push(`Public link: ${link}`);
-      if (generatedCode) messageParts.push(`MRB code: ${generatedCode}`);
       setSuccess(messageParts.join(' '));
       await loadTests();
     } catch (err) {
@@ -261,28 +266,32 @@ export default function AdminTestsPage() {
   async function onAikenFileChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
+    setImportFile(file);
     const extension = file.name.split('.').pop()?.toLowerCase();
-    if (extension !== 'txt') {
-      setError('Only .txt files are allowed for AIKEN upload in MVP.');
-      return;
+    if (extension === 'txt') {
+      const content = await file.text();
+      setAikenText(content);
+    } else {
+      setAikenText('');
     }
-    const content = await file.text();
-    setAikenText(content);
     setError('');
   }
 
   async function parseAikenPreview(event) {
     event.preventDefault();
     if (!selectedTestId) return;
-    if (!aikenText.trim()) {
-      setError('Please upload or paste AIKEN text first.');
+    if (!aikenText.trim() && !importFile) {
+      setError('Please upload/paste AIKEN or upload Excel/Word file first.');
       return;
     }
     setError('');
     setSuccess('');
     setIsImportBusy(true);
     try {
-      const response = await adminApi.previewAikenImport(token, selectedTestId, aikenText);
+      const response =
+        importFile && !aikenText.trim()
+          ? await adminApi.previewImportFile(token, selectedTestId, importFile)
+          : await adminApi.previewAikenImport(token, selectedTestId, aikenText);
       const previewItems = (response?.data?.items || []).map((row, index) =>
         validatePreviewRow({
           ...row,
@@ -347,7 +356,7 @@ export default function AdminTestsPage() {
         questionImageUrl: row.questionImageUrl || null,
         options: row.options,
         correctOption: row.correctOption,
-        explanation: row.explanation || 'No explanation provided.',
+        explanation: row.explanation,
         explanationImageUrl: row.explanationImageUrl || null,
         marks: Number(row.marks || 1),
         orderIndex: index,
@@ -384,16 +393,32 @@ export default function AdminTestsPage() {
     }
   }
 
-  async function regenerateCode(testId) {
+  async function duplicateExistingTest(testId) {
     setError('');
     setSuccess('');
     try {
-      const response = await adminApi.regenerateTestCode(token, testId);
-      const generatedCode = response?.data?.generatedMrbCode;
-      setSuccess(generatedCode ? `New MRB code generated: ${generatedCode}` : 'MRB code regenerated.');
+      await adminApi.duplicateTest(token, testId);
+      setSuccess('Test duplicated as draft copy.');
       await loadTests();
     } catch (err) {
-      setError(err.message || 'Failed to regenerate code');
+      setError(err.message || 'Failed to duplicate test');
+    }
+  }
+
+  async function downloadResults(testId) {
+    setError('');
+    try {
+      const { blob, filename } = await adminApi.exportTestResults(token, testId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || `test-${testId}-results.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || 'Failed to download results');
     }
   }
 
@@ -413,8 +438,8 @@ export default function AdminTestsPage() {
           <p className="admin-stat-card__value">{draftsCount}</p>
         </article>
         <article className="admin-stat-card">
-          <p className="admin-stat-card__label">MRB Protected</p>
-          <p className="admin-stat-card__value">{protectedCount}</p>
+          <p className="admin-stat-card__label">Total Questions</p>
+          <p className="admin-stat-card__value">{questions.length}</p>
         </article>
       </section>
 
@@ -422,13 +447,16 @@ export default function AdminTestsPage() {
         <h2 className="heading-3">Test Builder Workflow</h2>
         <ol className="admin-workflow-list">
           <li>
-            <strong>Adjust settings:</strong> Configure title, subject, timer, attempts, shuffle and explanation behavior.
+            <strong>Adjust settings:</strong> Change test name, duration, tags, and grading behavior.
           </li>
           <li>
-            <strong>Add questions:</strong> Insert, edit, and reorder questions from one page (manual + AIKEN import).
+            <strong>Edit questions:</strong> Add manual MCQs or bulk import from Aiken/Excel/Word.
           </li>
           <li>
-            <strong>Distribute URL:</strong> Publish and share test URL with students.
+            <strong>Publish & distribute:</strong> Publish and share link with public/private access.
+          </li>
+          <li>
+            <strong>View results:</strong> Track attempts and download per-test Excel report.
           </li>
         </ol>
       </section>
@@ -460,6 +488,16 @@ export default function AdminTestsPage() {
               />
             </div>
             <div className="admin-field">
+              <label htmlFor="tagsInput">Tags (comma separated)</label>
+              <input
+                id="tagsInput"
+                name="tagsInput"
+                value={testForm.tagsInput}
+                onChange={onTestChange}
+                placeholder="e.g. 2026k, Mock, Chapterwise"
+              />
+            </div>
+            <div className="admin-field">
               <label htmlFor="durationMinutes">Duration (minutes)</label>
               <input
                 id="durationMinutes"
@@ -483,35 +521,15 @@ export default function AdminTestsPage() {
               />
             </div>
             <div className="admin-field">
-              <label htmlFor="mrbCode">MRB Code (optional override)</label>
+              <label htmlFor="negativeMarking">Negative Marking (per wrong answer)</label>
               <input
-                id="mrbCode"
-                name="mrbCode"
-                value={testForm.mrbCode}
-                onChange={onTestChange}
-                placeholder="Leave empty to auto-generate on publish"
-              />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="mrbCodeExpiresAt">Code Expiry (optional)</label>
-              <input
-                id="mrbCodeExpiresAt"
-                name="mrbCodeExpiresAt"
-                type="datetime-local"
-                value={testForm.mrbCodeExpiresAt}
-                onChange={onTestChange}
-              />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="mrbCodeMaxUses">Code Max Uses (optional)</label>
-              <input
-                id="mrbCodeMaxUses"
-                name="mrbCodeMaxUses"
+                id="negativeMarking"
+                name="negativeMarking"
                 type="number"
-                min={1}
-                value={testForm.mrbCodeMaxUses}
+                min={0}
+                step="0.25"
+                value={testForm.negativeMarking}
                 onChange={onTestChange}
-                placeholder="No cap if empty"
               />
             </div>
           </div>
@@ -576,6 +594,25 @@ export default function AdminTestsPage() {
 
       <section className="admin-card">
         <h2 className="heading-3">Tests</h2>
+        <div className="admin-tag-board">
+          <button
+            className={`admin-tag-chip ${activeTag === 'all' ? 'admin-tag-chip--active' : ''}`}
+            type="button"
+            onClick={() => setActiveTag('all')}
+          >
+            All
+          </button>
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              className={`admin-tag-chip ${activeTag === tag ? 'admin-tag-chip--active' : ''}`}
+              type="button"
+              onClick={() => setActiveTag(tag)}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
         <div className="admin-table-wrap" style={{ marginTop: '1rem' }}>
           <table className="admin-table">
             <thead>
@@ -583,32 +620,27 @@ export default function AdminTestsPage() {
                 <th>Title</th>
                 <th>Subject</th>
                 <th>Category</th>
+                <th>Tags</th>
                 <th>Status</th>
                 <th>Duration</th>
-                <th>Code Policy</th>
+                <th>Neg Marking</th>
                 <th>Public Link</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {tests.length ? (
-                tests.map((test) => (
+              {visibleTests.length ? (
+                visibleTests.map((test) => (
                   <tr key={test.id}>
                     <td>{test.title}</td>
                     <td>{test.subject}</td>
                     <td>
                       {[test.category, test.subCategory].filter(Boolean).join(' / ') || '-'}
                     </td>
+                    <td>{(test.tags || []).join(', ') || '-'}</td>
                     <td>{test.status}</td>
                     <td>{test.durationMinutes} min</td>
-                    <td>
-                      <div>
-                        <div>{test.mrbCodeExpiresAt ? `Expiry: ${new Date(test.mrbCodeExpiresAt).toLocaleString()}` : 'No expiry'}</div>
-                        <div>
-                          {test.mrbCodeMaxUses ? `Uses: ${test.mrbCodeUsedCount || 0}/${test.mrbCodeMaxUses}` : 'Unlimited uses'}
-                        </div>
-                      </div>
-                    </td>
+                    <td>{Number(test.negativeMarking || 0)}</td>
                     <td>
                       {test.publicLink ? (
                         <div className="admin-row-actions">
@@ -640,15 +672,12 @@ export default function AdminTestsPage() {
                             Publish
                           </button>
                         ) : null}
-                        {test.status === 'published' ? (
-                          <button
-                            className="btn btn--secondary btn--sm"
-                            onClick={() => regenerateCode(test.id)}
-                            type="button"
-                          >
-                            Regenerate Code
-                          </button>
-                        ) : null}
+                        <button className="btn btn--secondary btn--sm" onClick={() => duplicateExistingTest(test.id)} type="button">
+                          Duplicate
+                        </button>
+                        <button className="btn btn--secondary btn--sm" onClick={() => downloadResults(test.id)} type="button">
+                          Download Results
+                        </button>
                         <button className="btn btn--secondary btn--sm" onClick={() => removeTest(test.id)} type="button">
                           Delete
                         </button>
@@ -658,7 +687,7 @@ export default function AdminTestsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8}>No tests yet.</td>
+                  <td colSpan={8}>No tests for this filter.</td>
                 </tr>
               )}
             </tbody>
@@ -675,14 +704,14 @@ export default function AdminTestsPage() {
         ) : (
           <>
             <section className="admin-card admin-import-card">
-              <h3 className="heading-4">AIKEN Upload (.txt)</h3>
+              <h3 className="heading-4">Bulk Upload (.txt / .xlsx / .docx)</h3>
               <p className="body-sm" style={{ marginTop: '0.5rem' }}>
                 Flow: Upload - Parse - Preview - Edit/Delete/Fix - Confirm & Save
               </p>
               <form className="admin-page" style={{ marginTop: '1rem' }} onSubmit={parseAikenPreview}>
                 <div className="admin-field">
-                  <label htmlFor="aikenFile">Upload AIKEN .txt</label>
-                  <input id="aikenFile" type="file" accept=".txt,text/plain" onChange={onAikenFileChange} />
+                  <label htmlFor="aikenFile">Upload Question File</label>
+                  <input id="aikenFile" type="file" accept=".txt,.xlsx,.docx,text/plain" onChange={onAikenFileChange} />
                 </div>
                 <div className="admin-field">
                   <label htmlFor="aikenText">Or paste AIKEN content</label>

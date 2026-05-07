@@ -10,13 +10,13 @@ sequenceDiagram
     participant DB as Database
     participant SS as SessionStorage
 
-    Note over S: Step 1 - Login + MRB Gate
+    Note over S: Step 1 - Login + Test Access
     S->>FE: Sign in (/login)
     FE->>BE: POST /auth/student/login
     BE-->>FE: student_access_token
     S->>FE: Open /tests/:slug
     FE->>BE: POST /tests/:slug/verify-code (Bearer student token)
-    BE->>DB: Validate code + attempt limits + create attempt
+    BE->>DB: Validate attempt limits + create attempt
     BE-->>FE: attempt_id + attempt_token + startUrl
     FE->>SS: Save attempt session
 
@@ -69,9 +69,8 @@ sequenceDiagram
 
 ## Security + Access Rules
 
-- Student must be authenticated before MRB verification.
-- MRB code is only validated on backend (hashed in DB).
-- Rate limiting uses Redis (`ratelimit:test-code:*`) with in-memory fallback.
+- Student must be authenticated before starting an attempt.
+- Rate limiting uses Redis (`ratelimit:test-start:*`) with in-memory fallback.
 - Attempt token uses nonce rotation: each protected call returns `nextAttemptToken`.
 - Attempt caps are enforced by user id + student name + device fingerprint.
 
@@ -80,7 +79,7 @@ sequenceDiagram
 - `/login` -> student login
 - `/register` -> student account creation
 - `/student` -> student portal (lectures, tests, result history)
-- `/tests/:slug` -> MRB code gate
+- `/tests/:slug` -> test landing/start page
 - `/tests/:slug/start` -> test runtime UI
 - `/tests/:slug/result` -> immediate result page after submit
 - `/student/results/:attemptId` -> historical result review page

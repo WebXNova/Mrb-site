@@ -1,6 +1,6 @@
 import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
-import bcrypt from 'bcryptjs';
+import XLSX from 'xlsx';
 
 function slugify(value) {
   return String(value || '')
@@ -19,16 +19,13 @@ function buildPublicLink(publicSlug) {
   return `${base}/tests/${publicSlug}`;
 }
 
-function generateMrbCode(length = 8) {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let output = '';
-  for (let i = 0; i < length; i += 1) {
-    output += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return output;
-}
-
 function toTest(row) {
+  let tags = [];
+  try {
+    tags = JSON.parse(row.tags_json || '[]');
+  } catch {
+    tags = [];
+  }
   return {
     id: row.id,
     title: row.title,
@@ -39,16 +36,16 @@ function toTest(row) {
     durationMinutes: row.duration_minutes,
     passingMarks: row.passing_marks,
     maxAttempts: row.max_attempts,
+    negativeMarking: Number(row.negative_marking || 0),
     shuffleQuestions: !!row.shuffle_questions,
     shuffleOptions: !!row.shuffle_options,
     showExplanations: !!row.show_explanations,
+    accessMode: 'public',
+    tags,
     status: row.status,
     publicSlug: row.public_slug || null,
     publicLink: buildPublicLink(row.public_slug),
-    hasMrbCode: !!row.mrb_code_hash,
-    mrbCodeExpiresAt: row.mrb_code_expires_at || null,
-    mrbCodeMaxUses: row.mrb_code_max_uses ?? null,
-    mrbCodeUsedCount: row.mrb_code_used_count ?? 0,
+    hasMrbCode: false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -112,10 +109,10 @@ export async function getPublishedTestBySlug(publicSlug) {
 }
 
 export async function createTest(payload, createdBy = null) {
-  const mrbCodeHash = payload.mrbCode ? await bcrypt.hash(String(payload.mrbCode).trim(), 10) : null;
+  const tagsJson = JSON.stringify(Array.isArray(payload.tags) ? payload.tags : []);
   const [result] = await mysqlPool.query(
     `INSERT INTO tests
-     (title, description, subject, category, sub_category, duration_minutes, passing_marks, max_attempts, shuffle_questions, shuffle_options, show_explanations, status, mrb_code_hash, mrb_code_expires_at, mrb_code_max_uses, created_by)
+     (title, description, subject, category, sub_category, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.title,
@@ -126,13 +123,13 @@ export async function createTest(payload, createdBy = null) {
       payload.durationMinutes,
       payload.passingMarks || null,
       payload.maxAttempts || 1,
+      Number(payload.negativeMarking || 0),
       payload.shuffleQuestions ?? false,
       payload.shuffleOptions ?? false,
       payload.showExplanations ?? true,
+      'public',
+      tagsJson,
       payload.status || 'draft',
-      mrbCodeHash,
-      payload.mrbCodeExpiresAt || null,
-      payload.mrbCodeMaxUses || null,
       createdBy,
     ]
   );
@@ -140,12 +137,11 @@ export async function createTest(payload, createdBy = null) {
 }
 
 export async function updateTest(testId, payload) {
-  const mrbCodeHash = payload.mrbCode ? await bcrypt.hash(String(payload.mrbCode).trim(), 10) : null;
+  const tagsJson = JSON.stringify(Array.isArray(payload.tags) ? payload.tags : []);
   await mysqlPool.query(
     `UPDATE tests
      SET title = ?, description = ?, subject = ?, category = ?, sub_category = ?, duration_minutes = ?, passing_marks = ?, max_attempts = ?,
-         shuffle_questions = ?, shuffle_options = ?, show_explanations = ?, status = ?, mrb_code_expires_at = ?, mrb_code_max_uses = ?,
-         mrb_code_hash = COALESCE(?, mrb_code_hash), updated_at = CURRENT_TIMESTAMP
+         negative_marking = ?, shuffle_questions = ?, shuffle_options = ?, show_explanations = ?, access_mode = ?, tags_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
       payload.title,
@@ -156,13 +152,13 @@ export async function updateTest(testId, payload) {
       payload.durationMinutes,
       payload.passingMarks || null,
       payload.maxAttempts || 1,
+      Number(payload.negativeMarking || 0),
       payload.shuffleQuestions ?? false,
       payload.shuffleOptions ?? false,
       payload.showExplanations ?? true,
+      'public',
+      tagsJson,
       payload.status || 'draft',
-      payload.mrbCodeExpiresAt || null,
-      payload.mrbCodeMaxUses || null,
-      mrbCodeHash,
       testId,
     ]
   );
@@ -195,40 +191,205 @@ export async function publishTest(testId) {
     }
   }
 
-  const [codeRows] = await mysqlPool.query(
-    `SELECT mrb_code_hash FROM tests WHERE id = ? LIMIT 1`,
-    [testId]
-  );
-  let generatedMrbCode = null;
-  let mrbCodeHash = codeRows[0]?.mrb_code_hash || null;
-  if (!mrbCodeHash) {
-    generatedMrbCode = generateMrbCode(8);
-    mrbCodeHash = await bcrypt.hash(generatedMrbCode, 10);
-  }
-
   await mysqlPool.query(
     `UPDATE tests
-     SET status = 'published', public_slug = ?, mrb_code_hash = ?, updated_at = CURRENT_TIMESTAMP
+     SET status = 'published', public_slug = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [publicSlug, mrbCodeHash, testId]
+    [publicSlug, testId]
   );
   const publishedTest = await getTestById(testId);
-  return { ...publishedTest, generatedMrbCode };
+  return publishedTest;
 }
 
-export async function regenerateTestMrbCode(testId) {
-  const [rows] = await mysqlPool.query(`SELECT id FROM tests WHERE id = ? LIMIT 1`, [testId]);
-  if (!rows[0]) return null;
-  const generatedMrbCode = generateMrbCode(8);
-  const mrbCodeHash = await bcrypt.hash(generatedMrbCode, 10);
-  await mysqlPool.query(
-    `UPDATE tests
-     SET mrb_code_hash = ?, mrb_code_used_count = 0, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [mrbCodeHash, testId]
+export async function duplicateTest(testId, createdBy = null) {
+  const [rows] = await mysqlPool.query(`SELECT * FROM tests WHERE id = ? LIMIT 1`, [testId]);
+  const source = rows[0];
+  if (!source) return null;
+
+  const [insertResult] = await mysqlPool.query(
+    `INSERT INTO tests
+     (title, description, subject, category, sub_category, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)`,
+    [
+      `${source.title} (Copy)`,
+      source.description,
+      source.subject,
+      source.category,
+      source.sub_category,
+      source.duration_minutes,
+      source.passing_marks,
+      source.max_attempts,
+      Number(source.negative_marking || 0),
+      source.shuffle_questions,
+      source.shuffle_options,
+      source.show_explanations,
+      'public',
+      source.tags_json || JSON.stringify([]),
+      createdBy,
+    ]
   );
-  const updated = await getTestById(testId);
-  return { ...updated, generatedMrbCode };
+
+  const newTestId = insertResult.insertId;
+  const [questionRows] = await mysqlPool.query(
+    `SELECT question_text, question_image_url, options_json, correct_option, explanation, explanation_image_url, marks, order_index
+     FROM test_questions
+     WHERE test_id = ?
+     ORDER BY order_index ASC, id ASC`,
+    [testId]
+  );
+  for (const row of questionRows) {
+    await mysqlPool.query(
+      `INSERT INTO test_questions
+       (test_id, question_text, question_image_url, options_json, correct_option, explanation, explanation_image_url, marks, order_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newTestId,
+        row.question_text,
+        row.question_image_url,
+        row.options_json,
+        row.correct_option,
+        row.explanation,
+        row.explanation_image_url,
+        row.marks,
+        row.order_index,
+      ]
+    );
+  }
+
+  return getTestById(newTestId);
+}
+
+export async function exportTestResultsWorkbook(testId) {
+  const [testRows] = await mysqlPool.query(`SELECT id, title FROM tests WHERE id = ? LIMIT 1`, [testId]);
+  if (!testRows[0]) return null;
+
+  const [attemptRows] = await mysqlPool.query(
+    `SELECT a.id, COALESCE(a.student_name, u.full_name, u.username, 'Student') AS student_name,
+            a.started_at, a.submitted_at, r.score, r.max_score, r.time_taken_seconds, r.detail_json
+     FROM test_attempts a
+     INNER JOIN test_results r ON r.attempt_id = a.id
+     LEFT JOIN users u ON u.id = a.user_id
+     WHERE a.test_id = ?
+     ORDER BY a.submitted_at DESC, a.id DESC`,
+    [testId]
+  );
+
+  const maxQuestionCount = attemptRows.reduce((max, row) => {
+    let detail = [];
+    try {
+      detail = JSON.parse(row.detail_json || '[]');
+    } catch {
+      detail = [];
+    }
+    return Math.max(max, Array.isArray(detail) ? detail.length : 0);
+  }, 0);
+
+  const header = ['Student Name', 'Score', 'Time (seconds)', 'Submitted At'];
+  for (let i = 1; i <= maxQuestionCount; i += 1) header.push(`Q${i}`);
+
+  const rows = attemptRows.map((row) => {
+    let detail = [];
+    try {
+      detail = JSON.parse(row.detail_json || '[]');
+    } catch {
+      detail = [];
+    }
+    const scoreText = `${Number(row.score || 0)}/${Number(row.max_score || 0)}`;
+    const base = [row.student_name, scoreText, Number(row.time_taken_seconds || 0), row.submitted_at];
+    for (let i = 0; i < maxQuestionCount; i += 1) {
+      const answer = detail[i]?.selectedOption || '';
+      base.push(answer);
+    }
+    return base;
+  });
+
+  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+  const fileBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+  return {
+    filename: `${slugify(testRows[0].title || 'test-results') || 'test-results'}-results.xlsx`,
+    buffer: fileBuffer,
+  };
+}
+
+export function parseSpreadsheetRows(buffer) {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return [];
+  const worksheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+  return rows.map((row) => ({
+    questionText: row.Question || row.question || '',
+    options: [
+      { id: 'A', text: row['Option A'] || row.optionA || row.A || '' },
+      { id: 'B', text: row['Option B'] || row.optionB || row.B || '' },
+      { id: 'C', text: row['Option C'] || row.optionC || row.C || '' },
+      { id: 'D', text: row['Option D'] || row.optionD || row.D || '' },
+    ],
+    correctOption: String(row['Correct Answer'] || row.correctAnswer || row.answer || '').trim(),
+    explanation: row.Explanation || row.explanation || '',
+    marks: Number(row.Marks || row.marks || 1),
+  }));
+}
+
+export function parseWordRows(content) {
+  const text = String(content || '').replace(/\r\n/g, '\n').trim();
+  if (!text) return [];
+  const blocks = text.split(/\n\s*\n+/).map((block) => block.trim()).filter(Boolean);
+  return blocks.map((block) => {
+    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+    let questionText = '';
+    const options = [];
+    let correctOption = '';
+    let explanation = '';
+    let inExplanation = false;
+
+    for (const line of lines) {
+      const optionMatch = line.match(/^([A-Da-d])[\)\.\:]\s+(.+)$/);
+      const answerMatch = line.match(/^answer\s*[:\-]\s*([A-Da-d])$/i);
+      const explanationMatch = line.match(/^explanation\s*[:\-]\s*(.*)$/i);
+      const questionMatch = line.match(/^question\s*[:\-]\s*(.+)$/i);
+
+      if (optionMatch) {
+        options.push({ id: optionMatch[1].toUpperCase(), text: optionMatch[2].trim() });
+        inExplanation = false;
+        continue;
+      }
+      if (answerMatch) {
+        correctOption = answerMatch[1].toUpperCase();
+        inExplanation = false;
+        continue;
+      }
+      if (explanationMatch) {
+        explanation = explanationMatch[1].trim();
+        inExplanation = true;
+        continue;
+      }
+      if (questionMatch) {
+        questionText = questionMatch[1].trim();
+        inExplanation = false;
+        continue;
+      }
+
+      if (inExplanation) {
+        explanation = `${explanation} ${line}`.trim();
+      } else if (!questionText) {
+        questionText = line;
+      } else if (!options.length) {
+        questionText = `${questionText} ${line}`.trim();
+      }
+    }
+
+    return {
+      questionText,
+      options,
+      correctOption,
+      explanation,
+      marks: 1,
+    };
+  });
 }
 
 export async function listTestQuestions(testId) {
@@ -332,6 +493,9 @@ function validateImportedQuestion(item) {
     errors.push('Exactly one ANSWER is required');
   } else if (!normalizedOptions.some((option) => option.id === correctOption)) {
     errors.push('ANSWER must match one provided option id');
+  }
+  if (!explanation) {
+    errors.push('Explanation is required');
   }
 
   return {
@@ -477,7 +641,7 @@ export async function bulkInsertImportedQuestions(testId, items) {
           normalized.questionImageUrl || null,
           JSON.stringify(normalized.options),
           normalized.correctOption,
-          normalized.explanation || 'No explanation provided.',
+          normalized.explanation,
           normalized.explanationImageUrl || null,
           normalized.marks || 1,
           nextOrder,

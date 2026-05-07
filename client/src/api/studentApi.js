@@ -126,8 +126,6 @@ export const studentApi = {
     studentRequest('/auth/student/reset-password', { method: 'POST', body: payload, retryOnUnauthorized: false }),
   verifyEmail: (payload) =>
     studentRequest('/auth/student/verify-email', { method: 'POST', body: payload, retryOnUnauthorized: false }),
-  verifyMrbEnrollment: (payload) =>
-    studentRequest('/auth/student/verify-mrb-enrollment', { method: 'POST', body: payload, retryOnUnauthorized: true }),
   logout: () => studentRequest('/auth/student/logout', { method: 'POST', retryOnUnauthorized: false }),
   me: () => studentRequest('/auth/student/me', { retryOnUnauthorized: true }),
   dashboard: () => studentRequest('/student/dashboard'),

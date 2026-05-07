@@ -7,7 +7,6 @@ import {
   studentLogout,
   studentMe,
   studentRegister,
-  studentVerifyMrbEnrollment,
 } from '../controllers/auth.controller.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { requireAdmin, requireStudent } from '../middleware/auth.js';
@@ -20,7 +19,6 @@ router.post('/logout', adminLogout);
 router.post('/refresh', refreshAuth);
 router.post('/student/register', authRateLimit, studentRegister);
 router.post('/student/login', authRateLimit, studentLogin);
-router.post('/student/verify-mrb-enrollment', authRateLimit, requireStudent, studentVerifyMrbEnrollment);
 router.post('/student/logout', studentLogout);
 router.get(
   '/me',
