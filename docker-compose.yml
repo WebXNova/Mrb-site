@@ -1,15 +1,46 @@
 version: "3.9"
 
+# Local MySQL for development (avoids ER_ACCESS_DENIED when host MySQL user is not set up).
+# Start only DB:  npm run db:docker   (from server/)
+# App on host:    MYSQL_HOST=127.0.0.1 MYSQL_PORT=3307 in server/.env
+# App in Docker:  backend service sets MYSQL_HOST=mysql automatically.
+
 services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: mrb_root_local_only
+      MYSQL_DATABASE: mrb_learning
+      MYSQL_USER: mrb_app
+      MYSQL_PASSWORD: mrb_app_local_only
+    ports:
+      - "3307:3306"
+    volumes:
+      - mrb_mysql_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pmrb_root_local_only"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 25s
+
   backend:
     build: ./server
     ports:
       - "4000:4000"
+    env_file:
+      - ./server/.env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
     volumes:
       - ./server:/app
       - /app/node_modules
-    environment:
-      - NODE_ENV=development
+    depends_on:
+      mysql:
+        condition: service_healthy
 
   frontend:
     build: ./client
@@ -22,3 +53,6 @@ services:
       - NODE_ENV=development
     depends_on:
       - backend
+
+volumes:
+  mrb_mysql_data:

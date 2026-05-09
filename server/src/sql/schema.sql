@@ -646,6 +646,7 @@ PREPARE auth_sessions_user_revoked_idx_stmt FROM @auth_sessions_user_revoked_idx
 EXECUTE auth_sessions_user_revoked_idx_stmt;
 DEALLOCATE PREPARE auth_sessions_user_revoked_idx_stmt;
 
+<<<<<<< Updated upstream
 CREATE TABLE IF NOT EXISTS email_suppressions (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(255) NOT NULL,
@@ -698,7 +699,7 @@ SET @users_unverified_created_idx_sql = IF(
 PREPARE users_unverified_created_idx_stmt FROM @users_unverified_created_idx_sql;
 EXECUTE users_unverified_created_idx_stmt;
 DEALLOCATE PREPARE users_unverified_created_idx_stmt;
-
+=======
 CREATE TABLE IF NOT EXISTS enrollments (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(255) NOT NULL,
@@ -816,3 +817,4 @@ SET @uq_enrollment_verify_idx_sql = IF(
 PREPARE uq_enrollment_verify_idx_stmt FROM @uq_enrollment_verify_idx_sql;
 EXECUTE uq_enrollment_verify_idx_stmt;
 DEALLOCATE PREPARE uq_enrollment_verify_idx_stmt;
+>>>>>>> Stashed changes

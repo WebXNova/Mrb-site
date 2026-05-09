@@ -32,7 +32,11 @@ app.use(
         callback(null, true);
         return;
       }
-      callback(new Error(`CORS blocked for origin: ${origin}`));
+      // Deny silently (browser blocks). Throwing invokes errorHandler → misleading HTTP 500 for all API calls.
+      if (env.nodeEnv !== 'test') {
+        console.warn('[cors] Origin not allowed (add CLIENT_URL/TRUSTED_ORIGINS):', origin);
+      }
+      callback(null, false);
     },
     credentials: true,
   })

@@ -1,5 +1,6 @@
+import { inferApiFailureMessage } from './apiErrors';
 import { http } from './http';
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+import { getApiBaseUrl } from './runtimeConfig';
 
 export const adminApi = {
   login: (payload) => http.post('/auth/login', payload, { retryOnUnauthorized: false }),
@@ -41,14 +42,27 @@ export const adminApi = {
   previewImportFile: async (token, testId, file) => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await fetch(`${API_BASE}/admin/tests/${testId}/questions/import/preview-file`, {
+    const response = await fetch(`${getApiBaseUrl()}/admin/tests/${testId}/questions/import/preview-file`, {
       method: 'POST',
       credentials: 'include',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || 'File import preview failed');
+    const rawText = await response.text();
+    let data = {};
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = {};
+    }
+    if (!response.ok)
+      throw new Error(
+        inferApiFailureMessage(data, {
+          status: response.status,
+          statusText: response.statusText,
+          rawText,
+        }) || 'File import preview failed'
+      );
     return data;
   },
   confirmAikenImport: (token, testId, items) =>
@@ -70,12 +84,27 @@ export const adminApi = {
   updateEnrollmentStatus: (token, enrollmentId, payload) =>
     http.put(`/enrollments/admin/${enrollmentId}/status`, payload, { token, authScope: 'admin' }),
   exportTestResults: async (token, testId) => {
-    const response = await fetch(`${API_BASE}/admin/tests/${testId}/results/export`, {
+    const response = await fetch(`${getApiBaseUrl()}/admin/tests/${testId}/results/export`, {
       method: 'GET',
       credentials: 'include',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!response.ok) throw new Error('Failed to export results');
+    if (!response.ok) {
+      const rawText = await response.text();
+      let data = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = {};
+      }
+      throw new Error(
+        inferApiFailureMessage(data, {
+          status: response.status,
+          statusText: response.statusText,
+          rawText,
+        }) || 'Failed to export results'
+      );
+    }
     const blob = await response.blob();
     const header = response.headers.get('content-disposition') || '';
     const match = header.match(/filename="([^"]+)"/i);
@@ -88,6 +117,7 @@ export const testsApi = {
     http.get(`/tests/${slug}`, {
       token: null,
       retryOnUnauthorized: false,
+      authScope: null,
     }),
   verifyCode: (slug, payload, studentToken) =>
     http.post(`/tests/${slug}/verify-code`, payload, {

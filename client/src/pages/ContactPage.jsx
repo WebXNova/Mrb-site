@@ -1,5 +1,7 @@
 import PageLayout from '../components/layout/PageLayout';
 import { useState } from 'react';
+import { inferApiFailureMessage } from '../api/apiErrors';
+import { getApiBaseUrl } from '../api/runtimeConfig';
 import SocialMediaLinks from '../components/ui/SocialMediaLinks';
 import './ContactPage.css';
 
@@ -14,9 +16,10 @@ export default function ContactPage() {
     setSendState({ error: '', success: '' });
     setIsSending(true);
     try {
-      const response = await fetch('/api/contact/remarks', {
+      const response = await fetch(`${getApiBaseUrl()}/contact/remarks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           name: name.trim() || null,
           email: null,
@@ -24,9 +27,15 @@ export default function ContactPage() {
           pageUrl: '/contact',
         }),
       });
-      const data = await response.json().catch(() => ({}));
+      const rawText = await response.text();
+      let data = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = {};
+      }
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to send remark');
+        throw new Error(inferApiFailureMessage(data, { status: response.status, statusText: response.statusText, rawText }));
       }
       setRemark('');
       setName('');

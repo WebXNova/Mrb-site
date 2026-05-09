@@ -2,7 +2,7 @@ import { clearAdminAuth, clearStudentAuth, getAdminToken, getStudentToken, setAd
 import { setAuthAuthenticated, setAuthDegraded, setAuthGuest } from '../auth/authStateMachine';
 import { getRefreshInFlightPromise, runSingleFlightRefresh } from '../auth/refreshManager';
 import { logAuthEvent } from '../observability/authTelemetry';
-import { createHttpError } from './apiErrors';
+import { createHttpError, inferApiFailureMessage } from './apiErrors';
 import { getApiBaseUrl, getRequestTimeoutMs } from './runtimeConfig';
 
 const REFRESH_PATH = '/auth/refresh';
@@ -242,12 +242,21 @@ export async function request(path, options = {}) {
     throw error;
   }
 
-  const data = await response.json().catch(() => ({}));
+  const rawBody = await response.text();
+  let data = {};
+  try {
+    data = rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    data = {};
+  }
   if (response.ok) return data;
 
   if (response.status === 401) {
     logAuthEvent('request.401', { path: stripQuery(path), authScope: authScope || 'none' });
   }
+
+  const failMsg = () =>
+    inferApiFailureMessage(data, { status: response.status, statusText: response.statusText, rawText: rawBody });
 
   if (response.status === 401 && retryOnUnauthorized && authScope && path !== REFRESH_PATH) {
     try {
@@ -270,8 +279,8 @@ export async function request(path, options = {}) {
   }
 
   if (response.status === 401) {
-    throw createHttpError(data.message || 'Unauthorized', { status: 401, refreshAlreadyTried: true });
+    throw createHttpError(failMsg() || 'Unauthorized', { status: 401, refreshAlreadyTried: true });
   }
-  throw createHttpError(data.message || 'Request failed', { status: response.status });
+  throw createHttpError(failMsg(), { status: response.status });
 }
 
