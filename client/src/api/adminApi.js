@@ -66,6 +66,9 @@ export const adminApi = {
     http.delete(`/admin/student-questions/${questionId}`, { token }),
   remarks: (token) => http.get('/admin/remarks', { token }),
   markRemarkRead: (token, remarkId) => http.put(`/admin/remarks/${remarkId}/read`, {}, { token }),
+  enrollments: (token) => http.get('/enrollments/admin', { token, authScope: 'admin' }),
+  updateEnrollmentStatus: (token, enrollmentId, payload) =>
+    http.put(`/enrollments/admin/${enrollmentId}/status`, payload, { token, authScope: 'admin' }),
   exportTestResults: async (token, testId) => {
     const response = await fetch(`${API_BASE}/admin/tests/${testId}/results/export`, {
       method: 'GET',

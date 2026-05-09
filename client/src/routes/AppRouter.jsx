@@ -10,6 +10,8 @@ const AboutPage = lazy(() => import('../pages/AboutPage'));
 const ContactPage = lazy(() => import('../pages/ContactPage'));
 const StudentLoginPage = lazy(() => import('../pages/StudentLoginPage'));
 const StudentRegisterPage = lazy(() => import('../pages/StudentRegisterPage'));
+const EnrollmentPage = lazy(() => import('../pages/EnrollmentPage'));
+const EnrollmentStatusPage = lazy(() => import('../pages/EnrollmentStatusPage'));
 const StudentForgotPasswordPage = lazy(() => import('../pages/StudentForgotPasswordPage'));
 const StudentResetPasswordPage = lazy(() => import('../pages/StudentResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('../pages/VerifyEmailPage'));
@@ -45,6 +47,8 @@ const AdminLogsPage = lazy(() => import('../admin/pages/AdminLogsPage'));
 const AdminTestsPage = lazy(() => import('../admin/pages/AdminTestsPage'));
 const AdminSettingsPage = lazy(() => import('../admin/pages/AdminSettingsPage'));
 const AdminQuestionsPage = lazy(() => import('../admin/pages/AdminQuestionsPage'));
+const AdminRemarksPage = lazy(() => import('../admin/pages/AdminRemarksPage'));
+const AdminRegistrationsPage = lazy(() => import('../admin/pages/AdminRegistrationsPage'));
 
 function PageFallback() {
   return (
@@ -105,6 +109,8 @@ export default function AppRouter({ authStatus }) {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<StudentLoginPage />} />
           <Route path="/register" element={<StudentRegisterPage />} />
+          <Route path="/enroll" element={<EnrollmentPage />} />
+          <Route path="/enrollment/status" element={<EnrollmentStatusPage />} />
           <Route path="/forgot-password" element={<StudentForgotPasswordPage />} />
           <Route path="/reset-password" element={<StudentResetPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
@@ -177,6 +183,8 @@ export default function AppRouter({ authStatus }) {
             <Route path="tests/:id" element={<AdminTestsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="mrb-codes" element={<AdminMrbCodesPage />} />
+            <Route path="remarks" element={<AdminRemarksPage />} />
+            <Route path="registrations" element={<AdminRegistrationsPage />} />
             <Route path="logs" element={<AdminLogsPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>

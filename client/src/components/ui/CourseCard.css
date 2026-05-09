@@ -20,8 +20,14 @@
 .course-card__link {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
   color: inherit;
+}
+
+.course-card__actions {
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--space-5) var(--space-5);
 }
 
 .course-card__cover {

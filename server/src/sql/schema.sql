@@ -698,3 +698,121 @@ SET @users_unverified_created_idx_sql = IF(
 PREPARE users_unverified_created_idx_stmt FROM @users_unverified_created_idx_sql;
 EXECUTE users_unverified_created_idx_stmt;
 DEALLOCATE PREPARE users_unverified_created_idx_stmt;
+
+CREATE TABLE IF NOT EXISTS enrollments (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(255) NOT NULL,
+  applicant_full_name VARCHAR(160) NOT NULL,
+  father_name VARCHAR(160) NOT NULL,
+  date_of_birth DATE NULL,
+  gender ENUM('male', 'female') NOT NULL,
+  whatsapp_number VARCHAR(20) NOT NULL,
+  province VARCHAR(80) NOT NULL,
+  district VARCHAR(120) NOT NULL,
+  hssc_status ENUM('Inter Class', 'First Year Class', 'Matric Class') NOT NULL,
+  board VARCHAR(120) NOT NULL,
+  mdcat_attempt_type ENUM('Fresher', 'Improver') NOT NULL,
+  transaction_id VARCHAR(120) NOT NULL,
+  verification_token VARCHAR(64) NULL,
+  payment_method VARCHAR(80) NOT NULL DEFAULT 'EasyPaisa and JazzCash',
+  account_title VARCHAR(120) NOT NULL DEFAULT 'Muzamil Raheem',
+  receipt_url VARCHAR(1000) NOT NULL,
+  receipt_original_name VARCHAR(255) NULL,
+  receipt_mime_type VARCHAR(80) NULL,
+  receipt_size_bytes BIGINT NULL,
+  status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending',
+  admin_note VARCHAR(500) NULL,
+  reviewed_by BIGINT NULL,
+  reviewed_at TIMESTAMP NULL,
+  submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_enrollments_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+  KEY idx_enrollments_status_submitted (status, submitted_at DESC),
+  KEY idx_enrollments_province (province),
+  KEY idx_enrollments_board (board),
+  KEY idx_enrollments_attempt (mdcat_attempt_type),
+  KEY idx_enrollments_email (email),
+  KEY idx_enrollments_whatsapp (whatsapp_number),
+  UNIQUE KEY uq_enrollments_verification_token (verification_token)
+);
+
+SET @enrollments_txn_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'enrollments'
+    AND COLUMN_NAME = 'transaction_id'
+);
+SET @enrollments_txn_col_sql = IF(
+  @enrollments_txn_col_exists = 0,
+  'ALTER TABLE enrollments ADD COLUMN transaction_id VARCHAR(120) NOT NULL',
+  'SELECT 1'
+);
+PREPARE enrollments_txn_col_stmt FROM @enrollments_txn_col_sql;
+EXECUTE enrollments_txn_col_stmt;
+DEALLOCATE PREPARE enrollments_txn_col_stmt;
+
+SET @enrollments_status_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'enrollments'
+    AND COLUMN_NAME = 'status'
+);
+SET @enrollments_status_col_sql = IF(
+  @enrollments_status_col_exists = 0,
+  "ALTER TABLE enrollments ADD COLUMN status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending'",
+  'SELECT 1'
+);
+PREPARE enrollments_status_col_stmt FROM @enrollments_status_col_sql;
+EXECUTE enrollments_status_col_stmt;
+DEALLOCATE PREPARE enrollments_status_col_stmt;
+
+SET @enrollments_unique_txn_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'enrollments'
+    AND INDEX_NAME = 'uq_enrollments_transaction_id'
+);
+SET @enrollments_unique_txn_idx_sql = IF(
+  @enrollments_unique_txn_idx_exists = 0,
+  'ALTER TABLE enrollments ADD CONSTRAINT uq_enrollments_transaction_id UNIQUE (transaction_id)',
+  'SELECT 1'
+);
+PREPARE enrollments_unique_txn_idx_stmt FROM @enrollments_unique_txn_idx_sql;
+EXECUTE enrollments_unique_txn_idx_stmt;
+DEALLOCATE PREPARE enrollments_unique_txn_idx_stmt;
+
+SET @enrollments_verify_token_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'enrollments'
+    AND COLUMN_NAME = 'verification_token'
+);
+SET @enrollments_verify_token_sql = IF(
+  @enrollments_verify_token_exists = 0,
+  'ALTER TABLE enrollments ADD COLUMN verification_token VARCHAR(64) NULL',
+  'SELECT 1'
+);
+PREPARE enrollments_verify_token_stmt FROM @enrollments_verify_token_sql;
+EXECUTE enrollments_verify_token_stmt;
+DEALLOCATE PREPARE enrollments_verify_token_stmt;
+
+SET @uq_enrollment_verify_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'enrollments'
+    AND INDEX_NAME = 'uq_enrollments_verification_token'
+);
+SET @uq_enrollment_verify_idx_sql = IF(
+  @uq_enrollment_verify_idx_exists = 0,
+  'CREATE UNIQUE INDEX uq_enrollments_verification_token ON enrollments (verification_token)',
+  'SELECT 1'
+);
+PREPARE uq_enrollment_verify_idx_stmt FROM @uq_enrollment_verify_idx_sql;
+EXECUTE uq_enrollment_verify_idx_stmt;
+DEALLOCATE PREPARE uq_enrollment_verify_idx_stmt;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Badge from './Badge';
+import Button from './Button';
 import './CourseCard.css';
 
 function formatPrice(price) {
@@ -145,6 +146,11 @@ export default function CourseCard({ course }) {
           </div>
         </div>
       </Link>
+      <div className="course-card__actions">
+        <Button as={Link} to="/enroll" variant="accent" size="lg">
+          Enroll now
+        </Button>
+      </div>
     </article>
   );
 }

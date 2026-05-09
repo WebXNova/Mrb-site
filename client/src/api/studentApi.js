@@ -1,4 +1,21 @@
 import { request } from './requestClient.js';
+import { getApiBaseUrl } from './runtimeConfig.js';
+
+function enrollmentApiErrorMessage(data, httpStatus) {
+  if (!data || typeof data !== 'object') {
+    return httpStatus ? `Enrollment submission failed (HTTP ${httpStatus}).` : '';
+  }
+  if (typeof data.message === 'string' && data.message.trim()) return data.message;
+  const fieldErrors = data.details?.fieldErrors;
+  if (fieldErrors && typeof fieldErrors === 'object') {
+    for (const key of Object.keys(fieldErrors)) {
+      const arr = fieldErrors[key];
+      const first = Array.isArray(arr) ? arr.find((m) => typeof m === 'string' && m.trim()) : arr;
+      if (typeof first === 'string' && first.trim()) return first;
+    }
+  }
+  return httpStatus ? `Enrollment submission failed (HTTP ${httpStatus}).` : '';
+}
 
 function studentRequest(path, options = {}) {
   return request(path, { ...options, authScope: 'student' });
@@ -41,4 +58,42 @@ export const studentApi = {
   },
   notifications: () => studentRequest('/student/notifications'),
   resultDetail: (attemptId) => studentRequest(`/student/results/${attemptId}`),
+  submitEnrollment: (payload, { onProgress } = {}) =>
+    new Promise((resolve, reject) => {
+      const formData = new FormData();
+      Object.entries(payload || {}).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        formData.append(key, value);
+      });
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${getApiBaseUrl()}/enrollments`);
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable || typeof onProgress !== 'function') return;
+        const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+        onProgress(percent);
+      };
+      xhr.onload = () => {
+        const data = (() => {
+          try {
+            return JSON.parse(xhr.responseText || '{}');
+          } catch {
+            return {};
+          }
+        })();
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+          return;
+        }
+        const msg =
+          enrollmentApiErrorMessage(data, xhr.status) || 'Enrollment submission failed. Please check your internet or API connection.';
+        reject(new Error(msg));
+      };
+      xhr.onerror = () => reject(new Error('Network error while submitting enrollment'));
+      xhr.send(formData);
+    }),
+  /** Public: check enrollment verification status using token from submit response (no login). */
+  trackEnrollment: (token) =>
+    request(`/enrollments/track/${encodeURIComponent(token)}`, { authScope: null, retryOnUnauthorized: false }),
 };

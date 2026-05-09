@@ -312,6 +312,115 @@
   color: var(--color-ink-600);
 }
 
+.admin-status-pill--enrollment {
+  text-transform: capitalize;
+}
+
+.admin-status-pill--pending {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.admin-status-pill--verified {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.admin-status-pill--rejected {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.admin-enrollment-table__receipt-cell {
+  vertical-align: middle;
+  min-width: 120px;
+}
+
+.admin-enrollment-receipt-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-100);
+  overflow: hidden;
+  background: var(--color-bg-soft);
+  transition: box-shadow var(--transition-base), transform var(--transition-fast);
+}
+
+.admin-enrollment-receipt-thumb:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.admin-enrollment-receipt-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-enrollment-receipt-thumb--table {
+  width: 96px;
+  height: 72px;
+}
+
+.admin-enrollment-receipt-thumb--table img {
+  object-fit: contain;
+  background: #f8fafc;
+}
+
+.admin-enrollment-receipt-thumb--detail {
+  width: min(420px, 100%);
+  height: min(240px, 50vw);
+}
+
+.admin-enrollment-receipt-thumb--detail img {
+  object-fit: contain;
+  background: #0f172a;
+}
+
+.admin-enrollment-receipt-thumb--pdf {
+  background: linear-gradient(135deg, #fef2f2, #fff7ed);
+  flex-direction: column;
+  gap: 0.35rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.admin-enrollment-receipt-thumb__pdf-mark {
+  font-size: var(--fs-12);
+  font-weight: var(--fw-extrabold);
+  color: #b91c1c;
+  letter-spacing: 0.04em;
+}
+
+.admin-enrollment-receipt-fallback {
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.admin-enrollment-receipt-fallback:hover {
+  text-decoration: underline;
+}
+
+.admin-enrollment-detail-receipt {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-ink-100);
+}
+
+.admin-enrollment-detail-receipt__label {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-800);
+}
+
 .admin-error {
   color: var(--color-danger);
   font-size: var(--fs-13);

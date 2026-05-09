@@ -12,6 +12,8 @@ import studentRoutes from './routes/student.routes.js';
 import emailProviderRoutes from './routes/emailProvider.routes.js';
 import { isRedisReady } from './config/redis.js';
 import { getEmailQueue } from './config/queue.js';
+import contactRoutes from './routes/contact.routes.js';
+import enrollmentRoutes from './routes/enrollment.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { attachRequestContext } from './middleware/requestContext.js';
 
@@ -88,6 +90,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/tests', testsRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/email', emailProviderRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/enrollments', enrollmentRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

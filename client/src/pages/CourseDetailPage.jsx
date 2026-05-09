@@ -153,7 +153,7 @@ export default function CourseDetailPage() {
                 </div>
 
                 <div className="course-detail-hero__card-actions">
-                  <Button as={Link} to="/register" variant="accent" size="lg" fullWidth>
+                  <Button as={Link} to="/enroll" variant="accent" size="lg" fullWidth>
                     Enroll now
                   </Button>
                   <Button as={Link} to="/courses" variant="secondary" size="md" fullWidth>

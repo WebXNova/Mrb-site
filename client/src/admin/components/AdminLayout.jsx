@@ -11,7 +11,9 @@ const navItems = [
   { to: '/admin/lectures', label: 'Lectures' },
   { to: '/admin/tests', label: 'Tests' },
   { to: '/admin/users', label: 'Users' },
+  { to: '/admin/mrb-codes', label: 'MRB codes' },
   { to: '/admin/remarks', label: 'Remarks' },
+  { to: '/admin/registrations', label: 'Registrations' },
   { to: '/admin/logs', label: 'Logs' },
   { to: '/admin/settings', label: 'Settings' },
 ];
@@ -62,7 +64,7 @@ export default function AdminLayout() {
           <div>
             <p className="admin-topbar__title">Admin Panel</p>
             <p className="admin-topbar__subtitle">
-              Manage questions, courses, lectures, tests, users, logs, and access
+              Manage questions, courses, lectures, tests, registrations, users, logs, and access
             </p>
             {adminUser?.email ? (
               <p className="admin-topbar__subtitle">
