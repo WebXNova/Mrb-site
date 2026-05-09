@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireStudent } from '../middleware/auth.js';
+import { enforcePolicy } from '../auth/securityPolicy.js';
 import { getStudentDashboardData, getStudentResultDetail } from '../controllers/student.controller.js';
 import {
   getStudentQuestionById,
@@ -9,7 +9,7 @@ import {
 import { postStudentQuestionAttachment } from '../controllers/studentQuestionUpload.controller.js';
 
 const router = Router();
-router.use(requireStudent);
+router.use(enforcePolicy({ auth: 'student', verified: true, enrollment: true, maxRisk: 'elevated' }));
 router.get('/dashboard', getStudentDashboardData);
 router.get('/questions', getStudentQuestions);
 router.post('/questions/attachment', postStudentQuestionAttachment);

@@ -9,10 +9,14 @@ import authRoutes from './routes/auth.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import testsRoutes from './routes/tests.routes.js';
 import studentRoutes from './routes/student.routes.js';
-import contactRoutes from './routes/contact.routes.js';
+import emailProviderRoutes from './routes/emailProvider.routes.js';
+import { isRedisReady } from './config/redis.js';
+import { getEmailQueue } from './config/queue.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { attachRequestContext } from './middleware/requestContext.js';
 
 export const app = express();
+app.set('trust proxy', env.security.trustProxy);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.resolve(__dirname, '../uploads');
@@ -49,21 +53,41 @@ app.use(
       },
     },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    referrerPolicy: { policy: 'no-referrer' },
   })
 );
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+app.use(attachRequestContext);
 app.use('/api/uploads', express.static(uploadsRoot));
 
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'Server healthy' });
+  res.json({
+    success: true,
+    message: 'Server healthy',
+    requestId: req.requestId,
+  });
+});
+
+app.get('/api/ready', async (req, res) => {
+  const queue = getEmailQueue();
+  const ready = {
+    redis: isRedisReady(),
+    emailQueue: Boolean(queue),
+  };
+  const statusCode = ready.redis || env.nodeEnv !== 'production' ? 200 : 503;
+  res.status(statusCode).json({
+    success: statusCode === 200,
+    requestId: req.requestId,
+    ready,
+  });
 });
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tests', testsRoutes);
 app.use('/api/student', studentRoutes);
-app.use('/api/contact', contactRoutes);
+app.use('/api/email', emailProviderRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

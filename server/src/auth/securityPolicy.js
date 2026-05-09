@@ -1,0 +1,93 @@
+import { mysqlPool } from '../config/mysql.js';
+import { ApiError } from '../utils/apiError.js';
+import { requireAdmin, requireStudent } from '../middleware/auth.js';
+import { requireStudentVerified } from '../middleware/requireStudentVerified.js';
+import { requireStudentMrbEnrollment } from '../middleware/requireStudentMrbEnrollment.js';
+import { requireCsrf } from '../middleware/csrf.js';
+import { env } from '../config/env.js';
+
+function runMiddleware(middleware, req, res) {
+  return new Promise((resolve, reject) => {
+    middleware(req, res, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+export async function requireAuth(req, res, role = 'student') {
+  if (role === 'admin') {
+    await runMiddleware(requireAdmin, req, res);
+    return;
+  }
+  await runMiddleware(requireStudent, req, res);
+}
+
+export async function requireRole(req, res, role) {
+  await requireAuth(req, res, role);
+}
+
+export async function requireVerified(req, res) {
+  await runMiddleware(requireStudentVerified, req, res);
+}
+
+export async function requireEnrollment(req, res) {
+  await runMiddleware(requireStudentMrbEnrollment, req, res);
+}
+
+export async function requireRiskLevel(req, _res, maxAllowedRisk = 'elevated') {
+  if (!req.user?.id) throw new ApiError(401, 'Authentication required');
+  const [rows] = await mysqlPool.query(`SELECT risk_level FROM users WHERE id = ? LIMIT 1`, [req.user.id]);
+  const riskLevel = String(rows[0]?.risk_level || 'normal');
+  const score = { normal: 0, elevated: 1, critical: 2 };
+  if ((score[riskLevel] ?? 2) > (score[maxAllowedRisk] ?? 1)) {
+    throw new ApiError(403, 'Account risk level requires additional verification');
+  }
+}
+
+export async function requireFreshSession(req, _res) {
+  if (!req.user?.iat) return;
+  const maxAgeSeconds = Number(process.env.FRESH_SESSION_MAX_AGE_SECONDS || 15 * 60);
+  const ageSeconds = Math.max(0, Math.floor(Date.now() / 1000) - Number(req.user.iat));
+  if (ageSeconds > maxAgeSeconds) {
+    throw new ApiError(401, 'Recent sign-in required');
+  }
+}
+
+export async function requireStepUpVerification(req, _res) {
+  const expected = String(env.security.authChallengeKey || '');
+  if (!expected) {
+    throw new ApiError(503, 'Step-up verification is not configured');
+  }
+  const provided = String(req.get('x-auth-challenge') || '');
+  if (!provided || provided !== expected) {
+    throw new ApiError(403, 'Step-up verification required');
+  }
+}
+
+export function enforcePolicy(policy = {}) {
+  const {
+    auth = null,
+    verified = false,
+    enrollment = false,
+    csrf = false,
+    maxRisk = null,
+    freshSession = false,
+    stepUp = false,
+  } = policy;
+  return async (req, res, next) => {
+    try {
+      if (auth) await requireRole(req, res, auth);
+      if (verified) await requireVerified(req, res);
+      if (enrollment) await requireEnrollment(req, res);
+      if (csrf) await runMiddleware(requireCsrf, req, res);
+      if (maxRisk) await requireRiskLevel(req, res, maxRisk);
+      if (freshSession) await requireFreshSession(req, res);
+      if (stepUp) await requireStepUpVerification(req, res);
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  };
+}
+

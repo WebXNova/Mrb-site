@@ -1,16 +1,15 @@
 const AUTH_EVENT = 'mrb-auth-changed';
-let adminAccessToken = null;
-let studentAccessToken = null;
+let adminSessionActive = false;
+let studentSessionActive = false;
 
-const SS_STUDENT_AT = 'mrb_access_student';
-const SS_ADMIN_AT = 'mrb_access_admin';
 const SS_STUDENT_USER = 'student_user';
 const SS_ADMIN_USER = 'admin_user';
-const ACCESS_SKEW_MS = 10_000;
 
 function purgeLegacyTokenKeys() {
   if (typeof window === 'undefined') return;
   try {
+    sessionStorage.removeItem('mrb_access_admin');
+    sessionStorage.removeItem('mrb_access_student');
     localStorage.removeItem('admin_access_token');
     localStorage.removeItem('student_access_token');
     localStorage.removeItem('student_user');
@@ -20,50 +19,10 @@ function purgeLegacyTokenKeys() {
   }
 }
 
-/** Non-authoritative JWT exp check — avoids needless /auth/refresh on every reload (rotation races under rapid F5). */
-function jwtExpMs(payloadSegment) {
-  try {
-    const b64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '=');
-    const json = JSON.parse(atob(padded));
-    if (typeof json.exp !== 'number') return null;
-    return json.exp * 1000;
-  } catch {
-    return null;
-  }
-}
-
-function isAccessTokenProbablyValid(raw) {
-  const parts = String(raw || '').split('.');
-  if (parts.length !== 3) return false;
-  const expMs = jwtExpMs(parts[1]);
-  if (!expMs) return false;
-  return expMs > Date.now() + ACCESS_SKEW_MS;
-}
-
-function readSessionAccess(storageKey) {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = sessionStorage.getItem(storageKey);
-    if (!raw || !isAccessTokenProbablyValid(raw)) {
-      sessionStorage.removeItem(storageKey);
-      return null;
-    }
-    return raw;
-  } catch {
-    try {
-      sessionStorage.removeItem(storageKey);
-    } catch {
-      // ignore
-    }
-    return null;
-  }
-}
-
-function writeSessionAccess(storageKey, token) {
+function writeSessionValue(storageKey, value) {
   if (typeof window === 'undefined') return;
   try {
-    if (token) sessionStorage.setItem(storageKey, token);
+    if (value) sessionStorage.setItem(storageKey, value);
     else sessionStorage.removeItem(storageKey);
   } catch {
     // ignore quota / privacy mode
@@ -85,50 +44,52 @@ export function onAuthChanged(handler) {
 }
 
 export function clearStudentAuth() {
-  studentAccessToken = null;
-  writeSessionAccess(SS_STUDENT_AT, null);
-  writeSessionAccess(SS_STUDENT_USER, null);
+  studentSessionActive = false;
+  writeSessionValue(SS_STUDENT_USER, null);
   notifyAuthChanged();
 }
 
 export function clearAdminAuth() {
-  adminAccessToken = null;
-  writeSessionAccess(SS_ADMIN_AT, null);
-  writeSessionAccess(SS_ADMIN_USER, null);
+  adminSessionActive = false;
+  writeSessionValue(SS_ADMIN_USER, null);
+  notifyAuthChanged();
+}
+
+export function clearAllAuth() {
+  adminSessionActive = false;
+  studentSessionActive = false;
+  writeSessionValue(SS_ADMIN_USER, null);
+  writeSessionValue(SS_STUDENT_USER, null);
   notifyAuthChanged();
 }
 
 export function setStudentAuth(token, student) {
-  studentAccessToken = token || null;
-  writeSessionAccess(SS_STUDENT_AT, token || null);
-  writeSessionAccess(SS_STUDENT_USER, JSON.stringify(student || {}));
+  studentSessionActive = true;
+  writeSessionValue(SS_STUDENT_USER, JSON.stringify(student || {}));
   notifyAuthChanged();
 }
 
 export function setAdminAuth(token, admin) {
-  adminAccessToken = token || null;
-  writeSessionAccess(SS_ADMIN_AT, token || null);
-  if (admin) writeSessionAccess(SS_ADMIN_USER, JSON.stringify(admin));
-  else writeSessionAccess(SS_ADMIN_USER, null);
+  adminSessionActive = true;
+  if (admin) writeSessionValue(SS_ADMIN_USER, JSON.stringify(admin));
+  else writeSessionValue(SS_ADMIN_USER, null);
   notifyAuthChanged();
 }
 
 export function getStudentToken() {
   purgeLegacyTokenKeys();
-  if (!studentAccessToken && typeof window !== 'undefined') {
-    const recovered = readSessionAccess(SS_STUDENT_AT);
-    if (recovered) studentAccessToken = recovered;
+  if (!studentSessionActive && getStoredUser('student_user')?.id) {
+    studentSessionActive = true;
   }
-  return studentAccessToken;
+  return studentSessionActive ? '__cookie_session__' : null;
 }
 
 export function getAdminToken() {
   purgeLegacyTokenKeys();
-  if (!adminAccessToken && typeof window !== 'undefined') {
-    const recovered = readSessionAccess(SS_ADMIN_AT);
-    if (recovered) adminAccessToken = recovered;
+  if (!adminSessionActive && getStoredUser('admin_user')?.id) {
+    adminSessionActive = true;
   }
-  return adminAccessToken;
+  return adminSessionActive ? '__cookie_session__' : null;
 }
 
 export function getStoredUser(key) {

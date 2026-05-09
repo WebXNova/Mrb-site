@@ -11,6 +11,10 @@ const MAX_TRANSIENT_REFRESH_RETRIES = 1;
 const CSRF_COOKIE_NAME = 'csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
 
+function stripQuery(path) {
+  return String(path || '').split('?')[0];
+}
+
 export class AuthRefreshError extends Error {
   constructor(message, { status = null, isNetworkError = false, isTimeout = false } = {}) {
     super(message);
@@ -71,7 +75,7 @@ function readCookie(name) {
 }
 
 function shouldAttachCsrf(path) {
-  return path === REFRESH_PATH || path === '/auth/logout' || path === '/auth/student/logout';
+  return path === REFRESH_PATH || path === '/auth/logout' || path === '/auth/student/logout' || path === '/auth/logout-all';
 }
 
 function shouldRetryRefresh(error, retryCount) {
@@ -110,11 +114,7 @@ async function postRefresh(scope, timeoutMs) {
   if (!response.ok) {
     throw new AuthRefreshError(payload.message || 'Session refresh failed', { status: response.status });
   }
-  const nextToken = payload?.data?.accessToken;
-  if (!nextToken) {
-    throw new AuthRefreshError('Session refresh failed', { status: response.status || 502 });
-  }
-  return { nextToken, user: payload?.data?.user || payload?.data?.admin || payload?.data?.student || null };
+  return { user: payload?.data?.user || payload?.data?.admin || payload?.data?.student || null };
 }
 
 export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs(), _allowFollowup = true } = {}) {
@@ -140,10 +140,10 @@ export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs(), _
     for (;;) {
       try {
         const out = await postRefresh(scope, timeoutMs);
-        setAuthByScope(scope, out.nextToken, out.user);
+        setAuthByScope(scope, '__cookie_session__', out.user);
         setAuthAuthenticated();
         logAuthEvent('refresh.success', { scope, retries: retryCount });
-        return out.nextToken;
+        return '__cookie_session__';
       } catch (error) {
         const cls = classifyRefreshFailure(error);
         logAuthEvent('refresh.failure', {
@@ -211,7 +211,8 @@ export async function request(path, options = {}) {
     await waitForRefresh();
   }
 
-  const resolvedToken = token ?? getTokenByScope(authScope);
+  void token;
+  void getTokenByScope(authScope);
   const prepared = buildBodyAndHeaders(body, headers);
   const csrfToken = shouldAttachCsrf(path) ? readCookie(CSRF_COOKIE_NAME) : '';
   const requestUrl = `${getApiBaseUrl()}${path}`;
@@ -224,7 +225,6 @@ export async function request(path, options = {}) {
         method,
         credentials: 'include',
         headers: {
-          ...(resolvedToken ? { Authorization: `Bearer ${resolvedToken}` } : {}),
           ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
           ...prepared.headers,
         },
@@ -246,7 +246,7 @@ export async function request(path, options = {}) {
   if (response.ok) return data;
 
   if (response.status === 401) {
-    logAuthEvent('request.401', { path, authScope: authScope || 'none' });
+    logAuthEvent('request.401', { path: stripQuery(path), authScope: authScope || 'none' });
   }
 
   if (response.status === 401 && retryOnUnauthorized && authScope && path !== REFRESH_PATH) {

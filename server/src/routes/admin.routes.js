@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdmin } from '../middleware/auth.js';
+import { enforcePolicy } from '../auth/securityPolicy.js';
 import {
   getDashboard,
   getLogs,
@@ -47,7 +47,7 @@ import {
 
 const router = Router();
 
-router.use(requireAdmin);
+router.use(enforcePolicy({ auth: 'admin', maxRisk: 'elevated' }));
 
 router.get('/dashboard', getDashboard);
 router.get('/logs', getLogs);

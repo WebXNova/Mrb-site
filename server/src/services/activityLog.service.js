@@ -1,4 +1,5 @@
 import { mysqlPool } from '../config/mysql.js';
+import { sanitizeMetadata } from '../utils/logSanitizer.js';
 
 function parseMetadata(value) {
   if (!value) return {};
@@ -32,10 +33,11 @@ export async function logActivity({
   metadata = {},
 }) {
   try {
+    const safeMetadata = sanitizeMetadata(metadata || {});
     await mysqlPool.query(
       `INSERT INTO activity_logs (user_id, role, action, entity_type, entity_id, metadata_json)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, role, action, entityType, entityId, JSON.stringify(metadata || {})]
+      [userId, role, action, entityType, entityId, JSON.stringify(safeMetadata)]
     );
   } catch (error) {
     // Swallow logging failures to avoid blocking primary flow.

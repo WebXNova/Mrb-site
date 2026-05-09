@@ -7,6 +7,8 @@ import { app } from './app.js';
 import { env } from './config/env.js';
 import { verifyMySqlConnection, mysqlPool } from './config/mysql.js';
 import { connectRedis } from './config/redis.js';
+import { startEmailQueueWorker } from './services/emailQueueWorker.service.js';
+import { getEmailProviderStatus } from './services/email.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,6 +106,16 @@ async function startServer() {
   await ensurePortAvailable(env.port);
 
   app.listen(env.port, () => {
+    const worker = startEmailQueueWorker();
+    const emailStatus = getEmailProviderStatus();
+    console.log(`[email] Active provider: ${emailStatus.provider}`);
+    console.log('[email] Provider config status:', {
+      fromConfigured: emailStatus.fromConfigured,
+      sendgridConfigured: emailStatus.sendgridConfigured,
+      smtpConfigured: emailStatus.smtpConfigured,
+      sendgridInitialized: emailStatus.sendgridInitialized,
+    });
+    console.log('[email] Queue delivery mode:', worker ? 'redis_worker_enabled' : 'direct_send_fallback');
     console.log(`MRB API running on http://localhost:${env.port}`);
   });
 }

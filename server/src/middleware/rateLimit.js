@@ -1,7 +1,8 @@
 import { ApiError } from '../utils/apiError.js';
-import { getRedisClient } from '../config/redis.js';
+import { getRedisClient, hasRedisErrored, isRedisReady } from '../config/redis.js';
 import { logActivity } from '../services/activityLog.service.js';
-import { mysqlPool } from '../config/mysql.js';
+import { env } from '../config/env.js';
+import { getClientAsn, getClientIp, getIpSubnet } from '../utils/network.js';
 
 const buckets = new Map();
 const WINDOW_MS = 60 * 1000;
@@ -20,12 +21,8 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getClientKey(req) {
-  return req.ip || req.headers['x-forwarded-for'] || 'unknown';
-}
-
 function normalizeIp(ipAddress) {
-  return String(ipAddress || '').trim() || 'unknown';
+  return getClientIp({ ip: ipAddress, socket: {} });
 }
 
 async function incrementCounter(key, windowMs) {
@@ -54,25 +51,6 @@ async function incrementCounter(key, windowMs) {
     count: current.count,
     ttlMs: Math.max(0, windowMs - (now - current.windowStart)),
   };
-}
-
-async function escalateIdentifierRiskLevel(identifier) {
-  const normalized = String(identifier || '').trim().toLowerCase();
-  if (!normalized) return;
-  try {
-    await mysqlPool.query(
-      `UPDATE users
-       SET risk_level = CASE
-         WHEN risk_level = 'critical' THEN 'critical'
-         ELSE 'elevated'
-       END
-       WHERE email = ? OR username = ?
-       LIMIT 1`,
-      [normalized, normalized]
-    );
-  } catch (error) {
-    if (error?.code !== 'ER_BAD_FIELD_ERROR') throw error;
-  }
 }
 
 export async function assertLoginNotLocked(identifier, ipAddress = null) {
@@ -159,7 +137,6 @@ export async function recordLoginResult({ identifier, ipAddress = null, success,
     },
   });
   if (uniqueIpCount >= MAX_UNIQUE_IPS_PER_IDENTIFIER_WINDOW) {
-    await escalateIdentifierRiskLevel(normalized);
     await logActivity({
       role,
       action: `${source}.ip_switching_detected`,
@@ -168,7 +145,6 @@ export async function recordLoginResult({ identifier, ipAddress = null, success,
     });
   }
   if (idIpCounter.count >= MAX_FAILURES_PER_WINDOW || globalCounter.count >= MAX_GLOBAL_FAILURES_PER_WINDOW) {
-    await escalateIdentifierRiskLevel(normalized);
     if (redis) {
       await Promise.all([
         redis.set(idIpLockKey, '1', { EX: LOCK_WINDOW_SECONDS }),
@@ -213,24 +189,146 @@ setInterval(() => {
 }, WINDOW_MS).unref();
 
 export async function authRateLimit(req, res, next) {
-  const key = `${req.path}:${getClientKey(req)}`;
-  const current = await incrementCounter(`auth:ip:${key}`, WINDOW_MS);
+  if (
+    env.abuse.requireRedisForCriticalAuthWrites &&
+    !isRedisReady() &&
+    hasRedisErrored() &&
+    (req.path === '/student/register' || req.path === '/resend-verification')
+  ) {
+    return next(new ApiError(503, 'Service temporarily unavailable. Please retry shortly.'));
+  }
 
-  if (current.count > MAX_REQUESTS) {
+  const ip = getClientIp(req);
+  const subnet = getIpSubnet(ip);
+  const key = `${req.path}:${ip}`;
+  const current = await incrementCounter(`auth:ip:${key}`, WINDOW_MS);
+  const subnetCurrent = await incrementCounter(`auth:subnet:${req.path}:${subnet}`, WINDOW_MS);
+
+  if (current.count > MAX_REQUESTS || subnetCurrent.count > env.verification.authPerSubnetPerMinute) {
     res.setHeader('Retry-After', '60');
     await logActivity({
       role: 'system',
       action: 'auth.rate_limit',
       entityType: 'auth',
-      metadata: { path: req.path, ip: getClientKey(req), count: current.count },
+      metadata: { path: req.path, ip, subnet, count: current.count, subnetCount: subnetCurrent.count },
     });
     return next(new ApiError(429, 'Too many attempts. Please try again in a minute.'));
   }
 
   if (current.count > 2) {
+    if (req.path === '/student/register' && env.security.authChallengeKey) {
+      const challenge = req.get('x-auth-challenge');
+      if (challenge !== env.security.authChallengeKey) {
+        return next(new ApiError(429, 'Additional signup verification required'));
+      }
+    }
     const delayMs = Math.min((current.count - 2) * 250, MAX_DELAY_MS);
     await sleep(delayMs);
   }
 
+  return next();
+}
+
+export async function signupAbuseRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const subnet = getIpSubnet(ip);
+  const asn = getClientAsn(req);
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const ipAllowed = await enforceSlidingLimit({
+    key: `signup:ip:${ip}`,
+    windowMs: 15 * 60 * 1000,
+    limit: env.verification.signupPerIpPer15Min,
+  });
+  const subnetAllowed = await enforceSlidingLimit({
+    key: `signup:subnet:${subnet}`,
+    windowMs: 15 * 60 * 1000,
+    limit: env.verification.signupPerSubnetPer15Min,
+  });
+  const asnAllowed = await enforceSlidingLimit({
+    key: `signup:asn:${asn}`,
+    windowMs: 15 * 60 * 1000,
+    limit: env.verification.signupPerAsnPer15Min,
+  });
+  if (!ipAllowed || !subnetAllowed || !asnAllowed) {
+    return next(new ApiError(429, 'Signup temporarily rate limited. Please try again later.'));
+  }
+  if (email) {
+    const emailAllowed = await enforceSlidingLimit({
+      key: `signup:email:${email}`,
+      windowMs: 24 * 60 * 60 * 1000,
+      limit: env.verification.signupPerEmailPerDay,
+    });
+    if (!emailAllowed) {
+      return next(new ApiError(429, 'Signup temporarily rate limited. Please try again later.'));
+    }
+  }
+  return next();
+}
+
+async function enforceSlidingLimit({ key, windowMs, limit }) {
+  const allowed = await incrementCounter(key, windowMs);
+  return allowed.count <= limit;
+}
+
+export async function verifyEmailRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const subnet = getIpSubnet(ip);
+  const asn = getClientAsn(req);
+  const ok = await enforceSlidingLimit({
+    key: `verify:ip:${ip}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.verifyPerIpPerMinute,
+  });
+  const subnetOk = await enforceSlidingLimit({
+    key: `verify:subnet:${subnet}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.verifyPerSubnetPerMinute,
+  });
+  const asnOk = await enforceSlidingLimit({
+    key: `verify:asn:${asn}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.verifyPerAsnPerMinute,
+  });
+  if (!ok || !subnetOk || !asnOk) {
+    return next(new ApiError(429, 'Too many verification attempts. Please try again shortly.'));
+  }
+  return next();
+}
+
+export async function resendVerificationRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const subnet = getIpSubnet(ip);
+  const asn = getClientAsn(req);
+  const coarseIpAllowed = await enforceSlidingLimit({
+    key: `verify:resend:ip:${ip}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.resendCoarsePerIpPerMinute,
+  });
+  const subnetAllowed = await enforceSlidingLimit({
+    key: `verify:resend:subnet:${subnet}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.resendCoarsePerSubnetPerMinute,
+  });
+  const asnAllowed = await enforceSlidingLimit({
+    key: `verify:resend:asn:${asn}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.resendCoarsePerAsnPerMinute,
+  });
+  if (!coarseIpAllowed || !subnetAllowed || !asnAllowed) {
+    return next(new ApiError(429, 'Too many resend attempts. Please try again later.'));
+  }
+  return next();
+}
+
+export async function providerWebhookRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const allowed = await enforceSlidingLimit({
+    key: `email:webhook:ip:${ip}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.providerWebhookPerIpPerMinute,
+  });
+  if (!allowed) {
+    return next(new ApiError(429, 'Webhook rate limited'));
+  }
   return next();
 }

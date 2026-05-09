@@ -1,18 +1,16 @@
 import { Router } from 'express';
 import {
-  getPublicTestMeta,
   getStartTest,
   getTestResult,
   patchSaveAnswer,
   postSubmitAttempt,
   postVerifyTestCode,
 } from '../controllers/publicTests.controller.js';
-import { requireStudent } from '../middleware/auth.js';
+import { enforcePolicy } from '../auth/securityPolicy.js';
 
 const router = Router();
 
-router.get('/:slug', getPublicTestMeta);
-router.post('/:slug/verify-code', requireStudent, postVerifyTestCode);
+router.post('/:slug/verify-code', enforcePolicy({ auth: 'student', verified: true, maxRisk: 'elevated' }), postVerifyTestCode);
 router.get('/:slug/attempts/:attemptId/start', getStartTest);
 router.patch('/:slug/attempts/:attemptId/answers', patchSaveAnswer);
 router.post('/:slug/attempts/:attemptId/submit', postSubmitAttempt);

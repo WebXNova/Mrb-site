@@ -6,6 +6,14 @@ function redact(details = {}) {
   delete out.accessToken;
   delete out.refreshToken;
   delete out.authorization;
+  if (typeof out.path === 'string') {
+    out.path = out.path.split('?')[0];
+  }
+  for (const [key, value] of Object.entries(out)) {
+    if (typeof value === 'string') {
+      out[key] = value.replace(/\b[a-f0-9]{64}\b/gi, '[REDACTED]');
+    }
+  }
   return out;
 }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
+import { mysqlPool } from '../config/mysql.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { env } from '../config/env.js';
@@ -9,15 +10,25 @@ import {
   loginStudent,
   logoutStudent,
   registerStudent,
+  verifyStudentMrbEnrollment,
 } from '../services/studentAuth.service.js';
 import {
   pickActiveRefreshContext,
+  revokeAllAuthSessionsForUser,
   refreshContextFromToken,
   rotateAuthSessionByRefreshToken,
+  verifyRefreshToken,
 } from '../services/authSession.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { assertLoginNotLocked, recordLoginResult } from '../middleware/rateLimit.js';
 import { CSRF_COOKIE_NAME, issueCsrfToken } from '../middleware/csrf.js';
+import {
+  createAndSendVerificationToken,
+  resendVerificationEmail,
+  verifyEmailByToken,
+} from '../services/emailVerification.service.js';
+import { getClientIp } from '../utils/network.js';
+import { assertCaptchaIfRequired } from '../services/abuseProtection.service.js';
 
 function refreshCookieMaxAgeMs(refreshToken) {
   const decoded = jwt.decode(refreshToken);
@@ -33,6 +44,27 @@ function setRefreshCookie(res, name, refreshToken) {
     secure: env.security.refreshCookieSecure,
     path: env.security.refreshCookiePath,
     maxAge: refreshCookieMaxAgeMs(refreshToken),
+  });
+}
+
+function setAccessCookie(res, role, accessToken) {
+  const name = role === 'student' ? 'student_access_token' : 'admin_access_token';
+  res.cookie(name, accessToken, {
+    httpOnly: true,
+    sameSite: env.security.accessCookieSameSite,
+    secure: env.security.accessCookieSecure,
+    path: env.security.accessCookiePath,
+    maxAge: env.security.accessCookieMaxAgeMs,
+  });
+}
+
+function clearAccessCookie(res, role) {
+  const name = role === 'student' ? 'student_access_token' : 'admin_access_token';
+  res.clearCookie(name, {
+    httpOnly: true,
+    sameSite: env.security.accessCookieSameSite,
+    secure: env.security.accessCookieSecure,
+    path: env.security.accessCookiePath,
   });
 }
 
@@ -154,14 +186,6 @@ const registerSchema = z.object({
   password: strongPasswordSchema,
 });
 
-function getClientIp(req) {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-    return forwardedFor.split(',')[0].trim();
-  }
-  return req.ip || req.socket?.remoteAddress || null;
-}
-
 export const adminLogin = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
   const parsed = loginSchema.safeParse(req.body);
@@ -185,7 +209,9 @@ export const adminLogin = asyncHandler(async (req, res) => {
     throw error;
   }
   clearRefreshCookie(res, 'student_refresh_token');
+  clearAccessCookie(res, 'student');
   setRefreshCookie(res, 'admin_refresh_token', result.refreshToken);
+  setAccessCookie(res, 'admin', result.accessToken);
   setCsrfCookie(res);
 
   await logActivity({
@@ -196,7 +222,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     metadata: { email: result.admin.email },
   });
 
-  res.json({ success: true, data: { admin: result.admin, accessToken: result.accessToken } });
+  res.json({ success: true, data: { admin: result.admin } });
 });
 
 export const adminLogout = asyncHandler(async (req, res) => {
@@ -204,6 +230,7 @@ export const adminLogout = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.admin_refresh_token;
   await logoutAdmin(refreshToken);
   clearRefreshCookie(res, 'admin_refresh_token');
+  clearAccessCookie(res, 'admin');
   clearCsrfCookie(res);
   await logActivity({ role: 'admin', action: 'admin.logout', entityType: 'auth' });
   res.json({ success: true, message: 'Logged out' });
@@ -214,6 +241,7 @@ export const studentLogout = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.student_refresh_token;
   await logoutStudent(refreshToken);
   clearRefreshCookie(res, 'student_refresh_token');
+  clearAccessCookie(res, 'student');
   clearCsrfCookie(res);
   await logActivity({ role: 'student', action: 'student.logout', entityType: 'auth' });
   res.json({ success: true, message: 'Logged out' });
@@ -223,9 +251,29 @@ export const studentRegister = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid registration details', parsed.error.flatten());
-  const result = await registerStudent(parsed.data);
+  const normalizedDomain = String(parsed.data.email || '')
+    .trim()
+    .toLowerCase()
+    .split('@')[1];
+  if (env.abuse.blockedEmailDomains.includes(normalizedDomain)) {
+    throw new ApiError(422, 'Email domain is not allowed');
+  }
   const clientIp = getClientIp(req);
+  await assertCaptchaIfRequired({
+    action: 'signup',
+    ipAddress: clientIp,
+    captchaToken: req.body?.captchaToken || req.get('x-captcha-token') || '',
+  });
+  const result = await registerStudent(parsed.data);
   const userAgent = req.get('user-agent') || null;
+  await createAndSendVerificationToken({
+    userId: result.student.id,
+    email: result.student.email,
+    fullName: result.student.fullName,
+    ipAddress: clientIp,
+    userAgent,
+    reason: 'signup',
+  });
   await logActivity({
     userId: result.student.id,
     role: 'student',
@@ -253,12 +301,80 @@ export const studentRegister = asyncHandler(async (req, res) => {
     },
   });
   clearRefreshCookie(res, 'admin_refresh_token');
+  clearAccessCookie(res, 'admin');
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
+  setAccessCookie(res, 'student', result.accessToken);
   setCsrfCookie(res);
   res.status(201).json({
     success: true,
-    data: { student: result.student, accessToken: result.accessToken },
+    data: { student: result.student },
   });
+});
+
+export const verifyEmail = asyncHandler(async (req, res) => {
+  const parsedBody = verifyEmailBodySchema.safeParse(req.body);
+  const token = parsedBody.success ? parsedBody.data.token : null;
+  console.log('[verify-email] received request body token', {
+    present: Boolean(token),
+    length: token?.length || 0,
+    preview: token ? `${token.slice(0, 8)}...${token.slice(-8)}` : null,
+  });
+  if (!token) throw new ApiError(400, 'Invalid or expired verification link');
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+  await verifyEmailByToken({ rawToken: token, ipAddress: clientIp, userAgent });
+  clearRefreshCookie(res, 'student_refresh_token');
+  clearRefreshCookie(res, 'admin_refresh_token');
+  clearAccessCookie(res, 'student');
+  clearAccessCookie(res, 'admin');
+  clearCsrfCookie(res);
+  res.setHeader('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.json({ success: true, message: 'Email verified successfully. Please sign in again.' });
+});
+
+export const resendVerification = asyncHandler(async (req, res) => {
+  const startedAt = Date.now();
+  const normalizedMessage = 'If the email exists, a verification email has been sent.';
+  const parsed = resendVerificationSchema.safeParse(req.body);
+  if (parsed.success) {
+    const email = parsed.data.email.toLowerCase();
+    const clientIp = getClientIp(req);
+    await assertCaptchaIfRequired({
+      action: 'resend_verification',
+      ipAddress: clientIp,
+      captchaToken: req.body?.captchaToken || req.get('x-captcha-token') || '',
+    });
+    try {
+      const [rows] = await mysqlPool.query(
+        `SELECT id, email, full_name, is_verified
+         FROM users
+         WHERE email = ? AND role = 'student'
+         LIMIT 1`,
+        [email]
+      );
+      const user = rows[0];
+      if (user && !user.is_verified) {
+        await resendVerificationEmail({
+          userId: user.id,
+          email: user.email,
+          fullName: user.full_name,
+                ipAddress: clientIp,
+          userAgent: req.get('user-agent') || null,
+        });
+      }
+    } catch (error) {
+      await logActivity({
+        role: 'system',
+        action: 'verification.resend_failed',
+        entityType: 'auth',
+        metadata: { email, reason: error.message },
+      });
+    }
+  }
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, 250 - (Date.now() - startedAt))));
+  res.json({ success: true, message: normalizedMessage });
 });
 
 export const studentLogin = asyncHandler(async (req, res) => {
@@ -300,18 +416,59 @@ export const studentLogin = asyncHandler(async (req, res) => {
     },
   });
   clearRefreshCookie(res, 'admin_refresh_token');
+  clearAccessCookie(res, 'admin');
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
+  setAccessCookie(res, 'student', result.accessToken);
   setCsrfCookie(res);
   res.json({
     success: true,
-    data: { student: result.student, accessToken: result.accessToken },
+    data: { student: result.student },
   });
+});
+
+export const logoutAll = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  const refreshContext = await readRefreshContext(req);
+  const payload = verifyRefreshToken(refreshContext.token);
+  await revokeAllAuthSessionsForUser(Number(payload.sub));
+  clearRefreshCookie(res, 'admin_refresh_token');
+  clearRefreshCookie(res, 'student_refresh_token');
+  clearAccessCookie(res, 'admin');
+  clearAccessCookie(res, 'student');
+  clearCsrfCookie(res);
+  await logActivity({
+    userId: Number(payload.sub),
+    role: refreshContext.role === 'student' ? 'student' : 'admin',
+    action: 'auth.logout_all',
+    entityType: 'auth',
+  });
+  res.json({ success: true, message: 'Logged out from all sessions' });
 });
 
 export const studentMe = asyncHandler(async (req, res) => {
   const profile = await getStudentMePayload(req.user.id);
   if (!profile) throw new ApiError(404, 'Student not found');
   res.json({ success: true, data: profile });
+});
+
+const verifyMrbBodySchema = z.object({
+  code: z.string().min(4).max(64),
+});
+
+const verifyEmailBodySchema = z.object({
+  token: z.string().trim().min(64).max(64),
+});
+
+const resendVerificationSchema = z.object({
+  email: z.string().trim().email(),
+});
+
+export const studentVerifyMrbEnrollment = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  const parsed = verifyMrbBodySchema.safeParse(req.body);
+  if (!parsed.success) throw new ApiError(422, 'Invalid code payload', parsed.error.flatten());
+  const out = await verifyStudentMrbEnrollment(req.user.id, parsed.data.code);
+  res.json({ success: true, data: out });
 });
 
 export const refreshAuth = asyncHandler(async (req, res) => {
@@ -338,6 +495,8 @@ export const refreshAuth = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'Student refresh token required');
   }
   setRefreshCookie(res, refreshContext.cookieName, rotated.refreshToken);
+  setAccessCookie(res, refreshContext.role, rotated.accessToken);
+  setCsrfCookie(res);
   await logActivity({
     userId: rotated.user.id,
     role: rotated.role === 'student' ? 'student' : 'admin',
@@ -348,7 +507,6 @@ export const refreshAuth = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      accessToken: rotated.accessToken,
       user: rotated.user,
       role: rotated.role,
     },

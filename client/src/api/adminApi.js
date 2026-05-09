@@ -4,6 +4,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 export const adminApi = {
   login: (payload) => http.post('/auth/login', payload, { retryOnUnauthorized: false }),
   logout: () => http.post('/auth/logout', {}, { retryOnUnauthorized: false }),
+  logoutAll: () => http.post('/auth/logout-all', {}, { retryOnUnauthorized: false }),
   me: (token) => http.get('/auth/me', { token }),
 
   dashboard: (token) => http.get('/admin/dashboard', { token }),

@@ -4,6 +4,10 @@
  * Requires .env (MySQL, JWT secrets). Set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD (or TEST_ADMIN_PASSWORD + ADMIN_EMAIL).
  */
 import 'dotenv/config';
+import crypto from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import { mysqlPool } from '../src/config/mysql.js';
 import { loginAdmin } from '../src/services/adminAuth.service.js';
@@ -11,7 +15,11 @@ import {
   revokeAuthSessionByRefreshToken,
   rotateAuthSessionByRefreshToken,
 } from '../src/services/authSession.service.js';
+import { verifyEmailByToken } from '../src/services/emailVerification.service.js';
 import { ApiError } from '../src/utils/apiError.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function assert(cond, msg) {
   if (!cond) throw new Error(`FAIL: ${msg}`);
@@ -30,7 +38,58 @@ async function getTokenVersion(userId) {
   return Number(rows[0]?.token_version ?? 0);
 }
 
+async function revokeAllAndBumpTokenVersion(userId) {
+  await mysqlPool.query(
+    `UPDATE users SET token_version = token_version + 1 WHERE id = ?`,
+    [userId]
+  );
+  await mysqlPool.query(
+    `UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE user_id = ?`,
+    [userId]
+  );
+}
+
 async function main() {
+  const controllerPath = path.resolve(__dirname, '../src/controllers/auth.controller.js');
+  const controllerSource = await fs.readFile(controllerPath, 'utf8');
+  assert(!/data\s*:\s*\{[\s\S]{0,300}accessToken/m.test(controllerSource), 'auth responses must not expose accessToken');
+  const testsRoutesPath = path.resolve(__dirname, '../src/routes/tests.routes.js');
+  const testsRoutesSource = await fs.readFile(testsRoutesPath, 'utf8');
+  assert(
+    /verify-code',\s*enforcePolicy\(\{\s*auth:\s*'student',\s*verified:\s*true/.test(testsRoutesSource),
+    'tests verify-code route must enforce student verified policy'
+  );
+  const authRoutesPath = path.resolve(__dirname, '../src/routes/auth.routes.js');
+  const authRoutesSource = await fs.readFile(authRoutesPath, 'utf8');
+  assert(
+    /student\/verify-mrb-enrollment',[\s\S]*enforcePolicy\(\{\s*auth:\s*'student',\s*verified:\s*true[\s\S]*freshSession:\s*true/.test(
+      authRoutesSource
+    ),
+    'student verify-mrb-enrollment route must enforce fresh student verified policy'
+  );
+  assert(
+    /student\/register',\s*authRateLimit,\s*signupAbuseRateLimit,\s*studentRegister/.test(authRoutesSource),
+    'student register route must enforce signup abuse limiter'
+  );
+  assert(!/router\.get\('\/verify-email'/.test(authRoutesSource), 'verify-email GET route must be removed');
+  const rateLimitPath = path.resolve(__dirname, '../src/middleware/rateLimit.js');
+  const rateLimitSource = await fs.readFile(rateLimitPath, 'utf8');
+  assert(/verify:subnet:/.test(rateLimitSource), 'verify endpoint must include subnet limiter');
+  assert(/requireRedisForCriticalAuthWrites/.test(rateLimitSource), 'critical auth writes must include redis outage behavior');
+  const emailProviderRoutePath = path.resolve(__dirname, '../src/routes/emailProvider.routes.js');
+  const emailProviderRouteSource = await fs.readFile(emailProviderRoutePath, 'utf8');
+  assert(/provider-feedback/.test(emailProviderRouteSource), 'provider feedback route must exist');
+  const studentApiPath = path.resolve(__dirname, '../../client/src/api/studentApi.js');
+  const studentApiSource = await fs.readFile(studentApiPath, 'utf8');
+  assert(
+    /verifyEmail:\s*\(token\)\s*=>\s*[\s\S]*studentRequest\('\/auth\/verify-email',\s*\{\s*method:\s*'POST'/m.test(studentApiSource),
+    'frontend verifyEmail must POST token in body'
+  );
+  assert(
+    !/verify-email\?token=/.test(studentApiSource),
+    'frontend verifyEmail must not send token in query string'
+  );
+
   const email = process.env.TEST_ADMIN_EMAIL || process.env.ADMIN_EMAIL;
   const password = process.env.TEST_ADMIN_PASSWORD;
   if (!email || !password) {
@@ -113,6 +172,38 @@ async function main() {
   }
   await revokeAuthSessionByRefreshToken(login2.refreshToken);
   results.push(['Re-login supersedes old refresh; cleanup logout', 'pass']);
+
+  // Simulate verification-time security transition:
+  // token_version bump + revoke all sessions should invalidate stale refresh immediately.
+  const login3 = await loginAdmin(email, password);
+  const userId3 = login3.admin.id;
+  const staleRefresh = login3.refreshToken;
+  await revokeAllAndBumpTokenVersion(userId3);
+  try {
+    await rotateAuthSessionByRefreshToken(staleRefresh);
+    throw new Error('expected stale refresh after revoke-all+bump to fail');
+  } catch (e) {
+    assert(e instanceof ApiError && e.statusCode === 401, 'stale refresh after revoke-all+bump is 401');
+  }
+  assert((await getActiveSessionCount(userId3)) === 0, 'no active sessions after revoke-all+bump');
+  results.push(['Stale session invalidation (revoke-all+bump) blocks refresh', 'pass']);
+
+  // Token replay/race simulation: one verify succeeds, one fails.
+  const replayToken = crypto.randomBytes(32).toString('hex');
+  const replayHash = crypto.createHash('sha256').update(replayToken).digest('hex');
+  await mysqlPool.query(
+    `INSERT INTO email_verifications (user_id, token_hash, expires_at, used_at)
+     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NULL)`,
+    [userId, replayHash]
+  );
+  const [v1, v2] = await Promise.allSettled([
+    verifyEmailByToken({ rawToken: replayToken, ipAddress: '127.0.0.1', userAgent: 'test-agent-a' }),
+    verifyEmailByToken({ rawToken: replayToken, ipAddress: '127.0.0.2', userAgent: 'test-agent-b' }),
+  ]);
+  const verifyPass = [v1, v2].filter((x) => x.status === 'fulfilled').length;
+  const verifyFail = [v1, v2].filter((x) => x.status === 'rejected').length;
+  assert(verifyPass === 1 && verifyFail === 1, 'parallel verify consumes token exactly once');
+  results.push(['Parallel verify replay: one success, one failure', 'pass']);
 
   const [delSample] = await mysqlPool.query(
     `SELECT COUNT(*) AS c FROM auth_sessions WHERE expires_at < NOW() OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL 400 DAY)`

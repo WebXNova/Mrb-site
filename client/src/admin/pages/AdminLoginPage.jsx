@@ -26,10 +26,9 @@ export default function AdminLoginPage() {
     setIsSubmitting(true);
     try {
       const response = await adminApi.login(form);
-      const token = response?.data?.accessToken;
       const admin = response?.data?.admin;
-      if (!token) throw new Error('Login failed');
-      setAdminAuth(token, admin);
+      if (!admin?.id) throw new Error('Login failed');
+      setAdminAuth('__cookie_session__', admin);
       navigate('/admin', { replace: true });
     } catch (err) {
       setError(err.message || 'Unable to login');

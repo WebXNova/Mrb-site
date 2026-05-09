@@ -243,6 +243,26 @@ export async function revokeAuthSessionByRefreshToken(refreshToken) {
   }
 }
 
+export async function revokeAllAuthSessionsForUser(userId) {
+  if (!userId) return;
+  const connection = await mysqlPool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query(`UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE user_id = ?`, [userId]);
+    await connection.query(`UPDATE users SET token_version = token_version + 1 WHERE id = ?`, [userId]);
+    await connection.commit();
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch {
+      // ignore rollback failures
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 /** Resolve cookie + DB state for refresh routing (revoked sessions → null). */
 export async function refreshContextFromToken(token, cookieName) {
   try {
@@ -290,11 +310,23 @@ export async function pickActiveRefreshContext(adminToken, studentToken) {
 
 export function verifyRefreshToken(refreshToken) {
   try {
-    const payload = jwt.verify(refreshToken, env.jwt.refreshSecret, {
-      algorithms: ['HS256'],
-      issuer: env.jwt.issuer,
-      audience: env.jwt.audience,
-    });
+    const secrets = [env.jwt.refreshSecret, ...env.jwt.previousRefreshSecrets];
+    let payload = null;
+    for (const secret of secrets) {
+      try {
+        payload = jwt.verify(refreshToken, secret, {
+          algorithms: ['HS256'],
+          issuer: env.jwt.issuer,
+          audience: env.jwt.audience,
+        });
+        break;
+      } catch {
+        // try next key
+      }
+    }
+    if (!payload) {
+      throw new ApiError(401, 'Invalid or expired refresh token');
+    }
     if (!payload?.sid || !payload?.jti || !payload?.sub) {
       throw new ApiError(401, 'Invalid refresh token payload');
     }
@@ -313,20 +345,15 @@ export function verifyRefreshToken(refreshToken) {
  * Stale/wrong refresh: 401 only (no user-wide revoke).
  */
 export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp = null, userAgent = null } = {}) {
-  // 1. Verify JWT (refresh)
   const payload = verifyRefreshToken(refreshToken);
   const sid = String(payload.sid);
-  const jtiFromJwt = String(payload.jti);
-  const userIdFromJwt = Number(payload.sub);
-  const tokenVersionFromJwt = Number(payload.tokenVersion ?? 0);
+  const jtiFromJwt = String(payload.jti || '');
   const providedHash = hashRefreshToken(refreshToken);
 
   const connection = await mysqlPool.getConnection();
   let transactionCommitted = false;
   try {
     await connection.beginTransaction();
-
-    // 3. Load session by sid (FOR UPDATE)
     const [rows] = await connection.query(
       `SELECT
          s.id,
@@ -335,19 +362,16 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
          s.jti,
          s.refresh_token_hash,
          s.previous_refresh_hash,
-         s.token_version_snapshot,
-         s.last_used_at,
+       s.token_version_snapshot,
          s.expires_at,
          s.revoked_at,
-         s.last_ip_hash,
-         s.ua_fingerprint,
          u.id AS user_id_ref,
          u.email,
          u.username,
          u.full_name,
          u.role AS user_role,
-         u.status,
-         u.token_version
+       u.status,
+       u.token_version
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = ?
@@ -357,95 +381,56 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
     );
     const session = rows[0];
 
-    // 4. Validate session exists
     if (!session) {
       throw new ApiError(401, 'Invalid refresh token');
     }
     await assertRefreshSessionRateLimit(session.id);
-    // revoked_at must be NULL
     if (session.revoked_at) {
       throw new ApiError(401, 'Session superseded by a new sign-in. Please sign in again.');
     }
-    // expires_at > NOW()
     if (new Date(session.expires_at).getTime() <= Date.now()) {
       throw new ApiError(401, 'Refresh token expired. Please sign in again.');
     }
-    // Deterministic refresh race/replay handling:
-    // - identity mismatch => revoke sessions (high-confidence attack)
-    // - stale jti/hash mismatch => fail this request only (parallel stale refresh or replay attempt)
-    const identityMismatch =
-      Number(session.user_id) !== userIdFromJwt ||
-      Number(session.token_version_snapshot ?? 0) !== tokenVersionFromJwt;
-    const tokenMismatch = session.jti !== jtiFromJwt || session.refresh_token_hash !== providedHash;
-    if (identityMismatch) {
-      await connection.query(`UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE user_id = ?`, [
-        session.user_id,
-      ]);
-      await connection.query(`UPDATE users SET token_version = token_version + 1 WHERE id = ?`, [session.user_id]);
-      await markAccountAtRisk(connection, session.user_id);
-      await logActivity({
-        userId: session.user_id,
-        role: session.user_role === 'student' ? 'student' : 'admin',
-        action: 'auth.refresh_reuse_detected',
-        entityType: 'auth',
-      });
+    const sidMismatch = Number(session.user_id) !== Number(payload.sub);
+    if (sidMismatch) {
       throw new ApiError(401, 'Invalid refresh token');
     }
+    const tokenVersion = Number(payload.tokenVersion);
+    if (!Number.isFinite(tokenVersion)) {
+      throw new ApiError(401, 'Invalid refresh token');
+    }
+    if (tokenVersion !== Number(session.token_version) || tokenVersion !== Number(session.token_version_snapshot)) {
+      await connection.query(`UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE id = ?`, [session.id]);
+      throw new ApiError(401, 'Session superseded by a new sign-in. Please sign in again.');
+    }
+    const tokenMismatch = session.jti !== jtiFromJwt || session.refresh_token_hash !== providedHash;
     if (tokenMismatch) {
       const confirmedReplay = session.previous_refresh_hash && session.previous_refresh_hash === providedHash;
       if (confirmedReplay) {
-        await connection.query(
-          `UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE id = ?`,
-          [session.id]
-        );
-        await markAccountAtRisk(connection, session.user_id);
+        await connection.query(`UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE id = ?`, [
+          session.id,
+        ]);
         await logActivity({
           userId: session.user_id,
           role: session.user_role === 'student' ? 'student' : 'admin',
           action: 'auth.refresh_replay_confirmed',
           entityType: 'auth',
         });
-        throw new ApiError(401, 'Invalid refresh token');
+      } else {
+        await logActivity({
+          userId: session.user_id,
+          role: session.user_role === 'student' ? 'student' : 'admin',
+          action: 'auth.refresh_mismatch',
+          entityType: 'auth',
+        });
       }
-      await logActivity({
-        userId: session.user_id,
-        role: session.user_role === 'student' ? 'student' : 'admin',
-        action: 'auth.refresh_stale_token',
-        entityType: 'auth',
-      });
       throw new ApiError(401, 'Invalid refresh token');
     }
-
-    const fp = await classifyFingerprintRisk({
-      sessionId: session.id,
-      lastIpHash: session.last_ip_hash,
-      lastUaHash: session.ua_fingerprint,
-      clientIp,
-      userAgent,
-      lastUsedAt: session.last_used_at,
-    });
-    const incomingIpHash = fp.incomingIpHash;
-    const incomingUaHash = fp.incomingUaHash;
-    if (fp.level === 'high') {
-      await connection.query(
-        `UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE id = ?`,
-        [session.id]
-      );
-      await markAccountAtRisk(connection, session.user_id);
+    if (clientIp || userAgent) {
       await logActivity({
         userId: session.user_id,
         role: session.user_role === 'student' ? 'student' : 'admin',
-        action: 'auth.session_fingerprint_high_risk_blocked',
-        entityType: 'auth',
-      });
-      throw new ApiError(401, 'Invalid refresh token');
-    }
-    if (fp.level === 'medium') {
-      await markAccountAtRisk(connection, session.user_id);
-      await logActivity({
-        userId: session.user_id,
-        role: session.user_role === 'student' ? 'student' : 'admin',
-        action: 'auth.session_fingerprint_medium_risk_allowed_once',
+        action: 'auth.refresh_fingerprint_observed',
         entityType: 'auth',
       });
     }
@@ -459,8 +444,6 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
       transactionCommitted = true;
       throw new ApiError(403, 'Account is suspended');
     }
-
-    // 5. Only after validation: new refresh (new jti), same sid, UPDATE same row
     const stableSessionId = sid;
     const rotatedJti = crypto.randomUUID();
     const rotatedRefreshToken = signRefreshToken({
@@ -478,11 +461,9 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
            refresh_token_hash = ?,
            token_version_snapshot = ?,
            expires_at = FROM_UNIXTIME(?),
-           last_used_at = CURRENT_TIMESTAMP,
-           last_ip_hash = COALESCE(?, last_ip_hash),
-           ua_fingerprint = COALESCE(?, ua_fingerprint)
+           last_used_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [rotatedJti, rotatedHash, Number(session.token_version || 0), rotatedExp, incomingIpHash, incomingUaHash, stableSessionId]
+      [rotatedJti, rotatedHash, Number(session.token_version || 0), rotatedExp, stableSessionId]
     );
 
     const role = session.user_role;
@@ -505,6 +486,35 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
       fullName: session.full_name,
       role,
     };
+
+    if (role === 'student') {
+      try {
+        const [mrbRows] = await mysqlPool.query(
+          `SELECT mrb_enrollment_verified_at, is_verified FROM users WHERE id = ? LIMIT 1`,
+          [session.user_id]
+        );
+        return {
+          accessToken,
+          refreshToken: rotatedRefreshToken,
+          role,
+          user: {
+            ...baseUser,
+            mrbEnrollmentVerified: Boolean(mrbRows[0]?.mrb_enrollment_verified_at),
+            isVerified: Boolean(mrbRows[0]?.is_verified),
+          },
+        };
+      } catch (error) {
+        if (error?.code === 'ER_BAD_FIELD_ERROR') {
+          return {
+            accessToken,
+            refreshToken: rotatedRefreshToken,
+            role,
+            user: { ...baseUser, mrbEnrollmentVerified: false, isVerified: false },
+          };
+        }
+        throw error;
+      }
+    }
 
     return {
       accessToken,

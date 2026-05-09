@@ -4,11 +4,32 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(50) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(120) NOT NULL,
+  is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  last_verification_sent_at TIMESTAMP NULL DEFAULT NULL,
+  verification_send_failures INT NOT NULL DEFAULT 0,
   token_version INT NOT NULL DEFAULT 0,
   role ENUM('student', 'teacher', 'admin', 'super_admin') NOT NULL DEFAULT 'student',
   status ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at TIMESTAMP NULL DEFAULT NULL,
+  issued_ip VARCHAR(64) NULL,
+  issued_user_agent VARCHAR(300) NULL,
+  verified_ip VARCHAR(64) NULL,
+  verified_user_agent VARCHAR(300) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_email_verifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  KEY idx_email_verifications_token_hash (token_hash),
+  KEY idx_email_verifications_verify_lookup (token_hash, used_at, expires_at),
+  KEY idx_email_verifications_user_id (user_id),
+  KEY idx_email_verifications_expires_at (expires_at)
 );
 
 CREATE TABLE IF NOT EXISTS courses (
@@ -297,6 +318,209 @@ PREPARE users_token_version_col_stmt FROM @users_token_version_col_sql;
 EXECUTE users_token_version_col_stmt;
 DEALLOCATE PREPARE users_token_version_col_stmt;
 
+SET @users_is_verified_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND COLUMN_NAME = 'is_verified'
+);
+SET @users_is_verified_col_sql = IF(
+  @users_is_verified_col_exists = 0,
+  'ALTER TABLE users ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT FALSE AFTER full_name',
+  'SELECT 1'
+);
+PREPARE users_is_verified_col_stmt FROM @users_is_verified_col_sql;
+EXECUTE users_is_verified_col_stmt;
+DEALLOCATE PREPARE users_is_verified_col_stmt;
+
+SET @users_last_verification_sent_at_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND COLUMN_NAME = 'last_verification_sent_at'
+);
+SET @users_last_verification_sent_at_col_sql = IF(
+  @users_last_verification_sent_at_col_exists = 0,
+  'ALTER TABLE users ADD COLUMN last_verification_sent_at TIMESTAMP NULL DEFAULT NULL AFTER is_verified',
+  'SELECT 1'
+);
+PREPARE users_last_verification_sent_at_col_stmt FROM @users_last_verification_sent_at_col_sql;
+EXECUTE users_last_verification_sent_at_col_stmt;
+DEALLOCATE PREPARE users_last_verification_sent_at_col_stmt;
+
+SET @users_verification_send_failures_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND COLUMN_NAME = 'verification_send_failures'
+);
+SET @users_verification_send_failures_col_sql = IF(
+  @users_verification_send_failures_col_exists = 0,
+  'ALTER TABLE users ADD COLUMN verification_send_failures INT NOT NULL DEFAULT 0 AFTER last_verification_sent_at',
+  'SELECT 1'
+);
+PREPARE users_verification_send_failures_col_stmt FROM @users_verification_send_failures_col_sql;
+EXECUTE users_verification_send_failures_col_stmt;
+DEALLOCATE PREPARE users_verification_send_failures_col_stmt;
+
+SET @email_verifications_table_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+);
+SET @email_verifications_table_sql = IF(
+  @email_verifications_table_exists = 0,
+  'CREATE TABLE email_verifications (
+     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+     user_id BIGINT NOT NULL,
+     token_hash CHAR(64) NOT NULL,
+     expires_at DATETIME NOT NULL,
+     used_at TIMESTAMP NULL DEFAULT NULL,
+     issued_ip VARCHAR(64) NULL,
+     issued_user_agent VARCHAR(300) NULL,
+     verified_ip VARCHAR(64) NULL,
+     verified_user_agent VARCHAR(300) NULL,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     CONSTRAINT fk_email_verifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+   )',
+  'SELECT 1'
+);
+PREPARE email_verifications_table_stmt FROM @email_verifications_table_sql;
+EXECUTE email_verifications_table_stmt;
+DEALLOCATE PREPARE email_verifications_table_stmt;
+
+SET @email_verifications_issued_ip_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND COLUMN_NAME = 'issued_ip'
+);
+SET @email_verifications_issued_ip_col_sql = IF(
+  @email_verifications_issued_ip_col_exists = 0,
+  'ALTER TABLE email_verifications ADD COLUMN issued_ip VARCHAR(64) NULL AFTER used_at',
+  'SELECT 1'
+);
+PREPARE email_verifications_issued_ip_col_stmt FROM @email_verifications_issued_ip_col_sql;
+EXECUTE email_verifications_issued_ip_col_stmt;
+DEALLOCATE PREPARE email_verifications_issued_ip_col_stmt;
+
+SET @email_verifications_issued_ua_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND COLUMN_NAME = 'issued_user_agent'
+);
+SET @email_verifications_issued_ua_col_sql = IF(
+  @email_verifications_issued_ua_col_exists = 0,
+  'ALTER TABLE email_verifications ADD COLUMN issued_user_agent VARCHAR(300) NULL AFTER issued_ip',
+  'SELECT 1'
+);
+PREPARE email_verifications_issued_ua_col_stmt FROM @email_verifications_issued_ua_col_sql;
+EXECUTE email_verifications_issued_ua_col_stmt;
+DEALLOCATE PREPARE email_verifications_issued_ua_col_stmt;
+
+SET @email_verifications_verified_ip_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND COLUMN_NAME = 'verified_ip'
+);
+SET @email_verifications_verified_ip_col_sql = IF(
+  @email_verifications_verified_ip_col_exists = 0,
+  'ALTER TABLE email_verifications ADD COLUMN verified_ip VARCHAR(64) NULL AFTER issued_user_agent',
+  'SELECT 1'
+);
+PREPARE email_verifications_verified_ip_col_stmt FROM @email_verifications_verified_ip_col_sql;
+EXECUTE email_verifications_verified_ip_col_stmt;
+DEALLOCATE PREPARE email_verifications_verified_ip_col_stmt;
+
+SET @email_verifications_verified_ua_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND COLUMN_NAME = 'verified_user_agent'
+);
+SET @email_verifications_verified_ua_col_sql = IF(
+  @email_verifications_verified_ua_col_exists = 0,
+  'ALTER TABLE email_verifications ADD COLUMN verified_user_agent VARCHAR(300) NULL AFTER verified_ip',
+  'SELECT 1'
+);
+PREPARE email_verifications_verified_ua_col_stmt FROM @email_verifications_verified_ua_col_sql;
+EXECUTE email_verifications_verified_ua_col_stmt;
+DEALLOCATE PREPARE email_verifications_verified_ua_col_stmt;
+
+SET @email_verifications_token_hash_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND INDEX_NAME = 'idx_email_verifications_token_hash'
+);
+SET @email_verifications_token_hash_idx_sql = IF(
+  @email_verifications_token_hash_idx_exists = 0,
+  'CREATE INDEX idx_email_verifications_token_hash ON email_verifications(token_hash)',
+  'SELECT 1'
+);
+PREPARE email_verifications_token_hash_idx_stmt FROM @email_verifications_token_hash_idx_sql;
+EXECUTE email_verifications_token_hash_idx_stmt;
+DEALLOCATE PREPARE email_verifications_token_hash_idx_stmt;
+
+SET @email_verifications_verify_lookup_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND INDEX_NAME = 'idx_email_verifications_verify_lookup'
+);
+SET @email_verifications_verify_lookup_idx_sql = IF(
+  @email_verifications_verify_lookup_idx_exists = 0,
+  'CREATE INDEX idx_email_verifications_verify_lookup ON email_verifications(token_hash, used_at, expires_at)',
+  'SELECT 1'
+);
+PREPARE email_verifications_verify_lookup_idx_stmt FROM @email_verifications_verify_lookup_idx_sql;
+EXECUTE email_verifications_verify_lookup_idx_stmt;
+DEALLOCATE PREPARE email_verifications_verify_lookup_idx_stmt;
+
+SET @email_verifications_user_id_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND INDEX_NAME = 'idx_email_verifications_user_id'
+);
+SET @email_verifications_user_id_idx_sql = IF(
+  @email_verifications_user_id_idx_exists = 0,
+  'CREATE INDEX idx_email_verifications_user_id ON email_verifications(user_id)',
+  'SELECT 1'
+);
+PREPARE email_verifications_user_id_idx_stmt FROM @email_verifications_user_id_idx_sql;
+EXECUTE email_verifications_user_id_idx_stmt;
+DEALLOCATE PREPARE email_verifications_user_id_idx_stmt;
+
+SET @email_verifications_expires_at_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'email_verifications'
+    AND INDEX_NAME = 'idx_email_verifications_expires_at'
+);
+SET @email_verifications_expires_at_idx_sql = IF(
+  @email_verifications_expires_at_idx_exists = 0,
+  'CREATE INDEX idx_email_verifications_expires_at ON email_verifications(expires_at)',
+  'SELECT 1'
+);
+PREPARE email_verifications_expires_at_idx_stmt FROM @email_verifications_expires_at_idx_sql;
+EXECUTE email_verifications_expires_at_idx_stmt;
+DEALLOCATE PREPARE email_verifications_expires_at_idx_stmt;
+
 UPDATE users
 SET username = LEFT(LOWER(TRIM(SUBSTRING_INDEX(email, '@', 1))), 30)
 WHERE username IS NULL OR TRIM(username) = '';
@@ -421,3 +645,56 @@ SET @auth_sessions_user_revoked_idx_sql = IF(
 PREPARE auth_sessions_user_revoked_idx_stmt FROM @auth_sessions_user_revoked_idx_sql;
 EXECUTE auth_sessions_user_revoked_idx_stmt;
 DEALLOCATE PREPARE auth_sessions_user_revoked_idx_stmt;
+
+CREATE TABLE IF NOT EXISTS email_suppressions (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(255) NOT NULL,
+  reason VARCHAR(255) NOT NULL,
+  source VARCHAR(120) NOT NULL DEFAULT 'system',
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_email_suppressions_email (email),
+  KEY idx_email_suppressions_active (active)
+);
+
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NULL,
+  template VARCHAR(120) NOT NULL,
+  recipient_email VARCHAR(255) NOT NULL,
+  payload_json JSON NULL,
+  status ENUM('queued', 'processing', 'sent', 'failed', 'dlq') NOT NULL DEFAULT 'queued',
+  attempts INT NOT NULL DEFAULT 0,
+  last_error VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_email_outbox_status_created (status, created_at),
+  KEY idx_email_outbox_user (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS email_delivery_dlq (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  outbox_id BIGINT NULL,
+  recipient_email VARCHAR(255) NOT NULL,
+  reason VARCHAR(255) NOT NULL,
+  payload_json JSON NULL,
+  failed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_email_delivery_dlq_failed_at (failed_at)
+);
+
+SET @users_unverified_created_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND INDEX_NAME = 'idx_users_unverified_created_at'
+);
+SET @users_unverified_created_idx_sql = IF(
+  @users_unverified_created_idx_exists = 0,
+  'CREATE INDEX idx_users_unverified_created_at ON users(is_verified, created_at)',
+  'SELECT 1'
+);
+PREPARE users_unverified_created_idx_stmt FROM @users_unverified_created_idx_sql;
+EXECUTE users_unverified_created_idx_stmt;
+DEALLOCATE PREPARE users_unverified_created_idx_stmt;
