@@ -19,6 +19,33 @@ export const adminApi = {
   updateCourse: (token, courseId, payload) =>
     http.put(`/admin/courses/${courseId}`, payload, { token }),
   deleteCourse: (token, courseId) => http.delete(`/admin/courses/${courseId}`, { token }),
+  uploadCourseImage: async (token, file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await fetch(`${getApiBaseUrl()}/admin/courses/upload-image`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const rawText = await response.text();
+    let data = {};
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = {};
+    }
+    if (!response.ok) {
+      throw new Error(
+        inferApiFailureMessage(data, {
+          status: response.status,
+          statusText: response.statusText,
+          rawText,
+        }) || 'Image upload failed'
+      );
+    }
+    return data;
+  },
 
   lectures: (token) => http.get('/admin/lectures', { token }),
   createLecture: (token, payload) => http.post('/admin/lectures', payload, { token }),

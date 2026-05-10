@@ -63,6 +63,11 @@ export default function CourseDetailPage() {
                 <Badge tone="neutral" size="lg">
                   {course.level}
                 </Badge>
+                {course.batchNumber ? (
+                  <Badge tone="neutral" size="lg">
+                    {course.batchNumber}
+                  </Badge>
+                ) : null}
               </div>
 
               <h1 className="heading-1 text-balance course-detail-hero__title">

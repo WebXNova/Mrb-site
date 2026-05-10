@@ -1,0 +1,6 @@
+{
+  "watch": ["src", "scripts/run-api-dev.mjs"],
+  "ext": "js,mjs,cjs,json",
+  "ignore": ["src/**/*.test.js", "uploads/**", "node_modules/**"],
+  "delay": 500
+}

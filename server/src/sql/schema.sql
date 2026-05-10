@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS courses (
   accent_color VARCHAR(20) NULL,
   level VARCHAR(60) NULL,
   instructor VARCHAR(120) NULL,
+  batch_number VARCHAR(80) NULL,
+  image_url VARCHAR(1000) NULL,
   lectures_count VARCHAR(20) DEFAULT '0',
   tests_count VARCHAR(20) DEFAULT '0',
   duration_weeks INT DEFAULT 0,
@@ -53,6 +55,38 @@ CREATE TABLE IF NOT EXISTS courses (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+SET @courses_batch_number_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'courses'
+    AND COLUMN_NAME = 'batch_number'
+);
+SET @courses_batch_number_col_sql = IF(
+  @courses_batch_number_col_exists = 0,
+  'ALTER TABLE courses ADD COLUMN batch_number VARCHAR(80) NULL AFTER instructor',
+  'SELECT 1'
+);
+PREPARE courses_batch_number_col_stmt FROM @courses_batch_number_col_sql;
+EXECUTE courses_batch_number_col_stmt;
+DEALLOCATE PREPARE courses_batch_number_col_stmt;
+
+SET @courses_image_url_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'courses'
+    AND COLUMN_NAME = 'image_url'
+);
+SET @courses_image_url_col_sql = IF(
+  @courses_image_url_col_exists = 0,
+  'ALTER TABLE courses ADD COLUMN image_url VARCHAR(1000) NULL AFTER batch_number',
+  'SELECT 1'
+);
+PREPARE courses_image_url_col_stmt FROM @courses_image_url_col_sql;
+EXECUTE courses_image_url_col_stmt;
+DEALLOCATE PREPARE courses_image_url_col_stmt;
 
 CREATE TABLE IF NOT EXISTS lectures (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -646,7 +680,6 @@ PREPARE auth_sessions_user_revoked_idx_stmt FROM @auth_sessions_user_revoked_idx
 EXECUTE auth_sessions_user_revoked_idx_stmt;
 DEALLOCATE PREPARE auth_sessions_user_revoked_idx_stmt;
 
-<<<<<<< Updated upstream
 CREATE TABLE IF NOT EXISTS email_suppressions (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(255) NOT NULL,
@@ -699,7 +732,7 @@ SET @users_unverified_created_idx_sql = IF(
 PREPARE users_unverified_created_idx_stmt FROM @users_unverified_created_idx_sql;
 EXECUTE users_unverified_created_idx_stmt;
 DEALLOCATE PREPARE users_unverified_created_idx_stmt;
-=======
+
 CREATE TABLE IF NOT EXISTS enrollments (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(255) NOT NULL,
@@ -817,4 +850,4 @@ SET @uq_enrollment_verify_idx_sql = IF(
 PREPARE uq_enrollment_verify_idx_stmt FROM @uq_enrollment_verify_idx_sql;
 EXECUTE uq_enrollment_verify_idx_stmt;
 DEALLOCATE PREPARE uq_enrollment_verify_idx_stmt;
->>>>>>> Stashed changes
+

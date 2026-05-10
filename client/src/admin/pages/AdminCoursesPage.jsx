@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 
@@ -10,6 +10,8 @@ const initialForm = {
   originalPrice: '',
   instructor: '',
   level: '',
+  batchNumber: '',
+  coverImage: '',
   lecturesCount: '0',
   testsCount: '0',
   durationWeeks: 0,
@@ -23,6 +25,8 @@ export default function AdminCoursesPage() {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef(null);
 
   async function loadCourses() {
     const response = await adminApi.courses(token);
@@ -41,6 +45,31 @@ export default function AdminCoursesPage() {
   function resetForm() {
     setEditingId(null);
     setForm(initialForm);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  }
+
+  async function onImageFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError('');
+    setSuccess('');
+    setImageUploading(true);
+    try {
+      const response = await adminApi.uploadCourseImage(token, file);
+      const url = response?.data?.url;
+      if (!url) throw new Error('Image upload returned no URL');
+      setForm((prev) => ({ ...prev, coverImage: url }));
+    } catch (err) {
+      setError(err.message || 'Failed to upload image');
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
+  function clearCoverImage() {
+    setForm((prev) => ({ ...prev, coverImage: '' }));
+    if (imageInputRef.current) imageInputRef.current.value = '';
   }
 
   async function onSubmit(event) {
@@ -53,6 +82,8 @@ export default function AdminCoursesPage() {
         price: Number(form.price || 0),
         originalPrice: form.originalPrice === '' ? null : Number(form.originalPrice),
         durationWeeks: Number(form.durationWeeks || 0),
+        batchNumber: form.batchNumber?.trim() || null,
+        coverImage: form.coverImage?.trim() || null,
       };
       if (editingId) {
         await adminApi.updateCourse(token, editingId, payload);
@@ -85,6 +116,8 @@ export default function AdminCoursesPage() {
       ...initialForm,
       ...course,
       originalPrice: course.originalPrice ?? '',
+      batchNumber: course.batchNumber ?? '',
+      coverImage: course.coverImage ?? '',
       isActive: !!course.isActive,
     });
   }
@@ -127,12 +160,71 @@ export default function AdminCoursesPage() {
               <label htmlFor="level">Level</label>
               <input id="level" name="level" value={form.level} onChange={onChange} />
             </div>
+            <div className="admin-field">
+              <label htmlFor="batchNumber">Batch Number</label>
+              <input
+                id="batchNumber"
+                name="batchNumber"
+                value={form.batchNumber}
+                onChange={onChange}
+                placeholder="e.g. Batch 2026-A"
+              />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="coverImage">Image</label>
+              <input
+                id="coverImage"
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={onImageFileChange}
+                disabled={imageUploading}
+              />
+              <small style={{ color: 'var(--color-text-muted, #6b7280)' }}>
+                {imageUploading
+                  ? 'Uploading…'
+                  : 'JPEG, PNG, WebP, or GIF. Max 5 MB.'}
+              </small>
+            </div>
           </div>
 
           <div className="admin-field">
             <label htmlFor="description">Description</label>
             <textarea id="description" name="description" value={form.description} onChange={onChange} required />
           </div>
+
+          {form.coverImage ? (
+            <div className="admin-field">
+              <span>Image preview</span>
+              <div
+                style={{
+                  marginTop: '0.5rem',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.75rem',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <img
+                  src={form.coverImage}
+                  alt="Course cover preview"
+                  style={{
+                    maxWidth: '240px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-border, #e5e7eb)',
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={clearCoverImage}
+                  disabled={imageUploading}
+                >
+                  Remove image
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <label className="admin-field" style={{ display: 'flex', flexDirection: 'row', gap: '0.5rem' }}>
             <input type="checkbox" name="isActive" checked={form.isActive} onChange={onChange} />
@@ -143,7 +235,7 @@ export default function AdminCoursesPage() {
           {success ? <p className="admin-success">{success}</p> : null}
 
           <div className="admin-actions">
-            <button className="btn btn--primary" type="submit">
+            <button className="btn btn--primary" type="submit" disabled={imageUploading}>
               {editingId ? 'Update Course' : 'Create Course'}
             </button>
             {editingId ? (
@@ -161,8 +253,10 @@ export default function AdminCoursesPage() {
           <table className="admin-table">
             <thead>
               <tr>
+                <th>Image</th>
                 <th>Title</th>
                 <th>Subject</th>
+                <th>Batch</th>
                 <th>Price</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -172,8 +266,25 @@ export default function AdminCoursesPage() {
               {courses.length ? (
                 courses.map((course) => (
                   <tr key={course.id}>
+                    <td>
+                      {course.coverImage ? (
+                        <img
+                          src={course.coverImage}
+                          alt={`${course.title} cover`}
+                          style={{
+                            width: '56px',
+                            height: '40px',
+                            objectFit: 'cover',
+                            borderRadius: '6px',
+                          }}
+                        />
+                      ) : (
+                        <span style={{ color: 'var(--color-text-muted, #9ca3af)' }}>—</span>
+                      )}
+                    </td>
                     <td>{course.title}</td>
                     <td>{course.subject}</td>
+                    <td>{course.batchNumber || '—'}</td>
                     <td>{course.price}</td>
                     <td>{course.isActive ? 'Active' : 'Inactive'}</td>
                     <td>
@@ -194,7 +305,7 @@ export default function AdminCoursesPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5}>No courses yet.</td>
+                  <td colSpan={7}>No courses yet.</td>
                 </tr>
               )}
             </tbody>

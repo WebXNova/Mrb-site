@@ -15,8 +15,11 @@ import {
   getStoredUser,
   getStudentToken,
   onAuthChanged,
+  setAdminAuth,
+  setStudentAuth,
 } from './auth/session';
-import { isRefreshAuthRevokedError, refreshAccessToken } from './api/requestClient';
+import { studentApi } from './api/studentApi';
+import { adminApi } from './api/adminApi';
 import MobileWhatsAppButton from './components/ui/MobileWhatsAppButton';
 import AppRouter from './routes/AppRouter';
 
@@ -25,20 +28,44 @@ function syncAuthStateFromTokens() {
   else setAuthGuest('no-active-session');
 }
 
-/** After full page reload, access tokens are empty but httpOnly refresh cookies may still exist. */
+/**
+ * Validate the existing HttpOnly session on app boot WITHOUT rotating
+ * the refresh token.
+ *
+ * Calls /auth/student/me and /auth/me (read-only endpoints that only
+ * validate the access cookie). When the access cookie is still valid
+ * the response returns the user immediately and no refresh-token
+ * rotation occurs. If the access cookie is expired but the refresh
+ * cookie is still valid, the existing 401 -> single-flight refresh
+ * interceptor in `requestClient` performs ONE rotation and retries
+ * `me` automatically. If the session is truly revoked / the refresh
+ * also returns 401, the local user record is cleared and the UI
+ * redirects to login.
+ *
+ * Why this matters: a previous attempt called `refreshAccessToken`
+ * on every boot, which combined with the server's strict refresh
+ * replay detection (authSession.service.js: `confirmedReplay`)
+ * caused multi-tab opens / fast reloads to revoke the entire session
+ * because two tabs raced the same refresh token. Using `me` keeps
+ * boot validation idempotent and only rotates when actually needed.
+ */
 async function rehydrateSessionFromCookies() {
-  if (!getStudentToken() && getStoredUser('student_user')?.id) {
+  if (getStoredUser('student_user')?.id) {
     try {
-      await refreshAccessToken('student');
+      const me = await studentApi.me();
+      if (me?.data?.id) setStudentAuth('__cookie_session__', me.data);
+      else clearStudentAuth();
     } catch (e) {
-      if (isRefreshAuthRevokedError(e)) clearStudentAuth();
+      if (e?.status === 401 || e?.status === 403) clearStudentAuth();
     }
   }
-  if (!getAdminToken() && getStoredUser('admin_user')?.id) {
+  if (getStoredUser('admin_user')?.id) {
     try {
-      await refreshAccessToken('admin');
+      const me = await adminApi.me();
+      if (me?.data?.id) setAdminAuth('__cookie_session__', me.data);
+      else clearAdminAuth();
     } catch (e) {
-      if (isRefreshAuthRevokedError(e)) clearAdminAuth();
+      if (e?.status === 401 || e?.status === 403) clearAdminAuth();
     }
   }
 }

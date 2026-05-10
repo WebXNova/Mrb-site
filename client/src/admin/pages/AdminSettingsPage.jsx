@@ -3,7 +3,7 @@ import { http } from '../../api/http';
 
 const initialSettings = {
   platformTitle: 'MRB Classes',
-  supportEmail: 'support@mrb.com',
+  supportEmail: '',
   maintenanceMode: false,
   allowTeacherSignups: true,
 };

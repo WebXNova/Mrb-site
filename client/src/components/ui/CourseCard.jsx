@@ -30,6 +30,7 @@ export default function CourseCard({ course }) {
     originalPrice,
     accentColor,
     coverImage,
+    batchNumber,
   } = course;
 
   const discount =
@@ -71,6 +72,11 @@ export default function CourseCard({ course }) {
               <span className="badge--dot" />
               {subject}
             </Badge>
+            {batchNumber ? (
+              <Badge tone="neutral" size="md">
+                {batchNumber}
+              </Badge>
+            ) : null}
             <span className="course-card__rating" aria-label={`Rating ${rating}`}>
               <svg
                 viewBox="0 0 20 20"

@@ -12,6 +12,8 @@ function toCourse(row) {
     accentColor: row.accent_color,
     level: row.level,
     instructor: row.instructor,
+    batchNumber: row.batch_number,
+    coverImage: row.image_url,
     lecturesCount: row.lectures_count,
     testsCount: row.tests_count,
     durationWeeks: row.duration_weeks,
@@ -34,8 +36,9 @@ export async function createCourse(payload, createdBy = null) {
   const [result] = await mysqlPool.query(
     `INSERT INTO courses
      (slug, title, subject, description, price, original_price, accent_color, level, instructor,
+      batch_number, image_url,
       lectures_count, tests_count, duration_weeks, rating, students_enrolled, is_active, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.slug,
       payload.title,
@@ -46,6 +49,8 @@ export async function createCourse(payload, createdBy = null) {
       payload.accentColor || null,
       payload.level || null,
       payload.instructor || null,
+      payload.batchNumber || null,
+      payload.coverImage || null,
       payload.lecturesCount || '0',
       payload.testsCount || '0',
       payload.durationWeeks || 0,
@@ -63,7 +68,8 @@ export async function updateCourse(courseId, payload) {
   await mysqlPool.query(
     `UPDATE courses
      SET title = ?, subject = ?, description = ?, price = ?, original_price = ?, accent_color = ?,
-         level = ?, instructor = ?, lectures_count = ?, tests_count = ?, duration_weeks = ?,
+         level = ?, instructor = ?, batch_number = ?, image_url = ?,
+         lectures_count = ?, tests_count = ?, duration_weeks = ?,
          rating = ?, students_enrolled = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
@@ -75,6 +81,8 @@ export async function updateCourse(courseId, payload) {
       payload.accentColor || null,
       payload.level || null,
       payload.instructor || null,
+      payload.batchNumber || null,
+      payload.coverImage || null,
       payload.lecturesCount || '0',
       payload.testsCount || '0',
       payload.durationWeeks || 0,

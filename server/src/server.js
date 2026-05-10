@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import fs from 'fs/promises';
-import net from 'net';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { app } from './app.js';
@@ -12,6 +12,9 @@ import { getEmailProviderStatus } from './services/email.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/** Strong ref so the process stays alive (avoids edge cases with GC / tooling). */
+let activeHttpServer = null;
 
 async function runSchema() {
   const schemaPath = path.join(__dirname, 'sql', 'schema.sql');
@@ -62,23 +65,6 @@ async function assertRequiredAuthSchema() {
   }
 }
 
-function ensurePortAvailable(port) {
-  return new Promise((resolve, reject) => {
-    const tester = net.createServer();
-    tester.once('error', (error) => {
-      if (error?.code === 'EADDRINUSE') {
-        reject(new Error(`Port ${port} is already in use. Please stop the existing server process first.`));
-        return;
-      }
-      reject(error);
-    });
-    tester.once('listening', () => {
-      tester.close(() => resolve());
-    });
-    tester.listen(port, '0.0.0.0');
-  });
-}
-
 async function startServer() {
   console.log('MySQL boot config:', {
     MYSQL_USER: process.env.MYSQL_USER,
@@ -103,20 +89,41 @@ async function startServer() {
     console.warn('Redis init skipped:', error.message);
   }
 
-  await ensurePortAvailable(env.port);
+  const listenHostRaw = process.env.LISTEN_HOST ? String(process.env.LISTEN_HOST).trim() : '';
+  /** Same host semantics for IPv4 vs IPv6; LISTEN_HOST unset = Node default (often :: dual-stack). */
+  const listenHost = listenHostRaw || undefined;
 
-  app.listen(env.port, () => {
-    const worker = startEmailQueueWorker();
-    const emailStatus = getEmailProviderStatus();
-    console.log(`[email] Active provider: ${emailStatus.provider}`);
-    console.log('[email] Provider config status:', {
-      fromConfigured: emailStatus.fromConfigured,
-      sendgridConfigured: emailStatus.sendgridConfigured,
-      smtpConfigured: emailStatus.smtpConfigured,
-      sendgridInitialized: emailStatus.sendgridInitialized,
+  await new Promise((resolve, reject) => {
+    const server = http.createServer(app);
+    server.once('error', (err) => {
+      if (err?.code === 'EADDRINUSE') {
+        console.error(`Port ${env.port} is already in use.${listenHost ? ` (LISTEN_HOST=${listenHost})` : ''}`);
+        console.error(`Find PID: netstat -ano | findstr :${env.port}`);
+        console.error('Stop it with: taskkill /PID <pid> /F');
+      }
+      reject(err);
     });
-    console.log('[email] Queue delivery mode:', worker ? 'redis_worker_enabled' : 'direct_send_fallback');
-    console.log(`MRB API running on http://localhost:${env.port}`);
+    const onListening = () => {
+      const worker = startEmailQueueWorker();
+      const emailStatus = getEmailProviderStatus();
+      console.log(`[email] Active provider: ${emailStatus.provider}`);
+      console.log('[email] Provider config status:', {
+        fromConfigured: emailStatus.fromConfigured,
+        sendgridConfigured: emailStatus.sendgridConfigured,
+        smtpConfigured: emailStatus.smtpConfigured,
+        sendgridInitialized: emailStatus.sendgridInitialized,
+      });
+      console.log('[email] Queue delivery mode:', worker ? 'redis_worker_enabled' : 'direct_send_fallback');
+      const suffix = listenHost ? listenHost : 'default bind';
+      console.log(`MRB API listening on ${suffix}, port ${env.port} (try http://127.0.0.1:${env.port})`);
+      activeHttpServer = server;
+      resolve(server);
+    };
+    if (listenHost) {
+      server.listen(env.port, listenHost, onListening);
+    } else {
+      server.listen(env.port, onListening);
+    }
   });
 }
 

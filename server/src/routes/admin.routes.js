@@ -12,6 +12,7 @@ import {
   putCourse,
   removeCourse,
 } from '../controllers/courses.controller.js';
+import { postCourseImage } from '../controllers/courseImageUpload.controller.js';
 import {
   getLectures,
   postLecture,
@@ -57,6 +58,7 @@ router.put('/users/:userId/status', putUserStatus);
 
 router.get('/courses', getCourses);
 router.post('/courses', postCourse);
+router.post('/courses/upload-image', postCourseImage);
 router.put('/courses/:courseId', putCourse);
 router.delete('/courses/:courseId', removeCourse);
 

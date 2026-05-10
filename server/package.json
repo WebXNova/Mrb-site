@@ -5,7 +5,7 @@
   "type": "module",
   "description": "MRB Learning Platform backend API",
   "scripts": {
-    "dev": "nodemon src/server.js",
+    "dev": "nodemon scripts/run-api-dev.mjs",
     "start": "node src/server.js",
     "db:docker": "docker compose -f ../docker-compose.yml up -d mysql",
     "db:docker:logs": "docker compose -f ../docker-compose.yml logs -f mysql",
@@ -44,6 +44,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "kill-port": "^2.0.1",
     "nodemon": "^3.1.7"
   }
 }

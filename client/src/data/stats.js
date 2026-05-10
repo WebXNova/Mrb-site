@@ -1,9 +1,26 @@
-export const platformStats = [
-  { value: '12K+', label: 'Active Students' },
-  { value: '200+', label: 'Recorded Lectures' },
-  { value: '400+', label: 'Practice Tests' },
-  { value: '24h', label: 'Avg. Doubt Response' },
-];
+/**
+ * Public homepage stats / features / testimonials.
+ *
+ * - `platformStats`  -> fake analytics numbers (Active Students count,
+ *                       Lecture/Test counts, doubt response time).
+ *                       Removed; should be sourced from a real
+ *                       `/api/public/platform-stats` (or similar)
+ *                       endpoint when wired up.
+ * - `testimonials`   -> seeded student quotes used as demo content.
+ *                       Removed; should be sourced from real
+ *                       backend-managed testimonials (CMS / admin
+ *                       moderated) when wired up.
+ * - `features`       -> static marketing copy describing the
+ *                       platform's actual capabilities (Lectures,
+ *                       Tests, Doubts, Code-based access). This is
+ *                       site copy, not sample data, and is preserved.
+ *
+ * Components that consume `platformStats` / `testimonials` already
+ * map over the array, so an empty array renders an empty grid
+ * without breaking layout.
+ */
+
+export const platformStats = [];
 
 export const features = [
   {
@@ -36,26 +53,4 @@ export const features = [
   },
 ];
 
-export const testimonials = [
-  {
-    id: 't1',
-    quote:
-      'Sir, your platform is undoubtedly excellent. The test quality is outstanding, and I have seen improvement after every test. Your student guidance is truly commendable.',
-    name: 'Zara Fatima',
-    role: 'MDCAT Aspirants, 2025 Batch',
-  },
-  {
-    id: 't2',
-    quote:
-      'Sir, thank you. I am officially part of MRB Classes and not using other testing services. Now that I am selected, I will fully support MRB Classes.',
-    name: 'Kumar Sindh',
-    role: 'MDCAT Aspirants, 2025 Batch',
-  },
-  {
-    id: 't3',
-    quote:
-      'I have been following your lectures since my ninth grade. Your guidance, and constant support have literally made this possible. Keep it up sir, one day, everyone will realize the hard work and dedication you put in to shape our success.',
-    name: 'Sheeraz Hussain',
-    role: 'MDCAT Aspirants, 2025 Batch',
-  },
-];
+export const testimonials = [];

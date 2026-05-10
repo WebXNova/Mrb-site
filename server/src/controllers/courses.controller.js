@@ -19,6 +19,8 @@ const courseSchema = z.object({
   accentColor: z.string().optional().nullable(),
   level: z.string().optional().nullable(),
   instructor: z.string().optional().nullable(),
+  batchNumber: z.string().max(80).optional().nullable(),
+  coverImage: z.string().max(1000).optional().nullable(),
   lecturesCount: z.string().optional(),
   testsCount: z.string().optional(),
   durationWeeks: z.number().int().min(0).optional(),
