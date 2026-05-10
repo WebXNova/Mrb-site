@@ -746,6 +746,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
   hssc_status ENUM('Inter Class', 'First Year Class', 'Matric Class') NOT NULL,
   board VARCHAR(120) NOT NULL,
   mdcat_attempt_type ENUM('Fresher', 'Improver') NOT NULL,
+  batch_number VARCHAR(20) NULL,
   transaction_id VARCHAR(120) NOT NULL,
   verification_token VARCHAR(64) NULL,
   payment_method VARCHAR(80) NOT NULL DEFAULT 'EasyPaisa and JazzCash',
@@ -768,6 +769,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
   KEY idx_enrollments_attempt (mdcat_attempt_type),
   KEY idx_enrollments_email (email),
   KEY idx_enrollments_whatsapp (whatsapp_number),
+  KEY idx_enrollments_batch_submitted (batch_number, submitted_at DESC),
   UNIQUE KEY uq_enrollments_verification_token (verification_token)
 );
 
@@ -850,4 +852,36 @@ SET @uq_enrollment_verify_idx_sql = IF(
 PREPARE uq_enrollment_verify_idx_stmt FROM @uq_enrollment_verify_idx_sql;
 EXECUTE uq_enrollment_verify_idx_stmt;
 DEALLOCATE PREPARE uq_enrollment_verify_idx_stmt;
+
+SET @enrollments_batch_col_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'enrollments'
+    AND COLUMN_NAME = 'batch_number'
+);
+SET @enrollments_batch_col_sql = IF(
+  @enrollments_batch_col_exists = 0,
+  'ALTER TABLE enrollments ADD COLUMN batch_number VARCHAR(20) NULL',
+  'SELECT 1'
+);
+PREPARE enrollments_batch_col_stmt FROM @enrollments_batch_col_sql;
+EXECUTE enrollments_batch_col_stmt;
+DEALLOCATE PREPARE enrollments_batch_col_stmt;
+
+SET @enrollments_batch_idx_exists = (
+  SELECT COUNT(1)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'enrollments'
+    AND INDEX_NAME = 'idx_enrollments_batch_submitted'
+);
+SET @enrollments_batch_idx_sql = IF(
+  @enrollments_batch_idx_exists = 0,
+  'CREATE INDEX idx_enrollments_batch_submitted ON enrollments (batch_number, submitted_at DESC)',
+  'SELECT 1'
+);
+PREPARE enrollments_batch_idx_stmt FROM @enrollments_batch_idx_sql;
+EXECUTE enrollments_batch_idx_stmt;
+DEALLOCATE PREPARE enrollments_batch_idx_stmt;
 

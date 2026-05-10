@@ -14,6 +14,9 @@ import {
   updateEnrollmentStatus,
 } from '../services/enrollment.service.js';
 import { logActivity } from '../services/activityLog.service.js';
+import { ENROLLMENT_BATCH_IDS } from '../constants/enrollmentBatches.js';
+
+const BATCH_NUMBER_ENUM = /** @type {readonly [string, ...string[]]} */ (ENROLLMENT_BATCH_IDS);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(__dirname, '../../uploads/enrollments');
@@ -59,6 +62,7 @@ const createEnrollmentSchema = z.object({
   hsscStatus: z.enum(['Inter Class', 'First Year Class', 'Matric Class']),
   board: z.string().min(2).max(120),
   mdcatAttemptType: z.enum(['Fresher', 'Improver']),
+  batchNumber: z.enum(BATCH_NUMBER_ENUM),
   transactionId: z.string().min(3).max(120),
 });
 
@@ -134,6 +138,7 @@ export const postEnrollment = [
       hsscStatus: parseBodyField(req.body.hsscStatus),
       board: parseBodyField(req.body.board),
       mdcatAttemptType: parseBodyField(req.body.mdcatAttemptType),
+      batchNumber: parseBodyField(req.body.batchNumber),
       transactionId: parseBodyField(req.body.transactionId),
     });
     if (!parsed.success) throw new ApiError(422, 'Invalid enrollment payload', parsed.error.flatten());
@@ -187,8 +192,24 @@ export const postEnrollment = [
   }),
 ];
 
-export const getAdminEnrollments = asyncHandler(async (_req, res) => {
-  const data = await listEnrollments();
+function parseAdminEnrollmentQuery(req) {
+  const slice = (v) => {
+    if (v === undefined || v === null) return undefined;
+    const s = String(v).trim();
+    return s === '' ? undefined : s;
+  };
+  return {
+    batch: slice(req.query.batch) ?? 'all',
+    province: slice(req.query.province) ?? 'all',
+    gender: (slice(req.query.gender)?.toLowerCase() ?? 'all') || 'all',
+    dateFrom: slice(req.query.dateFrom),
+    dateTo: slice(req.query.dateTo),
+    search: slice(req.query.search),
+  };
+}
+
+export const getAdminEnrollments = asyncHandler(async (req, res) => {
+  const data = await listEnrollments(parseAdminEnrollmentQuery(req));
   res.json({ success: true, data: data.map(stripEnrollmentSensitive) });
 });
 

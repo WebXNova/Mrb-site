@@ -1,4 +1,5 @@
 import { receiptMediaUrl } from '../../utils/mediaUrl';
+import { batchLabel } from '../../constants/enrollmentBatches';
 
 const BRAND = {
   navy: 'FF143E6B',
@@ -130,6 +131,8 @@ export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
   styledPairRow(ws, r, 'Date of birth', formatDt(enrollment.dateOfBirth, formatDate));
   r += 1;
   styledPairRow(ws, r, 'Gender', formatGender(enrollment.gender));
+  r += 1;
+  styledPairRow(ws, r, 'Batch number', enrollment.batchNumber ? batchLabel(enrollment.batchNumber) : 'Unassigned');
   r += 1;
   styledPairRow(ws, r, 'WhatsApp number', enrollment.whatsappNumber);
   r += 1;

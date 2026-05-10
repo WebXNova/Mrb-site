@@ -107,7 +107,17 @@ export const adminApi = {
     http.delete(`/admin/student-questions/${questionId}`, { token }),
   remarks: (token) => http.get('/admin/remarks', { token }),
   markRemarkRead: (token, remarkId) => http.put(`/admin/remarks/${remarkId}/read`, {}, { token }),
-  enrollments: (token) => http.get('/enrollments/admin', { token, authScope: 'admin' }),
+  enrollments: (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    return http.get(`/enrollments/admin${qs ? `?${qs}` : ''}`, { token, authScope: 'admin' });
+  },
   updateEnrollmentStatus: (token, enrollmentId, payload) =>
     http.put(`/enrollments/admin/${enrollmentId}/status`, payload, { token, authScope: 'admin' }),
   exportTestResults: async (token, testId) => {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import Button from '../components/ui/Button';
 import { studentApi } from '../api/studentApi';
+import { ENROLLMENT_BATCH_OPTIONS } from '../constants/enrollmentBatches';
 import './EnrollmentPage.css';
 
 const PROVINCES = [
@@ -343,6 +344,17 @@ export default function EnrollmentPage() {
                     {HSSC_OPTIONS.map((item) => (
                       <option key={item} value={item}>
                         {item}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Batch Number" required error={errors.batchNumber}>
+                  <select value={form.batchNumber} onChange={(event) => updateField('batchNumber', event.target.value)}>
+                    <option value="">Select batch</option>
+                    {ENROLLMENT_BATCH_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
                       </option>
                     ))}
                   </select>
