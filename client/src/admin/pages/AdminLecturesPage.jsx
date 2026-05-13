@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 
@@ -24,13 +24,13 @@ export default function AdminLecturesPage() {
   const [lectures, setLectures] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState(null);
-  const [lectureCategory, setLectureCategory] = useState('MDCAT');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  function normalizeCategory(value) {
-    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
-  }
+  const sortedCourses = useMemo(
+    () => [...courses].sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''))),
+    [courses]
+  );
 
   async function loadData() {
     const [courseRes, lectureRes] = await Promise.all([adminApi.courses(token), adminApi.lectures(token)]);
@@ -50,7 +50,6 @@ export default function AdminLecturesPage() {
   function resetForm() {
     setEditingId(null);
     setForm(initialForm);
-    setLectureCategory('MDCAT');
   }
 
   async function onSubmit(event) {
@@ -61,11 +60,14 @@ export default function AdminLecturesPage() {
       setError('Please enter a valid YouTube URL (youtube.com/watch?v=... or youtu.be/...).');
       return;
     }
+    if (!form.courseId) {
+      setError('Select a course — lectures must be attached to a catalog course.');
+      return;
+    }
     try {
       const payload = {
         ...form,
-        courseId: form.courseId ? Number(form.courseId) : undefined,
-        courseCategory: lectureCategory,
+        courseId: Number(form.courseId),
         sortOrder: Number(form.sortOrder || 1),
       };
       if (editingId) {
@@ -95,66 +97,44 @@ export default function AdminLecturesPage() {
 
   function onEdit(lecture) {
     setEditingId(lecture.id);
-    setLectureCategory((lecture.courseSubject || 'MDCAT').trim() || 'MDCAT');
     setForm({
       ...initialForm,
-      ...lecture,
       courseId: String(lecture.courseId),
+      title: lecture.title || '',
+      youtubeUrl: lecture.youtubeUrl || '',
+      topic: lecture.topic || '',
       sortOrder: lecture.sortOrder || 0,
       isActive: !!lecture.isActive,
     });
   }
 
-  const categoryOptions = Array.from(
-    new Set([
-      'MDCAT',
-      ...courses.map((course) => (course.subject || '').trim()).filter(Boolean),
-      ...lectures.map((lecture) => (lecture.courseSubject || '').trim()).filter(Boolean),
-    ])
-  );
-  const normalizedLectureCategory = normalizeCategory(lectureCategory);
-  const courseOptions = courses.filter((course) =>
-    normalizeCategory(course.subject || course.category) === normalizedLectureCategory
-  );
-
-  useEffect(() => {
-    if (!courses.length) {
-      setForm((prev) => ({ ...prev, courseId: '' }));
-      return;
-    }
-    const fallbackCourseId = courseOptions[0]?.id || courses[0]?.id || '';
-    const selectedCourseStillValid = courses.some((course) => String(course.id) === String(form.courseId));
-    if (selectedCourseStillValid) return;
-    setForm((prev) => ({ ...prev, courseId: String(fallbackCourseId) }));
-  }, [courses, courseOptions, form.courseId]);
-
   return (
     <section className="admin-page">
       <section className="admin-card">
         <h2 className="heading-3">{editingId ? 'Edit Lecture' : 'Add Lecture'}</h2>
-        <form className="admin-page admin-lectures-form" onSubmit={onSubmit}>
+        <p className="admin-muted" style={{ marginTop: '0.5rem' }}>
+          Every lecture must belong to a course. Create the course first under{' '}
+          <strong>Courses</strong>, then select it here.
+        </p>
+        <form className="admin-page admin-lectures-form" onSubmit={onSubmit} style={{ marginTop: '1rem' }}>
           <div className="admin-form-grid admin-lectures-form__grid">
             <div className="admin-field admin-lectures-form__field">
-              <label htmlFor="lectureCategory">Course Category</label>
-              <input
-                id="lectureCategory"
-                name="lectureCategory"
-                list="lecture-category-options"
-                value={lectureCategory}
-                onChange={(event) => setLectureCategory(event.target.value)}
-                placeholder="Type or choose category (e.g. MDCAT)"
+              <label htmlFor="courseId">Course</label>
+              <select
+                id="courseId"
+                name="courseId"
+                value={form.courseId}
+                onChange={onChange}
                 required
-              />
-              <datalist id="lecture-category-options">
-                {categoryOptions.map((category) => (
-                  <option key={category} value={category} />
+                disabled={!sortedCourses.length}
+              >
+                <option value="">{sortedCourses.length ? 'Select a course…' : 'No courses — create one first'}</option>
+                {sortedCourses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title} · #{c.id}
+                  </option>
                 ))}
-              </datalist>
-              {courseOptions.length ? (
-                <small className="admin-muted admin-lectures-form__hint">
-                  Lecture will be added to: {courseOptions[0]?.title}
-                </small>
-              ) : null}
+              </select>
             </div>
             <div className="admin-field admin-lectures-form__field">
               <label htmlFor="title">Title</label>
@@ -211,7 +191,7 @@ export default function AdminLecturesPage() {
               <tr>
                 <th>Title</th>
                 <th>Course</th>
-                <th>Category</th>
+                <th>Course ID</th>
                 <th>Order</th>
                 <th>YouTube ID</th>
                 <th>Status</th>
@@ -224,7 +204,7 @@ export default function AdminLecturesPage() {
                   <tr key={lecture.id}>
                     <td>{lecture.title}</td>
                     <td>{lecture.courseTitle || lecture.courseId}</td>
-                    <td>{lecture.courseSubject || 'MDCAT'}</td>
+                    <td>{lecture.courseId ?? '—'}</td>
                     <td>{lecture.sortOrder || '-'}</td>
                     <td>{lecture.youtubeVideoId}</td>
                     <td>{lecture.isActive ? 'Active' : 'Inactive'}</td>

@@ -8,26 +8,28 @@ import {
   updateLecture,
 } from '../services/lecture.service.js';
 import { logActivity } from '../services/activityLog.service.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const YOUTUBE_URL_REGEX =
   /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=[\w-]{11}(&.*)?|youtu\.be\/[\w-]{11}(\?.*)?)$/i;
 
-const lectureSchema = z.object({
-  courseId: z.number().int().positive().optional(),
-  courseCategory: z.string().min(2).max(80).optional(),
-  title: z.string().min(3).max(220),
-  youtubeUrl: z
-    .string()
-    .url()
-    .refine((value) => YOUTUBE_URL_REGEX.test(value), 'youtubeUrl must be a valid YouTube watch URL'),
-  topic: z.string().max(120).optional().nullable(),
-  sortOrder: z.number().int().min(0).optional(),
-  isActive: z.boolean().optional(),
-});
+const lectureSchema = z
+  .object({
+    courseId: z.number().int().positive(),
+    title: z.string().min(3).max(220),
+    youtubeUrl: z
+      .string()
+      .url()
+      .refine((value) => YOUTUBE_URL_REGEX.test(value), 'youtubeUrl must be a valid YouTube watch URL'),
+    topic: z.string().max(120).optional().nullable(),
+    sortOrder: z.number().int().min(0).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strip();
 
 export const getLectures = asyncHandler(async (req, res) => {
   const lectures = await listLectures();
-  res.json({ success: true, data: lectures });
+  sendSuccess(res, lectures);
 });
 
 export const postLecture = asyncHandler(async (req, res) => {
@@ -43,7 +45,7 @@ export const postLecture = asyncHandler(async (req, res) => {
     entityType: 'lecture',
     entityId: String(created.id),
   });
-  res.status(201).json({ success: true, data: created });
+  sendSuccess(res, created, 201);
 });
 
 export const putLecture = asyncHandler(async (req, res) => {
@@ -65,7 +67,7 @@ export const putLecture = asyncHandler(async (req, res) => {
     entityType: 'lecture',
     entityId: String(lectureId),
   });
-  res.json({ success: true, data: updated });
+  sendSuccess(res, updated);
 });
 
 export const removeLecture = asyncHandler(async (req, res) => {
@@ -82,5 +84,5 @@ export const removeLecture = asyncHandler(async (req, res) => {
     entityType: 'lecture',
     entityId: String(lectureId),
   });
-  res.json({ success: true, message: 'Lecture deleted' });
+  sendSuccess(res, { message: 'Lecture deleted' });
 });

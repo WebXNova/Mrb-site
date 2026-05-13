@@ -24,6 +24,21 @@ function firstFieldError(fieldErrors) {
 export function inferApiFailureMessage(body, { status, statusText, rawText } = {}) {
   const trimmedStatusText = typeof statusText === 'string' ? statusText.trim() : '';
   if (body && typeof body === 'object') {
+    if (body.success === false && body.error && typeof body.error === 'object') {
+      const em = body.error.message;
+      if (typeof em === 'string' && em.trim()) {
+        let out = em.trim();
+        const dbg = typeof body.debug === 'string' ? body.debug.trim() : '';
+        if (dbg && out.toLowerCase() === 'internal server error') out = dbg;
+        const rid = body.requestId != null ? String(body.requestId).trim() : '';
+        if (rid && status != null && status >= 500) out = `${out} Reference: ${rid}`;
+        return out;
+      }
+    }
+    if (typeof body.code === 'string' && body.code.trim()) {
+      const m = body.message;
+      if (typeof m === 'string' && m.trim()) return m.trim();
+    }
     const dbg = typeof body.debug === 'string' ? body.debug.trim() : '';
     const m = body.message ?? body.msg;
     if (typeof m === 'string' && m.trim()) {
@@ -69,10 +84,11 @@ export function inferApiFailureMessage(body, { status, statusText, rawText } = {
 }
 
 /** Attach HTTP metadata for callers that must not treat all failures as logout. */
-export function createHttpError(message, { status, refreshAlreadyTried } = {}) {
+export function createHttpError(message, { status, refreshAlreadyTried, refreshFailureKind } = {}) {
   const err = new Error(message);
   err.name = 'HttpRequestError';
   if (status != null) err.status = status;
   if (refreshAlreadyTried != null) err.refreshAlreadyTried = refreshAlreadyTried;
+  if (refreshFailureKind != null) err.refreshFailureKind = refreshFailureKind;
   return err;
 }

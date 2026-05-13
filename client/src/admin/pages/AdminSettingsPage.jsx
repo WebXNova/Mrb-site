@@ -31,7 +31,7 @@ export default function AdminSettingsPage() {
     setHealthText('Checking...');
     try {
       const response = await http.get('/health');
-      setHealthText(response?.message || 'Server healthy');
+      setHealthText(response?.data?.message || 'Server healthy');
     } catch (err) {
       setHealthText(err.message || 'Unable to reach backend');
     }

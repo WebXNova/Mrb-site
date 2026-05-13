@@ -219,8 +219,9 @@ export default function EnrollmentPage() {
         { onProgress: setUploadProgress }
       );
       const payload = res?.data;
+      const enrollment = payload?.enrollment ?? payload;
       const verificationToken =
-        payload?.verificationToken ?? payload?.verification_token ?? '';
+        enrollment?.verificationToken ?? enrollment?.verification_token ?? '';
       if (!verificationToken) {
         throw new Error('Your submission was received but no tracking reference was returned. Please contact support.');
       }

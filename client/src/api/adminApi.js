@@ -14,11 +14,29 @@ export const adminApi = {
   updateUserStatus: (token, userId, status) =>
     http.put(`/admin/users/${userId}/status`, { status }, { token }),
 
-  courses: (token) => http.get('/admin/courses', { token }),
+  courses: (token) => http.get('/courses/admin', { token }),
   createCourse: (token, payload) => http.post('/admin/courses', payload, { token }),
   updateCourse: (token, courseId, payload) =>
     http.put(`/admin/courses/${courseId}`, payload, { token }),
-  deleteCourse: (token, courseId) => http.delete(`/admin/courses/${courseId}`, { token }),
+  deleteCourse: (token, courseId, { purge = false, forceCascade = false } = {}) => {
+    const sp = new URLSearchParams();
+    if (purge) sp.set('purge', 'true');
+    if (forceCascade) sp.set('forceCascade', 'true');
+    const qs = sp.toString();
+    return http.delete(`/admin/courses/${courseId}${qs ? `?${qs}` : ''}`, { token });
+  },
+  subjects: (token, courseId, { includeInactive = false } = {}) => {
+    const qs = includeInactive ? '?includeInactive=true' : '';
+    return http.get(`/admin/courses/${courseId}/subjects${qs}`, { token });
+  },
+  subject: (token, courseId, subjectId) =>
+    http.get(`/admin/courses/${courseId}/subjects/${subjectId}`, { token }),
+  createSubject: (token, courseId, payload) =>
+    http.post(`/admin/courses/${courseId}/subjects`, payload, { token }),
+  updateSubject: (token, courseId, subjectId, payload) =>
+    http.put(`/admin/courses/${courseId}/subjects/${subjectId}`, payload, { token }),
+  deleteSubject: (token, courseId, subjectId) =>
+    http.delete(`/admin/courses/${courseId}/subjects/${subjectId}`, { token }),
   uploadCourseImage: async (token, file) => {
     const formData = new FormData();
     formData.append('image', file);

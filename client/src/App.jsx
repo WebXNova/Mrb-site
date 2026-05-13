@@ -20,8 +20,30 @@ import {
 } from './auth/session';
 import { studentApi } from './api/studentApi';
 import { adminApi } from './api/adminApi';
+import { getApiBaseUrl, getRequestTimeoutMs } from './api/runtimeConfig';
 import MobileWhatsAppButton from './components/ui/MobileWhatsAppButton';
 import AppRouter from './routes/AppRouter';
+
+/**
+ * Mint `csrf_token` at CSRF_COOKIE_PATH (/) so `document.cookie` can read it before refresh/logout POSTs.
+ * Bounded timeout so a down API cannot block the SPA shell forever (stuck "Verifying session...").
+ */
+async function ensureSpaReadableCsrfCookie() {
+  const timeoutMs = Math.min(getRequestTimeoutMs(), 10_000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await fetch(`${getApiBaseUrl()}/auth/csrf-session`, {
+      method: 'GET',
+      credentials: 'include',
+      signal: controller.signal,
+    });
+  } catch {
+    /* offline, CORS, 403 origin, or abort — continue; login may have set CSRF already */
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function syncAuthStateFromTokens() {
   if (getAdminToken() || getStudentToken()) setAuthAuthenticated();
@@ -56,7 +78,7 @@ async function rehydrateSessionFromCookies() {
       if (me?.data?.id) setStudentAuth('__cookie_session__', me.data);
       else clearStudentAuth();
     } catch (e) {
-      if (e?.status === 401 || e?.status === 403) clearStudentAuth();
+      if (e?.status === 401) clearStudentAuth();
     }
   }
   if (getStoredUser('admin_user')?.id) {
@@ -65,7 +87,7 @@ async function rehydrateSessionFromCookies() {
       if (me?.data?.id) setAdminAuth('__cookie_session__', me.data);
       else clearAdminAuth();
     } catch (e) {
-      if (e?.status === 401 || e?.status === 403) clearAdminAuth();
+      if (e?.status === 401) clearAdminAuth();
     }
   }
 }
@@ -84,11 +106,18 @@ export default function App() {
     let cancelled = false;
 
     (async () => {
-      await rehydrateSessionFromCookies();
-      if (cancelled) return;
-      syncAuthStateFromTokens();
-      setAuthStatus(getAuthSnapshot().status);
-      setIsAuthReady(true);
+      try {
+        await ensureSpaReadableCsrfCookie();
+        await rehydrateSessionFromCookies();
+      } catch {
+        /* network or unexpected API errors — still mount the app */
+      } finally {
+        if (!cancelled) {
+          syncAuthStateFromTokens();
+          setAuthStatus(getAuthSnapshot().status);
+          setIsAuthReady(true);
+        }
+      }
     })();
 
     return () => {

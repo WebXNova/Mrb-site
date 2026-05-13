@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(__dirname, '../../uploads/student-qa');
@@ -56,6 +57,6 @@ export const postStudentQuestionAttachment = [
       throw new ApiError(400, 'No image file uploaded');
     }
     const url = `/api/uploads/student-qa/${req.file.filename}`;
-    res.json({ success: true, data: { url } });
+    sendSuccess(res, { url });
   }),
 ];

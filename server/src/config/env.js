@@ -127,6 +127,8 @@ export const env = {
     refreshCookieSameSite: parseSameSite(process.env.REFRESH_COOKIE_SAMESITE, 'lax'),
     refreshCookieSecure: parseBoolean(process.env.REFRESH_COOKIE_SECURE, nodeEnv === 'production'),
     refreshCookiePath: process.env.REFRESH_COOKIE_PATH || '/api/auth',
+    /** CSRF double-submit cookie: must be readable from `document.cookie` on SPA routes — use `/`, not `/api/auth`. Refresh tokens stay on `refreshCookiePath`. */
+    csrfCookiePath: process.env.CSRF_COOKIE_PATH || '/',
     accessCookieSameSite: parseSameSite(process.env.ACCESS_COOKIE_SAMESITE, process.env.REFRESH_COOKIE_SAMESITE || 'lax'),
     accessCookieSecure: parseBoolean(process.env.ACCESS_COOKIE_SECURE, nodeEnv === 'production'),
     accessCookiePath: process.env.ACCESS_COOKIE_PATH || '/api',
@@ -177,6 +179,7 @@ export const env = {
     emailWebhookSignatureSecret: process.env.EMAIL_WEBHOOK_SIGNATURE_SECRET || '',
     emailWebhookToleranceSeconds: parseNumber(process.env.EMAIL_WEBHOOK_TOLERANCE_SECONDS, 300),
   },
+
 };
 
 if (env.email.provider === 'sendgrid' && !env.email.sendgridApiKey) {
@@ -188,6 +191,11 @@ if (env.email.provider === 'smtp' && (!env.email.host || !env.email.port || !env
 }
 
 if (env.nodeEnv === 'production') {
+  if (env.security.refreshCookiePath === env.security.csrfCookiePath) {
+    throw new Error(
+      'CSRF_COOKIE_PATH must differ from REFRESH_COOKIE_PATH: keep refresh on /api/auth and CSRF on / so the SPA can read only the CSRF cookie.'
+    );
+  }
   if (env.security.requireRedisInProduction && !env.redis.url) {
     throw new Error('REDIS_URL is required in production when REQUIRE_REDIS_IN_PRODUCTION is enabled');
   }

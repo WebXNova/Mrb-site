@@ -15,6 +15,7 @@ import {
 } from '../services/enrollment.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { ENROLLMENT_BATCH_IDS } from '../constants/enrollmentBatches.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const BATCH_NUMBER_ENUM = /** @type {readonly [string, ...string[]]} */ (ENROLLMENT_BATCH_IDS);
 
@@ -115,10 +116,7 @@ export const getEnrollmentTracking = asyncHandler(async (req, res) => {
   const data = await getEnrollmentTrackingByToken(token);
   if (!data) throw new ApiError(404, 'We could not find this registration. Please check your link or contact MRB Classes.');
 
-  res.json({
-    success: true,
-    data,
-  });
+  sendSuccess(res, data);
 });
 
 export const postEnrollment = [
@@ -184,11 +182,14 @@ export const postEnrollment = [
       },
     });
 
-    res.status(201).json({
-      success: true,
-      message: 'Registration submitted successfully. Your request is pending verification.',
-      data: enrollment,
-    });
+    sendSuccess(
+      res,
+      {
+        message: 'Registration submitted successfully. Your request is pending verification.',
+        enrollment,
+      },
+      201
+    );
   }),
 ];
 
@@ -210,7 +211,7 @@ function parseAdminEnrollmentQuery(req) {
 
 export const getAdminEnrollments = asyncHandler(async (req, res) => {
   const data = await listEnrollments(parseAdminEnrollmentQuery(req));
-  res.json({ success: true, data: data.map(stripEnrollmentSensitive) });
+  sendSuccess(res, data.map(stripEnrollmentSensitive));
 });
 
 const updateEnrollmentStatusSchema = z.object({
@@ -247,5 +248,5 @@ export const putAdminEnrollmentStatus = asyncHandler(async (req, res) => {
     metadata: { status: parsed.data.status },
   });
 
-  res.json({ success: true, data: stripEnrollmentSensitive(updated) });
+  sendSuccess(res, stripEnrollmentSensitive(updated));
 });

@@ -29,6 +29,7 @@ import {
 } from '../services/emailVerification.service.js';
 import { getClientIp } from '../utils/network.js';
 import { assertCaptchaIfRequired } from '../services/abuseProtection.service.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 function refreshCookieMaxAgeMs(refreshToken) {
   const decoded = jwt.decode(refreshToken);
@@ -78,20 +79,37 @@ function clearRefreshCookie(res, name) {
 }
 
 function setCsrfCookie(res, token = issueCsrfToken()) {
+  const sameSite = env.security.refreshCookieSameSite;
+  const secure = env.security.refreshCookieSecure;
+  // Clear legacy CSRF cookie so two `csrf_token` variants cannot confuse parsing on `/api/auth/*`.
+  res.clearCookie(CSRF_COOKIE_NAME, {
+    httpOnly: false,
+    sameSite,
+    secure,
+    path: env.security.refreshCookiePath,
+  });
   res.cookie(CSRF_COOKIE_NAME, token, {
     httpOnly: false,
-    sameSite: env.security.refreshCookieSameSite,
-    secure: env.security.refreshCookieSecure,
-    path: env.security.refreshCookiePath,
+    sameSite,
+    secure,
+    path: env.security.csrfCookiePath,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
 function clearCsrfCookie(res) {
+  const sameSite = env.security.refreshCookieSameSite;
+  const secure = env.security.refreshCookieSecure;
   res.clearCookie(CSRF_COOKIE_NAME, {
     httpOnly: false,
-    sameSite: env.security.refreshCookieSameSite,
-    secure: env.security.refreshCookieSecure,
+    sameSite,
+    secure,
+    path: env.security.csrfCookiePath,
+  });
+  res.clearCookie(CSRF_COOKIE_NAME, {
+    httpOnly: false,
+    sameSite,
+    secure,
     path: env.security.refreshCookiePath,
   });
 }
@@ -186,6 +204,16 @@ const registerSchema = z.object({
   password: strongPasswordSchema,
 });
 
+/**
+ * Establishes a browser-readable CSRF cookie at CSRF_COOKIE_PATH (typically `/`).
+ * Trusted Origin only; does not authenticate. Used after deploy/path changes so the SPA can read `csrf_token` before refresh/logout POSTs.
+ */
+export const issueCsrfSession = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  setCsrfCookie(res);
+  res.status(204).send();
+});
+
 export const adminLogin = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
   const parsed = loginSchema.safeParse(req.body);
@@ -222,7 +250,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     metadata: { email: result.admin.email },
   });
 
-  res.json({ success: true, data: { admin: result.admin } });
+  sendSuccess(res, { admin: result.admin });
 });
 
 export const adminLogout = asyncHandler(async (req, res) => {
@@ -233,7 +261,7 @@ export const adminLogout = asyncHandler(async (req, res) => {
   clearAccessCookie(res, 'admin');
   clearCsrfCookie(res);
   await logActivity({ role: 'admin', action: 'admin.logout', entityType: 'auth' });
-  res.json({ success: true, message: 'Logged out' });
+  sendSuccess(res, { message: 'Logged out' });
 });
 
 export const studentLogout = asyncHandler(async (req, res) => {
@@ -244,7 +272,7 @@ export const studentLogout = asyncHandler(async (req, res) => {
   clearAccessCookie(res, 'student');
   clearCsrfCookie(res);
   await logActivity({ role: 'student', action: 'student.logout', entityType: 'auth' });
-  res.json({ success: true, message: 'Logged out' });
+  sendSuccess(res, { message: 'Logged out' });
 });
 
 export const studentRegister = asyncHandler(async (req, res) => {
@@ -305,20 +333,12 @@ export const studentRegister = asyncHandler(async (req, res) => {
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
   setAccessCookie(res, 'student', result.accessToken);
   setCsrfCookie(res);
-  res.status(201).json({
-    success: true,
-    data: { student: result.student },
-  });
+  sendSuccess(res, { student: result.student }, 201);
 });
 
 export const verifyEmail = asyncHandler(async (req, res) => {
   const parsedBody = verifyEmailBodySchema.safeParse(req.body);
   const token = parsedBody.success ? parsedBody.data.token : null;
-  console.log('[verify-email] received request body token', {
-    present: Boolean(token),
-    length: token?.length || 0,
-    preview: token ? `${token.slice(0, 8)}...${token.slice(-8)}` : null,
-  });
   if (!token) throw new ApiError(400, 'Invalid or expired verification link');
   const clientIp = getClientIp(req);
   const userAgent = req.get('user-agent') || null;
@@ -331,7 +351,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  res.json({ success: true, message: 'Email verified successfully. Please sign in again.' });
+  sendSuccess(res, { message: 'Email verified successfully. Please sign in again.' });
 });
 
 export const resendVerification = asyncHandler(async (req, res) => {
@@ -374,7 +394,7 @@ export const resendVerification = asyncHandler(async (req, res) => {
     }
   }
   await new Promise((resolve) => setTimeout(resolve, Math.max(0, 250 - (Date.now() - startedAt))));
-  res.json({ success: true, message: normalizedMessage });
+  sendSuccess(res, { message: normalizedMessage });
 });
 
 export const studentLogin = asyncHandler(async (req, res) => {
@@ -420,10 +440,7 @@ export const studentLogin = asyncHandler(async (req, res) => {
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
   setAccessCookie(res, 'student', result.accessToken);
   setCsrfCookie(res);
-  res.json({
-    success: true,
-    data: { student: result.student },
-  });
+  sendSuccess(res, { student: result.student });
 });
 
 export const logoutAll = asyncHandler(async (req, res) => {
@@ -442,13 +459,13 @@ export const logoutAll = asyncHandler(async (req, res) => {
     action: 'auth.logout_all',
     entityType: 'auth',
   });
-  res.json({ success: true, message: 'Logged out from all sessions' });
+  sendSuccess(res, { message: 'Logged out from all sessions' });
 });
 
 export const studentMe = asyncHandler(async (req, res) => {
   const profile = await getStudentMePayload(req.user.id);
   if (!profile) throw new ApiError(404, 'Student not found');
-  res.json({ success: true, data: profile });
+  sendSuccess(res, profile);
 });
 
 const verifyMrbBodySchema = z.object({
@@ -468,7 +485,7 @@ export const studentVerifyMrbEnrollment = asyncHandler(async (req, res) => {
   const parsed = verifyMrbBodySchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid code payload', parsed.error.flatten());
   const out = await verifyStudentMrbEnrollment(req.user.id, parsed.data.code);
-  res.json({ success: true, data: out });
+  sendSuccess(res, out);
 });
 
 export const refreshAuth = asyncHandler(async (req, res) => {
@@ -504,11 +521,8 @@ export const refreshAuth = asyncHandler(async (req, res) => {
     entityType: 'auth',
     metadata: { role: rotated.role },
   });
-  res.json({
-    success: true,
-    data: {
-      user: rotated.user,
-      role: rotated.role,
-    },
+  sendSuccess(res, {
+    user: rotated.user,
+    role: rotated.role,
   });
 });

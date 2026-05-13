@@ -1,25 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
-import { getAdminToken } from '../../auth/session';
+import { getAdminToken, getStoredUser } from '../../auth/session';
+
+const LEVEL_OPTIONS = ['beginner', 'intermediate', 'advanced'];
 
 const initialForm = {
   title: '',
-  subject: 'MDCAT',
   description: '',
-  price: 0,
-  originalPrice: '',
-  instructor: '',
-  level: '',
-  batchNumber: '',
-  coverImage: '',
-  lecturesCount: '0',
-  testsCount: '0',
-  durationWeeks: 0,
-  isActive: true,
+  short_description: '',
+  level: 'beginner',
+  thumbnail_url: '',
+  is_active: true,
 };
 
 export default function AdminCoursesPage() {
   const token = getAdminToken();
+  const adminUser = typeof window !== 'undefined' ? getStoredUser('admin_user') : null;
+  const isSuperAdmin = adminUser?.role === 'super_admin';
   const [courses, setCourses] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState(null);
@@ -58,7 +55,7 @@ export default function AdminCoursesPage() {
       const response = await adminApi.uploadCourseImage(token, file);
       const url = response?.data?.url;
       if (!url) throw new Error('Image upload returned no URL');
-      setForm((prev) => ({ ...prev, coverImage: url }));
+      setForm((prev) => ({ ...prev, thumbnail_url: url }));
     } catch (err) {
       setError(err.message || 'Failed to upload image');
       if (imageInputRef.current) imageInputRef.current.value = '';
@@ -68,8 +65,20 @@ export default function AdminCoursesPage() {
   }
 
   function clearCoverImage() {
-    setForm((prev) => ({ ...prev, coverImage: '' }));
+    setForm((prev) => ({ ...prev, thumbnail_url: '' }));
     if (imageInputRef.current) imageInputRef.current.value = '';
+  }
+
+  function buildCourseWritePayload() {
+    const sd = form.short_description?.trim();
+    return {
+      title: form.title,
+      description: form.description,
+      short_description: sd === '' ? null : sd ?? null,
+      level: form.level || 'beginner',
+      thumbnail_url: form.thumbnail_url?.trim() || null,
+      is_active: !!form.is_active,
+    };
   }
 
   async function onSubmit(event) {
@@ -77,14 +86,7 @@ export default function AdminCoursesPage() {
     setError('');
     setSuccess('');
     try {
-      const payload = {
-        ...form,
-        price: Number(form.price || 0),
-        originalPrice: form.originalPrice === '' ? null : Number(form.originalPrice),
-        durationWeeks: Number(form.durationWeeks || 0),
-        batchNumber: form.batchNumber?.trim() || null,
-        coverImage: form.coverImage?.trim() || null,
-      };
+      const payload = buildCourseWritePayload();
       if (editingId) {
         await adminApi.updateCourse(token, editingId, payload);
         setSuccess('Course updated');
@@ -99,14 +101,58 @@ export default function AdminCoursesPage() {
     }
   }
 
-  async function onDelete(courseId) {
-    if (!window.confirm('Delete this course?')) return;
+  async function onArchive(courseId) {
+    if (
+      !window.confirm(
+        'Hide this course from the catalog? It will be archived — lectures stay attached until you purge the course.'
+      )
+    )
+      return;
     setError('');
     try {
       await adminApi.deleteCourse(token, courseId);
       await loadCourses();
+      setSuccess('Course archived.');
     } catch (err) {
-      setError(err.message || 'Failed to delete course');
+      setError(err.message || 'Failed to archive course');
+    }
+  }
+
+  async function onPurge(course) {
+    if (
+      !window.confirm(
+        `PERMANENTLY delete "${course.title}"? This removes the catalog row.${
+          isSuperAdmin
+            ? ' If lectures are attached you will be prompted to confirm cascade deletion.'
+            : ''
+        }`
+      )
+    )
+      return;
+    setError('');
+    try {
+      await adminApi.deleteCourse(token, course.id, { purge: true });
+      await loadCourses();
+      setSuccess('Course permanently deleted.');
+    } catch (err) {
+      const msg = err.message || '';
+      if (msg.includes('lecture') && isSuperAdmin) {
+        if (
+          window.confirm(
+            'This course still has lectures. Delete the course and ALL attached lectures? This cannot be undone.'
+          )
+        ) {
+          try {
+            await adminApi.deleteCourse(token, course.id, { purge: true, forceCascade: true });
+            await loadCourses();
+            setSuccess('Course and lectures permanently deleted.');
+          } catch (e2) {
+            setError(e2.message || 'Failed to purge course');
+          }
+        }
+        return;
+      }
+      setError(msg || 'Failed to purge course');
     }
   }
 
@@ -114,11 +160,12 @@ export default function AdminCoursesPage() {
     setEditingId(course.id);
     setForm({
       ...initialForm,
-      ...course,
-      originalPrice: course.originalPrice ?? '',
-      batchNumber: course.batchNumber ?? '',
-      coverImage: course.coverImage ?? '',
-      isActive: !!course.isActive,
+      title: course.title ?? '',
+      description: course.description ?? '',
+      short_description: course.short_description ?? '',
+      level: LEVEL_OPTIONS.includes(course.level) ? course.level : 'beginner',
+      thumbnail_url: course.thumbnail_url ?? '',
+      is_active: !!course.is_active,
     });
   }
 
@@ -133,47 +180,19 @@ export default function AdminCoursesPage() {
               <input id="title" name="title" value={form.title} onChange={onChange} required />
             </div>
             <div className="admin-field">
-              <label htmlFor="subject">Subject</label>
-              <select id="subject" name="subject" value={form.subject} onChange={onChange} required>
-                <option value="MDCAT">MDCAT</option>
+              <label htmlFor="level">Level</label>
+              <select id="level" name="level" value={form.level} onChange={onChange} required>
+                {LEVEL_OPTIONS.map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {lvl}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="admin-field">
-              <label htmlFor="price">Price</label>
-              <input id="price" name="price" type="number" value={form.price} onChange={onChange} required />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="originalPrice">Original Price</label>
+              <label htmlFor="course_image">Image</label>
               <input
-                id="originalPrice"
-                name="originalPrice"
-                type="number"
-                value={form.originalPrice}
-                onChange={onChange}
-              />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="instructor">Instructor</label>
-              <input id="instructor" name="instructor" value={form.instructor} onChange={onChange} />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="level">Level</label>
-              <input id="level" name="level" value={form.level} onChange={onChange} />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="batchNumber">Batch Number</label>
-              <input
-                id="batchNumber"
-                name="batchNumber"
-                value={form.batchNumber}
-                onChange={onChange}
-                placeholder="e.g. Batch 2026-A"
-              />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="coverImage">Image</label>
-              <input
-                id="coverImage"
+                id="course_image"
                 ref={imageInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
@@ -181,11 +200,22 @@ export default function AdminCoursesPage() {
                 disabled={imageUploading}
               />
               <small style={{ color: 'var(--color-text-muted, #6b7280)' }}>
-                {imageUploading
-                  ? 'Uploading…'
-                  : 'JPEG, PNG, WebP, or GIF. Max 5 MB.'}
+                {imageUploading ? 'Uploading…' : 'JPEG, PNG, WebP, or GIF. Max 5 MB.'}
               </small>
             </div>
+          </div>
+
+          <div className="admin-field">
+            <label htmlFor="short_description">Short description (optional)</label>
+            <textarea
+              id="short_description"
+              name="short_description"
+              value={form.short_description}
+              onChange={onChange}
+              rows={2}
+              maxLength={512}
+              placeholder="Summary shown in listings when set"
+            />
           </div>
 
           <div className="admin-field">
@@ -193,7 +223,7 @@ export default function AdminCoursesPage() {
             <textarea id="description" name="description" value={form.description} onChange={onChange} required />
           </div>
 
-          {form.coverImage ? (
+          {form.thumbnail_url ? (
             <div className="admin-field">
               <span>Image preview</span>
               <div
@@ -206,7 +236,7 @@ export default function AdminCoursesPage() {
                 }}
               >
                 <img
-                  src={form.coverImage}
+                  src={form.thumbnail_url}
                   alt="Course cover preview"
                   style={{
                     maxWidth: '240px',
@@ -227,7 +257,7 @@ export default function AdminCoursesPage() {
           ) : null}
 
           <label className="admin-field" style={{ display: 'flex', flexDirection: 'row', gap: '0.5rem' }}>
-            <input type="checkbox" name="isActive" checked={form.isActive} onChange={onChange} />
+            <input type="checkbox" name="is_active" checked={form.is_active} onChange={onChange} />
             Active
           </label>
 
@@ -254,10 +284,10 @@ export default function AdminCoursesPage() {
             <thead>
               <tr>
                 <th>Image</th>
+                <th>ID</th>
                 <th>Title</th>
-                <th>Subject</th>
-                <th>Batch</th>
-                <th>Price</th>
+                <th>Level</th>
+                <th>Created by</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -267,10 +297,10 @@ export default function AdminCoursesPage() {
                 courses.map((course) => (
                   <tr key={course.id}>
                     <td>
-                      {course.coverImage ? (
+                      {course.thumbnail_url ? (
                         <img
-                          src={course.coverImage}
-                          alt={`${course.title} cover`}
+                          src={course.thumbnail_url}
+                          alt=""
                           style={{
                             width: '56px',
                             height: '40px',
@@ -282,11 +312,11 @@ export default function AdminCoursesPage() {
                         <span style={{ color: 'var(--color-text-muted, #9ca3af)' }}>—</span>
                       )}
                     </td>
+                    <td>{course.id}</td>
                     <td>{course.title}</td>
-                    <td>{course.subject}</td>
-                    <td>{course.batchNumber || '—'}</td>
-                    <td>{course.price}</td>
-                    <td>{course.isActive ? 'Active' : 'Inactive'}</td>
+                    <td>{course.level}</td>
+                    <td>{course.created_by ?? '—'}</td>
+                    <td>{course.is_active ? 'Active' : 'Inactive'}</td>
                     <td>
                       <div className="admin-row-actions">
                         <button className="btn btn--secondary btn--sm" onClick={() => onEdit(course)} type="button">
@@ -294,11 +324,22 @@ export default function AdminCoursesPage() {
                         </button>
                         <button
                           className="btn btn--secondary btn--sm"
-                          onClick={() => onDelete(course.id)}
+                          onClick={() => onArchive(course.id)}
                           type="button"
+                          title="Hide from public catalog (soft)"
                         >
-                          Delete
+                          Archive
                         </button>
+                        {isSuperAdmin ? (
+                          <button
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => onPurge(course)}
+                            type="button"
+                            title="Hard delete (requires empty course or cascade)"
+                          >
+                            Purge
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

@@ -6,12 +6,7 @@ import {
   getUsers,
   putUserStatus,
 } from '../controllers/admin.controller.js';
-import {
-  getCourses,
-  postCourse,
-  putCourse,
-  removeCourse,
-} from '../controllers/courses.controller.js';
+import { postCourse, putCourse, removeCourse } from '../controllers/courses.controller.js';
 import { postCourseImage } from '../controllers/courseImageUpload.controller.js';
 import {
   getLectures,
@@ -45,6 +40,13 @@ import {
   getAdminContactRemarks,
   putAdminContactRemarkRead,
 } from '../controllers/contactRemarks.controller.js';
+import {
+  deleteSubject,
+  getSubject,
+  getSubjects,
+  postSubject,
+  putSubject,
+} from '../controllers/subjects.controller.js';
 
 const router = Router();
 
@@ -56,11 +58,16 @@ router.get('/logs', getLogs);
 router.get('/users', getUsers);
 router.put('/users/:userId/status', putUserStatus);
 
-router.get('/courses', getCourses);
 router.post('/courses', postCourse);
 router.post('/courses/upload-image', postCourseImage);
 router.put('/courses/:courseId', putCourse);
 router.delete('/courses/:courseId', removeCourse);
+
+router.get('/courses/:courseId/subjects', getSubjects);
+router.post('/courses/:courseId/subjects', postSubject);
+router.get('/courses/:courseId/subjects/:subjectId', getSubject);
+router.put('/courses/:courseId/subjects/:subjectId', putSubject);
+router.delete('/courses/:courseId/subjects/:subjectId', deleteSubject);
 
 router.get('/lectures', getLectures);
 router.post('/lectures', postLecture);

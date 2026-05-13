@@ -22,6 +22,7 @@ import {
   updateTest,
   updateTestQuestion,
 } from '../services/test.service.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const testSchema = z.object({
   title: z.string().min(3).max(220),
@@ -81,7 +82,7 @@ const confirmUploadSchema = z.object({
 
 export const getTests = asyncHandler(async (req, res) => {
   const tests = await listTests();
-  res.json({ success: true, data: tests });
+  sendSuccess(res, tests);
 });
 
 export const postTest = asyncHandler(async (req, res) => {
@@ -95,7 +96,7 @@ export const postTest = asyncHandler(async (req, res) => {
     entityType: 'test',
     entityId: String(created.id),
   });
-  res.status(201).json({ success: true, data: created });
+  sendSuccess(res, created, 201);
 });
 
 export const putTest = asyncHandler(async (req, res) => {
@@ -112,7 +113,7 @@ export const putTest = asyncHandler(async (req, res) => {
     entityType: 'test',
     entityId: String(testId),
   });
-  res.json({ success: true, data: updated });
+  sendSuccess(res, updated);
 });
 
 export const removeTest = asyncHandler(async (req, res) => {
@@ -127,7 +128,7 @@ export const removeTest = asyncHandler(async (req, res) => {
     entityType: 'test',
     entityId: String(testId),
   });
-  res.json({ success: true, message: 'Test deleted' });
+  sendSuccess(res, { message: 'Test deleted' });
 });
 
 export const putTestPublish = asyncHandler(async (req, res) => {
@@ -142,7 +143,7 @@ export const putTestPublish = asyncHandler(async (req, res) => {
     entityType: 'test',
     entityId: String(testId),
   });
-  res.json({ success: true, data: updated });
+  sendSuccess(res, updated);
 });
 
 export const postDuplicateTest = asyncHandler(async (req, res) => {
@@ -150,7 +151,7 @@ export const postDuplicateTest = asyncHandler(async (req, res) => {
   if (!testId) throw new ApiError(400, 'Invalid test id');
   const copied = await duplicateTest(testId, req.user?.id || null);
   if (!copied) throw new ApiError(404, 'Test not found');
-  res.status(201).json({ success: true, data: copied });
+  sendSuccess(res, copied, 201);
 });
 
 export const getTestQuestions = asyncHandler(async (req, res) => {
@@ -159,7 +160,7 @@ export const getTestQuestions = asyncHandler(async (req, res) => {
   const test = await getTestById(testId);
   if (!test) throw new ApiError(404, 'Test not found');
   const questions = await listTestQuestions(testId);
-  res.json({ success: true, data: questions });
+  sendSuccess(res, questions);
 });
 
 export const postTestQuestion = asyncHandler(async (req, res) => {
@@ -180,7 +181,7 @@ export const postTestQuestion = asyncHandler(async (req, res) => {
     entityId: String(created.id),
     metadata: { testId },
   });
-  res.status(201).json({ success: true, data: created });
+  sendSuccess(res, created, 201);
 });
 
 export const putTestQuestion = asyncHandler(async (req, res) => {
@@ -201,7 +202,7 @@ export const putTestQuestion = asyncHandler(async (req, res) => {
     entityType: 'test_question',
     entityId: String(questionId),
   });
-  res.json({ success: true, data: updated });
+  sendSuccess(res, updated);
 });
 
 export const removeTestQuestion = asyncHandler(async (req, res) => {
@@ -216,7 +217,7 @@ export const removeTestQuestion = asyncHandler(async (req, res) => {
     entityType: 'test_question',
     entityId: String(questionId),
   });
-  res.json({ success: true, message: 'Question deleted' });
+  sendSuccess(res, { message: 'Question deleted' });
 });
 
 export const postTestQuestionsImportPreview = asyncHandler(async (req, res) => {
@@ -229,7 +230,7 @@ export const postTestQuestionsImportPreview = asyncHandler(async (req, res) => {
   if (!parsed.success) throw new ApiError(422, 'Invalid preview payload', parsed.error.flatten());
 
   const preview = parseAikenPayload(parsed.data.content);
-  res.json({ success: true, data: preview });
+  sendSuccess(res, preview);
 });
 
 export const postTestQuestionsImportPreviewFile = asyncHandler(async (req, res) => {
@@ -277,7 +278,7 @@ export const postTestQuestionsImportPreviewFile = asyncHandler(async (req, res) 
     throw new ApiError(422, 'Unsupported file format. Use .txt, .xlsx or .docx');
   }
 
-  res.json({ success: true, data: preview });
+  sendSuccess(res, preview);
 });
 
 export const postTestQuestionsImportConfirm = asyncHandler(async (req, res) => {
@@ -322,13 +323,14 @@ export const postTestQuestionsImportConfirm = asyncHandler(async (req, res) => {
     },
   });
 
-  res.status(201).json({
-    success: true,
-    data: {
+  sendSuccess(
+    res,
+    {
       insertedCount: inserted.length,
       questions: inserted,
     },
-  });
+    201
+  );
 });
 
 export const getTestResultsExport = asyncHandler(async (req, res) => {

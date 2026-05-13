@@ -8,9 +8,7 @@ const footerSections = [
     title: 'Learn',
     links: [
       { to: '/courses', label: 'All Courses' },
-      { to: '/courses?subject=physics', label: 'Physics' },
-      { to: '/courses?subject=chemistry', label: 'Chemistry' },
-      { to: '/courses?subject=biology', label: 'Biology' },
+      { to: '/courses?tab=mdcat', label: 'MDCAT Courses' },
     ],
   },
   {

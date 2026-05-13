@@ -1,30 +1,76 @@
 import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import PageLayout from '../components/layout/PageLayout';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
-import { getCourseById } from '../data/courses';
+import { catalogApi } from '../api/catalogApi';
+import { mapCatalogCourseToDetailProps } from '../course/coursePresentation';
 import './CourseDetailPage.css';
 
-function formatPrice(price) {
-  if (price === 0) return 'Free';
-  const formatted = new Intl.NumberFormat('en-IN', {
-    maximumFractionDigits: 0,
-  }).format(price);
-  return `Rs ${formatted}`;
+function levelBadgeTone(level) {
+  const l = String(level || 'beginner').toLowerCase();
+  if (l === 'advanced') return 'warning';
+  return 'neutral';
 }
 
 export default function CourseDetailPage() {
-  const { id } = useParams();
-  const course = getCourseById(id);
+  const { id: routeId } = useParams();
+  const [course, setCourse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  if (!course) {
+  useEffect(() => {
+    let cancelled = false;
+    const courseId = Number(String(routeId || '').trim());
+    if (!Number.isFinite(courseId) || courseId <= 0) {
+      setLoading(false);
+      setCourse(null);
+      setError('Invalid course id');
+      return undefined;
+    }
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await catalogApi.getCourse(courseId);
+        const raw = res?.data;
+        if (!cancelled) {
+          setCourse(raw ? mapCatalogCourseToDetailProps(raw) : null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e?.message || 'Failed to load course');
+          setCourse(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [routeId]);
+
+  if (loading) {
+    return (
+      <PageLayout>
+        <section className="section">
+          <div className="container container-narrow">
+            <p className="body-md">Loading course…</p>
+          </div>
+        </section>
+      </PageLayout>
+    );
+  }
+
+  if (!course || error) {
     return (
       <PageLayout>
         <section className="section">
           <div className="container container-narrow course-not-found">
             <h1 className="heading-1">Course not found</h1>
             <p className="body-md">
-              The course you’re looking for doesn’t exist or may have been moved.
+              {error || 'The course you’re looking for doesn’t exist or may have been moved.'}
             </p>
             <Button as={Link} to="/courses" variant="primary" size="md">
               Back to all courses
@@ -35,12 +81,8 @@ export default function CourseDetailPage() {
     );
   }
 
-  const discount =
-    course.originalPrice && course.originalPrice > course.price
-      ? Math.round(
-          ((course.originalPrice - course.price) / course.originalPrice) * 100
-        )
-      : 0;
+  const showCoverImage = Boolean(course.thumbnail_url);
+  const thumbnailUrl = course.thumbnail_url || '';
 
   return (
     <PageLayout>
@@ -51,112 +93,37 @@ export default function CourseDetailPage() {
             <span aria-hidden="true">/</span>
             <Link to="/courses">Courses</Link>
             <span aria-hidden="true">/</span>
-            <span className="breadcrumb__current">{course.subject}</span>
+            <span className="breadcrumb__current">{course.title}</span>
           </nav>
 
           <div className="course-detail-hero__grid">
             <div className="course-detail-hero__main">
               <div className="cluster">
-                <Badge tone={course.subject.toLowerCase()} size="lg">
-                  {course.subject}
-                </Badge>
-                <Badge tone="neutral" size="lg">
+                <Badge tone={levelBadgeTone(course.level)} size="lg">
                   {course.level}
                 </Badge>
-                {course.batchNumber ? (
-                  <Badge tone="neutral" size="lg">
-                    {course.batchNumber}
-                  </Badge>
-                ) : null}
               </div>
 
-              <h1 className="heading-1 text-balance course-detail-hero__title">
-                {course.title}
-              </h1>
-              <p className="body-lg text-pretty course-detail-hero__lead">
-                {course.summary}
-              </p>
-
-              <div className="course-detail-hero__meta">
-                <div className="meta-item">
-                  <span className="meta-item__icon">
-                    <PlayIcon />
-                  </span>
-                  <div>
-                    <span className="meta-item__value">{course.lecturesCount}</span>
-                    <span className="meta-item__label">Lectures</span>
-                  </div>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-item__icon">
-                    <CheckIcon />
-                  </span>
-                  <div>
-                    <span className="meta-item__value">{course.testsCount}</span>
-                    <span className="meta-item__label">Tests</span>
-                  </div>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-item__icon">
-                    <ClockIcon />
-                  </span>
-                  <div>
-                    <span className="meta-item__value">{course.durationWeeks}</span>
-                    <span className="meta-item__label">Weeks</span>
-                  </div>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-item__icon">
-                    <UsersIcon />
-                  </span>
-                  <div>
-                    <span className="meta-item__value">
-                      {course.studentsEnrolled.toLocaleString('en-IN')}
-                    </span>
-                    <span className="meta-item__label">Students</span>
-                  </div>
-                </div>
-              </div>
+              <h1 className="heading-1 text-balance course-detail-hero__title">{course.title}</h1>
+              <p className="body-lg text-pretty course-detail-hero__lead">{course.summary}</p>
             </div>
 
             <aside className="course-detail-hero__card">
-              <div
-                className="course-detail-hero__card-cover"
-                style={{ '--cover-accent': course.accentColor }}
-              >
-                {course.coverImage ? (
+              <div className="course-detail-hero__card-cover">
+                {showCoverImage ? (
                   <img
                     className="course-detail-hero__card-cover-image"
-                    src={course.coverImage}
-                    alt={`${course.title} cover`}
+                    src={thumbnailUrl}
+                    alt=""
                     loading="eager"
                     decoding="async"
                     sizes="(max-width: 1024px) 100vw, 360px"
                   />
                 ) : null}
                 <div className="course-detail-hero__card-pattern" aria-hidden="true" />
-                {!course.coverImage ? (
-                  <span className="course-detail-hero__card-subject">{course.subject}</span>
-                ) : null}
               </div>
 
               <div className="course-detail-hero__card-body">
-                <div className="course-detail-hero__price">
-                  <span className="course-detail-hero__price-current">
-                    {formatPrice(course.price)}
-                  </span>
-                  {course.originalPrice && course.originalPrice > course.price ? (
-                    <>
-                      <span className="course-detail-hero__price-original">
-                        {formatPrice(course.originalPrice)}
-                      </span>
-                      <Badge tone="warning" size="md">
-                        Save {discount}%
-                      </Badge>
-                    </>
-                  ) : null}
-                </div>
-
                 <div className="course-detail-hero__card-actions">
                   <Button as={Link} to="/enroll" variant="accent" size="lg" fullWidth>
                     Enroll now
@@ -164,22 +131,6 @@ export default function CourseDetailPage() {
                   <Button as={Link} to="/courses" variant="secondary" size="md" fullWidth>
                     Browse other courses
                   </Button>
-                </div>
-
-                <div className="course-detail-hero__card-meta">
-                  <div className="course-detail-hero__instructor">
-                    <span className="course-detail-hero__instructor-avatar">
-                      {course.instructor.charAt(0)}
-                    </span>
-                    <div>
-                      <span className="course-detail-hero__instructor-label">
-                        Taught by
-                      </span>
-                      <span className="course-detail-hero__instructor-name">
-                        {course.instructor}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </aside>
@@ -190,17 +141,10 @@ export default function CourseDetailPage() {
       <section className="section course-detail-content">
         <div className="container container-narrow">
           <div className="course-detail-content__block">
-            <h2 className="heading-2">What you'll get</h2>
-            <ul className="highlight-list">
-              {course.highlights.map((h) => (
-                <li key={h} className="highlight-list__item">
-                  <span className="highlight-list__icon">
-                    <CheckIcon />
-                  </span>
-                  <span>{h}</span>
-                </li>
-              ))}
-            </ul>
+            <h2 className="heading-2">About this course</h2>
+            <p className="body-md" style={{ whiteSpace: 'pre-wrap' }}>
+              {course.description || course.summary}
+            </p>
           </div>
 
           <div className="course-detail-content__block">
@@ -211,8 +155,8 @@ export default function CourseDetailPage() {
                 <div>
                   <h3 className="heading-4">Watch the lectures</h3>
                   <p className="body-md">
-                    Topic-by-topic videos arranged in the right learning order. No
-                    decision fatigue — just press play.
+                    Topic-by-topic videos arranged in the right learning order. No decision fatigue — just press
+                    play.
                   </p>
                 </div>
               </li>
@@ -221,8 +165,7 @@ export default function CourseDetailPage() {
                 <div>
                   <h3 className="heading-4">Take chapter tests</h3>
                   <p className="body-md">
-                    Timed MCQs with auto-grading and detailed explanations after every
-                    submission.
+                    Timed MCQs with auto-grading and detailed explanations after every submission.
                   </p>
                 </div>
               </li>
@@ -231,8 +174,8 @@ export default function CourseDetailPage() {
                 <div>
                   <h3 className="heading-4">Ask your doubts</h3>
                   <p className="body-md">
-                    Tag your question by subject. Your teacher answers it in your
-                    dashboard — no public chats, no noise.
+                    Tag your question by topic. Your teacher answers it in your dashboard — no public chats,
+                    no noise.
                   </p>
                 </div>
               </li>
@@ -241,43 +184,5 @@ export default function CourseDetailPage() {
         </div>
       </section>
     </PageLayout>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h12a4 4 0 0 0 4-4z" />
-      <polygon points="10,9 16,12 10,15" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 11l3 3L22 4" />
-      <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12,6 12,12 16,14" />
-    </svg>
-  );
-}
-
-function UsersIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
   );
 }

@@ -14,8 +14,10 @@ import { isRedisReady } from './config/redis.js';
 import { getEmailQueue } from './config/queue.js';
 import contactRoutes from './routes/contact.routes.js';
 import enrollmentRoutes from './routes/enrollment.routes.js';
+import coursesRoutes from './routes/courses.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { attachRequestContext } from './middleware/requestContext.js';
+import { sendError, sendSuccess } from './utils/httpEnvelope.js';
 
 export const app = express();
 app.set('trust proxy', env.security.trustProxy);
@@ -68,11 +70,7 @@ app.use(attachRequestContext);
 app.use('/api/uploads', express.static(uploadsRoot));
 
 app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Server healthy',
-    requestId: req.requestId,
-  });
+  sendSuccess(res, { message: 'Server healthy' }, 200, { requestId: req.requestId });
 });
 
 app.get('/api/ready', async (req, res) => {
@@ -82,8 +80,11 @@ app.get('/api/ready', async (req, res) => {
     emailQueue: Boolean(queue),
   };
   const statusCode = ready.redis || env.nodeEnv !== 'production' ? 200 : 503;
-  res.status(statusCode).json({
-    success: statusCode === 200,
+  if (statusCode === 200) {
+    sendSuccess(res, { ready }, 200, { requestId: req.requestId });
+    return;
+  }
+  sendError(res, 503, 'SERVICE_NOT_READY', 'Redis is required for readiness in production.', {
     requestId: req.requestId,
     ready,
   });
@@ -96,6 +97,7 @@ app.use('/api/student', studentRoutes);
 app.use('/api/email', emailProviderRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
+app.use('/api/courses', coursesRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

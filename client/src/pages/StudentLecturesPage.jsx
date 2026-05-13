@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 import { mockStudentDashboard } from '../student/data/mockStudentData';
@@ -15,7 +15,7 @@ function getEmbedUrl(url) {
 
 export default function StudentLecturesPage() {
   const [lectures, setLectures] = useState(mockStudentDashboard.lectures);
-  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeCourseId, setActiveCourseId] = useState('all');
 
   useEffect(() => {
     let mounted = true;
@@ -36,15 +36,26 @@ export default function StudentLecturesPage() {
     };
   }, []);
 
-  const categories = Array.from(
-    new Set(['MDCAT', ...lectures.map((lecture) => lecture.courseSubject || lecture.subject || '').filter(Boolean)])
-  );
+  const courseTabs = useMemo(() => {
+    const rows = [];
+    const seen = new Set();
+    for (const lecture of lectures) {
+      const id = String(lecture.courseId ?? '');
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      rows.push({
+        id,
+        label: lecture.courseTitle || `Course ${id}`,
+      });
+    }
+    rows.sort((a, b) => a.label.localeCompare(b.label));
+    return rows;
+  }, [lectures]);
+
   const filteredLectures =
-    activeCategory === 'all'
+    activeCourseId === 'all'
       ? lectures
-      : lectures.filter(
-          (lecture) => (lecture.courseSubject || lecture.subject || '').toLowerCase() === activeCategory.toLowerCase()
-        );
+      : lectures.filter((lecture) => String(lecture.courseId) === activeCourseId);
 
   return (
     <section className="admin-card">
@@ -52,19 +63,19 @@ export default function StudentLecturesPage() {
       <div className="student-lecture-tabs">
         <button
           type="button"
-          className={`student-lecture-tab ${activeCategory === 'all' ? 'student-lecture-tab--active' : ''}`}
-          onClick={() => setActiveCategory('all')}
+          className={`student-lecture-tab ${activeCourseId === 'all' ? 'student-lecture-tab--active' : ''}`}
+          onClick={() => setActiveCourseId('all')}
         >
           All
         </button>
-        {categories.map((category) => (
+        {courseTabs.map((tab) => (
           <button
-            key={category}
+            key={tab.id}
             type="button"
-            className={`student-lecture-tab ${activeCategory === category ? 'student-lecture-tab--active' : ''}`}
-            onClick={() => setActiveCategory(category)}
+            className={`student-lecture-tab ${activeCourseId === tab.id ? 'student-lecture-tab--active' : ''}`}
+            onClick={() => setActiveCourseId(tab.id)}
           >
-            {category}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -85,10 +96,13 @@ export default function StudentLecturesPage() {
                 />
               </div>
               <p className="student-lecture-card__course">
-                👉 {(lecture.courseSubject || lecture.subject || 'MDCAT')}
-                : {lecture.courseTitle || 'Course'}
+                👉 {[lecture.courseTitle || 'Course', lecture.courseId ? `(#${lecture.courseId})` : null]
+                  .filter(Boolean)
+                  .join(' ')}
               </p>
-              <h3 className="student-lecture-card__title">Lec-{index + 1} {lecture.title}</h3>
+              <h3 className="student-lecture-card__title">
+                Lec-{index + 1} {lecture.title}
+              </h3>
               <div className="student-lecture-card__actions">
                 <Link to={`/dashboard/lectures/${lecture.id}`} className="student-lecture-card__link">
                   Open in player
@@ -106,7 +120,7 @@ export default function StudentLecturesPage() {
           ))
         ) : (
           <p className="admin-stat-card__label" style={{ marginTop: '0.75rem' }}>
-            No lectures available in this category.
+            No lectures available for this selection.
           </p>
         )}
       </div>

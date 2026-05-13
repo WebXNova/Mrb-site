@@ -5,6 +5,7 @@ import { ApiError } from '../utils/apiError.js';
 import { env } from '../config/env.js';
 import { mysqlPool } from '../config/mysql.js';
 import { getRedisClient } from '../config/redis.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const feedbackSchema = z.object({
   email: z.string().trim().email(),
@@ -55,6 +56,6 @@ export const providerFeedbackWebhook = asyncHandler(async (req, res) => {
      ON DUPLICATE KEY UPDATE reason = VALUES(reason), active = TRUE, updated_at = CURRENT_TIMESTAMP`,
     [parsed.data.email.toLowerCase(), `${parsed.data.event}:${parsed.data.reason || 'provider_signal'}`]
   );
-  res.json({ success: true });
+  sendSuccess(res, { acknowledged: true });
 });
 

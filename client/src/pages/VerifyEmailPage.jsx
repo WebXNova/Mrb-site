@@ -34,12 +34,6 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     if (requestedRef.current) return;
     requestedRef.current = true;
-    console.log('[verify-email] extracted token', {
-      source: tokenRead.source,
-      present: Boolean(token),
-      length: token?.length || 0,
-      preview: token ? `${token.slice(0, 8)}...${token.slice(-8)}` : null,
-    });
     if (!token) {
       // Common case: user landed here from login/register/dashboard redirect — URL has no token.
       // The real verification link is only in the email (?token=... or legacy #token=).
@@ -52,7 +46,6 @@ export default function VerifyEmailPage() {
     if (tokenRead.source === 'hash' || tokenRead.source === 'query') {
       scrubTokenFromLocation();
     }
-    console.log('[verify-email] request payload', { token });
     studentApi
       .verifyEmail(token)
       .then(() => {

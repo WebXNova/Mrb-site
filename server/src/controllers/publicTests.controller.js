@@ -11,6 +11,7 @@ import {
   verifyMrbCodeAndCreateAttempt,
 } from '../services/testAttempt.service.js';
 import { getPublishedTestBySlug } from '../services/test.service.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const verifyCodeSchema = z.object({
   studentName: z.string().min(2).max(120).optional().nullable(),
@@ -42,7 +43,7 @@ export const postVerifyTestCode = asyncHandler(async (req, res) => {
     studentUser: req.user,
   });
 
-  res.json({ success: true, data: result });
+  sendSuccess(res, result);
 });
 
 export const getPublicTestMeta = asyncHandler(async (req, res) => {
@@ -51,19 +52,16 @@ export const getPublicTestMeta = asyncHandler(async (req, res) => {
   const test = await getPublishedTestBySlug(slug);
   if (!test) throw new ApiError(404, 'Published test not found');
 
-  res.json({
-    success: true,
-    data: {
-      slug,
-      title: test.title,
-      description: test.description || '',
-      subject: test.subject,
-      durationMinutes: Number(test.durationMinutes || 0),
-      questionCount: Number(test.questions?.length || 0),
-      tags: Array.isArray(test.tags) ? test.tags : [],
-      requiresCode: false,
-      accessMode: 'public',
-    },
+  sendSuccess(res, {
+    slug,
+    title: test.title,
+    description: test.description || '',
+    subject: test.subject,
+    durationMinutes: Number(test.durationMinutes || 0),
+    questionCount: Number(test.questions?.length || 0),
+    tags: Array.isArray(test.tags) ? test.tags : [],
+    requiresCode: false,
+    accessMode: 'public',
   });
 });
 
@@ -76,7 +74,7 @@ export const getStartTest = asyncHandler(async (req, res) => {
   }
   const nextAttemptToken = await consumeAttemptNonce({ slug, attemptId, tokenNonce: attemptPayload.nonce });
   const data = await getAttemptTestForStart({ slug, attemptId });
-  res.json({ success: true, data: { ...data, nextAttemptToken } });
+  sendSuccess(res, { ...data, nextAttemptToken });
 });
 
 export const patchSaveAnswer = asyncHandler(async (req, res) => {
@@ -95,7 +93,7 @@ export const patchSaveAnswer = asyncHandler(async (req, res) => {
     questionId: parsed.data.questionId,
     selectedOption: parsed.data.selectedOption,
   });
-  res.json({ success: true, data: { ...data, nextAttemptToken } });
+  sendSuccess(res, { ...data, nextAttemptToken });
 });
 
 export const postSubmitAttempt = asyncHandler(async (req, res) => {
@@ -107,7 +105,7 @@ export const postSubmitAttempt = asyncHandler(async (req, res) => {
   }
   const nextAttemptToken = await consumeAttemptNonce({ slug, attemptId, tokenNonce: attemptPayload.nonce });
   const data = await submitAttempt({ attemptId });
-  res.json({ success: true, data: { ...data, nextAttemptToken } });
+  sendSuccess(res, { ...data, nextAttemptToken });
 });
 
 export const getTestResult = asyncHandler(async (req, res) => {
@@ -119,5 +117,5 @@ export const getTestResult = asyncHandler(async (req, res) => {
   }
   const nextAttemptToken = await consumeAttemptNonce({ slug, attemptId, tokenNonce: attemptPayload.nonce });
   const data = await getAttemptResult({ slug, attemptId });
-  res.json({ success: true, data: { ...data, nextAttemptToken } });
+  sendSuccess(res, { ...data, nextAttemptToken });
 });

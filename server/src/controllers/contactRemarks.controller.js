@@ -7,6 +7,7 @@ import {
   listContactRemarks,
   markContactRemarkAsRead,
 } from '../services/contactRemark.service.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const contactRemarkSchema = z.object({
   name: z.string().max(120).optional().nullable(),
@@ -19,16 +20,12 @@ export const postContactRemark = asyncHandler(async (req, res) => {
   const parsed = contactRemarkSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid remark payload', parsed.error.flatten());
   const created = await createContactRemark(parsed.data);
-  res.status(201).json({
-    success: true,
-    message: 'Remark received successfully',
-    data: created,
-  });
+  sendSuccess(res, { message: 'Remark received successfully', remark: created }, 201);
 });
 
 export const getAdminContactRemarks = asyncHandler(async (req, res) => {
   const rows = await listContactRemarks();
-  res.json({ success: true, data: rows });
+  sendSuccess(res, rows);
 });
 
 export const putAdminContactRemarkRead = asyncHandler(async (req, res) => {
@@ -43,5 +40,5 @@ export const putAdminContactRemarkRead = asyncHandler(async (req, res) => {
     entityType: 'contact_remark',
     entityId: String(remarkId),
   });
-  res.json({ success: true, data: updated });
+  sendSuccess(res, updated);
 });

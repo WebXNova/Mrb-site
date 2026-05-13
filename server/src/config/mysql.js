@@ -11,6 +11,8 @@ export const mysqlPool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   connectTimeout: Number(process.env.MYSQL_CONNECT_TIMEOUT_MS || 8000),
+  /** Required so `applyMigrations` can run multi-statement `.sql` files; never concatenate untrusted SQL. */
+  multipleStatements: true,
 });
 
 export async function verifyMySqlConnection() {

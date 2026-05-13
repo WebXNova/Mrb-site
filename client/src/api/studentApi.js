@@ -5,6 +5,9 @@ function enrollmentApiErrorMessage(data, httpStatus) {
   if (!data || typeof data !== 'object') {
     return httpStatus ? `Enrollment submission failed (HTTP ${httpStatus}).` : '';
   }
+  if (data.success === false && data.error && typeof data.error === 'object' && typeof data.error.message === 'string') {
+    return data.error.message.trim();
+  }
   if (typeof data.message === 'string' && data.message.trim()) return data.message;
   const fieldErrors = data.details?.fieldErrors;
   if (fieldErrors && typeof fieldErrors === 'object') {

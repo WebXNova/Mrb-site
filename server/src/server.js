@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { verifyMySqlConnection, mysqlPool } from './config/mysql.js';
+import { applyPendingMigrations } from './db/applyMigrations.js';
 import { connectRedis } from './config/redis.js';
 import { startEmailQueueWorker } from './services/emailQueueWorker.service.js';
 import { getEmailProviderStatus } from './services/email.service.js';
@@ -77,6 +78,11 @@ async function startServer() {
     await runSchema();
   } else {
     console.warn('Schema sync skipped (SKIP_SCHEMA_SYNC=true)');
+  }
+  if (String(process.env.SKIP_DB_MIGRATE_ON_START).toLowerCase() !== 'true') {
+    await applyPendingMigrations(mysqlPool);
+  } else {
+    console.warn('DB migrations skipped (SKIP_DB_MIGRATE_ON_START=true)');
   }
   await assertRequiredAuthSchema();
 

@@ -1,13 +1,19 @@
 import { clearAdminAuth, clearStudentAuth, getAdminToken, getStudentToken, setAdminAuth, setStudentAuth } from '../auth/session';
 import { setAuthAuthenticated, setAuthDegraded, setAuthGuest } from '../auth/authStateMachine';
+import {
+  RefreshFailureKind,
+  classifyRefreshHttpFailure,
+  isConfirmedAuthTerminationKind,
+  isTransientRefreshKind,
+} from '../auth/refreshFailureKind';
 import { getRefreshInFlightPromise, runSingleFlightRefresh } from '../auth/refreshManager';
 import { logAuthEvent } from '../observability/authTelemetry';
 import { createHttpError, inferApiFailureMessage } from './apiErrors';
 import { getApiBaseUrl, getRequestTimeoutMs } from './runtimeConfig';
 
 const REFRESH_PATH = '/auth/refresh';
-const TRANSIENT_REFRESH_STATUS = new Set([500, 502, 503, 504]);
-const MAX_TRANSIENT_REFRESH_RETRIES = 1;
+const MAX_TRANSIENT_REFRESH_RETRIES = 2;
+const CSRF_RETRY_DELAY_MS = 80;
 const CSRF_COOKIE_NAME = 'csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
 
@@ -16,17 +22,19 @@ function stripQuery(path) {
 }
 
 export class AuthRefreshError extends Error {
-  constructor(message, { status = null, isNetworkError = false, isTimeout = false } = {}) {
+  constructor(message, { status = null, kind = RefreshFailureKind.UNKNOWN, isNetworkError = false, isTimeout = false } = {}) {
     super(message);
     this.name = 'AuthRefreshError';
     this.status = status;
+    this.kind = kind;
     this.isNetworkError = Boolean(isNetworkError);
     this.isTimeout = Boolean(isTimeout);
   }
 }
 
+/** True when refresh failure means the server rejected the session (logout local display state). */
 export function isRefreshAuthRevokedError(err) {
-  return err instanceof AuthRefreshError && (err.status === 401 || err.status === 403);
+  return err instanceof AuthRefreshError && isConfirmedAuthTerminationKind(err.kind);
 }
 
 function getTokenByScope(scope) {
@@ -45,6 +53,14 @@ function clearAuthByScope(scope) {
   if (scope === 'student') clearStudentAuth();
 }
 
+function degradedReasonForRefreshKind(kind) {
+  if (kind === RefreshFailureKind.CSRF_MISMATCH) return 'refresh-csrf';
+  if (kind === RefreshFailureKind.ORIGIN_POLICY) return 'refresh-origin';
+  if (kind === RefreshFailureKind.FORBIDDEN_POLICY) return 'refresh-policy';
+  if (kind === RefreshFailureKind.MALFORMED_RESPONSE) return 'refresh-malformed';
+  return 'refresh-degraded';
+}
+
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -56,10 +72,10 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 function classifyRefreshFailure(error) {
-  if (isRefreshAuthRevokedError(error)) return 'revoked';
-  if (error instanceof AuthRefreshError && (error.isNetworkError || error.isTimeout)) return 'transient';
-  if (error instanceof AuthRefreshError && TRANSIENT_REFRESH_STATUS.has(error.status)) return 'transient';
-  return 'other';
+  if (!(error instanceof AuthRefreshError)) return 'unknown';
+  if (isConfirmedAuthTerminationKind(error.kind)) return 'revoked';
+  if (isTransientRefreshKind(error.kind)) return 'transient';
+  return 'recoverable';
 }
 
 function readCookie(name) {
@@ -78,43 +94,83 @@ function shouldAttachCsrf(path) {
   return path === REFRESH_PATH || path === '/auth/logout' || path === '/auth/student/logout' || path === '/auth/logout-all';
 }
 
-function shouldRetryRefresh(error, retryCount) {
+function shouldRetryTransientRefresh(error, retryCount) {
   if (retryCount >= MAX_TRANSIENT_REFRESH_RETRIES) return false;
-  return classifyRefreshFailure(error) === 'transient';
+  return error instanceof AuthRefreshError && isTransientRefreshKind(error.kind);
 }
 
 async function postRefresh(scope, timeoutMs) {
   const requestUrl = `${getApiBaseUrl()}${REFRESH_PATH}`;
-  const csrfToken = readCookie(CSRF_COOKIE_NAME);
-  let response;
-  try {
-    response = await fetchWithTimeout(
-      requestUrl,
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-role': scope,
-          ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+
+  for (let csrfAttempt = 0; csrfAttempt < 2; csrfAttempt += 1) {
+    const csrfToken = readCookie(CSRF_COOKIE_NAME);
+    let response;
+    try {
+      response = await fetchWithTimeout(
+        requestUrl,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-role': scope,
+            ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+          },
         },
-      },
-      timeoutMs
-    );
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw new AuthRefreshError('Refresh timeout', { isTimeout: true });
+        timeoutMs
+      );
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new AuthRefreshError('Refresh timeout', { kind: RefreshFailureKind.TIMEOUT, isTimeout: true });
+      }
+      if (error instanceof TypeError) {
+        throw new AuthRefreshError('Refresh network error', { kind: RefreshFailureKind.NETWORK_FAILURE, isNetworkError: true });
+      }
+      throw error;
     }
-    if (error instanceof TypeError) {
-      throw new AuthRefreshError('Refresh network error', { isNetworkError: true });
+
+    const rawBody = await response.text();
+    let data = {};
+    try {
+      data = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      if (response.ok) {
+        throw new AuthRefreshError('Malformed refresh response', {
+          status: response.status,
+          kind: RefreshFailureKind.MALFORMED_RESPONSE,
+        });
+      }
+      data = {};
     }
-    throw error;
+
+    if (response.ok) {
+      const user = data?.data?.user || data?.data?.admin || data?.data?.student || null;
+      if (!user || typeof user !== 'object' || user.id == null) {
+        throw new AuthRefreshError('Malformed refresh response', {
+          status: response.status,
+          kind: RefreshFailureKind.MALFORMED_RESPONSE,
+        });
+      }
+      return { user };
+    }
+
+    const message = inferApiFailureMessage(data, {
+      status: response.status,
+      statusText: response.statusText,
+      rawText: rawBody,
+    });
+    const kind = classifyRefreshHttpFailure(response.status, message);
+
+    if (kind === RefreshFailureKind.CSRF_MISMATCH && csrfAttempt === 0) {
+      logAuthEvent('refresh.csrf_retry', { scope });
+      await new Promise((r) => setTimeout(r, CSRF_RETRY_DELAY_MS));
+      continue;
+    }
+
+    throw new AuthRefreshError(message || 'Session refresh failed', { status: response.status, kind });
   }
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new AuthRefreshError(payload.message || 'Session refresh failed', { status: response.status });
-  }
-  return { user: payload?.data?.user || payload?.data?.admin || payload?.data?.student || null };
+
+  throw new AuthRefreshError('Session refresh failed', { status: 403, kind: RefreshFailureKind.CSRF_MISMATCH });
 }
 
 export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs(), _allowFollowup = true } = {}) {
@@ -130,7 +186,7 @@ export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs(), _
       if (_allowFollowup) {
         return refreshAccessToken(scope, { timeoutMs, _allowFollowup: false });
       }
-      throw new AuthRefreshError('Session refresh failed', { status: 401 });
+      throw new AuthRefreshError('Session refresh failed', { status: 401, kind: RefreshFailureKind.REVOKED_SESSION });
     });
   }
 
@@ -146,22 +202,26 @@ export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs(), _
         return '__cookie_session__';
       } catch (error) {
         const cls = classifyRefreshFailure(error);
+        const kind = error instanceof AuthRefreshError ? error.kind : RefreshFailureKind.UNKNOWN;
         logAuthEvent('refresh.failure', {
           scope,
           classification: cls,
-          status: error?.status || null,
+          kind,
+          status: error?.status ?? null,
           retryCount,
         });
-        if (shouldRetryRefresh(error, retryCount)) {
+        if (shouldRetryTransientRefresh(error, retryCount)) {
           retryCount += 1;
-          logAuthEvent('refresh.retry', { scope, retryCount });
+          logAuthEvent('refresh.retry', { scope, retryCount, kind });
           continue;
         }
-        if (cls === 'revoked') {
+        if (isConfirmedAuthTerminationKind(kind)) {
           clearAuthByScope(scope);
           setAuthGuest('refresh-revoked');
         } else if (cls === 'transient') {
           setAuthDegraded('refresh-transient-failure');
+        } else if (cls === 'recoverable') {
+          setAuthDegraded(degradedReasonForRefreshKind(kind));
         }
         throw error;
       }
@@ -169,7 +229,7 @@ export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs(), _
   }).then(() => {
     const token = getTokenByScope(scope);
     if (token) return token;
-    throw new AuthRefreshError('Session refresh failed', { status: 401 });
+    throw new AuthRefreshError('Session refresh failed', { status: 401, kind: RefreshFailureKind.REVOKED_SESSION });
   });
 }
 
@@ -193,6 +253,16 @@ function buildBodyAndHeaders(body, headers = {}) {
       ...headers,
     },
   };
+}
+
+function refreshFailureUserMessage(kind) {
+  if (kind === RefreshFailureKind.CSRF_MISMATCH) {
+    return 'Security validation failed while refreshing your session. Try reloading the page.';
+  }
+  if (kind === RefreshFailureKind.ORIGIN_POLICY) {
+    return 'This app origin is not authorized to refresh the session. Check deployment configuration.';
+  }
+  return null;
 }
 
 export async function request(path, options = {}) {
@@ -268,13 +338,29 @@ export async function request(path, options = {}) {
         skipRefreshQueue: true,
       });
     } catch (error) {
-      if (isRefreshAuthRevokedError(error)) {
-        throw createHttpError('Session expired', { status: 401, refreshAlreadyTried: true });
+      if (error instanceof AuthRefreshError && isConfirmedAuthTerminationKind(error.kind)) {
+        throw createHttpError('Session expired', {
+          status: 401,
+          refreshAlreadyTried: true,
+          refreshFailureKind: error.kind,
+        });
       }
-      if (error instanceof AuthRefreshError && (error.isNetworkError || error.isTimeout || TRANSIENT_REFRESH_STATUS.has(error.status))) {
-        throw createHttpError('Temporary auth connectivity issue. Please retry.', { status: error.status || 503, refreshAlreadyTried: true });
+      if (error instanceof AuthRefreshError && isTransientRefreshKind(error.kind)) {
+        throw createHttpError('Temporary auth connectivity issue. Please retry.', {
+          status: error.status && error.status >= 500 ? error.status : 503,
+          refreshAlreadyTried: true,
+          refreshFailureKind: error.kind,
+        });
       }
-      throw createHttpError(error?.message || 'Refresh failed', { status: error?.status || 503, refreshAlreadyTried: true });
+      if (error instanceof AuthRefreshError) {
+        const hint = refreshFailureUserMessage(error.kind);
+        throw createHttpError(hint || error.message || 'Refresh failed', {
+          status: error.status && error.status >= 400 ? error.status : 503,
+          refreshAlreadyTried: true,
+          refreshFailureKind: error.kind,
+        });
+      }
+      throw createHttpError(error?.message || 'Refresh failed', { status: 503, refreshAlreadyTried: true });
     }
   }
 
@@ -283,4 +369,3 @@ export async function request(path, options = {}) {
   }
   throw createHttpError(failMsg(), { status: response.status });
 }
-

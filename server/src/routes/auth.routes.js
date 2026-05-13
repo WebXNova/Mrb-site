@@ -11,14 +11,18 @@ import {
   resendVerification,
   verifyEmail,
   studentVerifyMrbEnrollment,
+  issueCsrfSession,
 } from '../controllers/auth.controller.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { rejectAuthHeaderInProduction, requireAdmin } from '../middleware/auth.js';
 import { authRateLimit, resendVerificationRateLimit, signupAbuseRateLimit, verifyEmailRateLimit } from '../middleware/rateLimit.js';
 import { enforcePolicy } from '../auth/securityPolicy.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const router = Router();
 router.use(rejectAuthHeaderInProduction);
+
+router.get('/csrf-session', authRateLimit, issueCsrfSession);
 
 router.post('/login', authRateLimit, adminLogin);
 router.post('/logout', authRateLimit, enforcePolicy({ csrf: true, auth: 'admin' }), adminLogout);
@@ -39,7 +43,7 @@ router.get(
   '/me',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    res.json({ success: true, data: req.user });
+    sendSuccess(res, req.user);
   })
 );
 router.get('/student/me', enforcePolicy({ auth: 'student', maxRisk: 'elevated' }), studentMe);

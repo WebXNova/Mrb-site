@@ -2,21 +2,22 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { dashboardStats, listUsers, updateUserStatus } from '../services/user.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { listRecentActivityLogs, logActivity } from '../services/activityLog.service.js';
+import { sendSuccess } from '../utils/httpEnvelope.js';
 
 export const getDashboard = asyncHandler(async (req, res) => {
   const stats = await dashboardStats();
   const recentLogs = await listRecentActivityLogs(10);
-  res.json({ success: true, data: { stats, recentLogs } });
+  sendSuccess(res, { stats, recentLogs });
 });
 
 export const getUsers = asyncHandler(async (req, res) => {
   const users = await listUsers();
-  res.json({ success: true, data: users });
+  sendSuccess(res, users);
 });
 
 export const getLogs = asyncHandler(async (req, res) => {
   const logs = await listRecentActivityLogs(100);
-  res.json({ success: true, data: logs });
+  sendSuccess(res, logs);
 });
 
 export const putUserStatus = asyncHandler(async (req, res) => {
@@ -39,5 +40,5 @@ export const putUserStatus = asyncHandler(async (req, res) => {
     metadata: { status },
   });
 
-  res.json({ success: true, data: updated });
+  sendSuccess(res, updated);
 });

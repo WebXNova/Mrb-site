@@ -22,54 +22,32 @@ function toLecture(row) {
   };
 }
 
-function normalizeCategory(value) {
-  return String(value || '').trim().replace(/\s+/g, ' ');
+/** @param {{ code: string }} [details] */
+function courseNotFound(details) {
+  return new ApiError(404, 'Course not found', details);
 }
 
-function slugify(value) {
-  return String(value || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-');
-}
-
-async function resolveCourseIdForLecture(payload, fallbackCourseId = null) {
-  if (payload.courseId) {
-    const [courseRows] = await mysqlPool.query(`SELECT id FROM courses WHERE id = ? LIMIT 1`, [payload.courseId]);
-    if (!courseRows[0]) {
-      throw new ApiError(404, 'Selected course not found');
-    }
-    return Number(payload.courseId);
+/** Require explicit `courseId`; verify row exists (no fallback, no auto-create). */
+async function requireExistingCourseId(courseId) {
+  const id = Number(courseId);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
   }
+  const [courseRows] = await mysqlPool.query(`SELECT id FROM courses WHERE id = ? LIMIT 1`, [id]);
+  if (!courseRows[0]) {
+    throw courseNotFound({ code: 'COURSE_NOT_FOUND' });
+  }
+  return id;
+}
 
-  const requestedCategory = normalizeCategory(payload.courseCategory || 'MDCAT') || 'MDCAT';
-
-  const [categoryRows] = await mysqlPool.query(
-    `SELECT id FROM courses WHERE LOWER(TRIM(subject)) = LOWER(TRIM(?)) ORDER BY is_active DESC, created_at DESC LIMIT 1`,
-    [requestedCategory]
-  );
-  if (categoryRows[0]) return Number(categoryRows[0].id);
-
-  if (fallbackCourseId) return Number(fallbackCourseId);
-
-  const autoSlug = `${slugify(`${requestedCategory} auto course`)}-${Date.now()}`;
-  const autoTitle = `${requestedCategory} Auto Course`;
-  const autoDescription = `Auto-generated course for ${requestedCategory} lectures. You can edit this course from the Courses section.`;
-
-  const [result] = await mysqlPool.query(
-    `INSERT INTO courses
-     (slug, title, subject, description, price, original_price, accent_color, level, instructor,
-      lectures_count, tests_count, duration_weeks, rating, students_enrolled, is_active, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [autoSlug, autoTitle, requestedCategory, autoDescription, 0, null, null, null, null, '0', '0', 0, 0, 0, true, null]
-  );
-  return Number(result.insertId);
+export async function countLecturesForCourse(courseId) {
+  const [[row]] = await mysqlPool.query(`SELECT COUNT(*) AS n FROM lectures WHERE course_id = ?`, [courseId]);
+  return Number(row?.n || 0);
 }
 
 export async function listLectures() {
   const [rows] = await mysqlPool.query(
-    `SELECT l.*, c.title AS course_title, c.subject AS course_subject
+    `SELECT l.*, c.title AS course_title
      FROM lectures l
      INNER JOIN courses c ON c.id = l.course_id
      ORDER BY l.created_at DESC`
@@ -77,7 +55,6 @@ export async function listLectures() {
   return rows.map((row) => ({
     ...toLecture(row),
     courseTitle: row.course_title,
-    courseSubject: row.course_subject,
   }));
 }
 
@@ -87,7 +64,7 @@ export async function createLecture(payload) {
     throw new ApiError(422, 'Invalid YouTube URL');
   }
 
-  const resolvedCourseId = await resolveCourseIdForLecture(payload);
+  const resolvedCourseId = await requireExistingCourseId(payload.courseId);
 
   const [result] = await mysqlPool.query(
     `INSERT INTO lectures (course_id, title, youtube_url, youtube_video_id, topic, sort_order, is_active)
@@ -117,7 +94,7 @@ export async function updateLecture(lectureId, payload) {
   if (!existingRows[0]) {
     return null;
   }
-  const resolvedCourseId = await resolveCourseIdForLecture(payload, existingRows[0].course_id);
+  const resolvedCourseId = await requireExistingCourseId(payload.courseId);
 
   await mysqlPool.query(
     `UPDATE lectures

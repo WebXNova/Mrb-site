@@ -1,21 +1,20 @@
 import { mysqlPool } from '../config/mysql.js';
 import { countStudentQuestions } from './studentQuestions.service.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
+import { COURSE_CORE_COLUMNS } from './courseCatalogQueries.service.js';
+import { toCoursePublicDto } from '../dto/course.dto.js';
 
 async function loadCourses() {
-  const [courses] = await mysqlPool.query(
-    `SELECT id, slug, title, subject, description, level, instructor
-     FROM courses
-     WHERE is_active = TRUE
-     ORDER BY created_at DESC`
+  const [rows] = await mysqlPool.query(
+    `SELECT ${COURSE_CORE_COLUMNS} FROM courses WHERE is_active = TRUE ORDER BY created_at DESC`
   );
-  return courses;
+  return (rows || []).map((row) => toCoursePublicDto(row)).filter(Boolean);
 }
 
 async function loadStudentLectures() {
   const [lectures] = await mysqlPool.query(
     `SELECT l.id, l.course_id, l.title, l.youtube_url, l.topic, l.sort_order,
-            c.title AS course_title, c.subject AS course_subject
+            c.title AS course_title
      FROM lectures l
      INNER JOIN courses c ON c.id = l.course_id
      WHERE l.is_active = TRUE AND c.is_active = TRUE
@@ -79,15 +78,7 @@ export async function getStudentDashboard(studentId) {
   const lectures = lecturesRows || [];
 
   return {
-    courses: coursesList.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      title: row.title,
-      subject: row.subject,
-      description: row.description,
-      level: row.level,
-      instructor: row.instructor,
-    })),
+    courses: coursesList,
     lectures: lectures.map((row) => ({
       id: row.id,
       courseId: row.course_id,
@@ -95,7 +86,6 @@ export async function getStudentDashboard(studentId) {
       title: row.title,
       youtubeUrl: row.youtube_url,
       topic: row.topic,
-      courseSubject: row.course_subject,
       sortOrder: row.sort_order,
     })),
     tests: tests.map((row) => ({
