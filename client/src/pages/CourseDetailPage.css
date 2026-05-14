@@ -1,9 +1,8 @@
 .course-detail-hero {
-  padding-block: var(--space-8) var(--space-12);
-  background: var(--color-bg-alt);
-  border-bottom: 1px solid var(--color-ink-100);
+  padding-block: var(--space-6) var(--space-10);
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ink-100) 70%, transparent);
 }
-
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -75,12 +74,12 @@
 }
 
 .meta-item__icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-md);
-  background: var(--color-bg);
-  border: 1px solid var(--color-ink-100);
-  color: var(--color-ink-700);
+  background: color-mix(in srgb, var(--color-bg-alt) 90%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 70%, transparent);
+  color: var(--color-ink-600);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -94,8 +93,8 @@
 .meta-item__value {
   display: block;
   font-family: var(--font-display);
-  font-weight: var(--fw-bold);
-  font-size: var(--fs-18);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-16);
   color: var(--color-ink-900);
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -112,16 +111,15 @@
   position: sticky;
   top: 96px;
   background: var(--color-surface);
-  border: 1px solid var(--color-ink-100);
-  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 65%, transparent);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
-
 .course-detail-hero__card-cover {
   position: relative;
   aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, var(--cover-accent), color-mix(in srgb, var(--cover-accent) 65%, #1f2937));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--cover-accent) 88%, #fff), var(--cover-accent));
   padding: var(--space-5);
   isolation: isolate;
 }
@@ -140,11 +138,11 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 32px 32px;
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
   z-index: -2;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent);
 }
 
 .course-detail-hero__card-subject {
@@ -162,10 +160,10 @@
 }
 
 .course-detail-hero__card-body {
-  padding: var(--space-6);
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .course-detail-hero__price {
@@ -194,6 +192,30 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.course-detail-hero__card-pricing {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-ink-100);
+}
+
+.course-detail-hero__card-pricing-current {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-20);
+  color: var(--color-ink-900);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.course-detail-hero__card-pricing-original {
+  font-size: var(--fs-14);
+  color: var(--color-ink-400);
+  text-decoration: line-through;
 }
 
 .course-detail-hero__card-meta {
@@ -261,8 +283,8 @@
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: var(--color-bg-alt);
-  border: 1px solid var(--color-ink-100);
+  background: color-mix(in srgb, var(--color-bg-alt) 55%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 55%, transparent);
   border-radius: var(--radius-md);
   font-size: var(--fs-15);
   color: var(--color-ink-700);
@@ -300,14 +322,15 @@
 
 .how-list__step {
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  background: var(--color-ink-900);
-  color: #ffffff;
+  width: 40px;
+  height: 40px;
+  background: var(--color-surface);
+  color: var(--color-ink-800);
+  border: 1px solid var(--color-ink-100);
   border-radius: var(--radius-md);
   font-family: var(--font-display);
-  font-weight: var(--fw-bold);
-  font-size: var(--fs-18);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-16);
   display: grid;
   place-items: center;
 }
@@ -323,4 +346,67 @@
   gap: var(--space-4);
   align-items: center;
   padding-block: var(--space-16);
+}
+
+.course-batches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.course-batch-card {
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  background: var(--color-surface);
+}
+
+.course-batch-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.course-batch-card__title {
+  font-size: var(--fs-18);
+  font-weight: var(--fw-semibold);
+  margin: 0;
+}
+
+.course-batch-card__meta {
+  font-size: var(--fs-14);
+  color: var(--color-ink-600);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.course-detail-content .batch-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: var(--fs-12, 0.75rem);
+  font-weight: var(--fw-semibold, 600);
+  text-transform: capitalize;
+}
+
+.course-detail-content .batch-badge--live {
+  background: rgba(34, 197, 94, 0.15);
+  color: rgb(22, 101, 52);
+}
+
+.course-detail-content .batch-badge--pending {
+  background: rgba(99, 102, 241, 0.12);
+  color: rgb(67, 56, 202);
+}
+
+.course-detail-content .batch-badge--done {
+  background: rgba(59, 130, 246, 0.12);
+  color: rgb(30, 64, 175);
+}
+
+.course-detail-content .batch-badge--muted {
+  background: rgba(107, 114, 128, 0.15);
+  color: rgb(55, 65, 81);
 }

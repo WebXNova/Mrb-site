@@ -1,5 +1,9 @@
 /**
  * Regression: canonical course API DTO shapes (snake_case, no forbidden fields).
+ *
+ * The public/admin response shapes include a nested `pricing` object sourced
+ * from joined `cp_*` columns. Top-level legacy keys (slug, price, subject, ...)
+ * must never appear on the response.
  */
 import assert from 'assert';
 import {
@@ -31,11 +35,14 @@ const PUBLIC_KEYS = [
   'short_description',
   'level',
   'thumbnail_url',
+  'pricing',
   'created_at',
   'updated_at',
 ];
 
 const ADMIN_EXTRA = ['is_active', 'created_by'];
+
+const PRICING_KEYS = ['type', 'currency', 'price_amount', 'original_price_amount'];
 
 function assertNoForbidden(course) {
   for (const k of FORBIDDEN) {
@@ -52,6 +59,7 @@ function assertIsoString(s, label) {
   assert.ok(/^\d{4}-\d{2}-\d{2}T/.test(s), `${label} ISO-like`);
 }
 
+// Row with a joined effective pricing row and many legacy fields that must stay invisible.
 const rowFromDb = {
   id: 1,
   slug: 'legacy-slug',
@@ -71,6 +79,11 @@ const rowFromDb = {
   created_by: 99,
   created_at: new Date('2026-01-01T00:00:00.000Z'),
   updated_at: new Date('2026-01-02T12:30:00.000Z'),
+  cp_id: 42,
+  cp_price_amount: 2500,
+  cp_original_price_amount: 5000,
+  cp_currency_code: 'PKR',
+  cp_pricing_type: 'one_time',
 };
 
 const n = normalizeCourseRow(rowFromDb);
@@ -89,6 +102,27 @@ assertIsoString(pub.updated_at, 'updated_at');
 assert.strictEqual(pub.is_active, undefined);
 assert.strictEqual(pub.created_by, undefined);
 
+// Nested pricing must exist with the exact contract shape and no extras.
+assert.ok(pub.pricing, 'pricing object must be present');
+assert.deepStrictEqual(Object.keys(pub.pricing).sort(), [...PRICING_KEYS].sort());
+assert.strictEqual(pub.pricing.type, 'one_time');
+assert.strictEqual(pub.pricing.currency, 'PKR');
+assert.strictEqual(pub.pricing.price_amount, 2500);
+assert.strictEqual(pub.pricing.original_price_amount, 5000);
+
+// Row without joined pricing → pricing should be `null` (explicit, not omitted).
+const rowNoPricing = { ...rowFromDb, cp_id: null, cp_price_amount: null, cp_original_price_amount: null,
+  cp_currency_code: null, cp_pricing_type: null };
+const pubNoPricing = toCoursePublicApi(normalizeCourseRow(rowNoPricing));
+assert.strictEqual(pubNoPricing.pricing, null);
+
+// Free pricing: amount 0, original ignored even if joined as a stale higher value.
+const rowFree = { ...rowFromDb, cp_price_amount: 0, cp_original_price_amount: 0, cp_pricing_type: 'free' };
+const pubFree = toCoursePublicApi(normalizeCourseRow(rowFree));
+assert.strictEqual(pubFree.pricing.type, 'free');
+assert.strictEqual(pubFree.pricing.price_amount, 0);
+assert.strictEqual(pubFree.pricing.original_price_amount, null);
+
 const rowWithShort = { ...rowFromDb, short_description: '  Custom summary  ' };
 const pub2 = toCoursePublicApi(normalizeCourseRow(rowWithShort));
 assert.strictEqual(pub2.short_description, 'Custom summary');
@@ -99,5 +133,7 @@ assertKeySet(admin, [...PUBLIC_KEYS, ...ADMIN_EXTRA]);
 assertNoForbidden(admin);
 assert.strictEqual(admin.is_active, true);
 assert.strictEqual(admin.created_by, 99);
+assert.ok(admin.pricing, 'admin pricing object must be present');
+assert.strictEqual(admin.pricing.price_amount, 2500);
 
 console.log('verify-course-dto-shape: OK');

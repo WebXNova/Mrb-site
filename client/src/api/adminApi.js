@@ -16,8 +16,13 @@ export const adminApi = {
 
   courses: (token) => http.get('/courses/admin', { token }),
   createCourse: (token, payload) => http.post('/admin/courses', payload, { token }),
+  createCourseWizard: (token, payload) => http.post('/admin/courses/wizard', payload, { token }),
   updateCourse: (token, courseId, payload) =>
     http.put(`/admin/courses/${courseId}`, payload, { token }),
+  coursePricing: (token, courseId) =>
+    http.get(`/admin/courses/${courseId}/pricing`, { token }),
+  updateCoursePricing: (token, courseId, payload) =>
+    http.put(`/admin/courses/${courseId}/pricing`, payload, { token }),
   deleteCourse: (token, courseId, { purge = false, forceCascade = false } = {}) => {
     const sp = new URLSearchParams();
     if (purge) sp.set('purge', 'true');
@@ -37,13 +42,39 @@ export const adminApi = {
     http.put(`/admin/courses/${courseId}/subjects/${subjectId}`, payload, { token }),
   deleteSubject: (token, courseId, subjectId) =>
     http.delete(`/admin/courses/${courseId}/subjects/${subjectId}`, { token }),
-  uploadCourseImage: async (token, file) => {
+  reorderSubjects: (token, courseId, orderedSubjectIds) =>
+    http.put(`/admin/courses/${courseId}/subjects/reorder`, { orderedSubjectIds }, { token }),
+
+  courseBatches: (token, courseId) => http.get(`/admin/courses/${courseId}/batches`, { token }),
+  createCourseBatch: (token, courseId, payload) =>
+    http.post(`/admin/courses/${courseId}/batches`, payload, { token }),
+  updateCourseBatch: (token, batchId, payload) =>
+    http.put(`/admin/batches/${batchId}`, payload, { token }),
+  archiveCourseBatch: (token, batchId) =>
+    http.post(`/admin/batches/${batchId}/archive`, {}, { token }),
+  reactivateCourseBatch: (token, batchId) =>
+    http.post(`/admin/batches/${batchId}/reactivate`, {}, { token }),
+  uploadCourseImage: async (_token, file) => {
+    const CSRF_COOKIE_NAME = 'csrf_token';
+    const CSRF_HEADER_NAME = 'x-csrf-token';
+    function readCookie(name) {
+      if (typeof document === 'undefined') return '';
+      const prefix = `${encodeURIComponent(name)}=`;
+      const parts = document.cookie ? document.cookie.split('; ') : [];
+      for (const part of parts) {
+        if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
+      }
+      return '';
+    }
+    const csrfToken = readCookie(CSRF_COOKIE_NAME);
     const formData = new FormData();
     formData.append('image', file);
     const response = await fetch(`${getApiBaseUrl()}/admin/courses/upload-image`, {
       method: 'POST',
       credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: {
+        ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+      },
       body: formData,
     });
     const rawText = await response.text();

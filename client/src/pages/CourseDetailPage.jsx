@@ -4,7 +4,8 @@ import PageLayout from '../components/layout/PageLayout';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { catalogApi } from '../api/catalogApi';
-import { mapCatalogCourseToDetailProps } from '../course/coursePresentation';
+import { buildPricingDisplay, mapCatalogCourseToDetailProps } from '../course/coursePresentation';
+import { batchStatusBadgeClass, batchStatusLabel, enrollmentStatusSummary, formatSeatLine } from '../course/batchPresentation';
 import './CourseDetailPage.css';
 
 function levelBadgeTone(level) {
@@ -13,9 +14,14 @@ function levelBadgeTone(level) {
   return 'neutral';
 }
 
+function formatAmount(amount, currency) {
+  return `${currency || 'PKR'} ${Number(amount || 0).toLocaleString('en-PK')}`;
+}
+
 export default function CourseDetailPage() {
   const { id: routeId } = useParams();
   const [course, setCourse] = useState(null);
+  const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,8 +40,16 @@ export default function CourseDetailPage() {
       try {
         const res = await catalogApi.getCourse(courseId);
         const raw = res?.data;
+        let batchList = [];
+        try {
+          const br = await catalogApi.listCourseBatches(courseId);
+          batchList = Array.isArray(br?.data) ? br.data : [];
+        } catch {
+          batchList = [];
+        }
         if (!cancelled) {
           setCourse(raw ? mapCatalogCourseToDetailProps(raw) : null);
+          setBatches(batchList);
         }
       } catch (e) {
         if (!cancelled) {
@@ -83,6 +97,7 @@ export default function CourseDetailPage() {
 
   const showCoverImage = Boolean(course.thumbnail_url);
   const thumbnailUrl = course.thumbnail_url || '';
+  const pricingDisplay = buildPricingDisplay(course.pricing);
 
   return (
     <PageLayout>
@@ -124,6 +139,24 @@ export default function CourseDetailPage() {
               </div>
 
               <div className="course-detail-hero__card-body">
+                {pricingDisplay ? (
+                  <div className="course-detail-hero__card-pricing">
+                    {pricingDisplay.isFree ? (
+                      <span className="course-detail-hero__card-pricing-current">Free</span>
+                    ) : (
+                      <>
+                        <span className="course-detail-hero__card-pricing-current">
+                          {formatAmount(pricingDisplay.amount, pricingDisplay.currency)}
+                        </span>
+                        {pricingDisplay.original ? (
+                          <span className="course-detail-hero__card-pricing-original">
+                            {formatAmount(pricingDisplay.original, pricingDisplay.currency)}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                ) : null}
                 <div className="course-detail-hero__card-actions">
                   <Button as={Link} to="/enroll" variant="accent" size="lg" fullWidth>
                     Enroll now
@@ -145,6 +178,46 @@ export default function CourseDetailPage() {
             <p className="body-md" style={{ whiteSpace: 'pre-wrap' }}>
               {course.description || course.summary}
             </p>
+          </div>
+
+          <div className="course-detail-content__block">
+            <h2 className="heading-2">Upcoming cohorts</h2>
+            {batches.length ? (
+              <div className="course-batches">
+                {batches.map((b) => (
+                  <article key={b.id} className="course-batch-card">
+                    <div className="course-batch-card__head">
+                      <h3 className="course-batch-card__title">{b.title}</h3>
+                      <span className={batchStatusBadgeClass(b.status)}>{batchStatusLabel(b.status)}</span>
+                      <code style={{ fontSize: '0.85rem', color: 'var(--color-ink-500)' }}>{b.code}</code>
+                    </div>
+                    <div className="course-batch-card__meta">
+                      <p className="body-md" style={{ margin: 0 }}>
+                        <strong>Dates:</strong> {b.start_date} → {b.end_date}
+                      </p>
+                      <p className="body-md" style={{ margin: 0 }}>
+                        <strong>Seats:</strong> {formatSeatLine(b)}
+                      </p>
+                      <p className="body-md" style={{ margin: 0 }}>
+                        <strong>Enrollment:</strong> {enrollmentStatusSummary(b)}
+                      </p>
+                      {b.instructor_name ? (
+                        <p className="body-md" style={{ margin: 0 }}>
+                          <strong>Instructor:</strong> {b.instructor_name}
+                        </p>
+                      ) : null}
+                      {b.schedule_label ? (
+                        <p className="body-md" style={{ margin: 0 }}>
+                          <strong>Schedule:</strong> {b.schedule_label} ({b.timezone})
+                        </p>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="body-md">No open cohorts are listed for this course right now.</p>
+            )}
           </div>
 
           <div className="course-detail-content__block">

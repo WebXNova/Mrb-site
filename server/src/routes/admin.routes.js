@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { enforcePolicy } from '../auth/securityPolicy.js';
+import { rejectAuthHeaderInProduction } from '../middleware/auth.js';
+import { requireCsrf } from '../middleware/csrf.js';
 import {
   getDashboard,
   getLogs,
@@ -8,6 +10,8 @@ import {
 } from '../controllers/admin.controller.js';
 import { postCourse, putCourse, removeCourse } from '../controllers/courses.controller.js';
 import { postCourseImage } from '../controllers/courseImageUpload.controller.js';
+import { postCourseWizard } from '../controllers/courseWizard.controller.js';
+import { getCoursePricing, putCoursePricing } from '../controllers/coursePricing.controller.js';
 import {
   getLectures,
   postLecture,
@@ -46,7 +50,11 @@ import {
   getSubjects,
   postSubject,
   putSubject,
+  putSubjectsReorder,
 } from '../controllers/subjects.controller.js';
+import courseBatchAdminRoutes from './courseBatch.routes.js';
+import { courseImageUploadRateLimit } from '../middleware/courseImageUploadRateLimit.js';
+import { courseWizardWriteRateLimit } from '../middleware/courseWizardWriteRateLimit.js';
 
 const router = Router();
 
@@ -58,16 +66,29 @@ router.get('/logs', getLogs);
 router.get('/users', getUsers);
 router.put('/users/:userId/status', putUserStatus);
 
+router.post('/courses/wizard', rejectAuthHeaderInProduction, courseWizardWriteRateLimit, requireCsrf, postCourseWizard);
 router.post('/courses', postCourse);
-router.post('/courses/upload-image', postCourseImage);
+router.post(
+  '/courses/upload-image',
+  rejectAuthHeaderInProduction,
+  courseImageUploadRateLimit,
+  requireCsrf,
+  postCourseImage
+);
 router.put('/courses/:courseId', putCourse);
 router.delete('/courses/:courseId', removeCourse);
 
+router.get('/courses/:courseId/pricing', getCoursePricing);
+router.put('/courses/:courseId/pricing', putCoursePricing);
+
 router.get('/courses/:courseId/subjects', getSubjects);
 router.post('/courses/:courseId/subjects', postSubject);
+router.put('/courses/:courseId/subjects/reorder', putSubjectsReorder);
 router.get('/courses/:courseId/subjects/:subjectId', getSubject);
 router.put('/courses/:courseId/subjects/:subjectId', putSubject);
 router.delete('/courses/:courseId/subjects/:subjectId', deleteSubject);
+
+router.use(courseBatchAdminRoutes);
 
 router.get('/lectures', getLectures);
 router.post('/lectures', postLecture);

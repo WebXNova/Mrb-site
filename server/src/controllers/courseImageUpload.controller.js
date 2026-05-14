@@ -5,11 +5,12 @@ import multer from 'multer';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
+import { detectImageKindFromFile } from '../utils/imageMagicBytes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(__dirname, '../../uploads/course-covers');
 
-const allowedExt = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const allowedExt = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {
@@ -29,8 +30,8 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
-    if (!/^(image\/(jpeg|png|gif|webp))$/i.test(file.mimetype)) {
-      cb(new Error('Only JPEG, PNG, GIF, or WebP images are allowed'));
+    if (!/^(image\/(jpeg|png|webp))$/i.test(file.mimetype)) {
+      cb(new Error('Only JPEG, PNG, or WebP images are allowed'));
       return;
     }
     cb(null, true);
@@ -57,7 +58,16 @@ export const postCourseImage = [
     if (!req.file) {
       throw new ApiError(400, 'No image file uploaded');
     }
+    const kind = detectImageKindFromFile(req.file.path);
+    if (!kind) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(400, 'File content is not a supported image format');
+    }
     const url = `/api/uploads/course-covers/${req.file.filename}`;
-    sendSuccess(res, { url });
+    sendSuccess(res, { url, kind });
   }),
 ];

@@ -1,13 +1,35 @@
 /**
  * Maps canonical course API objects (snake_case) onto list/detail UI props.
- * Public contract: id, title, description, short_description, level, thumbnail_url, timestamps.
+ * Public contract: id, title, description, short_description, level, thumbnail_url, pricing, timestamps.
  */
+
+const SUPPORTED_PRICING_TYPES = new Set(['free', 'one_time']);
 
 function truncateSummary(text, maxLen = 220) {
   const t = String(text || '').trim();
   if (!t) return '';
   if (t.length <= maxLen) return t;
   return `${t.slice(0, maxLen - 1).trim()}…`;
+}
+
+/** Pull the nested pricing object off a catalog API course, normalizing shape. */
+export function extractCoursePricing(course) {
+  const raw = course && typeof course === 'object' ? course.pricing : null;
+  if (!raw || typeof raw !== 'object') return null;
+  const rawType = typeof raw.type === 'string' ? raw.type.toLowerCase() : '';
+  const type = SUPPORTED_PRICING_TYPES.has(rawType) ? rawType : 'one_time';
+  const amount = Number(raw.price_amount);
+  const original = raw.original_price_amount == null ? null : Number(raw.original_price_amount);
+  const currency = typeof raw.currency === 'string' && raw.currency ? raw.currency.toUpperCase() : 'PKR';
+  return {
+    type,
+    currency,
+    price_amount: Number.isFinite(amount) ? Math.max(0, Math.trunc(amount)) : 0,
+    original_price_amount:
+      original != null && Number.isFinite(original) && original >= (Number.isFinite(amount) ? amount : 0)
+        ? Math.trunc(original)
+        : null,
+  };
 }
 
 /** @param {Record<string, unknown>} course from `/api/courses/public` or `/api/courses/:id` */
@@ -32,6 +54,7 @@ export function mapCatalogCourseToCardProps(course) {
     summary: truncateSummary(summarySource, 260),
     thumbnail_url: thumbnailUrl,
     level,
+    pricing: extractCoursePricing(course),
   };
 }
 
@@ -49,6 +72,25 @@ export function mapCatalogCourseToDetailProps(course) {
     ...base,
     summary: truncateSummary(summarySource, 2000),
     description,
+  };
+}
+
+/**
+ * Display-only helper: builds a small `{ amount, original, discount, isFree, currency }`
+ * struct from a pricing object. The discount is computed at render time only and is
+ * never persisted — UI must not store derived values as if they were business truth.
+ */
+export function buildPricingDisplay(pricing) {
+  if (!pricing) return null;
+  const amount = Number.isFinite(pricing.price_amount) ? pricing.price_amount : 0;
+  const original = pricing.original_price_amount;
+  const hasOriginal = Number.isFinite(original) && original > amount;
+  return {
+    isFree: pricing.type === 'free' || amount === 0,
+    currency: pricing.currency || 'PKR',
+    amount,
+    original: hasOriginal ? original : null,
+    discount: hasOriginal ? original - amount : 0,
   };
 }
 

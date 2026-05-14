@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Badge from './Badge';
 import Button from './Button';
+import { buildPricingDisplay } from '../../course/coursePresentation';
 import './CourseCard.css';
 
 function levelBadgeTone(level) {
@@ -11,9 +12,33 @@ function levelBadgeTone(level) {
   return 'neutral';
 }
 
+function formatAmount(amount, currency) {
+  return `${currency || 'PKR'} ${Number(amount || 0).toLocaleString('en-PK')}`;
+}
+
+function CoursePricingTag({ display }) {
+  if (!display) return null;
+  if (display.isFree) {
+    return (
+      <div className="course-card__price">
+        <span className="course-card__price-current">Free</span>
+      </div>
+    );
+  }
+  return (
+    <div className="course-card__price">
+      <span className="course-card__price-current">{formatAmount(display.amount, display.currency)}</span>
+      {display.original ? (
+        <span className="course-card__price-original">{formatAmount(display.original, display.currency)}</span>
+      ) : null}
+    </div>
+  );
+}
+
 export default function CourseCard({ course }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const { id, title, summary, thumbnail_url: thumbnailUrl, level } = course;
+  const { id, title, summary, thumbnail_url: thumbnailUrl, level, pricing } = course;
+  const pricingDisplay = buildPricingDisplay(pricing);
 
   const showCoverImage = Boolean(thumbnailUrl) && !imageFailed;
   const coursePath = `/courses/${encodeURIComponent(String(id))}`;
@@ -48,6 +73,7 @@ export default function CourseCard({ course }) {
               <span className="badge--dot" />
               {level}
             </Badge>
+            <CoursePricingTag display={pricingDisplay} />
           </div>
 
           <h3 className="course-card__title">{title}</h3>

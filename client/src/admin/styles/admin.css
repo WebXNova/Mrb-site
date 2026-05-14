@@ -665,6 +665,35 @@
   margin-top: 1rem;
 }
 
+.batch-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: var(--fs-12, 0.75rem);
+  font-weight: var(--fw-semibold, 600);
+  text-transform: capitalize;
+}
+
+.batch-badge--live {
+  background: rgba(34, 197, 94, 0.15);
+  color: rgb(22, 101, 52);
+}
+
+.batch-badge--pending {
+  background: rgba(99, 102, 241, 0.12);
+  color: rgb(67, 56, 202);
+}
+
+.batch-badge--done {
+  background: rgba(59, 130, 246, 0.12);
+  color: rgb(30, 64, 175);
+}
+
+.batch-badge--muted {
+  background: rgba(107, 114, 128, 0.15);
+  color: rgb(55, 65, 81);
+}
+
 @media (max-width: 720px) {
   .admin-filter-field--grow {
     grid-column: span 1;

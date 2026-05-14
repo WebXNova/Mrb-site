@@ -90,8 +90,14 @@ function readCookie(name) {
   return '';
 }
 
-function shouldAttachCsrf(path) {
-  return path === REFRESH_PATH || path === '/auth/logout' || path === '/auth/student/logout' || path === '/auth/logout-all';
+function shouldAttachCsrf(path, method = 'GET') {
+  const m = String(method || 'GET').toUpperCase();
+  const p = stripQuery(path);
+  if (p === REFRESH_PATH || p === '/auth/logout' || p === '/auth/student/logout' || p === '/auth/logout-all') {
+    return true;
+  }
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(m) && p.startsWith('/admin/')) return true;
+  return false;
 }
 
 function shouldRetryTransientRefresh(error, retryCount) {
@@ -284,7 +290,7 @@ export async function request(path, options = {}) {
   void token;
   void getTokenByScope(authScope);
   const prepared = buildBodyAndHeaders(body, headers);
-  const csrfToken = shouldAttachCsrf(path) ? readCookie(CSRF_COOKIE_NAME) : '';
+  const csrfToken = shouldAttachCsrf(path, method) ? readCookie(CSRF_COOKIE_NAME) : '';
   const requestUrl = `${getApiBaseUrl()}${path}`;
 
   let response;

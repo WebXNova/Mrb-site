@@ -7,9 +7,11 @@ import {
   deactivateSubject,
   getSubjectForCourse,
   listSubjectsForCourse,
+  reorderSubjects,
   updateSubject,
 } from '../services/subject.service.js';
 import { subjectCreateBodySchema, subjectUpdateBodySchema } from '../validators/subjectWrite.schema.js';
+import { subjectReorderBodySchema } from '../validators/subjectReorder.schema.js';
 
 function invalidCourseId() {
   return new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
@@ -81,20 +83,25 @@ export const putSubject = asyncHandler(async (req, res) => {
     throw new ApiError(422, 'Invalid subject payload', parsed.error.flatten());
   }
   const patch = parsed.data;
-  if (Object.keys(patch).length === 0) {
+  const mutatingKeys = Object.keys(patch).filter((k) => k !== 'expectedUpdatedAt');
+  if (mutatingKeys.length === 0) {
     throw new ApiError(422, 'No fields to update', { code: 'EMPTY_UPDATE' });
   }
-  const onlyOrderChanged = patch.orderIndex !== undefined && Object.keys(patch).length === 1;
-  const updated = await updateSubject(courseId, subjectId, patch);
+  const onlyOrderChanged = mutatingKeys.length === 1 && mutatingKeys[0] === 'orderIndex';
+  const { dto, activated, deactivated } = await updateSubject(courseId, subjectId, patch);
+  let action = 'admin.subject.update';
+  if (onlyOrderChanged) action = 'admin.subject.reorder';
+  else if (activated) action = 'admin.subject.activate';
+  else if (deactivated) action = 'admin.subject.deactivate';
   await logActivity({
     userId: req.user?.id,
     role: req.user?.role,
-    action: onlyOrderChanged ? 'admin.subject.reorder' : 'admin.subject.update',
+    action,
     entityType: 'subject',
     entityId: String(subjectId),
     metadata: { courseId },
   });
-  sendSuccess(res, updated);
+  sendSuccess(res, dto);
 });
 
 export const deleteSubject = asyncHandler(async (req, res) => {
@@ -112,4 +119,23 @@ export const deleteSubject = asyncHandler(async (req, res) => {
     metadata: { courseId },
   });
   sendSuccess(res, updated);
+});
+
+export const putSubjectsReorder = asyncHandler(async (req, res) => {
+  const courseId = parseCourseId(req);
+  if (!courseId) throw invalidCourseId();
+  const parsed = subjectReorderBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new ApiError(422, 'Invalid reorder payload', parsed.error.flatten());
+  }
+  const ordered = await reorderSubjects(courseId, parsed.data.orderedSubjectIds);
+  await logActivity({
+    userId: req.user?.id,
+    role: req.user?.role,
+    action: 'admin.subject.reorder_batch',
+    entityType: 'course',
+    entityId: String(courseId),
+    metadata: { courseId, count: ordered.length },
+  });
+  sendSuccess(res, ordered);
 });

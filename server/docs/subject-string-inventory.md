@@ -18,7 +18,8 @@ This document classifies uses of the word **subject** and related query params. 
 | Location | Pattern | Action |
 |----------|---------|--------|
 | `Footer.jsx` | Was `?subject=mdcat` | **Fixed** → `?tab=mdcat` (aligned with `CoursesPage`). |
-| `adminApi.js` | `GET/POST/PUT/DELETE` `/admin/courses/:courseId/subjects` | **New** relational subject admin API (camelCase body fields: `orderIndex`, `isActive`). |
+| `adminApi.js` | `GET/POST/PUT/DELETE` `/admin/courses/:courseId/subjects` | **New** relational subject admin API (camelCase body fields: `orderIndex`, `isActive`, optional `expectedUpdatedAt` on PUT). |
+| `adminApi.js` | `PUT /admin/courses/:courseId/subjects/reorder` | **New** batch reorder; payload `{ orderedSubjectIds: number[] }` covers all course subjects including inactive. |
 | `adminApi.js` | `?subject=` for student questions | **Keep**; optional rename to `queue` in a later PR. |
 
 ## Server modules (representative)

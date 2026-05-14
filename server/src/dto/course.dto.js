@@ -1,7 +1,14 @@
 /**
  * Course API serializers — DB Row → normalizeCourseRow → toCoursePublicApi | toCourseAdminApi → HTTP JSON (snake_case).
  * Legacy DB columns are ignored in normalizeCourseRow and never appear in API JSON.
+ *
+ * Catalog rows are read with a LEFT JOIN on `course_pricing` and carry prefixed
+ * `cp_*` columns. The DTO extracts those into a nested `pricing` object via
+ * `toCoursePricingPublicDto`; rows without an effective pricing row expose
+ * `pricing: null` so the API contract stays stable for clients.
  */
+
+import { toCoursePricingPublicDto } from './coursePricing.dto.js';
 
 const LEVEL_ALLOWED = ['beginner', 'intermediate', 'advanced'];
 
@@ -59,6 +66,22 @@ function resolveShortDescription(row) {
 }
 
 /**
+ * Resolve nested `pricing` from joined `cp_*` columns. Returns null when the
+ * catalog query did not match any effective pricing row.
+ *
+ * @param {Record<string, unknown>} row
+ */
+function resolvePricing(row) {
+  if (row.cp_id == null) return null;
+  return toCoursePricingPublicDto({
+    pricing_type: row.cp_pricing_type,
+    price_amount: row.cp_price_amount,
+    original_price_amount: row.cp_original_price_amount,
+    currency_code: row.cp_currency_code,
+  });
+}
+
+/**
  * Parse a courses table row from minimal SELECT (or compatible superset — forbidden keys ignored).
  *
  * @param {Record<string, unknown>|null|undefined} row
@@ -76,6 +99,7 @@ export function normalizeCourseRow(row) {
     thumbnail_url: resolveThumbnailUrl(row),
     is_active: row.is_active !== undefined && row.is_active !== null ? !!row.is_active : true,
     created_by: Number.isFinite(createdByRaw) ? createdByRaw : null,
+    pricing: resolvePricing(row),
     created_at: row.created_at ?? null,
     updated_at: row.updated_at ?? null,
   };
@@ -94,6 +118,7 @@ export function toCoursePublicApi(n) {
     short_description: n.short_description,
     level: n.level,
     thumbnail_url: n.thumbnail_url,
+    pricing: n.pricing ?? null,
     created_at: toIsoTimestamp(n.created_at) ?? '',
     updated_at: toIsoTimestamp(n.updated_at) ?? '',
   };

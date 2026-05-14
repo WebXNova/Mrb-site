@@ -16,6 +16,16 @@ const descriptionSchema = z
   .nullable()
   .transform((v) => (v == null || String(v).trim() === '' ? null : String(v).trim()));
 
+/**
+ * Minimal subject row embedded in `POST /admin/courses` (course + pricing +
+ * initial curriculum in one transaction). Order is assigned server-side by
+ * array index.
+ */
+export const subjectSeedForCourseCreateSchema = z.object({
+  title: z.string().trim().min(1).max(180),
+  description: descriptionSchema,
+});
+
 export const subjectCreateBodySchema = z.preprocess(
   preprocessSubjectBody,
   z
@@ -35,6 +45,13 @@ export const subjectUpdateBodySchema = z.preprocess(
       description: descriptionSchema,
       orderIndex: z.number().int().min(0).max(1_000_000).optional(),
       isActive: z.boolean().optional(),
+      // Optional optimistic-concurrency guard: ISO-8601 timestamp the client last saw.
+      expectedUpdatedAt: z
+        .string()
+        .trim()
+        .min(1)
+        .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'expectedUpdatedAt must be ISO-8601' })
+        .optional(),
     })
     .strict()
 );

@@ -13,7 +13,9 @@ This describes **aggregates** and allowed dependencies for the LMS. It is design
 
 - **Intent:** Course-scoped curriculum container (`subjects.course_id` → `courses.id`). **Not** a global subject catalog.
 - **Table:** `subjects` (`id`, `course_id`, `title`, `description`, `order_index`, `is_active`, timestamps). Ownership: exactly one course per row.
-- **API:** Admin-only CRUD under `/api/admin/courses/:courseId/subjects` (`subjects.controller.js`). **No** auto-inserts, **no** inference from legacy strings, **no** public or student routes in the foundation phase.
+- **API:** Admin-only CRUD under `/api/admin/courses/:courseId/subjects` (`subjects.controller.js`), plus batch reorder at `PUT /api/admin/courses/:courseId/subjects/reorder`. **No** auto-inserts, **no** inference from legacy strings, **no** public or student routes in the foundation phase.
+- **Ordering contract:** Deterministic, contiguous `order_index` per course, enforced transactionally on reorder. Full algorithm and inactive-inclusion policy are documented in `data-integrity-rules.md` (Subject ordering contract).
+- **Soft lifecycle only:** `DELETE` is a soft deactivation (`is_active = false`); reactivation is `PUT { isActive: true }`. Hard delete is not exposed.
 - **Not wired yet:** Lectures, tests, Q&A, and catalog **do not** use `subjects.id`. Legacy columns (`courses.subject`, `tests.subject`, `student_questions.subject`, `lectures.topic`) stay as documented in `subject-string-inventory.md` until explicit wire-up migrations.
 
 ## Chapter (future)

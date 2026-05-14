@@ -8,7 +8,7 @@ import {
 } from '../services/course.service.js';
 import { countLecturesForCourse } from '../services/lecture.service.js';
 import { logActivity } from '../services/activityLog.service.js';
-import { courseWriteBodySchema } from '../validators/courseWrite.schema.js';
+import { courseCreateBodySchema, courseWriteBodySchema } from '../validators/courseWrite.schema.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 
 function invalidCourseId() {
@@ -16,7 +16,7 @@ function invalidCourseId() {
 }
 
 export const postCourse = asyncHandler(async (req, res) => {
-  const parsed = courseWriteBodySchema.safeParse(req.body);
+  const parsed = courseCreateBodySchema.safeParse(req.body);
   if (!parsed.success) {
     throw new ApiError(422, 'Invalid course payload', parsed.error.flatten());
   }
@@ -31,7 +31,8 @@ export const postCourse = asyncHandler(async (req, res) => {
       thumbnail_url: p.thumbnail_url ?? null,
       is_active: p.is_active ?? true,
     },
-    req.user?.id || null
+    req.user?.id || null,
+    { pricing: p.pricing ?? null, curriculumSeeds: p.subjects }
   );
 
   await logActivity({
@@ -40,6 +41,10 @@ export const postCourse = asyncHandler(async (req, res) => {
     action: 'admin.course.create',
     entityType: 'course',
     entityId: String(created.id),
+    metadata: {
+      pricing_provided: !!p.pricing,
+      initial_curriculum_rows: Array.isArray(p.subjects) ? p.subjects.length : 0,
+    },
   });
 
   sendSuccess(res, created, 201);

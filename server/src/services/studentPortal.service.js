@@ -1,13 +1,11 @@
 import { mysqlPool } from '../config/mysql.js';
 import { countStudentQuestions } from './studentQuestions.service.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
-import { COURSE_CORE_COLUMNS } from './courseCatalogQueries.service.js';
+import { listActiveCourseRows } from './courseCatalogQueries.service.js';
 import { toCoursePublicDto } from '../dto/course.dto.js';
 
 async function loadCourses() {
-  const [rows] = await mysqlPool.query(
-    `SELECT ${COURSE_CORE_COLUMNS} FROM courses WHERE is_active = TRUE ORDER BY created_at DESC`
-  );
+  const rows = await listActiveCourseRows();
   return (rows || []).map((row) => toCoursePublicDto(row)).filter(Boolean);
 }
 

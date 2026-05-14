@@ -1,0 +1,161 @@
+/* Lighter layout for admin course management — less visual weight than default admin cards */
+
+.admin-page--courses {
+  gap: var(--space-5);
+  max-width: 960px;
+}
+
+.admin-page--courses .admin-courses__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin-page--courses .admin-courses__card {
+  box-shadow: none;
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 75%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg-alt));
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+}
+
+.admin-page--courses .heading-3 {
+  font-size: var(--fs-20);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.02em;
+  margin-bottom: 0;
+}
+
+.admin-page--courses .admin-courses__muted {
+  color: var(--color-ink-500);
+  line-height: 1.55;
+}
+
+.admin-page--courses .admin-table-wrap {
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 60%, transparent);
+  overflow: hidden;
+}
+
+.admin-page--courses .admin-table th {
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+  background: color-mix(in srgb, var(--color-bg-alt) 88%, var(--color-surface));
+}
+
+.admin-page--courses .admin-table td {
+  font-size: var(--fs-14);
+  vertical-align: middle;
+}
+
+.admin-page--courses .admin-table input[type='text'],
+.admin-page--courses .admin-table textarea {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-100);
+  padding: 0.4rem 0.55rem;
+  background: var(--color-surface);
+}
+
+.admin-page--courses .admin-table input[type='text']:focus,
+.admin-page--courses .admin-table textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.admin-page--courses .btn--sm {
+  font-size: var(--fs-13);
+}
+
+.admin-course-wizard {
+  margin-bottom: var(--space-5);
+}
+
+.admin-course-wizard__nav {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg-alt));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ink-100) 75%, transparent);
+  margin: 0 calc(-1 * var(--space-6)) var(--space-4);
+  padding: var(--space-3) var(--space-6);
+}
+
+.admin-course-wizard__nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-course-wizard__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-md);
+}
+
+.admin-course-wizard__nav-item--active {
+  color: var(--color-ink-900);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  font-weight: var(--fw-medium);
+}
+
+.admin-course-wizard__nav-item--done {
+  color: var(--color-ink-700);
+}
+
+.admin-course-wizard__nav-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 80%, transparent);
+  font-size: var(--fs-12);
+}
+
+.admin-course-wizard__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+}
+
+@media (min-width: 960px) {
+  .admin-page--courses {
+    max-width: 1100px;
+  }
+
+  .admin-course-wizard__body {
+    grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.45fr);
+    align-items: start;
+  }
+}
+
+.admin-course-wizard__aside {
+  position: sticky;
+  top: 4.5rem;
+}
+
+.admin-course-wizard-modal {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-ink-900) 35%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: var(--space-4);
+}
+
+.admin-course-wizard-modal__panel {
+  max-width: 420px;
+  width: 100%;
+  padding: var(--space-5);
+}

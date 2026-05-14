@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { coursePricingWriteBodySchema } from './coursePricing.schema.js';
+import { subjectSeedForCourseCreateSchema } from './subjectWrite.schema.js';
 
 function preprocessCourseBody(raw) {
   const obj = typeof raw === 'object' && raw !== null ? { ...raw } : {};
@@ -19,19 +21,36 @@ const shortDescriptionSchema = z
   .nullable()
   .transform((v) => (v == null || String(v).trim() === '' ? null : String(v).trim()));
 
+const courseBaseObject = z.object({
+  title: z.string().min(2).max(180),
+  description: z.string().min(10),
+  short_description: shortDescriptionSchema,
+  level: z.enum(['beginner', 'intermediate', 'advanced']),
+  thumbnail_url: z.string().max(1000).optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
 /**
- * Allowed fields for POST/PUT `/admin/courses`.
+ * Allowed fields for `PUT /admin/courses/:id`. Course identity only — pricing
+ * is updated via the dedicated `/admin/courses/:id/pricing` endpoint.
  */
 export const courseWriteBodySchema = z.preprocess(
   preprocessCourseBody,
-  z
-    .object({
-      title: z.string().min(2).max(180),
-      description: z.string().min(10),
-      short_description: shortDescriptionSchema,
-      level: z.enum(['beginner', 'intermediate', 'advanced']),
-      thumbnail_url: z.string().max(1000).optional().nullable(),
-      is_active: z.boolean().optional(),
+  courseBaseObject.strip()
+);
+
+/**
+ * Allowed fields for `POST /admin/courses`. Course identity + optional initial
+ * `pricing` + **required** `subjects` (at least one row) so the catalog row is
+ * never created without its first curriculum slice and pricing in one
+ * transactional submit.
+ */
+export const courseCreateBodySchema = z.preprocess(
+  preprocessCourseBody,
+  courseBaseObject
+    .extend({
+      pricing: coursePricingWriteBodySchema.optional().nullable(),
+      subjects: z.array(subjectSeedForCourseCreateSchema).min(1).max(200),
     })
     .strip()
 );

@@ -40,6 +40,8 @@ const AdminLayout = lazy(() => import('../admin/components/AdminLayout'));
 const AdminLoginPage = lazy(() => import('../admin/pages/AdminLoginPage'));
 const AdminDashboardPage = lazy(() => import('../admin/pages/AdminDashboardPage'));
 const AdminCoursesPage = lazy(() => import('../admin/pages/AdminCoursesPage'));
+const AdminCourseSubjectsPage = lazy(() => import('../admin/pages/AdminCourseSubjectsPage'));
+const AdminCourseBatchesPage = lazy(() => import('../admin/pages/AdminCourseBatchesPage'));
 const AdminLecturesPage = lazy(() => import('../admin/pages/AdminLecturesPage'));
 const AdminUsersPage = lazy(() => import('../admin/pages/AdminUsersPage'));
 const AdminMrbCodesPage = lazy(() => import('../admin/pages/AdminMrbCodesPage'));
@@ -177,6 +179,8 @@ export default function AppRouter({ authStatus }) {
             <Route path="questions" element={<AdminQuestionsPage />} />
             <Route path="courses" element={<AdminCoursesPage />} />
             <Route path="courses/:id" element={<AdminCoursesPage />} />
+            <Route path="courses/:courseId/subjects" element={<AdminCourseSubjectsPage />} />
+            <Route path="courses/:courseId/batches" element={<AdminCourseBatchesPage />} />
             <Route path="lectures" element={<AdminLecturesPage />} />
             <Route path="lectures/:id" element={<AdminLecturesPage />} />
             <Route path="tests" element={<AdminTestsPage />} />

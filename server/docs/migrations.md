@@ -22,6 +22,14 @@
 2. Prefer additive, idempotent SQL where practical (`IF NOT EXISTS`, guarded `INFORMATION_SCHEMA` checks).
 3. **Never** edit a migration file that has already been applied in any environment; add a follow-up file instead.
 
+## Checksum mismatch (dev only)
+
+If you changed an already-applied `.sql` file by mistake (e.g. comments) and the API fails with `Migration checksum mismatch`, either revert the file to its original bytes or, **only when the executed DDL is unchanged**, sync the ledger:
+
+- **`npm run db:repair-migration-checksum -- 005_course_batches.sql`** — updates `schema_migrations.checksum` to match the current file’s SHA-256.
+
+Do **not** use this to paper over real DDL changes; ship a new numbered migration instead.
+
 ## Baseline choice
 
 Existing environments historically ran dynamic DDL from a single `schema.sql`. That logic was extracted once into **`002_legacy_incremental.sql`** so new installs get the same end state via one recorded migration. New drift should use **`003+`** files only.
