@@ -3,7 +3,7 @@ import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import { ENROLLMENT_BATCH_OPTIONS, batchLabel } from '../../constants/enrollmentBatches';
 import { receiptMediaUrl } from '../../utils/mediaUrl';
-import { downloadEnrollmentBatchReportExcel } from '../utils/exportEnrollmentBatchReportExcel.js';
+import { downloadBatchRegistrationReportExcel } from '../utils/exportEnrollmentBatchReportExcel.js';
 import { downloadEnrollmentDetailExcel } from '../utils/exportEnrollmentDetailExcel.js';
 import { buildEnrollmentAdminQuery } from '../utils/enrollmentAdminQuery.js';
 
