@@ -1,6 +1,12 @@
--- Reference DDL (CREATE IF NOT EXISTS only). No runtime alters here.
--- Apply ordered migrations: npm run db:migrate
--- See server/docs/migrations.md
+-- =====================================================
+-- FULL SCHEMA (single source of truth)
+-- Apply in MySQL Workbench (or mysql client) against an empty database.
+-- No incremental migrations; edit this file when the model changes.
+-- =====================================================
+
+-- =====================================================
+-- USERS & AUTHENTICATION
+-- =====================================================
 
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -12,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   last_verification_sent_at TIMESTAMP NULL DEFAULT NULL,
   verification_send_failures INT NOT NULL DEFAULT 0,
   token_version INT NOT NULL DEFAULT 0,
+  risk_level ENUM('normal', 'elevated', 'critical') NOT NULL DEFAULT 'normal',
   role ENUM('student', 'teacher', 'admin', 'super_admin') NOT NULL DEFAULT 'student',
   status ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -35,6 +42,31 @@ CREATE TABLE IF NOT EXISTS email_verifications (
   KEY idx_email_verifications_user_id (user_id),
   KEY idx_email_verifications_expires_at (expires_at)
 );
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  role_snapshot VARCHAR(32) NOT NULL,
+  jti VARCHAR(64) NOT NULL,
+  refresh_token_hash CHAR(64) NOT NULL,
+  previous_refresh_hash CHAR(64) NULL,
+  token_version_snapshot INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  revoked_at TIMESTAMP NULL,
+  last_ip_hash CHAR(64) NULL,
+  ua_fingerprint CHAR(64) NULL,
+  CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_auth_sessions_jti (jti),
+  KEY idx_auth_sessions_user_id (user_id),
+  KEY idx_auth_sessions_expires_at (expires_at),
+  KEY idx_auth_sessions_revoked_at (revoked_at)
+);
+
+-- =====================================================
+-- COURSES & CONTENT
+-- =====================================================
 
 CREATE TABLE IF NOT EXISTS courses (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -122,7 +154,9 @@ CREATE TABLE IF NOT EXISTS course_batches (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_course_batches_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
   CONSTRAINT fk_course_batches_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-  UNIQUE KEY uq_course_batches_code (code),
+  UNIQUE KEY uq_course_batch_course_code (course_id, code),
+  UNIQUE KEY uq_course_batches_single_course (course_id),
+  KEY idx_course_batches_code (code),
   KEY idx_course_batches_course (course_id),
   KEY idx_course_batches_status (status),
   KEY idx_course_batches_active (course_id, is_active),
@@ -144,24 +178,9 @@ CREATE TABLE IF NOT EXISTS lectures (
   CONSTRAINT fk_lectures_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS auth_sessions (
-  id CHAR(36) NOT NULL PRIMARY KEY,
-  user_id BIGINT NOT NULL,
-  role_snapshot VARCHAR(32) NOT NULL,
-  jti VARCHAR(64) NOT NULL,
-  refresh_token_hash CHAR(64) NOT NULL,
-  previous_refresh_hash CHAR(64) NULL,
-  token_version_snapshot INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  expires_at DATETIME NOT NULL,
-  revoked_at TIMESTAMP NULL,
-  CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  UNIQUE KEY uq_auth_sessions_jti (jti),
-  KEY idx_auth_sessions_user_id (user_id),
-  KEY idx_auth_sessions_expires_at (expires_at),
-  KEY idx_auth_sessions_revoked_at (revoked_at)
-);
+-- =====================================================
+-- TESTS & ASSESSMENTS
+-- =====================================================
 
 CREATE TABLE IF NOT EXISTS tests (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -252,6 +271,293 @@ CREATE TABLE IF NOT EXISTS test_results (
   CONSTRAINT fk_result_attempt FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE
 );
 
+-- =====================================================
+-- GEOGRAPHIC DATA: PROVINCES
+-- =====================================================
+
+CREATE TABLE provinces (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(120) NOT NULL,
+    slug VARCHAR(140) NOT NULL,
+    is_other_option BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_provinces_name UNIQUE (name),
+    CONSTRAINT uq_provinces_slug UNIQUE (slug)
+);
+
+CREATE INDEX idx_provinces_active
+    ON provinces(is_active);
+
+CREATE INDEX idx_provinces_sort
+    ON provinces(sort_order);
+
+-- =====================================================
+-- GEOGRAPHIC DATA: DIVISIONS
+-- =====================================================
+
+CREATE TABLE divisions (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    province_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    slug VARCHAR(140) NOT NULL,
+    is_other_option BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_divisions_province
+        FOREIGN KEY (province_id)
+        REFERENCES provinces(id),
+    CONSTRAINT uq_divisions_province_name
+        UNIQUE (province_id, name),
+    CONSTRAINT uq_divisions_province_slug
+        UNIQUE (province_id, slug)
+);
+
+CREATE INDEX idx_divisions_province
+    ON divisions(province_id);
+
+CREATE INDEX idx_divisions_active
+    ON divisions(is_active);
+
+CREATE INDEX idx_divisions_sort
+    ON divisions(sort_order);
+
+-- =====================================================
+-- GEOGRAPHIC DATA: DISTRICTS
+-- =====================================================
+
+CREATE TABLE districts (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    province_id BIGINT UNSIGNED NOT NULL,
+    division_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    slug VARCHAR(140) NOT NULL,
+    is_other_option BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_districts_province
+        FOREIGN KEY (province_id)
+        REFERENCES provinces(id),
+    CONSTRAINT fk_districts_division
+        FOREIGN KEY (division_id)
+        REFERENCES divisions(id),
+    CONSTRAINT uq_districts_division_name
+        UNIQUE (division_id, name),
+    CONSTRAINT uq_districts_division_slug
+        UNIQUE (division_id, slug)
+);
+
+CREATE INDEX idx_districts_province
+    ON districts(province_id);
+
+CREATE INDEX idx_districts_division
+    ON districts(division_id);
+
+CREATE INDEX idx_districts_active
+    ON districts(is_active);
+
+CREATE INDEX idx_districts_sort
+    ON districts(sort_order);
+
+-- =====================================================
+-- GEOGRAPHIC DATA: CITIES
+-- =====================================================
+
+CREATE TABLE cities (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    province_id BIGINT UNSIGNED NOT NULL,
+    division_id BIGINT UNSIGNED NOT NULL,
+    district_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    slug VARCHAR(140) NOT NULL,
+    postal_code VARCHAR(20) NULL,
+    is_other_option BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_cities_province
+        FOREIGN KEY (province_id)
+        REFERENCES provinces(id),
+    CONSTRAINT fk_cities_division
+        FOREIGN KEY (division_id)
+        REFERENCES divisions(id),
+    CONSTRAINT fk_cities_district
+        FOREIGN KEY (district_id)
+        REFERENCES districts(id),
+    CONSTRAINT uq_cities_district_name
+        UNIQUE (district_id, name),
+    CONSTRAINT uq_cities_district_slug
+        UNIQUE (district_id, slug)
+);
+
+CREATE INDEX idx_cities_province
+    ON cities(province_id);
+
+CREATE INDEX idx_cities_division
+    ON cities(division_id);
+
+CREATE INDEX idx_cities_district
+    ON cities(district_id);
+
+CREATE INDEX idx_cities_active
+    ON cities(is_active);
+
+CREATE INDEX idx_cities_sort
+    ON cities(sort_order);
+
+-- =====================================================
+-- GEOGRAPHIC DATA: INTERMEDIATE BOARDS
+-- =====================================================
+
+CREATE TABLE intermediate_boards (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(190) NOT NULL,
+    slug VARCHAR(220) NOT NULL,
+    short_name VARCHAR(80) NULL,
+    is_other_option BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_intermediate_boards_name
+        UNIQUE (name),
+    CONSTRAINT uq_intermediate_boards_slug
+        UNIQUE (slug)
+);
+
+CREATE INDEX idx_intermediate_boards_active
+    ON intermediate_boards(is_active);
+
+CREATE INDEX idx_intermediate_boards_sort
+    ON intermediate_boards(sort_order);
+
+-- =====================================================
+-- ORDERS (Safepay + internal refs; created before enrollments for fk_enrollments_order)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS orders (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  course_id BIGINT NOT NULL,
+  enrollment_id BIGINT UNSIGNED NULL,
+  gateway VARCHAR(40) NOT NULL DEFAULT 'safepay',
+  gateway_order_ref VARCHAR(120) NULL,
+  amount INT NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'PKR',
+  status ENUM('pending', 'paid', 'failed', 'cancelled', 'refunded') NOT NULL DEFAULT 'pending',
+  safepay_token VARCHAR(255) NULL,
+  safepay_tracker VARCHAR(255) NULL,
+  safepay_transaction_id VARCHAR(255) NULL,
+  gateway_payload_json JSON NULL,
+  paid_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_orders_course FOREIGN KEY (course_id) REFERENCES courses(id),
+  UNIQUE KEY uq_orders_gateway_order_ref (gateway_order_ref),
+  KEY idx_orders_user (user_id),
+  KEY idx_orders_course (course_id),
+  KEY idx_orders_enrollment (enrollment_id),
+  KEY idx_orders_status (status),
+  KEY idx_orders_safepay_token (safepay_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- ENROLLMENTS
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS enrollments (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  course_id BIGINT NOT NULL,
+  order_id BIGINT UNSIGNED NULL,
+  applicant_full_name VARCHAR(160) NOT NULL,
+  father_name VARCHAR(160) NOT NULL,
+  date_of_birth DATE NULL,
+  gender ENUM('male', 'female') NOT NULL,
+  whatsapp_number VARCHAR(20) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  province_id BIGINT UNSIGNED NOT NULL,
+  division_id BIGINT UNSIGNED NOT NULL,
+  district_id BIGINT UNSIGNED NOT NULL,
+  city_id BIGINT UNSIGNED NOT NULL,
+  board_id BIGINT UNSIGNED NULL,
+  hssc_status ENUM('Inter Class', 'First Year Class', 'Matric Class') NOT NULL,
+  mdcat_attempt_type ENUM('Fresher', 'Improver') NOT NULL,
+  batch_number VARCHAR(20) NULL,
+  status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+  access_status ENUM('active', 'inactive', 'revoked') NOT NULL DEFAULT 'inactive',
+  admin_note VARCHAR(500) NULL,
+  reviewed_by BIGINT NULL,
+  reviewed_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_enrollments_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_enrollments_course FOREIGN KEY (course_id) REFERENCES courses(id),
+  CONSTRAINT fk_enrollments_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
+  CONSTRAINT fk_enrollments_province FOREIGN KEY (province_id) REFERENCES provinces(id),
+  CONSTRAINT fk_enrollments_division FOREIGN KEY (division_id) REFERENCES divisions(id),
+  CONSTRAINT fk_enrollments_district FOREIGN KEY (district_id) REFERENCES districts(id),
+  CONSTRAINT fk_enrollments_city FOREIGN KEY (city_id) REFERENCES cities(id),
+  CONSTRAINT fk_enrollments_board FOREIGN KEY (board_id) REFERENCES intermediate_boards(id),
+  CONSTRAINT fk_enrollments_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+  KEY idx_enrollments_user (user_id),
+  KEY idx_enrollments_course (course_id),
+  KEY idx_enrollments_order (order_id),
+  KEY idx_enrollments_status (status),
+  KEY idx_enrollments_user_access (user_id, access_status),
+  KEY idx_enrollments_province_id (province_id),
+  KEY idx_enrollments_division_id (division_id),
+  KEY idx_enrollments_district_id (district_id),
+  KEY idx_enrollments_city_id (city_id),
+  KEY idx_enrollments_board (board_id),
+  KEY idx_enrollments_batch (batch_number)
+);
+
+-- Link orders.enrollment_id after both tables exist (avoids circular CREATE dependency)
+ALTER TABLE orders
+  ADD CONSTRAINT fk_orders_enrollment FOREIGN KEY (enrollment_id) REFERENCES enrollments(id) ON DELETE SET NULL;
+
+-- Legacy course_access removed: course access is defined only on enrollments (status + access_status).
+
+-- =====================================================
+-- IDEMPOTENCY (API replay protection)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  idempotency_key VARCHAR(255) NOT NULL,
+  request_hash CHAR(64) NOT NULL,
+  status_code INT NOT NULL,
+  response_body JSON NOT NULL,
+  user_id BIGINT NULL,
+  endpoint VARCHAR(255) NOT NULL,
+  method VARCHAR(10) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  UNIQUE KEY uq_idempotency_key (idempotency_key),
+  KEY idx_idempotency_expires (expires_at),
+  KEY idx_idempotency_user (user_id),
+  KEY idx_idempotency_created (created_at),
+  CONSTRAINT fk_idempotency_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- COMMUNICATION & LOGGING
+-- =====================================================
+
 CREATE TABLE IF NOT EXISTS activity_logs (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   user_id BIGINT NULL,
@@ -298,6 +604,10 @@ CREATE TABLE IF NOT EXISTS student_questions (
   KEY idx_student_questions_updated (updated_at DESC)
 );
 
+-- =====================================================
+-- EMAIL SYSTEM
+-- =====================================================
+
 CREATE TABLE IF NOT EXISTS email_suppressions (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(255) NOT NULL,
@@ -335,42 +645,475 @@ CREATE TABLE IF NOT EXISTS email_delivery_dlq (
   KEY idx_email_delivery_dlq_failed_at (failed_at)
 );
 
-CREATE TABLE IF NOT EXISTS enrollments (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  email VARCHAR(255) NOT NULL,
-  applicant_full_name VARCHAR(160) NOT NULL,
-  father_name VARCHAR(160) NOT NULL,
-  date_of_birth DATE NULL,
-  gender ENUM('male', 'female') NOT NULL,
-  whatsapp_number VARCHAR(20) NOT NULL,
-  province VARCHAR(80) NOT NULL,
-  district VARCHAR(120) NOT NULL,
-  hssc_status ENUM('Inter Class', 'First Year Class', 'Matric Class') NOT NULL,
-  board VARCHAR(120) NOT NULL,
-  mdcat_attempt_type ENUM('Fresher', 'Improver') NOT NULL,
-  batch_number VARCHAR(20) NULL,
-  transaction_id VARCHAR(120) NOT NULL,
-  verification_token VARCHAR(64) NULL,
-  payment_method VARCHAR(80) NOT NULL DEFAULT 'EasyPaisa and JazzCash',
-  account_title VARCHAR(120) NOT NULL DEFAULT 'Muzamil Raheem',
-  receipt_url VARCHAR(1000) NOT NULL,
-  receipt_original_name VARCHAR(255) NULL,
-  receipt_mime_type VARCHAR(80) NULL,
-  receipt_size_bytes BIGINT NULL,
-  status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending',
-  admin_note VARCHAR(500) NULL,
-  reviewed_by BIGINT NULL,
-  reviewed_at TIMESTAMP NULL,
-  submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_enrollments_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
-  KEY idx_enrollments_status_submitted (status, submitted_at DESC),
-  KEY idx_enrollments_province (province),
-  KEY idx_enrollments_board (board),
-  KEY idx_enrollments_attempt (mdcat_attempt_type),
-  KEY idx_enrollments_email (email),
-  KEY idx_enrollments_whatsapp (whatsapp_number),
-  KEY idx_enrollments_batch_submitted (batch_number, submitted_at DESC),
-  UNIQUE KEY uq_enrollments_verification_token (verification_token)
+-- =====================================================
+-- SEED DATA: PROVINCES
+-- =====================================================
+
+INSERT INTO provinces (name, slug, is_other_option, is_active, sort_order) VALUES
+('Punjab', 'punjab', FALSE, TRUE, 1),
+('Sindh', 'sindh', FALSE, TRUE, 2),
+('Khyber Pakhtunkhwa', 'khyber-pakhtunkhwa', FALSE, TRUE, 3),
+('Balochistan', 'balochistan', FALSE, TRUE, 4),
+('Islamabad Capital Territory', 'islamabad-capital-territory', FALSE, TRUE, 5),
+('Azad Jammu & Kashmir', 'azad-jammu-kashmir', FALSE, TRUE, 6),
+('Gilgit-Baltistan', 'gilgit-baltistan', FALSE, TRUE, 7),
+('Other', 'other', TRUE, TRUE, 8);
+
+-- =====================================================
+-- SEED DATA: DIVISIONS
+-- =====================================================
+
+INSERT INTO divisions (province_id, name, slug, is_other_option, is_active, sort_order) VALUES
+-- Punjab (1)
+(1, 'Lahore', 'lahore', FALSE, TRUE, 1),
+(1, 'Rawalpindi', 'rawalpindi', FALSE, TRUE, 2),
+(1, 'Faisalabad', 'faisalabad', FALSE, TRUE, 3),
+(1, 'Multan', 'multan', FALSE, TRUE, 4),
+(1, 'Gujranwala', 'gujranwala', FALSE, TRUE, 5),
+(1, 'Sargodha', 'sargodha', FALSE, TRUE, 6),
+(1, 'Bahawalpur', 'bahawalpur', FALSE, TRUE, 7),
+(1, 'Sahiwal', 'sahiwal', FALSE, TRUE, 8),
+(1, 'DG Khan', 'dg-khan', FALSE, TRUE, 9),
+(1, 'Gujrat', 'gujrat', FALSE, TRUE, 10),
+-- Sindh (2)
+(2, 'Karachi', 'karachi', FALSE, TRUE, 1),
+(2, 'Hyderabad', 'hyderabad', FALSE, TRUE, 2),
+(2, 'Sukkur', 'sukkur', FALSE, TRUE, 3),
+(2, 'Larkana', 'larkana', FALSE, TRUE, 4),
+(2, 'Mirpurkhas', 'mirpurkhas', FALSE, TRUE, 5),
+(2, 'Shaheed Benazirabad', 'shaheed-benazirabad', FALSE, TRUE, 6),
+-- KPK (3)
+(3, 'Peshawar', 'peshawar', FALSE, TRUE, 1),
+(3, 'Mardan', 'mardan', FALSE, TRUE, 2),
+(3, 'Malakand', 'malakand', FALSE, TRUE, 3),
+(3, 'Hazara', 'hazara', FALSE, TRUE, 4),
+(3, 'Kohat', 'kohat', FALSE, TRUE, 5),
+(3, 'Bannu', 'bannu', FALSE, TRUE, 6),
+(3, 'Dera Ismail Khan', 'dera-ismail-khan', FALSE, TRUE, 7),
+-- Balochistan (4)
+(4, 'Quetta', 'quetta', FALSE, TRUE, 1),
+(4, 'Kalat', 'kalat', FALSE, TRUE, 2),
+(4, 'Makran', 'makran', FALSE, TRUE, 3),
+(4, 'Zhob', 'zhob', FALSE, TRUE, 4),
+(4, 'Nasirabad', 'nasirabad', FALSE, TRUE, 5),
+(4, 'Sibi', 'sibi', FALSE, TRUE, 6),
+-- ICT (5)
+(5, 'Islamabad', 'islamabad', FALSE, TRUE, 1),
+-- AJK (6)
+(6, 'Muzaffarabad', 'muzaffarabad', FALSE, TRUE, 1),
+(6, 'Mirpur', 'mirpur', FALSE, TRUE, 2),
+(6, 'Poonch', 'poonch', FALSE, TRUE, 3),
+-- GB (7)
+(7, 'Gilgit', 'gilgit', FALSE, TRUE, 1),
+(7, 'Baltistan', 'baltistan', FALSE, TRUE, 2),
+(7, 'Diamer', 'diamer', FALSE, TRUE, 3);
+
+-- =====================================================
+-- SEED DATA: DISTRICTS
+-- =====================================================
+
+INSERT INTO districts (province_id, division_id, name, slug, is_other_option, is_active, sort_order) VALUES
+-- Punjab > Lahore Division (1)
+(1, 1, 'Lahore', 'lahore', FALSE, TRUE, 1),
+(1, 1, 'Sheikhupura', 'sheikhupura', FALSE, TRUE, 2),
+(1, 1, 'Nankana Sahib', 'nankana-sahib', FALSE, TRUE, 3),
+(1, 1, 'Kasur', 'kasur', FALSE, TRUE, 4),
+-- Punjab > Rawalpindi Division (2)
+(1, 2, 'Rawalpindi', 'rawalpindi', FALSE, TRUE, 1),
+(1, 2, 'Attock', 'attock', FALSE, TRUE, 2),
+(1, 2, 'Chakwal', 'chakwal', FALSE, TRUE, 3),
+(1, 2, 'Jhelum', 'jhelum', FALSE, TRUE, 4),
+-- Punjab > Faisalabad Division (3)
+(1, 3, 'Faisalabad', 'faisalabad', FALSE, TRUE, 1),
+(1, 3, 'Chiniot', 'chiniot', FALSE, TRUE, 2),
+(1, 3, 'Jhang', 'jhang', FALSE, TRUE, 3),
+(1, 3, 'Toba Tek Singh', 'toba-tek-singh', FALSE, TRUE, 4),
+-- Punjab > Multan Division (4)
+(1, 4, 'Multan', 'multan', FALSE, TRUE, 1),
+(1, 4, 'Khanewal', 'khanewal', FALSE, TRUE, 2),
+(1, 4, 'Lodhran', 'lodhran', FALSE, TRUE, 3),
+(1, 4, 'Vehari', 'vehari', FALSE, TRUE, 4),
+-- Punjab > Gujranwala Division (5)
+(1, 5, 'Gujranwala', 'gujranwala', FALSE, TRUE, 1),
+(1, 5, 'Gujrat', 'gujrat', FALSE, TRUE, 2),
+(1, 5, 'Hafizabad', 'hafizabad', FALSE, TRUE, 3),
+(1, 5, 'Mandi Bahauddin', 'mandi-bahauddin', FALSE, TRUE, 4),
+(1, 5, 'Narowal', 'narowal', FALSE, TRUE, 5),
+(1, 5, 'Sialkot', 'sialkot', FALSE, TRUE, 6),
+-- Punjab > Sargodha Division (6)
+(1, 6, 'Sargodha', 'sargodha', FALSE, TRUE, 1),
+(1, 6, 'Bhakkar', 'bhakkar', FALSE, TRUE, 2),
+(1, 6, 'Khushab', 'khushab', FALSE, TRUE, 3),
+(1, 6, 'Mianwali', 'mianwali', FALSE, TRUE, 4),
+-- Punjab > Bahawalpur Division (7)
+(1, 7, 'Bahawalpur', 'bahawalpur', FALSE, TRUE, 1),
+(1, 7, 'Bahawalnagar', 'bahawalnagar', FALSE, TRUE, 2),
+(1, 7, 'Rahim Yar Khan', 'rahim-yar-khan', FALSE, TRUE, 3),
+-- Punjab > Sahiwal Division (8)
+(1, 8, 'Sahiwal', 'sahiwal', FALSE, TRUE, 1),
+(1, 8, 'Okara', 'okara', FALSE, TRUE, 2),
+(1, 8, 'Pakpattan', 'pakpattan', FALSE, TRUE, 3),
+-- Punjab > DG Khan Division (9)
+(1, 9, 'DG Khan', 'dg-khan', FALSE, TRUE, 1),
+(1, 9, 'Layyah', 'layyah', FALSE, TRUE, 2),
+(1, 9, 'Muzaffargarh', 'muzaffargarh', FALSE, TRUE, 3),
+(1, 9, 'Rajanpur', 'rajanpur', FALSE, TRUE, 4),
+-- Punjab > Gujrat Division (10)
+(1, 10, 'Gujrat', 'gujrat-d', FALSE, TRUE, 1),
+(1, 10, 'Kharian', 'kharian', FALSE, TRUE, 2),
+-- Sindh > Karachi Division (11)
+(2, 11, 'Karachi East', 'karachi-east', FALSE, TRUE, 1),
+(2, 11, 'Karachi West', 'karachi-west', FALSE, TRUE, 2),
+(2, 11, 'Karachi Central', 'karachi-central', FALSE, TRUE, 3),
+(2, 11, 'Karachi South', 'karachi-south', FALSE, TRUE, 4),
+(2, 11, 'Malir', 'malir', FALSE, TRUE, 5),
+(2, 11, 'Korangi', 'korangi', FALSE, TRUE, 6),
+-- Sindh > Hyderabad Division (12)
+(2, 12, 'Hyderabad', 'hyderabad', FALSE, TRUE, 1),
+(2, 12, 'Jamshoro', 'jamshoro', FALSE, TRUE, 2),
+(2, 12, 'Matiari', 'matiari', FALSE, TRUE, 3),
+(2, 12, 'Tando Allahyar', 'tando-allahyar', FALSE, TRUE, 4),
+(2, 12, 'Tando Muhammad Khan', 'tando-muhammad-khan', FALSE, TRUE, 5),
+-- Sindh > Sukkur Division (13)
+(2, 13, 'Sukkur', 'sukkur', FALSE, TRUE, 1),
+(2, 13, 'Ghotki', 'ghotki', FALSE, TRUE, 2),
+(2, 13, 'Khairpur', 'khairpur', FALSE, TRUE, 3),
+-- Sindh > Larkana Division (14)
+(2, 14, 'Larkana', 'larkana', FALSE, TRUE, 1),
+(2, 14, 'Jacobabad', 'jacobabad', FALSE, TRUE, 2),
+(2, 14, 'Kashmore', 'kashmore', FALSE, TRUE, 3),
+(2, 14, 'Shikarpur', 'shikarpur', FALSE, TRUE, 4),
+-- Sindh > Mirpurkhas Division (15)
+(2, 15, 'Mirpurkhas', 'mirpurkhas', FALSE, TRUE, 1),
+(2, 15, 'Tharparkar', 'tharparkar', FALSE, TRUE, 2),
+(2, 15, 'Umerkot', 'umerkot', FALSE, TRUE, 3),
+-- Sindh > Shaheed Benazirabad Division (16)
+(2, 16, 'Shaheed Benazirabad', 'shaheed-benazirabad', FALSE, TRUE, 1),
+(2, 16, 'Naushahro Feroze', 'naushahro-feroze', FALSE, TRUE, 2),
+(2, 16, 'Sanghar', 'sanghar', FALSE, TRUE, 3),
+-- KPK > Peshawar Division (17)
+(3, 17, 'Peshawar', 'peshawar', FALSE, TRUE, 1),
+(3, 17, 'Charsadda', 'charsadda', FALSE, TRUE, 2),
+(3, 17, 'Nowshera', 'nowshera', FALSE, TRUE, 3),
+-- KPK > Mardan Division (18)
+(3, 18, 'Mardan', 'mardan', FALSE, TRUE, 1),
+(3, 18, 'Swabi', 'swabi', FALSE, TRUE, 2),
+-- KPK > Malakand Division (19)
+(3, 19, 'Malakand', 'malakand', FALSE, TRUE, 1),
+(3, 19, 'Swat', 'swat', FALSE, TRUE, 2),
+(3, 19, 'Dir Lower', 'dir-lower', FALSE, TRUE, 3),
+(3, 19, 'Dir Upper', 'dir-upper', FALSE, TRUE, 4),
+(3, 19, 'Chitral', 'chitral', FALSE, TRUE, 5),
+(3, 19, 'Buner', 'buner', FALSE, TRUE, 6),
+(3, 19, 'Shangla', 'shangla', FALSE, TRUE, 7),
+-- KPK > Hazara Division (20)
+(3, 20, 'Abbottabad', 'abbottabad', FALSE, TRUE, 1),
+(3, 20, 'Mansehra', 'mansehra', FALSE, TRUE, 2),
+(3, 20, 'Haripur', 'haripur', FALSE, TRUE, 3),
+(3, 20, 'Battagram', 'battagram', FALSE, TRUE, 4),
+(3, 20, 'Kohistan', 'kohistan', FALSE, TRUE, 5),
+-- KPK > Kohat Division (21)
+(3, 21, 'Kohat', 'kohat', FALSE, TRUE, 1),
+(3, 21, 'Karak', 'karak', FALSE, TRUE, 2),
+(3, 21, 'Hangu', 'hangu', FALSE, TRUE, 3),
+-- KPK > Bannu Division (22)
+(3, 22, 'Bannu', 'bannu', FALSE, TRUE, 1),
+(3, 22, 'Lakki Marwat', 'lakki-marwat', FALSE, TRUE, 2),
+(3, 22, 'North Waziristan', 'north-waziristan', FALSE, TRUE, 3),
+-- KPK > DI Khan Division (23)
+(3, 23, 'Dera Ismail Khan', 'dera-ismail-khan', FALSE, TRUE, 1),
+(3, 23, 'South Waziristan', 'south-waziristan', FALSE, TRUE, 2),
+(3, 23, 'Tank', 'tank', FALSE, TRUE, 3),
+-- Balochistan > Quetta Division (24)
+(4, 24, 'Quetta', 'quetta', FALSE, TRUE, 1),
+(4, 24, 'Pishin', 'pishin', FALSE, TRUE, 2),
+(4, 24, 'Killa Abdullah', 'killa-abdullah', FALSE, TRUE, 3),
+(4, 24, 'Chagai', 'chagai', FALSE, TRUE, 4),
+-- Balochistan > Kalat Division (25)
+(4, 25, 'Kalat', 'kalat', FALSE, TRUE, 1),
+(4, 25, 'Khuzdar', 'khuzdar', FALSE, TRUE, 2),
+(4, 25, 'Mastung', 'mastung', FALSE, TRUE, 3),
+-- Balochistan > Makran Division (26)
+(4, 26, 'Gwadar', 'gwadar', FALSE, TRUE, 1),
+(4, 26, 'Turbat', 'turbat', FALSE, TRUE, 2),
+(4, 26, 'Panjgur', 'panjgur', FALSE, TRUE, 3),
+-- Balochistan > Zhob Division (27)
+(4, 27, 'Zhob', 'zhob', FALSE, TRUE, 1),
+(4, 27, 'Sherani', 'sherani', FALSE, TRUE, 2),
+(4, 27, 'Musakhel', 'musakhel', FALSE, TRUE, 3),
+-- Balochistan > Nasirabad Division (28)
+(4, 28, 'Nasirabad', 'nasirabad', FALSE, TRUE, 1),
+(4, 28, 'Jaffarabad', 'jaffarabad', FALSE, TRUE, 2),
+(4, 28, 'Sohbatpur', 'sohbatpur', FALSE, TRUE, 3),
+-- Balochistan > Sibi Division (29)
+(4, 29, 'Sibi', 'sibi', FALSE, TRUE, 1),
+(4, 29, 'Ziarat', 'ziarat', FALSE, TRUE, 2),
+(4, 29, 'Harnai', 'harnai', FALSE, TRUE, 3),
+-- ICT > Islamabad Division (30)
+(5, 30, 'Islamabad', 'islamabad', FALSE, TRUE, 1),
+-- AJK > Muzaffarabad Division (31)
+(6, 31, 'Muzaffarabad', 'muzaffarabad', FALSE, TRUE, 1),
+(6, 31, 'Neelum', 'neelum', FALSE, TRUE, 2),
+-- AJK > Mirpur Division (32)
+(6, 32, 'Mirpur', 'mirpur', FALSE, TRUE, 1),
+(6, 32, 'Bhimber', 'bhimber', FALSE, TRUE, 2),
+(6, 32, 'Kotli', 'kotli', FALSE, TRUE, 3),
+-- AJK > Poonch Division (33)
+(6, 33, 'Poonch', 'poonch', FALSE, TRUE, 1),
+(6, 33, 'Haveli', 'haveli', FALSE, TRUE, 2),
+(6, 33, 'Bagh', 'bagh', FALSE, TRUE, 3),
+(6, 33, 'Sudhnoti', 'sudhnoti', FALSE, TRUE, 4),
+-- GB > Gilgit Division (34)
+(7, 34, 'Gilgit', 'gilgit', FALSE, TRUE, 1),
+(7, 34, 'Hunza', 'hunza', FALSE, TRUE, 2),
+(7, 34, 'Nagar', 'nagar', FALSE, TRUE, 3),
+-- GB > Baltistan Division (35)
+(7, 35, 'Skardu', 'skardu', FALSE, TRUE, 1),
+(7, 35, 'Shigar', 'shigar', FALSE, TRUE, 2),
+(7, 35, 'Kharmang', 'kharmang', FALSE, TRUE, 3),
+(7, 35, 'Roundu', 'roundu', FALSE, TRUE, 4),
+-- GB > Diamer Division (36)
+(7, 36, 'Diamer', 'diamer', FALSE, TRUE, 1),
+(7, 36, 'Darel', 'darel', FALSE, TRUE, 2),
+(7, 36, 'Tangir', 'tangir', FALSE, TRUE, 3);
+
+-- =====================================================
+-- SEED DATA: CITIES (major cities per district)
+-- =====================================================
+
+INSERT INTO cities (province_id, division_id, district_id, name, slug, is_other_option, is_active, sort_order) VALUES
+-- Punjab > Lahore > Lahore (1)
+(1, 1, 1, 'Lahore', 'lahore', FALSE, TRUE, 1),
+(1, 1, 1, 'Bahria Town Lahore', 'bahria-town-lahore', FALSE, TRUE, 2),
+(1, 1, 1, 'DHA Lahore', 'dha-lahore', FALSE, TRUE, 3),
+-- Punjab > Lahore > Sheikhupura (2)
+(1, 1, 2, 'Sheikhupura', 'sheikhupura', FALSE, TRUE, 1),
+(1, 1, 2, 'Muridke', 'muridke', FALSE, TRUE, 2),
+-- Punjab > Lahore > Nankana Sahib (3)
+(1, 1, 3, 'Nankana Sahib', 'nankana-sahib', FALSE, TRUE, 1),
+-- Punjab > Lahore > Kasur (4)
+(1, 1, 4, 'Kasur', 'kasur', FALSE, TRUE, 1),
+(1, 1, 4, 'Chunian', 'chunian', FALSE, TRUE, 2),
+-- Punjab > Rawalpindi > Rawalpindi (5)
+(1, 2, 5, 'Rawalpindi', 'rawalpindi', FALSE, TRUE, 1),
+(1, 2, 5, 'Bahria Town Rawalpindi', 'bahria-town-rawalpindi', FALSE, TRUE, 2),
+(1, 2, 5, 'Murree', 'murree', FALSE, TRUE, 3),
+-- Punjab > Rawalpindi > Attock (6)
+(1, 2, 6, 'Attock', 'attock', FALSE, TRUE, 1),
+(1, 2, 6, 'Hazro', 'hazro', FALSE, TRUE, 2),
+-- Punjab > Rawalpindi > Chakwal (7)
+(1, 2, 7, 'Chakwal', 'chakwal', FALSE, TRUE, 1),
+-- Punjab > Rawalpindi > Jhelum (8)
+(1, 2, 8, 'Jhelum', 'jhelum', FALSE, TRUE, 1),
+(1, 2, 8, 'Sohawa', 'sohawa', FALSE, TRUE, 2),
+-- Punjab > Faisalabad > Faisalabad (9)
+(1, 3, 9, 'Faisalabad', 'faisalabad', FALSE, TRUE, 1),
+(1, 3, 9, 'Jaranwala', 'jaranwala', FALSE, TRUE, 2),
+(1, 3, 9, 'Samundri', 'samundri', FALSE, TRUE, 3),
+-- Punjab > Faisalabad > Chiniot (10)
+(1, 3, 10, 'Chiniot', 'chiniot', FALSE, TRUE, 1),
+-- Punjab > Faisalabad > Jhang (11)
+(1, 3, 11, 'Jhang', 'jhang', FALSE, TRUE, 1),
+(1, 3, 11, 'Shorkot', 'shorkot', FALSE, TRUE, 2),
+-- Punjab > Faisalabad > Toba Tek Singh (12)
+(1, 3, 12, 'Toba Tek Singh', 'toba-tek-singh', FALSE, TRUE, 1),
+(1, 3, 12, 'Gojra', 'gojra', FALSE, TRUE, 2),
+-- Punjab > Multan > Multan (13)
+(1, 4, 13, 'Multan', 'multan', FALSE, TRUE, 1),
+(1, 4, 13, 'Shujabad', 'shujabad', FALSE, TRUE, 2),
+-- Punjab > Multan > Khanewal (14)
+(1, 4, 14, 'Khanewal', 'khanewal', FALSE, TRUE, 1),
+(1, 4, 14, 'Mian Channu', 'mian-channu', FALSE, TRUE, 2),
+-- Punjab > Multan > Lodhran (15)
+(1, 4, 15, 'Lodhran', 'lodhran', FALSE, TRUE, 1),
+-- Punjab > Multan > Vehari (16)
+(1, 4, 16, 'Vehari', 'vehari', FALSE, TRUE, 1),
+(1, 4, 16, 'Burewala', 'burewala', FALSE, TRUE, 2),
+-- Punjab > Gujranwala > Gujranwala (17)
+(1, 5, 17, 'Gujranwala', 'gujranwala', FALSE, TRUE, 1),
+(1, 5, 17, 'Kamoke', 'kamoke', FALSE, TRUE, 2),
+-- Punjab > Gujranwala > Sialkot (22)
+(1, 5, 22, 'Sialkot', 'sialkot', FALSE, TRUE, 1),
+(1, 5, 22, 'Daska', 'daska', FALSE, TRUE, 2),
+(1, 5, 22, 'Wazirabad', 'wazirabad', FALSE, TRUE, 3),
+-- Punjab > Sargodha > Sargodha (23)
+(1, 6, 23, 'Sargodha', 'sargodha', FALSE, TRUE, 1),
+(1, 6, 23, 'Bhalwal', 'bhalwal', FALSE, TRUE, 2),
+-- Punjab > Bahawalpur > Bahawalpur (27)
+(1, 7, 27, 'Bahawalpur', 'bahawalpur', FALSE, TRUE, 1),
+(1, 7, 27, 'Ahmadpur East', 'ahmadpur-east', FALSE, TRUE, 2),
+-- Punjab > Bahawalpur > Rahim Yar Khan (29)
+(1, 7, 29, 'Rahim Yar Khan', 'rahim-yar-khan', FALSE, TRUE, 1),
+(1, 7, 29, 'Sadiqabad', 'sadiqabad', FALSE, TRUE, 2),
+-- Sindh > Karachi > Karachi South (44)
+(2, 11, 44, 'Karachi', 'karachi', FALSE, TRUE, 1),
+(2, 11, 44, 'Clifton', 'clifton', FALSE, TRUE, 2),
+(2, 11, 44, 'Saddar', 'saddar', FALSE, TRUE, 3),
+-- Sindh > Karachi > Karachi East (41)
+(2, 11, 41, 'Gulshan-e-Iqbal', 'gulshan-e-iqbal', FALSE, TRUE, 1),
+(2, 11, 41, 'Gulberg', 'gulberg', FALSE, TRUE, 2),
+(2, 11, 41, 'North Nazimabad', 'north-nazimabad', FALSE, TRUE, 3),
+-- Sindh > Karachi > Malir (45)
+(2, 11, 45, 'Malir', 'malir', FALSE, TRUE, 1),
+(2, 11, 45, 'Bin Qasim', 'bin-qasim', FALSE, TRUE, 2),
+-- Sindh > Hyderabad > Hyderabad (47)
+(2, 12, 47, 'Hyderabad', 'hyderabad', FALSE, TRUE, 1),
+(2, 12, 47, 'Qasimabad', 'qasimabad', FALSE, TRUE, 2),
+(2, 12, 47, 'Latifabad', 'latifabad', FALSE, TRUE, 3),
+-- Sindh > Sukkur > Sukkur (51)
+(2, 13, 51, 'Sukkur', 'sukkur', FALSE, TRUE, 1),
+-- Sindh > Sukkur > Khairpur (53)
+(2, 13, 53, 'Khairpur', 'khairpur', FALSE, TRUE, 1),
+(2, 13, 53, 'Kingri', 'kingri', FALSE, TRUE, 2),
+-- Sindh > Larkana > Larkana (54)
+(2, 14, 54, 'Larkana', 'larkana', FALSE, TRUE, 1),
+-- Sindh > Larkana > Jacobabad (55)
+(2, 14, 55, 'Jacobabad', 'jacobabad', FALSE, TRUE, 1),
+-- Sindh > Larkana > Shikarpur (57)
+(2, 14, 57, 'Shikarpur', 'shikarpur', FALSE, TRUE, 1),
+-- KPK > Peshawar > Peshawar (67)
+(3, 17, 67, 'Peshawar', 'peshawar', FALSE, TRUE, 1),
+(3, 17, 67, 'Hayatabad', 'hayatabad', FALSE, TRUE, 2),
+(3, 17, 67, 'University Town', 'university-town', FALSE, TRUE, 3),
+-- KPK > Peshawar > Charsadda (68)
+(3, 17, 68, 'Charsadda', 'charsadda', FALSE, TRUE, 1),
+-- KPK > Peshawar > Nowshera (69)
+(3, 17, 69, 'Nowshera', 'nowshera', FALSE, TRUE, 1),
+-- KPK > Hazara > Abbottabad (77)
+(3, 20, 77, 'Abbottabad', 'abbottabad', FALSE, TRUE, 1),
+(3, 20, 77, 'Havelian', 'havelian', FALSE, TRUE, 2),
+-- KPK > Hazara > Mansehra (78)
+(3, 20, 78, 'Mansehra', 'mansehra', FALSE, TRUE, 1),
+-- KPK > Hazara > Haripur (79)
+(3, 20, 79, 'Haripur', 'haripur', FALSE, TRUE, 1),
+-- KPK > Swat (71)
+(3, 19, 71, 'Swat', 'swat', FALSE, TRUE, 1),
+(3, 19, 71, 'Mingora', 'mingora', FALSE, TRUE, 2),
+-- Balochistan > Quetta > Quetta (101)
+(4, 24, 101, 'Quetta', 'quetta', FALSE, TRUE, 1),
+(4, 24, 101, 'Satellite Town Quetta', 'satellite-town-quetta', FALSE, TRUE, 2),
+-- Balochistan > Makran > Gwadar (107)
+(4, 26, 107, 'Gwadar', 'gwadar', FALSE, TRUE, 1),
+-- ICT > Islamabad (116)
+(5, 30, 116, 'Islamabad', 'islamabad', FALSE, TRUE, 1),
+(5, 30, 116, 'F-6', 'f-6', FALSE, TRUE, 2),
+(5, 30, 116, 'F-7', 'f-7', FALSE, TRUE, 3),
+(5, 30, 116, 'F-8', 'f-8', FALSE, TRUE, 4),
+(5, 30, 116, 'G-9', 'g-9', FALSE, TRUE, 5),
+(5, 30, 116, 'G-10', 'g-10', FALSE, TRUE, 6),
+(5, 30, 116, 'G-11', 'g-11', FALSE, TRUE, 7),
+(5, 30, 116, 'Bahria Town Islamabad', 'bahria-town-islamabad', FALSE, TRUE, 8),
+(5, 30, 116, 'DHA Islamabad', 'dha-islamabad', FALSE, TRUE, 9),
+-- AJK > Muzaffarabad (117)
+(6, 31, 117, 'Muzaffarabad', 'muzaffarabad', FALSE, TRUE, 1),
+-- AJK > Mirpur (119)
+(6, 32, 119, 'Mirpur', 'mirpur', FALSE, TRUE, 1),
+(6, 32, 119, 'New Mirpur City', 'new-mirpur-city', FALSE, TRUE, 2),
+-- GB > Gilgit (125)
+(7, 34, 125, 'Gilgit', 'gilgit', FALSE, TRUE, 1),
+-- GB > Baltistan > Skardu (128)
+(7, 35, 128, 'Skardu', 'skardu', FALSE, TRUE, 1);
+
+-- =====================================================
+-- SEED DATA: INTERMEDIATE BOARDS
+-- =====================================================
+
+INSERT INTO intermediate_boards (name, slug, short_name, is_other_option, is_active, sort_order) VALUES
+-- Punjab Boards
+('Board of Intermediate and Secondary Education Lahore', 'bise-lahore', 'BISE Lahore', FALSE, TRUE, 1),
+('Board of Intermediate and Secondary Education Rawalpindi', 'bise-rawalpindi', 'BISE Rawalpindi', FALSE, TRUE, 2),
+('Board of Intermediate and Secondary Education Faisalabad', 'bise-faisalabad', 'BISE Faisalabad', FALSE, TRUE, 3),
+('Board of Intermediate and Secondary Education Multan', 'bise-multan', 'BISE Multan', FALSE, TRUE, 4),
+('Board of Intermediate and Secondary Education Gujranwala', 'bise-gujranwala', 'BISE Gujranwala', FALSE, TRUE, 5),
+('Board of Intermediate and Secondary Education Sargodha', 'bise-sargodha', 'BISE Sargodha', FALSE, TRUE, 6),
+('Board of Intermediate and Secondary Education Bahawalpur', 'bise-bahawalpur', 'BISE Bahawalpur', FALSE, TRUE, 7),
+('Board of Intermediate and Secondary Education Sahiwal', 'bise-sahiwal', 'BISE Sahiwal', FALSE, TRUE, 8),
+('Board of Intermediate and Secondary Education DG Khan', 'bise-dg-khan', 'BISE DG Khan', FALSE, TRUE, 9),
+-- Sindh Boards
+('Board of Intermediate Education Karachi', 'bie-karachi', 'BIE Karachi', FALSE, TRUE, 10),
+('Board of Intermediate and Secondary Education Hyderabad', 'bise-hyderabad', 'BISE Hyderabad', FALSE, TRUE, 11),
+('Board of Intermediate and Secondary Education Sukkur', 'bise-sukkur', 'BISE Sukkur', FALSE, TRUE, 12),
+('Board of Intermediate and Secondary Education Larkana', 'bise-larkana', 'BISE Larkana', FALSE, TRUE, 13),
+('Board of Intermediate and Secondary Education Mirpurkhas', 'bise-mirpurkhas', 'BISE Mirpurkhas', FALSE, TRUE, 14),
+('Board of Intermediate and Secondary Education Shaheed Benazirabad', 'bise-shaheed-benazirabad', 'BISE SBA', FALSE, TRUE, 15),
+-- KPK Boards
+('Board of Intermediate and Secondary Education Peshawar', 'bise-peshawar', 'BISE Peshawar', FALSE, TRUE, 16),
+('Board of Intermediate and Secondary Education Mardan', 'bise-mardan', 'BISE Mardan', FALSE, TRUE, 17),
+('Board of Intermediate and Secondary Education Swat', 'bise-swat', 'BISE Swat', FALSE, TRUE, 18),
+('Board of Intermediate and Secondary Education Abbottabad', 'bise-abbottabad', 'BISE Abbottabad', FALSE, TRUE, 19),
+('Board of Intermediate and Secondary Education Kohat', 'bise-kohat', 'BISE Kohat', FALSE, TRUE, 20),
+('Board of Intermediate and Secondary Education Bannu', 'bise-bannu', 'BISE Bannu', FALSE, TRUE, 21),
+('Board of Intermediate and Secondary Education DI Khan', 'bise-di-khan', 'BISE DI Khan', FALSE, TRUE, 22),
+('Board of Intermediate and Secondary Education Malakand', 'bise-malakand', 'BISE Malakand', FALSE, TRUE, 23),
+-- Balochistan Boards
+('Board of Intermediate and Secondary Education Quetta', 'bise-quetta', 'BISE Quetta', FALSE, TRUE, 24),
+('Board of Intermediate and Secondary Education Turbat', 'bise-turbat', 'BISE Turbat', FALSE, TRUE, 25),
+('Board of Intermediate and Secondary Education Khuzdar', 'bise-khuzdar', 'BISE Khuzdar', FALSE, TRUE, 26),
+-- Federal & Other
+('Federal Board of Intermediate and Secondary Education', 'fbise', 'FBISE', FALSE, TRUE, 27),
+('Aga Khan University Examination Board', 'aku-eb', 'AKU-EB', FALSE, TRUE, 28),
+('Board of Intermediate and Secondary Education AJK', 'bise-ajk', 'BISE AJK', FALSE, TRUE, 29),
+('Board of Intermediate Gilgit-Baltistan', 'bi-gilgit-baltistan', 'BI GB', FALSE, TRUE, 30),
+('Other', 'other', 'Other', TRUE, TRUE, 31);
+
+-- =====================================================
+-- MIGRATION HOOKS (idempotent — safe when schema.sql re-run)
+-- =====================================================
+
+DROP TABLE IF EXISTS course_access;
+
+SET @db := DATABASE();
+SET @allow_migr := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'enrollments'
 );
+SET @col_raw := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'enrollments' AND COLUMN_NAME = 'access_status'
+);
+SET @access_col_type := (
+  SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'enrollments' AND COLUMN_NAME = 'access_status'
+  LIMIT 1
+);
+SET @sql_add_col := IF(
+  @allow_migr = 0,
+  'SELECT 1',
+  IF(
+    @col_raw = 0,
+    'ALTER TABLE enrollments ADD COLUMN access_status ENUM(''active'', ''inactive'', ''revoked'') NOT NULL DEFAULT ''inactive'' AFTER status',
+    'SELECT 1'
+  )
+);
+PREPARE stmt_add_access_col FROM @sql_add_col;
+EXECUTE stmt_add_access_col;
+DEALLOCATE PREPARE stmt_add_access_col;
+
+SET @needs_enum_upgrade := (
+  @allow_migr > 0 AND @col_raw > 0 AND IFNULL(@access_col_type, '') NOT LIKE '%revoked%'
+);
+SET @sql_modify_access_enum := IF(
+  @needs_enum_upgrade,
+  'ALTER TABLE enrollments MODIFY COLUMN access_status ENUM(''active'', ''inactive'', ''revoked'') NOT NULL DEFAULT ''inactive''',
+  'SELECT 1'
+);
+PREPARE stmt_modify_access_enum FROM @sql_modify_access_enum;
+EXECUTE stmt_modify_access_enum;
+DEALLOCATE PREPARE stmt_modify_access_enum;
+
+SET @idx_exists := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'enrollments' AND INDEX_NAME = 'idx_enrollments_user_access'
+);
+SET @sql_add_idx := IF(
+  @allow_migr = 0,
+  'SELECT 1',
+  IF(
+    @idx_exists = 0,
+    'ALTER TABLE enrollments ADD KEY idx_enrollments_user_access (user_id, access_status)',
+    'SELECT 1'
+  )
+);
+PREPARE stmt_add_access_idx FROM @sql_add_idx;
+EXECUTE stmt_add_access_idx;
+DEALLOCATE PREPARE stmt_add_access_idx;

@@ -21,11 +21,10 @@ function mustContain(fileRel, needles, label) {
 
 try {
   mustContain(
-    'src/db/migrations/003_subjects_table.sql',
+    'src/sql/schema.sql',
     ['CREATE TABLE IF NOT EXISTS subjects', 'course_id', 'fk_subjects_course', 'order_index'],
-    'migration 003'
+    'schema: subjects'
   );
-  mustContain('src/sql/schema.sql', ['CREATE TABLE IF NOT EXISTS subjects', 'fk_subjects_course'], 'reference schema');
   mustContain(
     'src/routes/admin.routes.js',
     ["/courses/:courseId/subjects", 'getSubjects', 'postSubject', 'deleteSubject'],

@@ -33,7 +33,6 @@ export function buildDefaultWizardBatch() {
   close.setUTCDate(close.getUTCDate() - 2);
   return {
     title: 'Primary cohort',
-    code: undefined,
     start_date: start.toISOString().slice(0, 10),
     end_date: end.toISOString().slice(0, 10),
     enrollment_open_at: open.toISOString(),

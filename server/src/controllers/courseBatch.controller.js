@@ -51,7 +51,15 @@ export const postAdminCourseBatch = asyncHandler(async (req, res) => {
   if (!parsed.success) {
     throw new ApiError(422, 'Invalid batch payload', parsed.error.flatten());
   }
-  const created = await createBatch(courseId, parsed.data, req.user?.id || null);
+  let created;
+  try {
+    created = await createBatch(courseId, parsed.data, req.user?.id || null);
+  } catch (err) {
+    if (err instanceof ApiError && err.details?.code === 'COURSE_BATCH_LIMIT_REACHED') {
+      throw new ApiError(409, 'Course already has a batch', { code: 'COURSE_BATCH_LIMIT_REACHED' });
+    }
+    throw err;
+  }
   await logActivity({
     userId: req.user?.id,
     role: req.user?.role,

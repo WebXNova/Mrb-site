@@ -9,7 +9,7 @@ Transitional behaviors kept for production stability. Use the table template: **
 | `tests.subject` VARCHAR | Yes | Subjects phase + data backfill | Admin tests UI, `test.service.js`, public test meta |
 | `student_questions.subject` VARCHAR | Yes | Subjects phase or rename to `queue_key` | Student ask + admin Q&A filters |
 | `studentPortal.service.js` defensive SQL / column fallbacks | Yes | When test schema stable | Student dashboard |
-| Dynamic DDL moved to `002_legacy_incremental.sql` | N/A (historical) | Never edit applied migration; add `003+` | `applyMigrations.js` |
+| Historical incremental DDL was in numbered SQL files (removed); use `schema.sql` only | N/A | Edit `schema.sql` | Workbench / manual apply |
 | `subjects` rows (relational) without lecture/test FKs | Yes (foundation) | Wire-up phase adds FKs + UI | `subject.service.js`, `003_subjects_table.sql` |
 
 ## API envelopes (breaking change log)

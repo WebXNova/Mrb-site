@@ -12,9 +12,6 @@ function readAccessToken(req, role) {
   const cookieToken = req.cookies?.[cookieName] || null;
   const bearerToken = parseBearer(req.headers.authorization);
 
-  if (env.nodeEnv === 'production' && bearerToken) {
-    throw new ApiError(400, 'Authorization header is not allowed in production');
-  }
   return cookieToken || bearerToken || null;
 }
 

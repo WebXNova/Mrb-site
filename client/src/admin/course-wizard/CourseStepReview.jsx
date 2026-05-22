@@ -29,7 +29,9 @@ export default function CourseStepReview({
         {pricing.pricing_type === 'free' ? '0' : Number(pricing.price_amount || 0).toLocaleString('en-PK')}
       </p>
       <h4 className="heading-4">Batches</h4>
-      <p className="admin-courses__muted">{batches.length} batch(es)</p>
+      <p className="admin-courses__muted">
+        {batches.length} batch(es). Courses allow exactly one batch; edit this batch if you need changes.
+      </p>
       <h4 className="heading-4">Subjects</h4>
       <p className="admin-courses__muted">{subjects.filter((s) => String(s.title || '').trim()).length} subject(s)</p>
       {warnings.length > 0 ? (

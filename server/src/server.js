@@ -1,3 +1,4 @@
+import './bootstrapFatalHandlers.js';
 import 'dotenv/config';
 import fs from 'fs/promises';
 import http from 'http';
@@ -6,10 +7,12 @@ import { fileURLToPath } from 'url';
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { verifyMySqlConnection, mysqlPool } from './config/mysql.js';
-import { applyPendingMigrations } from './db/applyMigrations.js';
 import { connectRedis } from './config/redis.js';
 import { startEmailQueueWorker } from './services/emailQueueWorker.service.js';
 import { getEmailProviderStatus } from './services/email.service.js';
+import { seedLocationTables } from './services/locationSeed.service.js';
+import { ensureEnrollmentAccessSchema } from './db/ensureEnrollmentAccessSchema.js';
+import { ensureCourseCatalogSchema } from './db/ensureCourseCatalogSchema.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +36,17 @@ async function runSchema() {
       throw new Error(`Schema migration failed at statement ${index + 1}: ${snippet}. ${error.message}`);
     }
   }
+}
+
+async function hasBaseSchema() {
+  const [rows] = await mysqlPool.query(
+    `SELECT 1 AS ok
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'provinces'
+     LIMIT 1`
+  );
+  return rows.length > 0;
 }
 
 async function assertRequiredAuthSchema() {
@@ -74,16 +88,17 @@ async function startServer() {
   });
 
   await verifyMySqlConnection();
-  if (String(process.env.SKIP_SCHEMA_SYNC).toLowerCase() !== 'true') {
+  const baseSchemaExists = await hasBaseSchema();
+  if (!baseSchemaExists && String(process.env.SKIP_SCHEMA_SYNC).toLowerCase() !== 'true') {
     await runSchema();
+  } else if (baseSchemaExists) {
+    console.log('Schema bootstrap skipped (base schema already present)');
   } else {
     console.warn('Schema sync skipped (SKIP_SCHEMA_SYNC=true)');
   }
-  if (String(process.env.SKIP_DB_MIGRATE_ON_START).toLowerCase() !== 'true') {
-    await applyPendingMigrations(mysqlPool);
-  } else {
-    console.warn('DB migrations skipped (SKIP_DB_MIGRATE_ON_START=true)');
-  }
+  await seedLocationTables(mysqlPool);
+  await ensureCourseCatalogSchema(mysqlPool);
+  await ensureEnrollmentAccessSchema(mysqlPool);
   await assertRequiredAuthSchema();
 
   try {

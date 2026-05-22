@@ -61,9 +61,15 @@ function degradedReasonForRefreshKind(kind) {
   return 'refresh-degraded';
 }
 
-async function fetchWithTimeout(url, options, timeoutMs) {
+async function fetchWithTimeout(url, options, timeoutMs, externalSignal) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  
+  // Combine external signal with timeout signal
+  if (externalSignal) {
+    externalSignal.addEventListener('abort', () => controller.abort());
+  }
+  
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
@@ -281,6 +287,8 @@ export async function request(path, options = {}) {
     retryOnUnauthorized = true,
     timeoutMs = getRequestTimeoutMs(),
     skipRefreshQueue = false,
+    idempotencyKey,
+    signal,
   } = options;
 
   if (!skipRefreshQueue && authScope) {
@@ -302,11 +310,13 @@ export async function request(path, options = {}) {
         credentials: 'include',
         headers: {
           ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
           ...prepared.headers,
         },
         body: prepared.body,
       },
-      timeoutMs
+      timeoutMs,
+      signal
     );
   } catch (error) {
     if (error?.name === 'AbortError') {

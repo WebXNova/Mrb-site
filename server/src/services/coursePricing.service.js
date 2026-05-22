@@ -2,6 +2,7 @@ import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { toCoursePricingAdminDto, toCoursePricingPublicDto } from '../dto/coursePricing.dto.js';
+import { formatMySqlDateTime } from '../utils/dateTime.js';
 
 /**
  * Explicit projection for course_pricing reads. Never use SELECT * here — the
@@ -59,8 +60,12 @@ function normalizeWriteInput(payload) {
   const currencyCode = String(payload.currency_code ?? 'PKR').toUpperCase().trim() || 'PKR';
   const pricingType = String(payload.pricing_type ?? 'one_time').toLowerCase().trim();
   const isActive = payload.is_active === undefined ? true : Boolean(payload.is_active);
-  const startsAt = payload.starts_at ? new Date(payload.starts_at) : null;
-  const endsAt = payload.ends_at ? new Date(payload.ends_at) : null;
+  const startsAt = payload.starts_at
+    ? formatMySqlDateTime(payload.starts_at, { fieldName: 'starts_at' })
+    : null;
+  const endsAt = payload.ends_at
+    ? formatMySqlDateTime(payload.ends_at, { fieldName: 'ends_at' })
+    : null;
   const enrollmentVisible =
     payload.enrollment_visible === undefined ? true : Boolean(payload.enrollment_visible);
   const publicPurchaseVisible =
@@ -73,8 +78,8 @@ function normalizeWriteInput(payload) {
     is_active: isActive,
     enrollment_visible: enrollmentVisible,
     public_purchase_visible: publicPurchaseVisible,
-    starts_at: startsAt && !Number.isNaN(startsAt.getTime()) ? startsAt : null,
-    ends_at: endsAt && !Number.isNaN(endsAt.getTime()) ? endsAt : null,
+    starts_at: startsAt,
+    ends_at: endsAt,
   };
 }
 

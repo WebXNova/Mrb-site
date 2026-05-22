@@ -3,6 +3,7 @@ import { ApiError } from '../utils/apiError.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { COURSE_BATCH_PUBLIC_STATUSES, COURSE_BATCH_STATUSES } from '../constants/courseBatchStatus.js';
 import { toCourseBatchAdminDto, toCourseBatchPublicDto } from '../dto/courseBatch.dto.js';
+import { formatMySqlDateTime } from '../utils/dateTime.js';
 import { customAlphabet } from 'nanoid';
 
 const genBatchCode = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 12);
@@ -208,6 +209,16 @@ export async function createBatch(courseId, payload, createdByUserId) {
   }
   const course = await getCourseRowById(cid, { activeOnly: false });
   if (!course) throw courseNotFound();
+  // Enforce single-batch-per-course invariant
+  const [existingRows] = await mysqlPool.query(
+    'SELECT id FROM course_batches WHERE course_id = ? LIMIT 1',
+    [cid]
+  );
+  if (existingRows.length > 0) {
+    throw new ApiError(409, 'Course already has a batch', {
+      code: 'COURSE_BATCH_LIMIT_REACHED',
+    });
+  }
   const courseActive = Boolean(Number(course.is_active));
   if (!courseActive) {
     if (payload.is_active) {
@@ -228,6 +239,17 @@ export async function createBatch(courseId, payload, createdByUserId) {
   const insInstructor = payload.instructor_name == null ? null : String(payload.instructor_name).trim() || null;
   const insSchedule = payload.schedule_label == null ? null : String(payload.schedule_label).trim() || null;
 
+  // CRITICAL: Backend always generates secure batch codes
+  const code = `B${genBatchCode()}`;
+
+  // Normalize datetimes for MySQL
+  const enrollmentOpenAt = formatMySqlDateTime(payload.enrollment_open_at, {
+    fieldName: 'enrollment_open_at',
+  });
+  const enrollmentCloseAt = formatMySqlDateTime(payload.enrollment_close_at, {
+    fieldName: 'enrollment_close_at',
+  });
+
   try {
     const [result] = await mysqlPool.query(
       `INSERT INTO course_batches (
@@ -240,11 +262,11 @@ export async function createBatch(courseId, payload, createdByUserId) {
       [
         cid,
         payload.title,
-        payload.code,
+        code,
         payload.start_date,
         payload.end_date,
-        payload.enrollment_open_at,
-        payload.enrollment_close_at,
+        enrollmentOpenAt,
+        enrollmentCloseAt,
         payload.total_seats,
         insInstructor,
         insSchedule,
@@ -352,6 +374,14 @@ export async function updateBatch(batchId, patch, { isSuperAdmin = false } = {})
       ? Boolean(patch.recordings_enabled)
       : Boolean(Number(row.recordings_enabled ?? 1));
 
+  // Normalize datetimes for MySQL
+  const enrollmentOpenAt = formatMySqlDateTime(mergedDates.enrollment_open_at, {
+    fieldName: 'enrollment_open_at',
+  });
+  const enrollmentCloseAt = formatMySqlDateTime(mergedDates.enrollment_close_at, {
+    fieldName: 'enrollment_close_at',
+  });
+
   try {
     await mysqlPool.query(
       `UPDATE course_batches SET
@@ -365,8 +395,8 @@ export async function updateBatch(batchId, patch, { isSuperAdmin = false } = {})
         nextCode,
         mergedDates.start_date,
         mergedDates.end_date,
-        mergedDates.enrollment_open_at,
-        mergedDates.enrollment_close_at,
+        enrollmentOpenAt,
+        enrollmentCloseAt,
         nextTotal,
         insInstructor,
         insSchedule,
@@ -448,6 +478,17 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
   const course = crows[0];
   if (!course) throw courseNotFound();
 
+  // Enforce single-batch-per-course invariant even inside transactions
+  const [existingRows] = await connection.query(
+    'SELECT id FROM course_batches WHERE course_id = ? LIMIT 1',
+    [cid]
+  );
+  if (existingRows.length > 0) {
+    throw new ApiError(409, 'Course already has a batch', {
+      code: 'COURSE_BATCH_LIMIT_REACHED',
+    });
+  }
+
   const courseActive = Boolean(Number(course.is_active));
   if (!courseActive && payload.is_active) {
     throw new ApiError(409, 'Inactive courses cannot create active batches', { code: 'COURSE_INACTIVE' });
@@ -465,13 +506,20 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
   validateSeatRules({ total_seats: payload.total_seats, seats_filled: 0, status: initial });
   validateBatchStateTransition('draft', initial, { isSuperAdmin: false });
 
-  const code =
-    payload.code && String(payload.code).trim()
-      ? String(payload.code).trim().toUpperCase()
-      : `B${genBatchCode()}`;
+  // CRITICAL: Backend always generates secure batch codes
+  // Frontend must NEVER send batch codes - they are internal identifiers
+  const code = `B${genBatchCode()}`;
 
   const insInstructor = payload.instructor_name == null ? null : String(payload.instructor_name).trim() || null;
   const insSchedule = payload.schedule_label == null ? null : String(payload.schedule_label).trim() || null;
+
+  // Normalize datetimes for MySQL
+  const enrollmentOpenAt = formatMySqlDateTime(payload.enrollment_open_at, {
+    fieldName: 'enrollment_open_at',
+  });
+  const enrollmentCloseAt = formatMySqlDateTime(payload.enrollment_close_at, {
+    fieldName: 'enrollment_close_at',
+  });
 
   try {
     const [result] = await connection.query(
@@ -488,8 +536,8 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
         code,
         payload.start_date,
         payload.end_date,
-        payload.enrollment_open_at,
-        payload.enrollment_close_at,
+        enrollmentOpenAt,
+        enrollmentCloseAt,
         payload.total_seats,
         insInstructor,
         insSchedule,

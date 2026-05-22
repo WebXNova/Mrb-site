@@ -136,27 +136,9 @@ const batchStatusSchema = z
     { message: 'invalid batch status' }
   );
 
-const batchCodeSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(120)
-  .regex(
-    /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/,
-    'code must be alphanumeric with optional ._- and start with alphanumeric'
-  )
-  .transform((s) => s.toUpperCase());
-
-const optionalBatchCodeSchema = z.preprocess((v) => {
-  if (v == null) return undefined;
-  const s = String(v).trim();
-  return s === '' ? undefined : s;
-}, batchCodeSchema.optional());
-
 export const courseWizardBatchItemSchema = z
   .object({
     title: z.string().trim().min(1).max(180),
-    code: optionalBatchCodeSchema,
     start_date: dateOnlySchema,
     end_date: dateOnlySchema,
     enrollment_open_at: dateTimeSchema,
@@ -258,7 +240,8 @@ export const courseWizardBodySchema = z
         publish: z.boolean(),
         course: courseWizardCourseSchema,
         pricing: courseWizardPricingSchema,
-        batches: z.array(courseWizardBatchItemSchema).max(50),
+        // STRICT: exactly one batch per course
+        batches: z.array(courseWizardBatchItemSchema).length(1),
         subjects: z.array(courseWizardSubjectItemSchema).max(200),
       })
       .strict()

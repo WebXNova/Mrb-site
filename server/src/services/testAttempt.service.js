@@ -6,6 +6,7 @@ import { env } from '../config/env.js';
 import { getRedisClient } from '../config/redis.js';
 import { ApiError } from '../utils/apiError.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
+import { formatMySqlDateTime } from '../utils/dateTime.js';
 
 const attemptRateMap = new Map();
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -130,6 +131,7 @@ export async function verifyMrbCodeAndCreateAttempt({ slug, studentName, ipAddre
 
   const durationMinutes = Number(test.duration_minutes || 0);
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
+  const expiresAtFormatted = formatMySqlDateTime(expiresAt, { fieldName: 'expires_at' });
   const attemptNonce = nanoid(24);
   const [insertResult] = await mysqlPool.query(
     `INSERT INTO test_attempts
@@ -140,7 +142,7 @@ export async function verifyMrbCodeAndCreateAttempt({ slug, studentName, ipAddre
       studentUser?.id || null,
       studentName || studentUser?.name || null,
       'DIRECT',
-      expiresAt,
+      expiresAtFormatted,
       ipAddress || null,
       userAgent || null,
       deviceFingerprint,

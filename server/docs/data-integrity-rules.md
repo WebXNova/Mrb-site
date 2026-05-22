@@ -27,7 +27,7 @@ Today, lectures reference **courses** only; tests carry a free-text **subject** 
 ## Integrity with current schema
 
 - Reference DDL lives in `server/src/sql/schema.sql` (CREATE only).
-- Incremental / conditional alters are **migration-only** (`server/src/db/migrations/`), recorded in `schema_migrations` with checksums.
+- Schema changes are made in `server/src/sql/schema.sql` and applied manually to existing databases.
 
 ## Subject ordering contract
 

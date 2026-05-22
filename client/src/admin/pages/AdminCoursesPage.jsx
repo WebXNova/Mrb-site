@@ -388,7 +388,7 @@ export default function AdminCoursesPage() {
           setSuccess('Course, pricing, and subjects saved together.');
           scrollToSubjects();
         } else {
-          setSuccess('Course created');
+        setSuccess('Course created');
           resetForm();
         }
       }

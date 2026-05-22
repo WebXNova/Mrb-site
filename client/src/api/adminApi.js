@@ -16,7 +16,12 @@ export const adminApi = {
 
   courses: (token) => http.get('/courses/admin', { token }),
   createCourse: (token, payload) => http.post('/admin/courses', payload, { token }),
-  createCourseWizard: (token, payload) => http.post('/admin/courses/wizard', payload, { token }),
+  createCourseWizard: (token, payload, options = {}) => 
+    http.post('/admin/courses/wizard', payload, { 
+      token, 
+      idempotencyKey: options.idempotencyKey,
+      signal: options.signal,
+    }),
   updateCourse: (token, courseId, payload) =>
     http.put(`/admin/courses/${courseId}`, payload, { token }),
   coursePricing: (token, courseId) =>

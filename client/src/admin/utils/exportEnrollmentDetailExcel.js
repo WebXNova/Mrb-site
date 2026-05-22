@@ -1,4 +1,3 @@
-import { receiptMediaUrl } from '../../utils/mediaUrl';
 import { batchLabel } from '../../constants/enrollmentBatches';
 
 const BRAND = {
@@ -24,14 +23,6 @@ function safeExportFilename(id, applicantName) {
     .slice(0, 42);
   const stamp = new Date().toISOString().slice(0, 10);
   return `MRB-enrollment-${id}-${slug || 'record'}-${stamp}.xlsx`;
-}
-
-function bytesToHuman(n) {
-  const num = Number(n);
-  if (!Number.isFinite(num) || num < 0) return '-';
-  if (num < 1024) return `${Math.round(num)} B`;
-  if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
-  return `${(num / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatGender(value) {
@@ -141,7 +132,11 @@ export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
   r += 1;
   styledPairRow(ws, r, 'Province', enrollment.province);
   r += 1;
+  styledPairRow(ws, r, 'Division', enrollment.division);
+  r += 1;
   styledPairRow(ws, r, 'District', enrollment.district);
+  r += 1;
+  styledPairRow(ws, r, 'City', enrollment.city);
   r += 1;
   styledPairRow(ws, r, 'HSSC status', enrollment.hsscStatus);
   r += 1;
@@ -150,15 +145,24 @@ export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
   styledPairRow(ws, r, 'MDCAT attempt history', enrollment.mdcatAttemptType);
   r += 1;
 
-  styledSectionRow(ws, r, 'Fee & verification');
+  styledSectionRow(ws, r, 'Payment & review');
   r += 1;
-  styledPairRow(ws, r, 'Transaction ID', enrollment.transactionId);
+  styledPairRow(ws, r, 'Course title', enrollment.courseTitle);
   r += 1;
-  styledPairRow(ws, r, 'Payment method', enrollment.paymentMethod);
+  styledPairRow(ws, r, 'Order ID', enrollment.orderId != null ? String(enrollment.orderId) : '-');
   r += 1;
-  styledPairRow(ws, r, 'Account title', enrollment.accountTitle);
+  styledPairRow(ws, r, 'Order status', enrollment.orderStatus ?? '-');
   r += 1;
-  styledPairRow(ws, r, 'Verification status', enrollment.status ?? '-');
+  styledPairRow(
+    ws,
+    r,
+    'Order amount',
+    enrollment.orderAmount != null ? `${String(enrollment.orderAmount)} ${enrollment.orderCurrency || 'PKR'}` : '-'
+  );
+  r += 1;
+  styledPairRow(ws, r, 'Paid at', formatDt(enrollment.orderPaidAt, formatDate));
+  r += 1;
+  styledPairRow(ws, r, 'Enrollment status', enrollment.status ?? '-');
   r += 1;
   styledPairRow(ws, r, 'Admin note', enrollment.adminNote ?? '-');
   r += 1;
@@ -171,19 +175,6 @@ export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
   styledPairRow(ws, r, 'Record created', formatDt(enrollment.createdAt, formatDate));
   r += 1;
   styledPairRow(ws, r, 'Last updated', formatDt(enrollment.updatedAt, formatDate));
-  r += 1;
-
-  const receiptHref = receiptMediaUrl(enrollment.receiptUrl);
-
-  styledSectionRow(ws, r, 'Receipt file (open link in browser)');
-  r += 1;
-  styledPairRow(ws, r, 'Receipt URL', receiptHref || '-');
-  r += 1;
-  styledPairRow(ws, r, 'Original filename', enrollment.receiptOriginalName ?? '-');
-  r += 1;
-  styledPairRow(ws, r, 'MIME type', enrollment.receiptMimeType ?? '-');
-  r += 1;
-  styledPairRow(ws, r, 'File size', bytesToHuman(enrollment.receiptSizeBytes));
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {

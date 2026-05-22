@@ -81,7 +81,7 @@ export default function CourseCard({ course }) {
         </div>
       </Link>
       <div className="course-card__actions">
-        <Button as={Link} to="/enroll" variant="accent" size="lg">
+        <Button as={Link} to={`/enroll/${encodeURIComponent(String(id))}`} variant="accent" size="lg">
           Enroll now
         </Button>
       </div>

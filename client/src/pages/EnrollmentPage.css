@@ -145,9 +145,60 @@
   line-height: 1.35;
 }
 
+.enrollment-field__loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--fs-12);
+  color: var(--color-ink-500);
+  line-height: 1.35;
+}
+
+.enrollment-spinner {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 20%, white);
+  border-top-color: var(--color-primary);
+  animation: enrollmentSpin 0.8s linear infinite;
+}
+
 .enrollment-success {
   font-size: var(--fs-13);
   color: var(--color-success);
+}
+
+.enrollment-payment-next {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.enrollment-payment-next__summary {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+}
+
+.enrollment-payment-next__summary p,
+.enrollment-payment-next__notice {
+  margin: 0;
+}
+
+.enrollment-payment-next__notice {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-primary) 8%, white);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 20%, white);
+  color: var(--color-ink-700);
+}
+
+@keyframes enrollmentSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .enrollment-radio-row {
@@ -457,37 +508,6 @@
     background: var(--color-bg-soft);
     border-color: var(--color-ink-200);
   }
-}
-
-.enrollment-receipt-preview {
-  border: 1px solid var(--color-ink-100);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  display: grid;
-  gap: var(--space-2);
-}
-
-.enrollment-receipt-preview img {
-  width: 100%;
-  max-height: min(260px, 45vh);
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-}
-
-.enrollment-receipt-preview--pdf {
-  text-align: center;
-}
-
-.enrollment-receipt-preview__icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  margin: 0 auto;
-  display: grid;
-  place-items: center;
-  font-weight: var(--fw-bold);
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 .enrollment-progress-wrap {

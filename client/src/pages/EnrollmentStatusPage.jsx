@@ -50,14 +50,14 @@ export default function EnrollmentStatusPage() {
 
   const statusUi = useMemo(() => {
     const raw = tracking?.status || 'pending';
-    if (raw === 'verified') {
+    if (raw === 'approved' || raw === 'verified') {
       return {
         key: 'accepted',
         label: 'Accepted',
         tone: 'success',
-        headline: 'Your enrollment is verified',
+        headline: 'Your enrollment is approved',
         detail:
-          'MRB Classes has verified your registration and fee details. Welcome aboard — your student dashboard will reflect your lectures and tests as soon as course access is turned on.',
+          'MRB Classes has approved your registration after payment confirmation. Welcome aboard — your student dashboard will reflect your lectures and tests as soon as course access is turned on.',
         extras:
           'If you already have an MRB student account, please sign in. If not, complete student registration next so everything stays under one login.',
       };
@@ -80,9 +80,9 @@ export default function EnrollmentStatusPage() {
       tone: 'pending',
       headline: 'Thank you — you will be added soon',
       detail:
-        'Your registration and receipt have reached the admin team safely. In most cases verification is completed in a short time. Please refresh this page or return later; status updates automatically every few moments while we are still reviewing.',
+        'Your registration has reached the admin team safely. In most cases review is completed in a short time after payment confirmation. Please refresh this page or return later; status updates automatically every few moments while we are still reviewing.',
       extras:
-        'Once verified, you will be able to access your lectures and all tests from your student portal. We appreciate your patience and your trust in MRB Classes.',
+        'Once approved, you will be able to access your lectures and all tests from your student portal. We appreciate your patience and your trust in MRB Classes.',
     };
   }, [tracking?.status]);
 
@@ -98,8 +98,8 @@ export default function EnrollmentStatusPage() {
               enrollment.
             </p>
             <div className="enrollment-status-actions">
-              <Button as={Link} to="/enroll" variant="accent" size="md">
-                Start registration again
+              <Button as={Link} to="/courses" variant="accent" size="md">
+                Browse courses
               </Button>
               <Button as={Link} to="/" variant="secondary" size="md">
                 Back to home
@@ -172,7 +172,7 @@ export default function EnrollmentStatusPage() {
               ) : null}
 
               <div className="enrollment-status-actions">
-                {tracking?.status === 'verified' ? (
+                {tracking?.status === 'approved' || tracking?.status === 'verified' ? (
                   <Button as={Link} to="/login" variant="accent" size="md">
                     Go to student login
                   </Button>

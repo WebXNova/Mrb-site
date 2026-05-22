@@ -32,7 +32,7 @@ function mustNotContain(fileRel, needles, label) {
 
 try {
   mustContain(
-    'src/db/migrations/005_course_batches.sql',
+    'src/sql/schema.sql',
     [
       'CREATE TABLE IF NOT EXISTS course_batches',
       'idx_course_batches_course',
@@ -42,14 +42,15 @@ try {
       'idx_course_batches_course_status',
       'fk_course_batches_course',
       'fk_course_batches_created_by',
-      'uq_course_batches_code',
+      'uq_course_batch_course_code',
+      'allow_enrollment',
     ],
-    'migration 005'
+    'schema: course_batches'
   );
   mustNotContain(
-    'src/db/migrations/005_course_batches.sql',
+    'src/sql/schema.sql',
     ['description VARCHAR', 'slug VARCHAR', 'price_amount'],
-    'forbidden columns'
+    'forbidden columns in course_batches block'
   );
   mustContain('src/sql/schema.sql', ['CREATE TABLE IF NOT EXISTS course_batches'], 'reference schema');
   mustContain(
@@ -75,7 +76,7 @@ try {
     ],
     'service'
   );
-  mustContain('src/db/migrations/007_course_batches_wizard_flags.sql', ['allow_enrollment'], 'migration 007');
+  mustContain('src/sql/schema.sql', ['allow_enrollment', 'show_publicly'], 'schema: batch wizard flags');
   console.log('verify-course-batches-shape: OK');
 } catch (e) {
   console.error(e.message || e);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { courseWizardBodySchema } from '@course-wizard-schema';
+import { generateIdempotencyKey } from '../../utils/idempotency.js';
 import CourseWizardLayout from './CourseWizardLayout.jsx';
 import CourseStepDetails from './CourseStepDetails.jsx';
 import CourseStepPricing from './CourseStepPricing.jsx';
@@ -24,6 +25,10 @@ import {
 const DRAFT_KEY = 'mrb_admin_course_create_wizard_v1';
 
 function buildWizardPayload(publish, course, pricing, batches, subjects) {
+  // CRITICAL: Auto-sync publish state
+  // If publish=true, force course and pricing to be active
+  const publishIntent = Boolean(publish);
+  
   const pricingOut = {
     ...pricing,
     price_amount: Math.trunc(Number(pricing.price_amount ?? 0)),
@@ -31,7 +36,10 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
       pricing.original_price_amount === '' || pricing.original_price_amount == null
         ? null
         : Math.trunc(Number(pricing.original_price_amount)),
+    // Auto-activate pricing when publishing
+    is_active: publishIntent ? true : Boolean(pricing.is_active),
   };
+  
   const courseOut = {
     ...course,
     short_description:
@@ -39,17 +47,50 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
         ? null
         : String(course.short_description).trim(),
     thumbnail_url: course.thumbnail_url === undefined ? null : course.thumbnail_url ?? null,
+    // Auto-activate course when publishing
+    is_active: publishIntent ? true : Boolean(course.is_active),
   };
   const batchesOut = batches
     .filter((b) => String(b.title || '').trim())
-    .map((b) => ({
-      ...b,
-      title: String(b.title).trim(),
-      code: b.code ? String(b.code).trim() : undefined,
-      instructor_name: (b.instructor_name && String(b.instructor_name).trim()) || null,
-      schedule_label: (b.schedule_label && String(b.schedule_label).trim()) || null,
-      total_seats: Math.trunc(Number(b.total_seats)),
-    }));
+    .map((b, index) => {
+      const rawStatus = String(b.status || 'draft').toLowerCase();
+      
+      // Auto-sync batch state when publishing
+      let effectiveStatus = rawStatus;
+      let effectiveActive = b.is_active !== false;
+      
+      if (publishIntent) {
+        // If publishing and batch is draft, upgrade to upcoming
+        if (rawStatus === 'draft') {
+          effectiveStatus = 'upcoming';
+        }
+        // Ensure at least first batch is active when publishing
+        if (index === 0 || b.is_active !== false) {
+          effectiveActive = true;
+        }
+      } else {
+        // When saving draft, respect original states
+        effectiveActive = b.is_active !== false;
+      }
+      
+      return {
+        title: String(b.title).trim(),
+        start_date: b.start_date,
+        end_date: b.end_date,
+        enrollment_open_at: b.enrollment_open_at,
+        enrollment_close_at: b.enrollment_close_at,
+        total_seats: Math.trunc(Number(b.total_seats)),
+        instructor_name: (b.instructor_name && String(b.instructor_name).trim()) || null,
+        schedule_label: (b.schedule_label && String(b.schedule_label).trim()) || null,
+        timezone: b.timezone || 'UTC',
+        status: effectiveStatus,
+        is_active: effectiveActive,
+        allow_enrollment: b.allow_enrollment !== false,
+        show_publicly: b.show_publicly !== false,
+        certificate_enabled: b.certificate_enabled === true,
+        recordings_enabled: b.recordings_enabled !== false,
+      };
+    });
   const subjectsOut = subjects
     .filter((s) => String(s.title || '').trim())
     .map((s, i) => ({
@@ -74,6 +115,8 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef(null);
   const draftTimerRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const idempotencyKeyRef = useRef(null);
 
   const persistDraft = useCallback(() => {
     try {
@@ -91,7 +134,10 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
       const d = JSON.parse(raw);
       if (d.course) setCourse(d.course);
       if (d.pricing) setPricing(d.pricing);
-      if (Array.isArray(d.batches) && d.batches.length) setBatches(d.batches);
+      if (Array.isArray(d.batches) && d.batches.length) {
+        // Enforce single-batch invariant when restoring drafts
+        setBatches([d.batches[0]]);
+      }
       if (Array.isArray(d.subjects) && d.subjects.length) setSubjects(d.subjects);
       if (typeof d.step === 'number' && d.step >= 0 && d.step <= 4) setStep(d.step);
     } catch {
@@ -146,15 +192,12 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   }
 
   function onBatchChange(idx, patch) {
-    setBatches((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
-  }
-
-  function onAddBatch() {
-    setBatches((prev) => [...prev, buildDefaultWizardBatch()]);
-  }
-
-  function onRemoveBatch(idx) {
-    setBatches((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+    // Enforce a single-batch invariant: always update index 0 only
+    setBatches((prev) => {
+      const base = prev[0] || buildDefaultWizardBatch();
+      const next = { ...base, ...(idx === 0 ? patch : {}) };
+      return [next];
+    });
   }
 
   function onSubjectChange(idx, patch) {
@@ -200,6 +243,38 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   function clearCoverImage() {
     setCourse((prev) => ({ ...prev, thumbnail_url: undefined }));
     if (imageInputRef.current) imageInputRef.current.value = '';
+  }
+
+  function handleCancel() {
+    // Cancel any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // Clear draft from local storage
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignore */
+    }
+
+    // Reset wizard state back to initial defaults
+    setCourse(buildDefaultWizardCourse());
+    setPricing(buildDefaultWizardPricing());
+    setBatches([buildDefaultWizardBatch()]);
+    setSubjects([buildDefaultWizardSubject()]);
+    setStep(0);
+    setStepError('');
+    setFieldErrors({});
+    setBatchFieldErrors({});
+    setPublishModalOpen(false);
+    setSaving(false);
+
+    // Let parent page react (e.g. clear messages)
+    if (typeof onCancel === 'function') {
+      onCancel();
+    }
   }
 
   function goNext() {
@@ -269,25 +344,106 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   })();
 
   async function submitWizard(publish) {
+    // Prevent parallel submissions
+    if (saving) {
+      return;
+    }
+
     const body = buildWizardPayload(publish, course, pricing, batches, subjects);
     const parsed = courseWizardBodySchema.safeParse(body);
     if (!parsed.success) {
       setStepError(flattenZodError(parsed.error));
       return;
     }
+
+    // Generate idempotency key for this submission
+    // Reuse the same key if retrying the same submission
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = generateIdempotencyKey();
+    }
+
+    // Create abort controller for request cancellation
+    abortControllerRef.current = new AbortController();
+
     setSaving(true);
     setStepError('');
+    
     try {
-      const res = await adminApi.createCourseWizard(token, parsed.data);
+      const res = await adminApi.createCourseWizard(token, parsed.data, {
+        idempotencyKey: idempotencyKeyRef.current,
+        signal: abortControllerRef.current.signal,
+      });
+      
+      // Clear idempotency key on success
+      idempotencyKeyRef.current = null;
       localStorage.removeItem(DRAFT_KEY);
       onCreated(res?.data);
     } catch (err) {
-      setStepError(err.message || 'Wizard submit failed');
+      // Don't show error if request was cancelled
+      if (err.name === 'AbortError' || err.name === 'CanceledError') {
+        return;
+      }
+      
+      let errorMessage = err.message || 'Wizard submit failed';
+      
+      // Handle specific error codes
+      if (err.response?.data?.error) {
+        const errorCode = err.response.data.error.code;
+        const errorMsg = err.response.data.error.message;
+        const validationErrors = err.response.data.error.validationErrors;
+        
+        // Domain state errors
+        if (errorCode === 'INVALID_PUBLISH_STATE') {
+          if (validationErrors && validationErrors.length > 0) {
+            errorMessage = validationErrors.map(e => e.message).join('; ');
+          } else {
+            errorMessage = errorMsg || 'Invalid publish state. Please check all required fields.';
+          }
+        } else if (errorCode === 'ACTIVE_BATCH_ON_INACTIVE_COURSE') {
+          errorMessage = 'Cannot have active batches on an inactive course.';
+        } else if (errorCode === 'ACTIVE_PRICING_ON_INACTIVE_COURSE') {
+          errorMessage = 'Cannot have active pricing on an inactive course.';
+        } else if (errorCode === 'INVALID_BATCH_LIFECYCLE') {
+          errorMessage = errorMsg || 'Batch enrollment windows or dates are invalid.';
+        }
+        // Duplicate entry errors
+        else if (errorCode === 'BATCH_CODE_EXISTS') {
+          errorMessage = errorMsg || 'A batch with this code already exists in this course.';
+        } else if (errorCode === 'COURSE_TITLE_EXISTS') {
+          errorMessage = errorMsg || 'A course with this title already exists.';
+        }
+        // Idempotency errors
+        else if (errorCode === 'IDEMPOTENCY_KEY_MISMATCH') {
+          errorMessage = 'This submission was modified. Please review and resubmit.';
+          idempotencyKeyRef.current = null;
+        }
+        // Generic fallback
+        else if (errorMsg) {
+          errorMessage = errorMsg;
+        }
+      }
+      
+      setStepError(errorMessage);
     } finally {
       setSaving(false);
       setPublishModalOpen(false);
+      abortControllerRef.current = null;
     }
   }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Cancel any pending requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      // Clear draft timer
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+      }
+    };
+  }, []);
 
   const previewCard =
     step === 0 ? (
@@ -349,8 +505,6 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
           <CourseStepBatches
             batches={batches}
             onBatchChange={onBatchChange}
-            onAddBatch={onAddBatch}
-            onRemoveBatch={onRemoveBatch}
             fieldErrors={batchFieldErrors}
           />
         ) : null}
@@ -373,7 +527,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
             saving={saving}
             onSaveDraft={() => submitWizard(false)}
             onOpenPublishModal={() => setPublishModalOpen(true)}
-            onCancel={onCancel}
+            onCancel={handleCancel}
           />
         ) : null}
         {step < 4 ? (
@@ -384,7 +538,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
             <button type="button" className="btn btn--primary btn--sm" onClick={goNext}>
               Next
             </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={onCancel}>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={handleCancel}>
               Exit wizard
             </button>
           </div>

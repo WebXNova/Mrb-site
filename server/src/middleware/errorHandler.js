@@ -29,15 +29,23 @@ export function notFoundHandler(req, res) {
 export function errorHandler(err, req, res, next) {
   if (res.headersSent) return next(err);
   const isProd = process.env.NODE_ENV === 'production';
-  const status = err instanceof ApiError ? err.statusCode : 500;
-  if (status >= 500) {
+  const inferredStatus =
+    err instanceof ApiError ? err.statusCode : Number(err?.status ?? err?.statusCode) || 500;
+  if (inferredStatus >= 500) {
     console.error('Unhandled request error:', {
       requestId: req.requestId || null,
       method: req.method,
       path: sanitizePath(req.originalUrl),
-      status,
+      status: inferredStatus,
       message: err.message,
       stack: err.stack,
+    });
+  }
+
+  /** body-parser (`express.raw`/`express.json`) — treat oversize payloads as HTTP 413, not HTTP 500. */
+  if (err?.type === 'entity.too.large' || inferredStatus === 413 || Number(err.status) === 413) {
+    return sendError(res, 413, 'PAYLOAD_TOO_LARGE', 'Payload too large', {
+      requestId: req.requestId || null,
     });
   }
 

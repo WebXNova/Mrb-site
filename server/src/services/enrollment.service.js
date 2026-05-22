@@ -15,6 +15,10 @@ function toEnrollment(row) {
     whatsappNumber: row.whatsapp_number,
     province: row.province,
     district: row.district,
+    provinceId: row.province_id ?? null,
+    divisionId: row.division_id ?? null,
+    districtId: row.district_id ?? null,
+    cityId: row.city_id ?? null,
     hsscStatus: row.hssc_status,
     board: row.board,
     mdcatAttemptType: row.mdcat_attempt_type,
@@ -66,9 +70,9 @@ export async function createEnrollment(payload) {
   const [result] = await mysqlPool.query(
     `INSERT INTO enrollments (
       email, applicant_full_name, father_name, date_of_birth, gender, whatsapp_number,
-      province, district, hssc_status, board, mdcat_attempt_type, batch_number, transaction_id, verification_token,
+      province, district, province_id, division_id, district_id, city_id, hssc_status, board, mdcat_attempt_type, batch_number, transaction_id, verification_token,
       payment_method, account_title, receipt_url, receipt_original_name, receipt_mime_type, receipt_size_bytes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.email,
       payload.applicantFullName,
@@ -78,6 +82,10 @@ export async function createEnrollment(payload) {
       payload.whatsappNumber,
       payload.province,
       payload.district,
+      payload.provinceId,
+      payload.divisionId,
+      payload.districtId,
+      payload.cityId,
       payload.hsscStatus,
       payload.board,
       payload.mdcatAttemptType,

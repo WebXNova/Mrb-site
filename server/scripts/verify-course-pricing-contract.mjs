@@ -1,7 +1,7 @@
 /**
  * Pricing domain contract guards.
  *
- *  1) Foundation files exist with the expected markers (migration, DDL,
+ *  1) Foundation files exist with the expected markers (DDL in schema.sql,
  *     service, DTO, validator, controller, admin route wiring, client API).
  *  2) Runtime code under `server/src` (excluding migrations, reference SQL
  *     and verify scripts themselves) does not reintroduce the legacy
@@ -23,7 +23,6 @@ const serverRoot = path.join(__dirname, '..');
 const srcRoot = path.join(serverRoot, 'src');
 
 const SKIP_RELATIVE_DIRS = new Set([
-  path.join('src', 'db', 'migrations'),
   path.join('src', 'sql'),
 ]);
 
@@ -194,22 +193,17 @@ function assertDtoShape() {
 
 try {
   mustContain(
-    'src/db/migrations/004_course_pricing.sql',
+    'src/sql/schema.sql',
     ['CREATE TABLE IF NOT EXISTS course_pricing', 'fk_course_pricing_course', 'idx_course_pricing_course_active'],
-    'migration 004'
+    'schema: course_pricing base'
   );
   mustContain(
-    'src/db/migrations/006_course_pricing_wizard.sql',
+    'src/sql/schema.sql',
     ['subscription', 'enrollment_visible', 'public_purchase_visible'],
-    'migration 006'
+    'schema: course_pricing wizard columns'
   );
   mustContain('src/validators/courseWizard.schema.js', ['courseWizardBodySchema'], 'wizard schema');
   mustContain('src/routes/admin.routes.js', ['postCourseWizard', '/courses/wizard'], 'wizard route');
-  mustContain(
-    'src/sql/schema.sql',
-    ['CREATE TABLE IF NOT EXISTS course_pricing', 'fk_course_pricing_course'],
-    'reference schema'
-  );
   mustContain(
     'src/services/coursePricing.service.js',
     [

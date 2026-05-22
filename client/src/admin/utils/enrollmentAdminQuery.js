@@ -6,6 +6,7 @@ export function buildEnrollmentAdminQuery(filters, debouncedSearch) {
   if (filters.batch !== 'all') q.batch = filters.batch;
   if (filters.province !== 'all') q.province = filters.province;
   if (filters.gender !== 'all') q.gender = filters.gender;
+  if (filters.status !== 'all') q.status = filters.status;
   const from = filters.dateFrom?.trim();
   const to = filters.dateTo?.trim();
   if (from) q.dateFrom = from;

@@ -332,3 +332,19 @@ export async function providerWebhookRateLimit(req, res, next) {
   }
   return next();
 }
+
+/** Sliding window per IP for Safepay payment webhook (abuse / burst control). */
+export async function safepayPaymentWebhookRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const limit = Math.max(30, Number(env.verification.safepayWebhookPerIpPerMinute || 240));
+  const allowed = await enforceSlidingLimit({
+    key: `payments:sfpy:webhook:ip:${ip}`,
+    windowMs: 60 * 1000,
+    limit,
+  });
+  if (!allowed) {
+    res.setHeader('Retry-After', '60');
+    return next(new ApiError(429, 'Payment webhook rate limited'));
+  }
+  return next();
+}

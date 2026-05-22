@@ -1,56 +1,38 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import multer from 'multer';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import {
+  assertBoardExists,
+  assertCourseExists,
+  assertOrderExists,
   createEnrollment,
   getEnrollmentById,
-  getEnrollmentTrackingByToken,
   hasDuplicatePendingEnrollment,
   listEnrollments,
+  normalizeEnrollmentStatus,
   updateEnrollmentStatus,
-} from '../services/enrollment.service.js';
+} from '../services/safepayEnrollment.service.js';
+import { resolveEnrollmentLocationSelection } from '../services/location.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { ENROLLMENT_BATCH_IDS } from '../constants/enrollmentBatches.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 
 const BATCH_NUMBER_ENUM = /** @type {readonly [string, ...string[]]} */ (ENROLLMENT_BATCH_IDS);
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = path.resolve(__dirname, '../../uploads/enrollments');
-const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
-const maxReceiptSizeBytes = 8 * 1024 * 1024;
-
-const storage = multer.diskStorage({
-  destination(_req, _file, cb) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename(_req, file, cb) {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeExt = ext || (file.mimetype === 'application/pdf' ? '.pdf' : '.jpg');
-    const name = `enrollment-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${safeExt}`;
-    cb(null, name);
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: maxReceiptSizeBytes },
-  fileFilter(_req, file, cb) {
-    if (!allowedMimeTypes.has(file.mimetype)) {
-      cb(new Error('Only JPG, PNG, WEBP images and PDF files are allowed'));
-      return;
-    }
-    cb(null, true);
-  },
-});
+function emptyToUndefined(value) {
+  if (value === undefined || value === null) return undefined;
+  const s = String(value).trim();
+  return s === '' ? undefined : value;
+}
 
 const createEnrollmentSchema = z.object({
-  email: z.string().email(),
+  courseId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
+  provinceId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
+  divisionId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
+  districtId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
+  cityId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
+  boardId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional().nullable()),
+  orderId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional().nullable()),
   applicantFullName: z.string().min(2).max(160),
   fatherName: z.string().min(2).max(160),
   dateOfBirth: z.string().optional().nullable(),
@@ -58,13 +40,10 @@ const createEnrollmentSchema = z.object({
   whatsappNumber: z
     .string()
     .regex(/^\+923[0-9]{9}$/, 'Enter a valid Pakistan WhatsApp number'),
-  province: z.string().min(2).max(80),
-  district: z.string().min(2).max(120),
+  email: z.string().email().optional().nullable(),
   hsscStatus: z.enum(['Inter Class', 'First Year Class', 'Matric Class']),
-  board: z.string().min(2).max(120),
   mdcatAttemptType: z.enum(['Fresher', 'Improver']),
-  batchNumber: z.enum(BATCH_NUMBER_ENUM),
-  transactionId: z.string().min(3).max(120),
+  batchNumber: z.preprocess(emptyToUndefined, z.enum(BATCH_NUMBER_ENUM).optional().nullable()),
 });
 
 function parseBodyField(value) {
@@ -72,7 +51,6 @@ function parseBodyField(value) {
   return String(value).trim();
 }
 
-/** Strip non-digits and match client normalization so pasted/formatted WhatsApp accepts. */
 function normalizePakistaniWhatsapp(value) {
   const digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -82,116 +60,105 @@ function normalizePakistaniWhatsapp(value) {
   return `+${digits}`;
 }
 
-function enrollmentReceiptUrl(fileName) {
-  return `/api/uploads/enrollments/${fileName}`;
-}
-
-function handleReceiptUpload(req, res, next) {
-  upload.single('receipt')(req, res, (err) => {
-    if (err && err.name === 'MulterError') {
-      next(new ApiError(400, err.code === 'LIMIT_FILE_SIZE' ? 'Receipt must be 8 MB or smaller.' : err.message));
-      return;
-    }
-    if (err) {
-      next(err instanceof ApiError ? err : new ApiError(400, err.message || 'Receipt upload failed'));
-      return;
-    }
-    next();
-  });
-}
-
-const trackingTokenRegex = /^[a-zA-Z0-9_-]{16,64}$/;
-
-function stripEnrollmentSensitive(enrollment) {
-  if (!enrollment) return enrollment;
-  const { verificationToken, ...rest } = enrollment;
-  return rest;
-}
-
-export const getEnrollmentTracking = asyncHandler(async (req, res) => {
-  const token = req.params.token;
-  if (!token || !trackingTokenRegex.test(token)) {
-    throw new ApiError(404, 'Invalid tracking link.');
+export const postEnrollment = asyncHandler(async (req, res) => {
+  const userId = Number(req.user?.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new ApiError(401, 'Authentication required');
   }
-  const data = await getEnrollmentTrackingByToken(token);
-  if (!data) throw new ApiError(404, 'We could not find this registration. Please check your link or contact MRB Classes.');
 
-  sendSuccess(res, data);
+  const parsed = createEnrollmentSchema.safeParse({
+    courseId: req.body.course_id ?? req.body.courseId,
+    provinceId: req.body.province_id ?? req.body.provinceId,
+    divisionId: req.body.division_id ?? req.body.divisionId,
+    districtId: req.body.district_id ?? req.body.districtId,
+    cityId: req.body.city_id ?? req.body.cityId,
+    boardId: req.body.board_id ?? req.body.boardId,
+    orderId: req.body.order_id ?? req.body.orderId,
+    applicantFullName: parseBodyField(req.body.applicantFullName),
+    fatherName: parseBodyField(req.body.fatherName),
+    dateOfBirth: parseBodyField(req.body.dateOfBirth) || null,
+    gender: parseBodyField(req.body.gender),
+    whatsappNumber: normalizePakistaniWhatsapp(parseBodyField(req.body.whatsappNumber)),
+    email: req.user?.email || parseBodyField(req.body.email),
+    hsscStatus: parseBodyField(req.body.hsscStatus),
+    mdcatAttemptType: parseBodyField(req.body.mdcatAttemptType),
+    batchNumber: parseBodyField(req.body.batchNumber),
+  });
+  if (!parsed.success) throw new ApiError(422, 'Invalid enrollment payload', parsed.error.flatten());
+
+  const userEmail = String(req.user?.email || parsed.data.email || '').trim();
+  if (!userEmail) {
+    throw new ApiError(401, 'Authenticated email is required');
+  }
+
+  if (parsed.data.email && String(parsed.data.email).toLowerCase() !== userEmail.toLowerCase()) {
+    throw new ApiError(400, 'Email must match the signed-in student account');
+  }
+
+  const course = await assertCourseExists(parsed.data.courseId);
+  const location = await resolveEnrollmentLocationSelection({
+    provinceId: parsed.data.provinceId,
+    divisionId: parsed.data.divisionId,
+    districtId: parsed.data.districtId,
+    cityId: parsed.data.cityId,
+  });
+  const board = await assertBoardExists(parsed.data.boardId);
+  await assertOrderExists(parsed.data.orderId);
+
+  const duplicatePending = await hasDuplicatePendingEnrollment({
+    userId,
+    courseId: parsed.data.courseId,
+  });
+  if (duplicatePending) {
+    throw new ApiError(409, 'You already have a pending enrollment for this course.');
+  }
+
+  const enrollment = await createEnrollment({
+    userId,
+    courseId: parsed.data.courseId,
+    orderId: null,
+    applicantFullName: parsed.data.applicantFullName,
+    fatherName: parsed.data.fatherName,
+    dateOfBirth: parsed.data.dateOfBirth || null,
+    gender: parsed.data.gender,
+    whatsappNumber: parsed.data.whatsappNumber,
+    email: userEmail,
+    provinceId: location.province.id,
+    divisionId: location.division.id,
+    districtId: location.district.id,
+    cityId: location.city.id,
+    boardId: board?.id ?? null,
+    hsscStatus: parsed.data.hsscStatus,
+    mdcatAttemptType: parsed.data.mdcatAttemptType,
+    batchNumber: parsed.data.batchNumber ?? null,
+  });
+
+  await logActivity({
+    userId,
+    role: req.user?.role,
+    action: 'student.enrollment.create',
+    entityType: 'enrollment',
+    entityId: String(enrollment?.id || ''),
+    metadata: {
+      userId,
+      courseId: course.id,
+      province: location.province.name,
+      division: location.division.name,
+      district: location.district.name,
+      city: location.city.name,
+      board: board?.name || null,
+    },
+  });
+
+  sendSuccess(
+    res,
+    {
+      message: 'Enrollment saved successfully. Payment confirmation will be linked later via Safepay.',
+      enrollment,
+    },
+    201
+  );
 });
-
-export const postEnrollment = [
-  handleReceiptUpload,
-  asyncHandler(async (req, res) => {
-    if (!req.file) throw new ApiError(400, 'Please upload your fee receipt');
-
-    const parsed = createEnrollmentSchema.safeParse({
-      email: parseBodyField(req.body.email),
-      applicantFullName: parseBodyField(req.body.applicantFullName),
-      fatherName: parseBodyField(req.body.fatherName),
-      dateOfBirth: parseBodyField(req.body.dateOfBirth) || null,
-      gender: parseBodyField(req.body.gender),
-      whatsappNumber: normalizePakistaniWhatsapp(parseBodyField(req.body.whatsappNumber)),
-      province: parseBodyField(req.body.province),
-      district: parseBodyField(req.body.district),
-      hsscStatus: parseBodyField(req.body.hsscStatus),
-      board: parseBodyField(req.body.board),
-      mdcatAttemptType: parseBodyField(req.body.mdcatAttemptType),
-      batchNumber: parseBodyField(req.body.batchNumber),
-      transactionId: parseBodyField(req.body.transactionId),
-    });
-    if (!parsed.success) throw new ApiError(422, 'Invalid enrollment payload', parsed.error.flatten());
-
-    const duplicatePending = await hasDuplicatePendingEnrollment({
-      email: parsed.data.email,
-      whatsappNumber: parsed.data.whatsappNumber,
-    });
-    if (duplicatePending) {
-      throw new ApiError(
-        409,
-        'You already have a pending registration. Please wait for admin review or contact support.'
-      );
-    }
-
-    let enrollment;
-    try {
-      enrollment = await createEnrollment({
-        ...parsed.data,
-        receiptUrl: enrollmentReceiptUrl(req.file.filename),
-        receiptOriginalName: req.file.originalname,
-        receiptMimeType: req.file.mimetype,
-        receiptSizeBytes: req.file.size,
-        paymentMethod: 'EasyPaisa and JazzCash',
-        accountTitle: 'Muzamil Raheem',
-      });
-    } catch (error) {
-      if (error?.code === 'ER_DUP_ENTRY') {
-        throw new ApiError(409, 'This transaction ID is already submitted. Please double-check your receipt.');
-      }
-      throw error;
-    }
-
-    await logActivity({
-      role: 'system',
-      action: 'student.enrollment.create',
-      entityType: 'enrollment',
-      entityId: String(enrollment?.id || ''),
-      metadata: {
-        email: parsed.data.email,
-        province: parsed.data.province,
-        board: parsed.data.board,
-      },
-    });
-
-    sendSuccess(
-      res,
-      {
-        message: 'Registration submitted successfully. Your request is pending verification.',
-        enrollment,
-      },
-      201
-    );
-  }),
-];
 
 function parseAdminEnrollmentQuery(req) {
   const slice = (v) => {
@@ -201,7 +168,15 @@ function parseAdminEnrollmentQuery(req) {
   };
   return {
     batch: slice(req.query.batch) ?? 'all',
+    status: slice(req.query.status) ?? 'all',
     province: slice(req.query.province) ?? 'all',
+    province_id: slice(req.query.province_id) ?? slice(req.query.provinceId),
+    division_id: slice(req.query.division_id) ?? slice(req.query.divisionId),
+    district_id: slice(req.query.district_id) ?? slice(req.query.districtId),
+    city_id: slice(req.query.city_id) ?? slice(req.query.cityId),
+    board_id: slice(req.query.board_id) ?? slice(req.query.boardId),
+    course_id: slice(req.query.course_id) ?? slice(req.query.courseId),
+    user_id: slice(req.query.user_id) ?? slice(req.query.userId),
     gender: (slice(req.query.gender)?.toLowerCase() ?? 'all') || 'all',
     dateFrom: slice(req.query.dateFrom),
     dateTo: slice(req.query.dateTo),
@@ -211,11 +186,11 @@ function parseAdminEnrollmentQuery(req) {
 
 export const getAdminEnrollments = asyncHandler(async (req, res) => {
   const data = await listEnrollments(parseAdminEnrollmentQuery(req));
-  sendSuccess(res, data.map(stripEnrollmentSensitive));
+  sendSuccess(res, data);
 });
 
 const updateEnrollmentStatusSchema = z.object({
-  status: z.enum(['pending', 'verified', 'rejected']),
+  status: z.enum(['pending', 'approved', 'rejected', 'verified']),
   adminNote: z.string().max(500).optional().nullable(),
 });
 
@@ -234,7 +209,7 @@ export const putAdminEnrollmentStatus = asyncHandler(async (req, res) => {
 
   const updated = await updateEnrollmentStatus({
     enrollmentId,
-    status: parsed.data.status,
+    status: normalizeEnrollmentStatus(parsed.data.status),
     adminNote: parsed.data.adminNote,
     reviewedBy: req.user?.id || null,
   });
@@ -245,8 +220,8 @@ export const putAdminEnrollmentStatus = asyncHandler(async (req, res) => {
     action: 'admin.enrollment.status.update',
     entityType: 'enrollment',
     entityId: String(enrollmentId),
-    metadata: { status: parsed.data.status },
+    metadata: { status: normalizeEnrollmentStatus(parsed.data.status) },
   });
 
-  sendSuccess(res, stripEnrollmentSensitive(updated));
+  sendSuccess(res, updated);
 });

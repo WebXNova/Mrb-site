@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { getAdminToken, getStoredUser, getStudentToken } from '../auth/session';
 import ScrollToTop from '../components/layout/ScrollToTop';
+import ProtectedRoute from './ProtectedRoute';
 
 const HomePage = lazy(() => import('../pages/HomePage'));
 const CoursesPage = lazy(() => import('../pages/CoursesPage'));
@@ -11,6 +12,9 @@ const ContactPage = lazy(() => import('../pages/ContactPage'));
 const StudentLoginPage = lazy(() => import('../pages/StudentLoginPage'));
 const StudentRegisterPage = lazy(() => import('../pages/StudentRegisterPage'));
 const EnrollmentPage = lazy(() => import('../pages/EnrollmentPage'));
+const EnrollmentPaymentPage = lazy(() => import('../pages/EnrollmentPaymentPage'));
+const EnrollmentPaymentSuccessPage = lazy(() => import('../pages/EnrollmentPaymentSuccessPage'));
+const EnrollmentPaymentFailedPage = lazy(() => import('../pages/EnrollmentPaymentFailedPage'));
 const EnrollmentStatusPage = lazy(() => import('../pages/EnrollmentStatusPage'));
 const StudentForgotPasswordPage = lazy(() => import('../pages/StudentForgotPasswordPage'));
 const StudentResetPasswordPage = lazy(() => import('../pages/StudentResetPasswordPage'));
@@ -111,7 +115,46 @@ export default function AppRouter({ authStatus }) {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<StudentLoginPage />} />
           <Route path="/register" element={<StudentRegisterPage />} />
-          <Route path="/enroll" element={<EnrollmentPage />} />
+          <Route
+            path="/enroll"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/courses" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/enroll/:courseId"
+            element={
+              <ProtectedRoute>
+                <EnrollmentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/enrollment/payment"
+            element={
+              <ProtectedRoute>
+                <EnrollmentPaymentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/enrollment/payment/success"
+            element={
+              <ProtectedRoute>
+                <EnrollmentPaymentSuccessPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/enrollment/payment/failed"
+            element={
+              <ProtectedRoute>
+                <EnrollmentPaymentFailedPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/enrollment/status" element={<EnrollmentStatusPage />} />
           <Route path="/forgot-password" element={<StudentForgotPasswordPage />} />
           <Route path="/reset-password" element={<StudentResetPasswordPage />} />

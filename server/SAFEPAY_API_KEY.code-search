@@ -1,0 +1,18 @@
+# Query: SAFEPAY_API_KEY
+# ContextLines: 1
+
+3 results - 2 files
+
+Mrb-site\server\.env:
+  31  
+  32: SAFEPAY_API_KEY
+  33  SAFEPAY_KEY=5518f8bec7ec39eb5a1a9a2f3c90492fdd4c05fd1822fe570ca0876e115eac02
+
+Mrb-site\server\src\config\env.js:
+  182    safepay: {
+  183:     apiKey: process.env.SAFEPAY_KEY || '',
+  184      publicKey: process.env.SAFEPAY_PUBLIC_KEY || '',
+
+  186      /** HMAC secret for webhooks; falls back to API key if SAFEPAY_WEBHOOK_SECRET unset */
+  187:     webhookSecret: process.env.SAFEPAY_WEBHOOK_SECRET || process.env.SAFEPAY_API_KEY || '',
+  188    },

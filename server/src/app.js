@@ -15,6 +15,8 @@ import { getEmailQueue } from './config/queue.js';
 import contactRoutes from './routes/contact.routes.js';
 import enrollmentRoutes from './routes/enrollment.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
+import locationsRoutes from './routes/locations.routes.js';
+import { paymentsWebhookRouter, paymentsApiRouter } from './routes/payments.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { attachRequestContext } from './middleware/requestContext.js';
 import { sendError, sendSuccess } from './utils/httpEnvelope.js';
@@ -26,6 +28,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.resolve(__dirname, '../uploads');
 
 const allowedOrigins = env.security.trustedOrigins;
+
+if (env.nodeEnv !== 'production') {
+  app.use((req, res, next) => {
+    console.log('GLOBAL REQUEST:', req.method, req.url);
+    next();
+  });
+}
 
 app.use(
   cors({
@@ -64,9 +73,24 @@ app.use(
     referrerPolicy: { policy: 'no-referrer' },
   })
 );
+
+/**
+ * WHY before raw/webhook parsers: every ingress (especially payment webhooks) needs a correlatable request id,
+ * independent of downstream JSON/cookie parsers.
+ */
+app.use(attachRequestContext);
+
+/**
+ * WHY before `express.json()`: `/api/payments/webhook` HMAC binds to exact raw JSON octets — if `express.json`
+ * executes first it consumes & normalises the stream and signature verification FAILS CLOSED forever.
+ *
+ * WHY only POST + router-isolated middleware: minimise attack surface versus `app.use(express.raw(global))`,
+ * avoid parsing PDFs/binary as gateways and avoid RAM denial-of-service on benign JSON routes.
+ */
+app.use('/api/payments', paymentsWebhookRouter);
+
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-app.use(attachRequestContext);
 app.use('/api/uploads', express.static(uploadsRoot));
 
 app.get('/api/health', (req, res) => {
@@ -98,6 +122,8 @@ app.use('/api/email', emailProviderRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/courses', coursesRoutes);
+app.use('/api/locations', locationsRoutes);
+app.use('/api/payments', paymentsApiRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

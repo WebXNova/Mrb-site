@@ -50,7 +50,7 @@ This describes **aggregates** and allowed dependencies for the LMS. It is design
 
 **Prerequisites (from earlier stabilization — still required before wire-up):**
 
-1. **Migrations:** `schema_migrations` ledger in use; `npm run db:migrate` documented; new DDL only via numbered files under `server/src/db/migrations/`.
+1. **Schema:** `server/src/sql/schema.sql` is the authoritative DDL; apply manually in MySQL Workbench when needed.
 2. **API envelope:** Unified success/error JSON contracts end-to-end.
 3. **Course contract:** Course write/read paths and DTOs remain frozen unless a migration + DTO review explicitly extends them.
 4. **Subject inventory:** `subject-string-inventory.md` kept current as code changes.

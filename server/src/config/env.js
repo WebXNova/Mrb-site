@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -76,6 +77,15 @@ function parseEmailProvider(value) {
   return normalized;
 }
 
+/** Strip BOM / accidental quotes / null-ish — avoids “client not found” from credential paste drift. */
+function stripCred(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .replace(/^["']|["']$/g, '');
+}
+
 const nodeEnv = process.env.NODE_ENV || 'development';
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
@@ -91,6 +101,80 @@ function buildTrustedOrigins() {
     origins.add('http://localhost:5174');
   }
   return [...origins];
+}
+
+const SAFEPAY_RESOLVED_API_HOST = {
+  sandbox: 'https://sandbox.api.getsafepay.com',
+  production: 'https://api.getsafepay.com',
+};
+
+const safepayEnvRaw = stripCred(process.env.SAFEPAY_ENV || '');
+const safepayEnvLower = safepayEnvRaw.toLowerCase();
+/** @type {'sandbox' | 'production'} */
+let safepayEnvTier;
+if (!safepayEnvRaw || safepayEnvLower === 'sandbox') {
+  safepayEnvTier = 'sandbox';
+} else if (safepayEnvLower === 'production' || safepayEnvLower === 'prod') {
+  safepayEnvTier = 'production';
+} else {
+  throw new Error(
+    `[safepay] SAFEPAY_ENV must be "sandbox" or "production" (got "${safepayEnvRaw}"). This must match paired keys so API host aligns with sandbox vs live.`
+  );
+}
+
+/**
+ * Prefer explicit names; SAFEPAY_API_KEY is LEGACY ONLY for merchant SECRET — not publishable API key:
+ * Header `x-sfpy-merchant-secret`: MERCHANT_SECRET → SECRET_KEY → API_KEY legacy
+ * Publishable merchant key for JSON (`merchant_api_key`): SAFEPAY_MERCHANT_API_KEY → SAFEPAY_PUBLIC_KEY
+ */
+const safepayMerchantSecret = stripCred(
+  process.env.SAFEPAY_MERCHANT_SECRET ||
+    process.env.SAFEPAY_SECRET_KEY ||
+    process.env.SAFEPAY_API_KEY ||
+    ''
+);
+
+const safepayMerchantPublishableKey =
+  stripCred(process.env.SAFEPAY_MERCHANT_API_KEY || process.env.SAFEPAY_PUBLIC_KEY || '') || '';
+
+/** Webhook signing secret: exactly 64 hex chars (32 bytes). Decoded with Buffer.from(secret, 'hex') for HMAC-SHA512 — not base64. */
+const safepayWebhookSecretHex = stripCred(process.env.SAFEPAY_WEBHOOK_SECRET || '')
+  .replace(/^0x/i, '')
+  .trim();
+const safepayWebhookSecretFinal = safepayWebhookSecretHex || safepayMerchantSecret;
+
+const safepayMisconfiguredHalves =
+  Boolean(safepayMerchantSecret) !== Boolean(safepayMerchantPublishableKey);
+if (safepayMisconfiguredHalves && (safepayMerchantSecret || safepayMerchantPublishableKey)) {
+  throw new Error(
+    '[safepay] Set BOTH halves: merchant SECRET (SAFEPAY_MERCHANT_SECRET / SAFEPAY_SECRET_KEY / legacy SAFEPAY_API_KEY) AND publishable key (SAFEPAY_MERCHANT_API_KEY / SAFEPAY_PUBLIC_KEY). One without the other → unauthorized / "could not fetch client".'
+  );
+}
+
+if (
+  safepayMerchantSecret &&
+  safepayMerchantPublishableKey &&
+  safepayMerchantSecret === safepayMerchantPublishableKey
+) {
+  throw new Error(
+    '[safepay] Merchant secret and publishable API key must differ (two fields from Developers → API for the SAME environment). Identical strings cause "could not fetch client".'
+  );
+}
+
+if (safepayMerchantSecret && safepayMerchantSecret.length < 8) {
+  throw new Error(
+    '[safepay] Merchant secret is too short; likely wrong variable (use server secret — not publishable API key name).'
+  );
+}
+
+if (safepayMerchantPublishableKey && safepayMerchantPublishableKey.length < 8) {
+  throw new Error('[safepay] Publishable merchant API key looks invalid (too short).');
+}
+
+if (safepayWebhookSecretHex && !/^[a-fA-F0-9]{64}$/.test(safepayWebhookSecretHex)) {
+  console.warn(
+    '[safepay] SAFEPAY_WEBHOOK_SECRET must be exactly 64 hexadecimal characters (32 bytes). Webhook verification will fail until corrected.'
+  );
 }
 
 export const env = {
@@ -166,6 +250,8 @@ export const env = {
     verifyPerAsnPerMinute: parseNumber(process.env.EMAIL_VERIFY_PER_ASN_PER_MINUTE, 180),
     resendCoarsePerAsnPerMinute: parseNumber(process.env.EMAIL_RESEND_COARSE_PER_ASN_PER_MINUTE, 300),
     providerWebhookPerIpPerMinute: parseNumber(process.env.EMAIL_PROVIDER_WEBHOOK_PER_IP_PER_MINUTE, 120),
+    /** Safepay `/api/payments/webhook` sliding window per client IP (minute). */
+    safepayWebhookPerIpPerMinute: parseNumber(process.env.SAFEPAY_WEBHOOK_PER_IP_PER_MINUTE, 240),
   },
   abuse: {
     requireRedisForCriticalAuthWrites: parseBoolean(process.env.REQUIRE_REDIS_FOR_CRITICAL_AUTH_WRITES, nodeEnv === 'production'),
@@ -179,8 +265,42 @@ export const env = {
     emailWebhookSignatureSecret: process.env.EMAIL_WEBHOOK_SIGNATURE_SECRET || '',
     emailWebhookToleranceSeconds: parseNumber(process.env.EMAIL_WEBHOOK_TOLERANCE_SECONDS, 300),
   },
+  safepay: {
+    /** Merchant SECRET (`x-sfpy-merchant-secret`) — `new Safepay(this, { authType: 'secret', host })` */
+    apiKey: safepayMerchantSecret,
+    /** Publishable merchant key — JSON `merchant_api_key` ONLY (never passed to SDK ctor). */
+    publicKey: safepayMerchantPublishableKey,
+    env: safepayEnvTier,
+    /** Must match SAFEPAY_ENV tier (sandbox host only with sandbox credentials). */
+    apiHost: SAFEPAY_RESOLVED_API_HOST[safepayEnvTier],
+    /** 64-char hex webhook signing secret, or empty if not configured. */
+    webhookSecretHex: safepayWebhookSecretHex,
+    /** True when SAFEPAY_WEBHOOK_SECRET is set (hex). */
+    webhookSecretIsDedicated: Boolean(safepayWebhookSecretHex),
+    /** Reject X-SFPY-TIMESTAMP outside ±N seconds (replay of old signed bodies). */
+    webhookTimestampSkewSeconds: parseNumber(process.env.SAFEPAY_WEBHOOK_TIMESTAMP_SKEW_SECONDS, 300),
+    /** Max raw JSON body for webhook (express.raw limit + post-parse guard). */
+    webhookMaxPayloadBytes: parseNumber(process.env.SAFEPAY_WEBHOOK_MAX_BYTES, 524288),
+    /** Redis TTL for replay short-circuit key after successful processing. */
+    webhookReplayTtlSeconds: parseNumber(process.env.SAFEPAY_WEBHOOK_REPLAY_TTL_SECONDS, 86400),
+  },
 
 };
+
+if (safepayMerchantSecret && safepayMerchantPublishableKey) {
+  console.log('[safepay] startup credential probe:', {
+    SAFEPAY_ENV: safepayEnvTier,
+    apiHost: SAFEPAY_RESOLVED_API_HOST[safepayEnvTier],
+    merchantSecretConfigured: true,
+    publishableMerchantKeyConfigured: true,
+    merchantSecretLen: safepayMerchantSecret.length,
+    publishableMerchantKeyLen: safepayMerchantPublishableKey.length,
+    webhookSigningSecretHexLen: safepayWebhookSecretHex.length,
+    webhookSigningSecretConfigured: Boolean(safepayWebhookSecretHex),
+  });
+} else if (!safepayMerchantSecret && !safepayMerchantPublishableKey) {
+  console.log('[safepay] payments disabled until merchant secret + publishable API key are set.');
+}
 
 if (env.email.provider === 'sendgrid' && !env.email.sendgridApiKey) {
   throw new Error('SENDGRID_API_KEY is required when EMAIL_PROVIDER=sendgrid');

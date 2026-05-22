@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { enforcePolicy } from '../auth/securityPolicy.js';
 import { rejectAuthHeaderInProduction } from '../middleware/auth.js';
 import { requireCsrf } from '../middleware/csrf.js';
+import { idempotencyMiddleware } from '../middleware/idempotency.js';
 import {
   getDashboard,
   getLogs,
@@ -66,7 +67,14 @@ router.get('/logs', getLogs);
 router.get('/users', getUsers);
 router.put('/users/:userId/status', putUserStatus);
 
-router.post('/courses/wizard', rejectAuthHeaderInProduction, courseWizardWriteRateLimit, requireCsrf, postCourseWizard);
+router.post(
+  '/courses/wizard', 
+  rejectAuthHeaderInProduction, 
+  courseWizardWriteRateLimit, 
+  requireCsrf, 
+  idempotencyMiddleware,
+  postCourseWizard
+);
 router.post('/courses', postCourse);
 router.post(
   '/courses/upload-image',

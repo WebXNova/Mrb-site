@@ -27,7 +27,7 @@ export default function Hero() {
             <Button as={Link} to="/register" variant="primary" size="lg">
               Start learning
             </Button>
-            <Button as={Link} to="/enroll" variant="accent" size="lg">
+            <Button as={Link} to="/courses" variant="accent" size="lg">
               Enroll now
             </Button>
           </div>
