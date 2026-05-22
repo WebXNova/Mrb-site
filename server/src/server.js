@@ -80,7 +80,36 @@ async function assertRequiredAuthSchema() {
   }
 }
 
+function validateRequiredEnv() {
+  const missing = [];
+  if (!process.env.JWT_ACCESS_SECRET) missing.push('JWT_ACCESS_SECRET');
+  if (!process.env.JWT_REFRESH_SECRET) missing.push('JWT_REFRESH_SECRET');
+  if (missing.length) {
+    throw new Error(`Missing required env variable(s): ${missing.join(', ')}`);
+  }
+
+  const accessSecret = process.env.JWT_ACCESS_SECRET;
+  const refreshSecret = process.env.JWT_REFRESH_SECRET;
+
+  if (accessSecret.length < 32) throw new Error('JWT_ACCESS_SECRET must be at least 32 characters');
+  if (refreshSecret.length < 32) throw new Error('JWT_REFRESH_SECRET must be at least 32 characters');
+
+  for (const [name, value] of [['JWT_ACCESS_SECRET', accessSecret], ['JWT_REFRESH_SECRET', refreshSecret]]) {
+    const lowered = value.toLowerCase();
+    if (
+      lowered.includes('replace') ||
+      lowered.includes('secret') ||
+      lowered.includes('changeme') ||
+      lowered.includes('example')
+    ) {
+      throw new Error(`${name} appears weak or placeholder-like. Use a strong random secret.`);
+    }
+  }
+}
+
 async function startServer() {
+  validateRequiredEnv();
+
   console.log('MySQL boot config:', {
     MYSQL_USER: process.env.MYSQL_USER,
     MYSQL_HOST: process.env.MYSQL_HOST,

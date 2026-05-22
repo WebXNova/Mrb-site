@@ -183,19 +183,19 @@ export const env = {
   clientUrl,
 
   mysql: {
-    host: required('MYSQL_HOST', '127.0.0.1'),
+    host: process.env.MYSQL_HOST || '127.0.0.1',
     port: Number(process.env.MYSQL_PORT || 3306),
-    user: required('MYSQL_USER'),
-    password: required('MYSQL_PASSWORD'),
-    database: required('MYSQL_DATABASE'),
+    user: process.env.MYSQL_USER || '',
+    password: process.env.MYSQL_PASSWORD || '',
+    database: process.env.MYSQL_DATABASE || '',
   },
   redis: {
     url: process.env.REDIS_URL || '',
   },
 
   jwt: {
-    accessSecret: requiredJwtSecret('JWT_ACCESS_SECRET'),
-    refreshSecret: requiredJwtSecret('JWT_REFRESH_SECRET'),
+    accessSecret: process.env.JWT_ACCESS_SECRET || '',
+    refreshSecret: process.env.JWT_REFRESH_SECRET || '',
     previousAccessSecrets: parseCsv(process.env.JWT_ACCESS_PREVIOUS_SECRETS),
     previousRefreshSecrets: parseCsv(process.env.JWT_REFRESH_PREVIOUS_SECRETS),
     issuer: process.env.JWT_ISSUER || 'mrb-learning',
