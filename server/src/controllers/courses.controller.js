@@ -10,6 +10,7 @@ import { countLecturesForCourse } from '../services/lecture.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { courseCreateBodySchema, courseWriteBodySchema } from '../validators/courseWrite.schema.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
+import { isAdminRole } from '../utils/isAdminRole.js';
 
 function invalidCourseId() {
   return new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
@@ -82,7 +83,7 @@ export const putCourse = asyncHandler(async (req, res) => {
 
 /**
  * Default: archive (soft) — set `is_active = false`. Lectures remain attached.
- * `?purge=true`: hard delete (super_admin only). If lectures exist, returns 409 unless `forceCascade=true`.
+ * `?purge=true`: permanent delete (LMS admin or super_admin; same privileges). Returns 409 if lectures exist unless `forceCascade=true`.
  */
 export const removeCourse = asyncHandler(async (req, res) => {
   const courseId = Number(req.params.courseId);
@@ -92,14 +93,14 @@ export const removeCourse = asyncHandler(async (req, res) => {
   const forceCascade = String(req.query.forceCascade || '') === 'true';
 
   if (purge) {
-    if (req.user?.role !== 'super_admin') {
-      throw new ApiError(403, 'Permanent course deletion requires super_admin');
+    if (!isAdminRole(req.user?.role)) {
+      throw new ApiError(403, 'Permanent course deletion requires an admin session');
     }
     const lectureCount = await countLecturesForCourse(courseId);
     if (lectureCount > 0 && !forceCascade) {
       throw new ApiError(
         409,
-        `This course has ${lectureCount} lecture(s). Archive it, reassign lectures, or request purge with forceCascade=true (super_admin) to delete the course and its lectures.`,
+        `This course has ${lectureCount} lecture(s). Archive it, reassign lectures, or request purge with forceCascade=true (privileged admin delete) to delete the course and its lectures.`,
         { lectureCount }
       );
     }

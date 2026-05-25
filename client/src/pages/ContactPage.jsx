@@ -56,7 +56,7 @@ export default function ContactPage() {
             We’ll get back to you within a working day.
           </h1>
           <p className="body-lg text-pretty" style={{ marginTop: '1.5rem' }}>
-            For MRB-code activation issues, billing, or general queries, write to us
+            For billing, enrollment, or general queries, write to us
             at{' '}
             <a
               href="mailto:mrbclasses8@gmail.com"

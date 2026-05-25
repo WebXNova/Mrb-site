@@ -103,6 +103,8 @@ function shouldAttachCsrf(path, method = 'GET') {
     return true;
   }
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(m) && p.startsWith('/admin/')) return true;
+  /** Admin enrollment mutations use `/enrollments/admin` (outside `/api/admin` mount). */
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(m) && p.startsWith('/enrollments/admin')) return true;
   return false;
 }
 

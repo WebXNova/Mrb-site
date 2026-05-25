@@ -61,12 +61,7 @@ async function main() {
   );
   const authRoutesPath = path.resolve(__dirname, '../src/routes/auth.routes.js');
   const authRoutesSource = await fs.readFile(authRoutesPath, 'utf8');
-  assert(
-    /student\/verify-mrb-enrollment',[\s\S]*enforcePolicy\(\{\s*auth:\s*'student',\s*verified:\s*true[\s\S]*freshSession:\s*true/.test(
-      authRoutesSource
-    ),
-    'student verify-mrb-enrollment route must enforce fresh student verified policy'
-  );
+  assert(!/student\/verify-mrb-enrollment/.test(authRoutesSource), 'student verify-mrb-enrollment route must be removed');
   assert(
     /student\/register',\s*authRateLimit,\s*signupAbuseRateLimit,\s*studentRegister/.test(authRoutesSource),
     'student register route must enforce signup abuse limiter'

@@ -12,6 +12,7 @@ import {
   updateBatch,
 } from '../services/courseBatch.service.js';
 import { courseBatchCreateBodySchema, courseBatchUpdateBodySchema } from '../validators/courseBatch.schema.js';
+import { isAdminRole } from '../utils/isAdminRole.js';
 
 function invalidCourseId() {
   return new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
@@ -31,10 +32,6 @@ function parseBatchId(req) {
   const id = Number(req.params.batchId);
   if (!Number.isFinite(id) || id <= 0) return null;
   return id;
-}
-
-function isSuperAdmin(req) {
-  return String(req.user?.role || '') === 'super_admin';
 }
 
 export const getAdminCourseBatches = asyncHandler(async (req, res) => {
@@ -88,7 +85,7 @@ export const putAdminBatch = asyncHandler(async (req, res) => {
     throw new ApiError(422, 'No fields to update', { code: 'EMPTY_UPDATE' });
   }
   const existing = await getBatchById(batchId);
-  const updated = await updateBatch(batchId, patch, { isSuperAdmin: isSuperAdmin(req) });
+  const updated = await updateBatch(batchId, patch, { isSuperAdmin: isAdminRole(req.user?.role) });
   await logActivity({
     userId: req.user?.id,
     role: req.user?.role,
@@ -130,7 +127,7 @@ export const postAdminBatchReactivate = asyncHandler(async (req, res) => {
   const batchId = parseBatchId(req);
   if (!batchId) throw invalidBatchId();
   const before = await getBatchById(batchId);
-  const updated = await reactivateBatch(batchId, { isSuperAdmin: isSuperAdmin(req) });
+  const updated = await reactivateBatch(batchId, { isSuperAdmin: isAdminRole(req.user?.role) });
   await logActivity({
     userId: req.user?.id,
     role: req.user?.role,

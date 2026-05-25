@@ -299,7 +299,7 @@ export function validatePublishRequirements(payload) {
 draft → published
 draft → archived
 published → archived
-archived → (immutable, super_admin can recover to draft)
+archived → (immutable; admin-equivalent roles may recover via `validateCourseLifecycleTransition()` when callers set `privilegedRecoverArchivedCourse`).
 ```
 
 ### Enforcement

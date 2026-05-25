@@ -94,7 +94,7 @@ export async function consumeAttemptNonce({ slug, attemptId, tokenNonce }) {
   });
 }
 
-export async function verifyMrbCodeAndCreateAttempt({ slug, studentName, ipAddress, userAgent, studentUser }) {
+export async function createPublicTestAttempt({ slug, studentName, ipAddress, userAgent, studentUser }) {
   await checkVerifyRateLimit(slug, ipAddress);
 
   const [rows] = await mysqlPool.query(

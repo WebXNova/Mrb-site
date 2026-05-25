@@ -54,7 +54,7 @@ function isDupEntry(err) {
 /**
  * @param {string} from
  * @param {string} to
- * @param {{ isSuperAdmin?: boolean }} [ctx]
+ * @param {{ isSuperAdmin?: boolean }} [ctx] True when LMS session satisfies `isAdminRole()` (`admin` or `super_admin`); wired from authenticated admin routes only.
  */
 export function validateBatchStateTransition(from, to, ctx = {}) {
   const f = String(from || '').toLowerCase();

@@ -53,7 +53,14 @@ export default function StudentLecturePlayerPage() {
     <section className="admin-card">
       <h2 className="heading-3">{lecture.title}</h2>
       <p className="admin-stat-card__label" style={{ marginTop: '0.5rem' }}>
-        {[lecture.courseTitle || 'Course', lecture.courseId ? `(#${lecture.courseId})` : null].filter(Boolean).join(' • ')}
+        {[
+          lecture.subjectTitle,
+          lecture.chapterTitle,
+          lecture.courseTitle || 'Course',
+          lecture.courseId ? `(#${lecture.courseId})` : null,
+        ]
+          .filter(Boolean)
+          .join(' • ')}
         {lecture.durationMinutes != null && Number.isFinite(Number(lecture.durationMinutes))
           ? ` • ${lecture.durationMinutes} min`
           : ''}

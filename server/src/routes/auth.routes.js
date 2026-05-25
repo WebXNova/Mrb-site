@@ -10,11 +10,10 @@ import {
   studentRegister,
   resendVerification,
   verifyEmail,
-  studentVerifyMrbEnrollment,
   issueCsrfSession,
 } from '../controllers/auth.controller.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { rejectAuthHeaderInProduction, requireAdmin } from '../middleware/auth.js';
+import { rejectAuthHeaderInProduction } from '../middleware/auth.js';
 import { authRateLimit, resendVerificationRateLimit, signupAbuseRateLimit, verifyEmailRateLimit } from '../middleware/rateLimit.js';
 import { enforcePolicy } from '../auth/securityPolicy.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
@@ -32,16 +31,10 @@ router.post('/student/register', authRateLimit, signupAbuseRateLimit, studentReg
 router.post('/verify-email', verifyEmailRateLimit, verifyEmail);
 router.post('/resend-verification', resendVerificationRateLimit, resendVerification);
 router.post('/student/login', authRateLimit, studentLogin);
-router.post(
-  '/student/verify-mrb-enrollment',
-  authRateLimit,
-  enforcePolicy({ auth: 'student', verified: true, maxRisk: 'elevated', freshSession: true }),
-  studentVerifyMrbEnrollment
-);
 router.post('/student/logout', authRateLimit, enforcePolicy({ csrf: true, auth: 'student' }), studentLogout);
 router.get(
   '/me',
-  requireAdmin,
+  enforcePolicy({ auth: 'admin', maxRisk: 'elevated' }),
   asyncHandler(async (req, res) => {
     sendSuccess(res, req.user);
   })

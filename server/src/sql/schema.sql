@@ -108,6 +108,29 @@ CREATE TABLE IF NOT EXISTS subjects (
   KEY idx_subjects_course_active (course_id, is_active)
 );
 
+CREATE TABLE IF NOT EXISTS chapters (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+
+  subject_id BIGINT NOT NULL,
+
+  title VARCHAR(255) NOT NULL,
+  description TEXT DEFAULT NULL,
+
+  order_index INT NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  KEY idx_subject_id (subject_id),
+  KEY idx_subject_order (subject_id, order_index),
+
+  CONSTRAINT fk_chapters_subject
+    FOREIGN KEY (subject_id)
+    REFERENCES subjects(id)
+    ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS course_pricing (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   course_id BIGINT NOT NULL,
@@ -164,9 +187,23 @@ CREATE TABLE IF NOT EXISTS course_batches (
   KEY idx_course_batches_course_status (course_id, status)
 );
 
+-- Lectures — Phase 3D Step 1 foundation (COURSE → SUBJECT → CHAPTER → LECTURE)
+--
+-- LEGACY (unchanged, required at runtime):
+--   course_id BIGINT NOT NULL  — current admin/student APIs read/write this only
+--
+-- FORWARD (additive, nullable until later phases):
+--   chapter_id BIGINT UNSIGNED NULL — optional link to chapters.id; NO FK yet
+--
+-- NOT in MRB canonical schema: lectures.subject_id (ownership is course-scoped today;
+-- subject context is derived via chapters after backfill in phase2+).
+--
+-- Step 1 explicitly does NOT: NOT NULL chapter_id, FK to chapters, DROP/ALTER course_id,
+-- backfill rows, or change application code.
 CREATE TABLE IF NOT EXISTS lectures (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   course_id BIGINT NOT NULL,
+  chapter_id BIGINT UNSIGNED NULL,
   title VARCHAR(220) NOT NULL,
   youtube_url VARCHAR(500) NOT NULL,
   youtube_video_id VARCHAR(50) NOT NULL,
@@ -175,7 +212,8 @@ CREATE TABLE IF NOT EXISTS lectures (
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_lectures_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+  CONSTRAINT fk_lectures_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  KEY idx_lectures_chapter_id (chapter_id)
 );
 
 -- =====================================================
@@ -1060,6 +1098,48 @@ INSERT INTO intermediate_boards (name, slug, short_name, is_other_option, is_act
 -- MIGRATION HOOKS (idempotent — safe when schema.sql re-run)
 -- =====================================================
 
+-- Phase-1: chapters + optional lecture chapter link (backward compatible).
+-- Drop legacy chapters shape (old index names) so CREATE IF NOT EXISTS can recreate; DATA LOSS on chapters rows.
+SET @chapters_tbl := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chapters'
+);
+SET @idx_subject_id_exists := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chapters' AND INDEX_NAME = 'idx_subject_id'
+);
+SET @sql_drop_chapters := IF(
+  @chapters_tbl > 0 AND @idx_subject_id_exists = 0,
+  'DROP TABLE chapters',
+  'SELECT 1'
+);
+PREPARE stmt_drop_chapters FROM @sql_drop_chapters;
+EXECUTE stmt_drop_chapters;
+DEALLOCATE PREPARE stmt_drop_chapters;
+
+CREATE TABLE IF NOT EXISTS chapters (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+
+  subject_id BIGINT NOT NULL,
+
+  title VARCHAR(255) NOT NULL,
+  description TEXT DEFAULT NULL,
+
+  order_index INT NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  KEY idx_subject_id (subject_id),
+  KEY idx_subject_order (subject_id, order_index),
+
+  CONSTRAINT fk_chapters_subject
+    FOREIGN KEY (subject_id)
+    REFERENCES subjects(id)
+    ON DELETE CASCADE
+);
+
 DROP TABLE IF EXISTS course_access;
 
 SET @db := DATABASE();
@@ -1117,3 +1197,36 @@ SET @sql_add_idx := IF(
 PREPARE stmt_add_access_idx FROM @sql_add_idx;
 EXECUTE stmt_add_access_idx;
 DEALLOCATE PREPARE stmt_add_access_idx;
+
+-- Phase 3D Step 1: lectures.chapter_id foundation (nullable; no FK/NOT NULL yet).
+-- Standalone runner: sql/migrations/phase3d_step1_lectures_chapter_id.sql
+-- Rollback:          sql/migrations/phase3d_step1_lectures_chapter_id_rollback.sql
+SET @lectures_allow := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'lectures'
+);
+SET @lectures_chapter_col := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'lectures' AND COLUMN_NAME = 'chapter_id'
+);
+SET @sql_lectures_add_chapter := IF(
+  @lectures_allow = 0 OR @lectures_chapter_col > 0,
+  'SELECT 1',
+  'ALTER TABLE lectures ADD COLUMN chapter_id BIGINT UNSIGNED NULL AFTER course_id'
+);
+PREPARE stmt_lectures_add_chapter FROM @sql_lectures_add_chapter;
+EXECUTE stmt_lectures_add_chapter;
+DEALLOCATE PREPARE stmt_lectures_add_chapter;
+
+SET @lectures_chapter_idx := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'lectures' AND INDEX_NAME = 'idx_lectures_chapter_id'
+);
+SET @sql_lectures_add_chapter_idx := IF(
+  @lectures_allow = 0 OR @lectures_chapter_idx > 0,
+  'SELECT 1',
+  'ALTER TABLE lectures ADD KEY idx_lectures_chapter_id (chapter_id)'
+);
+PREPARE stmt_lectures_add_chapter_idx FROM @sql_lectures_add_chapter_idx;
+EXECUTE stmt_lectures_add_chapter_idx;
+DEALLOCATE PREPARE stmt_lectures_add_chapter_idx;

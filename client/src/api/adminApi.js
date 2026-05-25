@@ -1,6 +1,10 @@
 import { inferApiFailureMessage } from './apiErrors';
 import { http } from './http';
 import { getApiBaseUrl } from './runtimeConfig';
+import {
+  buildChapterCreatePayload,
+  buildChapterUpdatePayload,
+} from '../components/admin/chapterFormUtils';
 
 export const adminApi = {
   login: (payload) => http.post('/auth/login', payload, { retryOnUnauthorized: false }),
@@ -49,6 +53,41 @@ export const adminApi = {
     http.delete(`/admin/courses/${courseId}/subjects/${subjectId}`, { token }),
   reorderSubjects: (token, courseId, orderedSubjectIds) =>
     http.put(`/admin/courses/${courseId}/subjects/reorder`, { orderedSubjectIds }, { token }),
+
+  listChapters: (token, filters = {}, options = {}) => {
+    const sp = new URLSearchParams();
+    if (filters.subjectId != null && String(filters.subjectId).trim() !== '') {
+      sp.set('subjectId', String(filters.subjectId).trim());
+    }
+    const statusRaw = filters.status;
+    const statusNorm =
+      statusRaw === 'archived' || statusRaw === 'all'
+        ? statusRaw
+        : 'active';
+    sp.set('status', statusNorm);
+    const qs = sp.toString();
+    return http.get(`/admin/chapters?${qs}`, { token, signal: options.signal });
+  },
+  getChapter: (token, id, options = {}) =>
+    http.get(`/admin/chapters/${encodeURIComponent(String(id))}`, { token, signal: options.signal }),
+  createChapter: (token, payload, options = {}) =>
+    http.post('/admin/chapters', buildChapterCreatePayload(payload), {
+      token,
+      signal: options.signal,
+    }),
+  updateChapter: (token, id, payload, options = {}) =>
+    http.put(`/admin/chapters/${encodeURIComponent(String(id))}`, buildChapterUpdatePayload(payload), {
+      token,
+      signal: options.signal,
+    }),
+  archiveChapter: (token, id, options = {}) =>
+    http.delete(`/admin/chapters/${encodeURIComponent(String(id))}`, { token, signal: options.signal }),
+  /** @deprecated Prefer listChapters */
+  chapters: (token, subjectId, options = {}) => {
+    const sp = new URLSearchParams();
+    sp.set('subjectId', String(subjectId));
+    return http.get(`/admin/chapters?${sp}`, { token, signal: options?.signal });
+  },
 
   courseBatches: (token, courseId) => http.get(`/admin/courses/${courseId}/batches`, { token }),
   createCourseBatch: (token, courseId, payload) =>
@@ -101,12 +140,48 @@ export const adminApi = {
     return data;
   },
 
-  lectures: (token) => http.get('/admin/lectures', { token }),
-  createLecture: (token, payload) => http.post('/admin/lectures', payload, { token }),
-  updateLecture: (token, lectureId, payload) =>
-    http.put(`/admin/lectures/${lectureId}`, payload, { token }),
-  deleteLecture: (token, lectureId) =>
-    http.delete(`/admin/lectures/${lectureId}`, { token }),
+  /**
+   * List admin lectures. Server currently ignores query filters; callers may filter locally.
+   * @param {Record<string, string | number>} [filters]
+   */
+  listLectures: (token, filters = {}, options = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(filters || {}).forEach(([k, v]) => {
+      if (v != null && String(v).trim() !== '') sp.set(k, String(v).trim());
+    });
+    const qs = sp.toString();
+    return http.get(`/admin/lectures${qs ? `?${qs}` : ''}`, { token, signal: options.signal });
+  },
+
+  /** Authoritative lecture by id. Uses list endpoint until a dedicated GET route exists. */
+  getLecture: async (token, id, options = {}) => {
+    const res = await http.get('/admin/lectures', { token, signal: options.signal });
+    const list = res?.data ?? [];
+    const nid = Number(id);
+    const found = list.find((l) => Number(l.id) === nid);
+    if (!found) {
+      const err = new Error('Lecture not found');
+      err.status = 404;
+      throw err;
+    }
+    return { data: found };
+  },
+
+  createLecture: (token, payload, options = {}) =>
+    http.post('/admin/lectures', payload, { token, signal: options.signal }),
+  updateLecture: (token, lectureId, payload, options = {}) =>
+    http.put(`/admin/lectures/${encodeURIComponent(String(lectureId))}`, payload, {
+      token,
+      signal: options.signal,
+    }),
+  deleteLecture: (token, lectureId, options = {}) =>
+    http.delete(`/admin/lectures/${encodeURIComponent(String(lectureId))}`, {
+      token,
+      signal: options.signal,
+    }),
+
+  /** @deprecated Prefer listLectures */
+  lectures: (token, options = {}) => http.get('/admin/lectures', { token, signal: options?.signal }),
 
   tests: (token) => http.get('/admin/tests', { token }),
   createTest: (token, payload) => http.post('/admin/tests', payload, { token }),
@@ -121,12 +196,27 @@ export const adminApi = {
   previewAikenImport: (token, testId, content) =>
     http.post(`/admin/tests/${testId}/questions/import/preview`, { content }, { token }),
   previewImportFile: async (token, testId, file) => {
+    const CSRF_COOKIE_NAME = 'csrf_token';
+    const CSRF_HEADER_NAME = 'x-csrf-token';
+    function readCookie(name) {
+      if (typeof document === 'undefined') return '';
+      const prefix = `${encodeURIComponent(name)}=`;
+      const parts = document.cookie ? document.cookie.split('; ') : [];
+      for (const part of parts) {
+        if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
+      }
+      return '';
+    }
+    const csrfToken = readCookie(CSRF_COOKIE_NAME);
     const formData = new FormData();
     formData.append('file', file);
     const response = await fetch(`${getApiBaseUrl()}/admin/tests/${testId}/questions/import/preview-file`, {
       method: 'POST',
       credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: {
+        ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: formData,
     });
     const rawText = await response.text();

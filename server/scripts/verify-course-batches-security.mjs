@@ -1,5 +1,6 @@
 /**
- * Static security checks: CSRF on writes, rate limiter, no SELECT *, no Bearer-only patterns in batch module.
+ * Static security checks: parent admin stack for CSRF + bearer, batch write rate limits,
+ * no SELECT *, no Bearer-only patterns in batch module.
  */
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
@@ -15,15 +16,21 @@ function read(rel) {
 }
 
 try {
-  const routes = read('src/routes/courseBatch.routes.js');
-  if (!routes.includes('requireCsrf')) {
-    throw new Error('batch admin writes must use requireCsrf');
+  const adminRoutes = read('src/routes/admin.routes.js');
+  const batch = read('src/routes/courseBatch.routes.js');
+
+  if (!adminRoutes.includes('adminSecurityStack')) {
+    throw new Error('admin.routes must mount adminSecurityStack (CSRF + bearer) before batch routes');
   }
-  if (!routes.includes('courseBatchWriteRateLimit')) {
+  if (!adminRoutes.includes('courseBatchAdminRoutes')) {
+    throw new Error('admin.routes must mount courseBatchAdminRoutes');
+  }
+  if (batch.includes('requireCsrf') || batch.includes('rejectAuthHeaderInProduction')) {
+    throw new Error('courseBatch.routes duplicates parent admin stack; remove per-route CSRF/bearer here');
+  }
+
+  if (!batch.includes('courseBatchWriteRateLimit')) {
     throw new Error('batch admin writes must use courseBatchWriteRateLimit');
-  }
-  if (!routes.includes('rejectAuthHeaderInProduction')) {
-    throw new Error('batch routes must reject Authorization header in production');
   }
 
   const svc = read('src/services/courseBatch.service.js');

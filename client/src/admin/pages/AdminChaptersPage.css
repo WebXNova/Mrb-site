@@ -1,0 +1,70 @@
+/* Chapter admin: edit dialog & read-only hierarchy (F5+F6) */
+
+.admin-chapter-dialog {
+  padding: 0;
+  margin: auto;
+  max-width: min(640px, 100vw - 2rem);
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--color-ink-900, #111) 22%, transparent);
+  background: var(--color-surface, #fff);
+}
+
+.admin-chapter-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-ink-900, #111) 40%, transparent);
+}
+
+.admin-chapter-dialog:focus {
+  outline: none;
+}
+
+.admin-chapter-dialog__inner {
+  margin: 0;
+  padding: 0;
+  max-height: min(85vh, 900px);
+  overflow: auto;
+}
+
+.admin-chapter-dialog__loading {
+  padding: var(--space-5, 1.25rem);
+  margin: 0;
+}
+
+.admin-field--readonly-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 85%, transparent);
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--color-bg-alt) 92%, transparent);
+}
+
+.admin-field--readonly-stack dd {
+  margin: 0;
+  font-weight: var(--fw-medium, 500);
+}
+
+.admin-field__readonly-muted {
+  font-size: var(--fs-13, 0.8125rem);
+  color: var(--color-ink-500, #737373);
+  margin-top: 0.15rem;
+}
+
+.admin-chapter-lock-dl {
+  margin: 0;
+}
+
+.admin-chapter-lock-dl > div:not(:first-child) {
+  margin-top: 0.5rem;
+}
+
+.admin-chapter-lock-dl dd {
+  margin: 0.15rem 0 0;
+  font-weight: var(--fw-medium, 500);
+}
+
+.admin-chapter-dialog__panel {
+  border-radius: var(--radius-lg, 12px);
+}

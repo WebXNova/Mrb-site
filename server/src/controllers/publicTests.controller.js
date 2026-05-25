@@ -8,7 +8,7 @@ import {
   saveAttemptAnswer,
   submitAttempt,
   verifyAttemptToken,
-  verifyMrbCodeAndCreateAttempt,
+  createPublicTestAttempt,
 } from '../services/testAttempt.service.js';
 import { getPublishedTestBySlug } from '../services/test.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
@@ -35,7 +35,7 @@ export const postVerifyTestCode = asyncHandler(async (req, res) => {
   const parsed = verifyCodeSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid verification payload', parsed.error.flatten());
 
-  const result = await verifyMrbCodeAndCreateAttempt({
+  const result = await createPublicTestAttempt({
     slug,
     studentName: parsed.data.studentName || null,
     ipAddress: req.ip,

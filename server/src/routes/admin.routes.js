@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { enforcePolicy } from '../auth/securityPolicy.js';
-import { rejectAuthHeaderInProduction } from '../middleware/auth.js';
-import { requireCsrf } from '../middleware/csrf.js';
+import { adminSecurityStack } from '../security/admin/adminSecurityStack.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
 import {
   getDashboard,
@@ -54,11 +53,13 @@ import {
   putSubjectsReorder,
 } from '../controllers/subjects.controller.js';
 import courseBatchAdminRoutes from './courseBatch.routes.js';
+import chapterRoutes from './chapter.routes.js';
 import { courseImageUploadRateLimit } from '../middleware/courseImageUploadRateLimit.js';
 import { courseWizardWriteRateLimit } from '../middleware/courseWizardWriteRateLimit.js';
 
 const router = Router();
 
+router.use(adminSecurityStack);
 router.use(enforcePolicy({ auth: 'admin', maxRisk: 'elevated' }));
 
 router.get('/dashboard', getDashboard);
@@ -68,19 +69,15 @@ router.get('/users', getUsers);
 router.put('/users/:userId/status', putUserStatus);
 
 router.post(
-  '/courses/wizard', 
-  rejectAuthHeaderInProduction, 
-  courseWizardWriteRateLimit, 
-  requireCsrf, 
+  '/courses/wizard',
+  courseWizardWriteRateLimit,
   idempotencyMiddleware,
   postCourseWizard
 );
 router.post('/courses', postCourse);
 router.post(
   '/courses/upload-image',
-  rejectAuthHeaderInProduction,
   courseImageUploadRateLimit,
-  requireCsrf,
   postCourseImage
 );
 router.put('/courses/:courseId', putCourse);
@@ -95,6 +92,8 @@ router.put('/courses/:courseId/subjects/reorder', putSubjectsReorder);
 router.get('/courses/:courseId/subjects/:subjectId', getSubject);
 router.put('/courses/:courseId/subjects/:subjectId', putSubject);
 router.delete('/courses/:courseId/subjects/:subjectId', deleteSubject);
+
+router.use('/chapters', chapterRoutes);
 
 router.use(courseBatchAdminRoutes);
 

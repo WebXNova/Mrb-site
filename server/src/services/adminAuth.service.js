@@ -3,6 +3,8 @@ import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { createAuthSessionTokens, deleteAuthSessionsForUser, revokeAuthSessionByRefreshToken } from './authSession.service.js';
 
+/** Admin-login SQL `IN (...)` roles must stay aligned with `utils/isAdminRole.js`. */
+
 const FAKE_BCRYPT_HASH = '$2b$10$8fN0fSpA6W2VYJvA3pD6Guzf1u0lydBcbgQ9f7Q6w6v3zM4fM6x8S';
 
 async function fetchAdminByEmail(email) {

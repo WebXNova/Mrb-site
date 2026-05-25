@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
+import { isAdminRole } from '../utils/isAdminRole.js';
 
 function parseBearer(authHeader) {
   return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -46,7 +47,7 @@ export async function evaluateAccessRequest(req, { expectedRole }) {
   if (!Number.isFinite(Number(payload.tokenVersion))) {
     throw new ApiError(401, 'Invalid token version');
   }
-  if (expectedRole === 'admin' && payload.role !== 'admin' && payload.role !== 'super_admin') {
+  if (expectedRole === 'admin' && !isAdminRole(payload.role)) {
     throw new ApiError(403, 'Admin access required');
   }
   if (expectedRole === 'student' && payload.role !== 'student') {

@@ -96,9 +96,15 @@ export default function StudentLecturesPage() {
                 />
               </div>
               <p className="student-lecture-card__course">
-                👉 {[lecture.courseTitle || 'Course', lecture.courseId ? `(#${lecture.courseId})` : null]
+                👉{' '}
+                {[
+                  lecture.subjectTitle,
+                  lecture.chapterTitle,
+                  lecture.courseTitle || 'Course',
+                  lecture.courseId ? `(#${lecture.courseId})` : null,
+                ]
                   .filter(Boolean)
-                  .join(' ')}
+                  .join(' · ')}
               </p>
               <h3 className="student-lecture-card__title">
                 Lec-{index + 1} {lecture.title}

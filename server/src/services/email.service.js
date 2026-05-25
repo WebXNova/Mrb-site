@@ -24,9 +24,41 @@ class EmailDeliveryError extends Error {
   }
 }
 
+/** SendGrid v3 expects a parseable email in `from.email`; use explicit `{ email, name? }`. */
+function buildSendGridMailFrom(raw) {
+  const trimmed = String(raw || '').trim();
+  const lastLt = trimmed.lastIndexOf('<');
+  const lastGt = trimmed.lastIndexOf('>');
+  if (lastLt !== -1 && lastGt > lastLt) {
+    const email = trimmed.slice(lastLt + 1, lastGt).trim();
+    const name = trimmed
+      .slice(0, lastLt)
+      .trim()
+      .replace(/^["']+|["']+$/g, '')
+      .trim();
+    if (email.includes('@')) {
+      return name ? { email, name } : { email };
+    }
+  }
+  return { email: trimmed };
+}
+
+function extractConfiguredFromEmail(raw) {
+  return buildSendGridMailFrom(raw).email;
+}
+
 function assertEmailConfig() {
   if (!env.email.from) {
     throw new ApiError(503, 'Email service is not configured');
+  }
+  if (
+    usingSendGrid() &&
+    !extractConfiguredFromEmail(env.email.from).includes('@')
+  ) {
+    throw new ApiError(
+      503,
+      'EMAIL_FROM must be a valid sender address (e.g. you@verified-domain.com)'
+    );
   }
   if (usingSendGrid() && !env.email.sendgridApiKey) {
     throw new ApiError(503, 'SendGrid is not configured');
@@ -119,7 +151,7 @@ export async function sendEmailNow({ to, subject, html, text, outboxId = null, u
       initSendGrid();
       const [response] = await sgMail.send({
         to,
-        from: env.email.from,
+        from: buildSendGridMailFrom(env.email.from),
         subject,
         html,
         text,

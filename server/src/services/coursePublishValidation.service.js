@@ -122,7 +122,7 @@ export function validatePublishRequirements(payload) {
  * 
  * @param {string} currentStatus - Current course status
  * @param {string} newStatus - Desired new status
- * @param {object} context - Additional context
+ * @param {object} context - Additional context; `privilegedRecoverArchivedCourse` when caller allows LMS admin-equivalent recovery (admin or super_admin).
  */
 export function validateCourseLifecycleTransition(currentStatus, newStatus, context = {}) {
   const current = String(currentStatus || 'draft').toLowerCase();
@@ -141,8 +141,12 @@ export function validateCourseLifecycleTransition(currentStatus, newStatus, cont
   const allowed = allowedTransitions[current] || [];
 
   if (!allowed.includes(next)) {
-    // Super admins can recover archived courses
-    if (context.isSuperAdmin && current === 'archived' && next === 'draft') {
+    // LMS admin-equivalent roles (admin, super_admin): recover archived → draft — set `privilegedRecoverArchivedCourse` via isAdminRole() at call sites when wiring.
+    if (
+      context.privilegedRecoverArchivedCourse &&
+      current === 'archived' &&
+      next === 'draft'
+    ) {
       return;
     }
 

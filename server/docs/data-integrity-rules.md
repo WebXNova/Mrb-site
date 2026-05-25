@@ -20,7 +20,7 @@ Today, lectures reference **courses** only; tests carry a free-text **subject** 
 ## Deletion policy
 
 - **No hard-delete** of user-visible aggregates in normal admin flows; prefer `is_active`, `archived_at`, or soft-delete companion rows.
-- **Courses:** Default delete path is **archive** (`is_active = false`). **Purge** requires `super_admin` and optional `forceCascade` when lectures exist (see `courses.controller.js`).
+- **Courses:** Default delete path is **archive** (`is_active = false`). **Purge** requires either LMS admin **`admin`** or **`super_admin`** (equivalent privileges; see `courses.controller.js` + `utils/isAdminRole.js`) with optional **`forceCascade`** when lectures exist.
 - **Tests / Q&A:** Until soft-delete is uniform, use status enums (`draft` / `published` / `archived`) where implemented.
 - **Subjects:** Admin `DELETE` on `/api/admin/courses/:courseId/subjects/:subjectId` maps to **`is_active = false`** (soft); preserves `id` for a future FK migration. Reactivation via `PUT` with `isActive: true`.
 

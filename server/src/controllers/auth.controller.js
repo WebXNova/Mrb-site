@@ -10,7 +10,6 @@ import {
   loginStudent,
   logoutStudent,
   registerStudent,
-  verifyStudentMrbEnrollment,
 } from '../services/studentAuth.service.js';
 import {
   pickActiveRefreshContext,
@@ -30,6 +29,7 @@ import {
 import { getClientIp } from '../utils/network.js';
 import { assertCaptchaIfRequired } from '../services/abuseProtection.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
+import { isAdminRole } from '../utils/isAdminRole.js';
 
 function refreshCookieMaxAgeMs(refreshToken) {
   const decoded = jwt.decode(refreshToken);
@@ -125,7 +125,7 @@ async function readRefreshContext(req) {
     if (!adminRefreshToken) throw new ApiError(401, 'Admin refresh token required');
     const ctx = await refreshContextFromToken(adminRefreshToken, 'admin_refresh_token');
     if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
-    if (ctx.role !== 'admin') throw new ApiError(403, 'Admin refresh token required');
+    if (!isAdminRole(ctx.role)) throw new ApiError(403, 'Admin refresh token required');
     return ctx;
   }
   if (requestedRole === 'student') {
@@ -468,24 +468,12 @@ export const studentMe = asyncHandler(async (req, res) => {
   sendSuccess(res, profile);
 });
 
-const verifyMrbBodySchema = z.object({
-  code: z.string().min(4).max(64),
-});
-
 const verifyEmailBodySchema = z.object({
   token: z.string().trim().min(64).max(64),
 });
 
 const resendVerificationSchema = z.object({
   email: z.string().trim().email(),
-});
-
-export const studentVerifyMrbEnrollment = asyncHandler(async (req, res) => {
-  assertTrustedOrigin(req);
-  const parsed = verifyMrbBodySchema.safeParse(req.body);
-  if (!parsed.success) throw new ApiError(422, 'Invalid code payload', parsed.error.flatten());
-  const out = await verifyStudentMrbEnrollment(req.user.id, parsed.data.code);
-  sendSuccess(res, out);
 });
 
 export const refreshAuth = asyncHandler(async (req, res) => {
@@ -505,7 +493,7 @@ export const refreshAuth = asyncHandler(async (req, res) => {
     });
     throw error;
   }
-  if (refreshContext.role === 'admin' && rotated.role !== 'admin' && rotated.role !== 'super_admin') {
+  if (isAdminRole(refreshContext.role) && !isAdminRole(rotated.role)) {
     throw new ApiError(403, 'Admin refresh token required');
   }
   if (refreshContext.role === 'student' && rotated.role !== 'student') {

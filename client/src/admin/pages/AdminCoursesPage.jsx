@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
-import { getAdminToken, getStoredUser } from '../../auth/session';
+import { getAdminToken } from '../../auth/session';
 import AdminCourseSubjectsPanel from './AdminCourseSubjectsPanel';
 import CourseCreateWizard from '../course-wizard/CourseCreateWizard.jsx';
 import './AdminCoursesPage.css';
@@ -37,9 +37,6 @@ const initialDraftSubjects = () => [{ key: newDraftKey(), title: '', description
 
 export default function AdminCoursesPage() {
   const token = getAdminToken();
-  const adminUser = typeof window !== 'undefined' ? getStoredUser('admin_user') : null;
-  const isSuperAdmin = adminUser?.role === 'super_admin';
-  const [courses, setCourses] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
@@ -417,11 +414,7 @@ export default function AdminCoursesPage() {
   async function onPurge(course) {
     if (
       !window.confirm(
-        `PERMANENTLY delete "${course.title}"? This removes the catalog row.${
-          isSuperAdmin
-            ? ' If lectures are attached you will be prompted to confirm cascade deletion.'
-            : ''
-        }`
+        `PERMANENTLY delete "${course.title}"? This removes the catalog row. If lectures are attached you will be prompted to confirm cascade deletion.`
       )
     )
       return;
@@ -432,7 +425,7 @@ export default function AdminCoursesPage() {
       setSuccess('Course permanently deleted.');
     } catch (err) {
       const msg = err.message || '';
-      if (msg.includes('lecture') && isSuperAdmin) {
+      if (msg.includes('lecture')) {
         if (
           window.confirm(
             'This course still has lectures. Delete the course and ALL attached lectures? This cannot be undone.'
@@ -922,16 +915,14 @@ export default function AdminCoursesPage() {
                         >
                           Archive
                         </button>
-                        {isSuperAdmin ? (
-                          <button
-                            className="btn btn--secondary btn--sm"
-                            onClick={() => onPurge(course)}
-                            type="button"
-                            title="Hard delete (requires empty course or cascade)"
-                          >
-                            Purge
-                          </button>
-                        ) : null}
+                        <button
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => onPurge(course)}
+                          type="button"
+                          title="Hard delete (requires empty course or cascade)"
+                        >
+                          Purge
+                        </button>
                       </div>
                     </td>
                   </tr>

@@ -117,6 +117,11 @@ function stripCred(value) {
     .replace(/^["']|["']$/g, '');
 }
 
+/** Outgoing From header / SendGrid identifier (strip BOM, quotes, CR from Windows .env, etc.). */
+function normalizeMailFromIdentity(value) {
+  return stripCred(String(value || '').replace(/\r/g, '').replace(/\n/g, ''));
+}
+
 const nodeEnv = process.env.NODE_ENV || 'development';
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
@@ -195,6 +200,11 @@ if (
   throw new Error('[safepay] Secret and publishable key must differ');
 }
 
+/** Lowercase hostname labels after '@' (comma-separated BLOCKED_EMAIL_DOMAINS); empty unless configured. */
+const blockedEmailDomains = parseCsv(process.env.BLOCKED_EMAIL_DOMAINS)
+  .map((d) => String(d || '').trim().toLowerCase())
+  .filter(Boolean);
+
 /**
  * EXPORT ENV
  */
@@ -244,8 +254,10 @@ export const env = {
 
   email: {
     provider: parseEmailProvider(process.env.EMAIL_PROVIDER),
-    from: process.env.EMAIL_FROM || '',
-    sendgridApiKey: process.env.SENDGRID_API_KEY || '',
+    from: normalizeMailFromIdentity(
+      process.env.EMAIL_FROM || process.env.SMTP_FROM || ''
+    ),
+    sendgridApiKey: stripCred(process.env.SENDGRID_API_KEY || ''),
     sendgridSandboxMode: parseBoolean(process.env.EMAIL_SANDBOX_MODE, false),
     host: process.env.SMTP_HOST || '',
     port: parseNumber(process.env.SMTP_PORT, 587),
@@ -274,4 +286,48 @@ export const env = {
       86400
     ),
   },
+
+  abuse: {
+    /** When true, signup + resend paths return 503 if Redis failed (prevents naive in-memory drift). */
+    requireRedisForCriticalAuthWrites: parseBoolean(
+      process.env.REQUIRE_REDIS_FOR_CRITICAL_AUTH_WRITES,
+      true
+    ),
+    /** Cloudflare Turnstile secret (siteverify); optional until abuse threshold triggers challenges. */
+    captchaSecret: stripCred(process.env.TURNSTILE_SECRET_KEY || process.env.ABUSE_CAPTCHA_SECRET || ''),
+    blockedEmailDomains,
+  },
+
+  verification: {
+    challengeThresholdPerIpPerHour: parseNumber(
+      process.env.VERIFICATION_CHALLENGE_THRESHOLD_PER_IP_PER_HOUR,
+      48
+    ),
+    resendMaxPerHour: parseNumber(process.env.VERIFICATION_RESEND_MAX_PER_HOUR, 12),
+    resendCooldownSeconds: parseNumber(process.env.VERIFICATION_RESEND_COOLDOWN_SECONDS, 90),
+    tokenTtlMinutes: parseNumber(process.env.VERIFICATION_TOKEN_TTL_MINUTES, 15),
+    authPerSubnetPerMinute: parseNumber(process.env.VERIFICATION_AUTH_PER_SUBNET_PER_MINUTE, 120),
+    signupPerIpPer15Min: parseNumber(process.env.VERIFICATION_SIGNUP_PER_IP_PER_15MIN, 8),
+    signupPerSubnetPer15Min: parseNumber(process.env.VERIFICATION_SIGNUP_PER_SUBNET_PER_15MIN, 35),
+    signupPerAsnPer15Min: parseNumber(process.env.VERIFICATION_SIGNUP_PER_ASN_PER_15MIN, 80),
+    signupPerEmailPerDay: parseNumber(process.env.VERIFICATION_SIGNUP_PER_EMAIL_PER_DAY, 10),
+    verifyPerIpPerMinute: parseNumber(process.env.VERIFICATION_VERIFY_PER_IP_PER_MINUTE, 40),
+    verifyPerSubnetPerMinute: parseNumber(process.env.VERIFICATION_VERIFY_PER_SUBNET_PER_MINUTE, 80),
+    verifyPerAsnPerMinute: parseNumber(process.env.VERIFICATION_VERIFY_PER_ASN_PER_MINUTE, 160),
+    resendCoarsePerIpPerMinute: parseNumber(process.env.VERIFICATION_RESEND_COARSE_IP_PER_MINUTE, 15),
+    resendCoarsePerSubnetPerMinute: parseNumber(
+      process.env.VERIFICATION_RESEND_COARSE_SUBNET_PER_MINUTE,
+      40
+    ),
+    resendCoarsePerAsnPerMinute: parseNumber(process.env.VERIFICATION_RESEND_COARSE_ASN_PER_MINUTE, 80),
+    providerWebhookPerIpPerMinute: parseNumber(
+      process.env.VERIFICATION_PROVIDER_WEBHOOK_IP_PER_MINUTE,
+      200
+    ),
+    safepayWebhookPerIpPerMinute: parseNumber(
+      process.env.SAFEPAY_WEBHOOK_PER_IP_PER_MINUTE,
+      240
+    ),
+  },
 };
+

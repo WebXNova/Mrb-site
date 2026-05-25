@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
+import { isAdminRole } from '../../utils/isAdminRole';
 
 function formatDateTime(value) {
   if (!value) return '-';
@@ -67,7 +68,7 @@ export default function AdminUsersPage() {
                   <td>{user.lastLoginIpAddress || '-'}</td>
                   <td>{user.loginCount ?? 0}</td>
                   <td>
-                    {user.role === 'admin' || user.role === 'super_admin' ? (
+                    {isAdminRole(user.role) ? (
                       '-'
                     ) : (
                       <div className="admin-row-actions">

@@ -101,6 +101,7 @@ export async function dashboardStats() {
   const [[teachersCount]] = await mysqlPool.query(
     `SELECT COUNT(*) AS value FROM users WHERE role = 'teacher'`
   );
+  // Panel admin accounts — keep IN list aligned with `src/utils/isAdminRole.js`.
   const [[adminsCount]] = await mysqlPool.query(
     `SELECT COUNT(*) AS value FROM users WHERE role IN ('admin', 'super_admin')`
   );

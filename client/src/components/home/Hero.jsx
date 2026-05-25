@@ -34,7 +34,7 @@ export default function Hero() {
 
           <ul className="hero__bullets">
             <li>
-              <CheckIcon /> Verified MRB-code access
+              <CheckIcon /> Verified student access
             </li>
             <li>
               <CheckIcon /> Subject-tagged doubt support

@@ -8,6 +8,7 @@ const navItems = [
   { to: '/admin', label: 'Dashboard', end: true },
   { to: '/admin/questions', label: 'Questions' },
   { to: '/admin/courses', label: 'Courses' },
+  { to: '/admin/chapters', label: 'Chapters' },
   { to: '/admin/lectures', label: 'Lectures' },
   { to: '/admin/tests', label: 'Tests' },
   { to: '/admin/users', label: 'Users' },

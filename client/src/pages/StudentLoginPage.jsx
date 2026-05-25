@@ -12,15 +12,8 @@ export default function StudentLoginPage() {
   const [searchParams] = useSearchParams();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [mrbCode, setMrbCode] = useState('');
   const [error, setError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
-
-  function normaliseMrbCode(value) {
-    return String(value || '')
-      .toUpperCase()
-      .replace(/[^A-Z0-9-]/g, '');
-  }
 
   async function onSubmit(event) {
     event.preventDefault();
@@ -47,21 +40,8 @@ export default function StudentLoginPage() {
       const next = safeRedirectPath(searchParams.get('from')) || '/dashboard';
       if (payload?.student?.isVerified !== true) {
         navigate('/verify-email', { replace: true });
-      } else if (payload?.student?.mrbEnrollmentVerified === true) {
-        navigate(next, { replace: true });
       } else {
-        const code = mrbCode.trim();
-        if (code.length >= 4) {
-          await studentApi.verifyMrbEnrollment({ code });
-          const me = await studentApi.me();
-          setStudentAuth('__cookie_session__', {
-            ...studentUser,
-            ...(me?.data || {}),
-          });
-          navigate(next, { replace: true });
-        } else {
-          navigate('/verify-mrb', { replace: true, state: { from: next } });
-        }
+        navigate(next, { replace: true });
       }
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -81,8 +61,7 @@ export default function StudentLoginPage() {
           <AuthBrandHeader subtitle="Student sign in" compact />
           <h1 className="heading-2">Student Login</h1>
           <p className="auth-subtitle">
-            Sign in with your email or username and password. You will need an <strong>MRB enrollment code</strong>{' '}
-            (from Admin → MRB Codes) before the student portal opens.
+            Sign in with your email or username and password.
           </p>
           <form onSubmit={onSubmit} className="auth-form">
             <div className="admin-field">
@@ -104,18 +83,6 @@ export default function StudentLoginPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
-              />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="mrbCode">MRB Code</label>
-              <input
-                id="mrbCode"
-                value={mrbCode}
-                onChange={(event) => setMrbCode(normaliseMrbCode(event.target.value))}
-                placeholder="Required if your portal is not yet activated"
-                autoComplete="one-time-code"
-                inputMode="text"
-                maxLength={40}
               />
             </div>
             {error ? <p className="admin-error auth-form__error">{error}</p> : null}

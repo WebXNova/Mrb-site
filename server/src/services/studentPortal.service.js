@@ -11,12 +11,24 @@ async function loadCourses() {
 
 async function loadStudentLectures() {
   const [lectures] = await mysqlPool.query(
-    `SELECT l.id, l.course_id, l.title, l.youtube_url, l.topic, l.sort_order,
-            c.title AS course_title
+    `SELECT l.id, l.course_id, l.chapter_id, l.title, l.youtube_url, l.topic, l.sort_order,
+            c.title AS course_title,
+            ch.title AS chapter_title,
+            ch.order_index AS chapter_order_index,
+            s.id AS subject_id,
+            s.title AS subject_title,
+            s.order_index AS subject_order_index
      FROM lectures l
      INNER JOIN courses c ON c.id = l.course_id
-     WHERE l.is_active = TRUE AND c.is_active = TRUE
-     ORDER BY l.sort_order ASC, l.created_at DESC`
+     LEFT JOIN chapters ch ON ch.id = l.chapter_id
+     LEFT JOIN subjects s ON s.id = ch.subject_id
+     WHERE l.is_active = TRUE
+       AND c.is_active = TRUE
+       AND (
+         l.chapter_id IS NULL
+         OR (ch.is_active = TRUE AND s.is_active = TRUE)
+       )
+     ORDER BY s.order_index ASC, ch.order_index ASC, l.sort_order ASC, l.created_at ASC`
   );
   return lectures;
 }
@@ -81,6 +93,10 @@ export async function getStudentDashboard(studentId) {
       id: row.id,
       courseId: row.course_id,
       courseTitle: row.course_title,
+      chapterId: row.chapter_id == null ? null : Number(row.chapter_id),
+      chapterTitle: row.chapter_title == null ? null : String(row.chapter_title),
+      subjectId: row.subject_id == null ? null : Number(row.subject_id),
+      subjectTitle: row.subject_title == null ? null : String(row.subject_title),
       title: row.title,
       youtubeUrl: row.youtube_url,
       topic: row.topic,

@@ -2,7 +2,6 @@ import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { requireAdmin, requireStudent } from '../middleware/auth.js';
 import { requireStudentVerified } from '../middleware/requireStudentVerified.js';
-import { requireStudentMrbEnrollment } from '../middleware/requireStudentMrbEnrollment.js';
 import { requireCsrf } from '../middleware/csrf.js';
 import { env } from '../config/env.js';
 
@@ -29,10 +28,6 @@ export async function requireRole(req, res, role) {
 
 export async function requireVerified(req, res) {
   await runMiddleware(requireStudentVerified, req, res);
-}
-
-export async function requireEnrollment(req, res) {
-  await runMiddleware(requireStudentMrbEnrollment, req, res);
 }
 
 export async function requireRiskLevel(req, _res, maxAllowedRisk = 'elevated') {
@@ -69,7 +64,6 @@ export function enforcePolicy(policy = {}) {
   const {
     auth = null,
     verified = false,
-    enrollment = false,
     csrf = false,
     maxRisk = null,
     freshSession = false,
@@ -79,7 +73,6 @@ export function enforcePolicy(policy = {}) {
     try {
       if (auth) await requireRole(req, res, auth);
       if (verified) await requireVerified(req, res);
-      if (enrollment) await requireEnrollment(req, res);
       if (csrf) await runMiddleware(requireCsrf, req, res);
       if (maxRisk) await requireRiskLevel(req, res, maxRisk);
       if (freshSession) await requireFreshSession(req, res);

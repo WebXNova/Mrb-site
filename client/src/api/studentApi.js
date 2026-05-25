@@ -45,8 +45,6 @@ export const studentApi = {
     studentRequest('/auth/verify-email', { method: 'POST', body: { token }, retryOnUnauthorized: false }),
   resendVerification: (payload) =>
     studentRequest('/auth/resend-verification', { method: 'POST', body: payload, retryOnUnauthorized: false }),
-  verifyMrbEnrollment: (payload) =>
-    studentRequest('/auth/student/verify-mrb-enrollment', { method: 'POST', body: payload, retryOnUnauthorized: true }),
   logout: () => studentRequest('/auth/student/logout', { method: 'POST', retryOnUnauthorized: false }),
   me: () => studentRequest('/auth/student/me', { retryOnUnauthorized: true }),
   dashboard: () => studentRequest('/student/dashboard'),

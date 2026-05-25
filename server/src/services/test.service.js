@@ -46,7 +46,6 @@ function toTest(row) {
     status: row.status,
     publicSlug: row.public_slug || null,
     publicLink: buildPublicLink(row.public_slug),
-    hasMrbCode: false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

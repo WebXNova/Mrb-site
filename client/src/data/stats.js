@@ -12,8 +12,7 @@
  *                       moderated) when wired up.
  * - `features`       -> static marketing copy describing the
  *                       platform's actual capabilities (Lectures,
- *                       Tests, Doubts, Code-based access). This is
- *                       site copy, not sample data, and is preserved.
+ *                       Tests, Doubts, secure portal access).
  *
  * Components that consume `platformStats` / `testimonials` already
  * map over the array, so an empty array renders an empty grid
@@ -46,9 +45,9 @@ export const features = [
   },
   {
     id: 'access',
-    title: 'Verified, Code-Based Access',
+    title: 'Secure student portal',
     description:
-      'Each MRB student gets a unique enrollment code. No spam accounts, no distractions \u2014 just a clean classroom.',
+      'Sign in once to reach lectures, tests, and doubts in a calm, distraction-free dashboard.',
     icon: 'shield',
   },
 ];

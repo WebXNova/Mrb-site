@@ -12,7 +12,7 @@ function isProtectedRoute(fileName, routePath) {
   if (fileName === 'student.routes.js') return true;
   if (fileName === 'tests.routes.js' && routePath.includes('/verify-code')) return true;
   if (fileName === 'auth.routes.js') {
-    return ['/logout', '/logout-all', '/refresh', '/student/logout', '/student/verify-mrb-enrollment', '/student/me'].includes(
+    return ['/logout', '/logout-all', '/refresh', '/student/logout', '/student/me'].includes(
       routePath
     );
   }

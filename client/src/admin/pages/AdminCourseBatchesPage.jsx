@@ -1,7 +1,7 @@
 import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
-import { getAdminToken, getStoredUser } from '../../auth/session';
+import { getAdminToken } from '../../auth/session';
 import {
   BATCH_STATUSES,
   BATCH_TIMEZONES,
@@ -53,8 +53,6 @@ const emptyForm = {
 
 function AdminCourseBatchesInner() {
   const token = getAdminToken();
-  const adminUser = typeof window !== 'undefined' ? getStoredUser('admin_user') : null;
-  const isSuperAdmin = adminUser?.role === 'super_admin';
   const { courseId: rawCourseId } = useParams();
   const courseId = Number(rawCourseId);
   const courseIdValid = Number.isFinite(courseId) && courseId > 0;
@@ -193,10 +191,6 @@ function AdminCourseBatchesInner() {
   }
 
   async function onReactivate(row) {
-    if (row.status === 'archived' && !isSuperAdmin) {
-      setError('Recovering archived batches requires a super admin.');
-      return;
-    }
     setBusyId(row.id);
     setError('');
     setSuccess('');
@@ -405,12 +399,8 @@ function AdminCourseBatchesInner() {
                             type="button"
                             className="btn btn--secondary btn--sm"
                             onClick={() => onReactivate(b)}
-                            disabled={busy || (b.status === 'archived' && !isSuperAdmin)}
-                            title={
-                              b.status === 'archived' && !isSuperAdmin
-                                ? 'Super admin required to recover archived batches'
-                                : 'Reactivate'
-                            }
+                            disabled={busy}
+                            title="Reactivate"
                           >
                             Reactivate
                           </button>

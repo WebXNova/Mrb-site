@@ -13,19 +13,40 @@ import { sendSuccess } from '../utils/httpEnvelope.js';
 const YOUTUBE_URL_REGEX =
   /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=[\w-]{11}(&.*)?|youtu\.be\/[\w-]{11}(\?.*)?)$/i;
 
-const lectureSchema = z
-  .object({
-    courseId: z.number().int().positive(),
-    title: z.string().min(3).max(220),
-    youtubeUrl: z
-      .string()
-      .url()
-      .refine((value) => YOUTUBE_URL_REGEX.test(value), 'youtubeUrl must be a valid YouTube watch URL'),
-    topic: z.string().max(120).optional().nullable(),
-    sortOrder: z.number().int().min(0).optional(),
-    isActive: z.boolean().optional(),
-  })
-  .strip();
+function preprocessLectureBody(raw) {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return raw;
+  }
+  const obj = { ...raw };
+  if (obj.chapter_id != null && obj.chapterId == null) obj.chapterId = obj.chapter_id;
+  if (obj.sort_order != null && obj.sortOrder == null) obj.sortOrder = obj.sort_order;
+  if (obj.is_active != null && obj.isActive == null) obj.isActive = obj.is_active;
+  if (obj.youtube_url != null && obj.youtubeUrl == null) obj.youtubeUrl = obj.youtube_url;
+  delete obj.chapter_id;
+  delete obj.course_id;
+  delete obj.courseId;
+  delete obj.sort_order;
+  delete obj.is_active;
+  delete obj.youtube_url;
+  return obj;
+}
+
+const lectureSchema = z.preprocess(
+  preprocessLectureBody,
+  z
+    .object({
+      chapterId: z.number({ invalid_type_error: 'chapterId must be a number' }).int().positive(),
+      title: z.string().min(3).max(220),
+      youtubeUrl: z
+        .string()
+        .url()
+        .refine((value) => YOUTUBE_URL_REGEX.test(value), 'youtubeUrl must be a valid YouTube watch URL'),
+      topic: z.string().max(120).optional().nullable(),
+      sortOrder: z.number().int().min(0).optional(),
+      isActive: z.boolean().optional(),
+    })
+    .strict()
+);
 
 export const getLectures = asyncHandler(async (req, res) => {
   const lectures = await listLectures();
@@ -44,6 +65,11 @@ export const postLecture = asyncHandler(async (req, res) => {
     action: 'admin.lecture.create',
     entityType: 'lecture',
     entityId: String(created.id),
+    metadata: {
+      chapterId: created.chapterId,
+      subjectId: created.subjectId,
+      courseId: created.courseId,
+    },
   });
   sendSuccess(res, created, 201);
 });
@@ -66,6 +92,11 @@ export const putLecture = asyncHandler(async (req, res) => {
     action: 'admin.lecture.update',
     entityType: 'lecture',
     entityId: String(lectureId),
+    metadata: {
+      chapterId: updated.chapterId,
+      subjectId: updated.subjectId,
+      courseId: updated.courseId,
+    },
   });
   sendSuccess(res, updated);
 });

@@ -1,5 +1,33 @@
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
+import { assertChapterExists } from './chapter.service.js';
+
+const LECTURE_HIERARCHY_SELECT = `
+  l.id,
+  l.course_id,
+  l.chapter_id,
+  l.title,
+  l.youtube_url,
+  l.youtube_video_id,
+  l.topic,
+  l.sort_order,
+  l.is_active,
+  l.created_at,
+  l.updated_at,
+  c.title AS course_title,
+  ch.title AS chapter_title,
+  ch.order_index AS chapter_order_index,
+  s.id AS subject_id,
+  s.title AS subject_title,
+  s.order_index AS subject_order_index
+`;
+
+const LECTURE_HIERARCHY_FROM = `
+  FROM lectures l
+  INNER JOIN courses c ON c.id = l.course_id
+  LEFT JOIN chapters ch ON ch.id = l.chapter_id
+  LEFT JOIN subjects s ON s.id = ch.subject_id
+`;
 
 function getYouTubeVideoId(url) {
   const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/i;
@@ -7,37 +35,53 @@ function getYouTubeVideoId(url) {
   return match ? match[1] : null;
 }
 
-function toLecture(row) {
+/** @param {unknown} v */
+function toIsoTimestamp(v) {
+  if (v == null) return null;
+  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString();
+  const d = new Date(typeof v === 'string' || typeof v === 'number' ? v : String(v));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** @param {Record<string, unknown>} row */
+function toLectureDto(row) {
+  if (!row) return null;
   return {
-    id: row.id,
-    courseId: row.course_id,
-    title: row.title,
+    id: Number(row.id),
+    courseId: Number(row.course_id),
+    courseTitle: String(row.course_title ?? ''),
+    chapterId: row.chapter_id == null ? null : Number(row.chapter_id),
+    chapterTitle: row.chapter_title == null ? null : String(row.chapter_title),
+    subjectId: row.subject_id == null ? null : Number(row.subject_id),
+    subjectTitle: row.subject_title == null ? null : String(row.subject_title),
+    title: String(row.title ?? ''),
     youtubeUrl: row.youtube_url,
     youtubeVideoId: row.youtube_video_id,
-    topic: row.topic,
-    sortOrder: row.sort_order,
-    isActive: !!row.is_active,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    topic: row.topic == null ? null : String(row.topic),
+    sortOrder: Number(row.sort_order ?? 0),
+    isActive: Boolean(Number(row.is_active)),
+    createdAt: toIsoTimestamp(row.created_at),
+    updatedAt: toIsoTimestamp(row.updated_at),
   };
 }
 
-/** @param {{ code: string }} [details] */
-function courseNotFound(details) {
-  return new ApiError(404, 'Course not found', details);
+/** @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} executor */
+async function fetchLectureDto(lectureId, executor = mysqlPool) {
+  const [rows] = await executor.query(
+    `SELECT ${LECTURE_HIERARCHY_SELECT} ${LECTURE_HIERARCHY_FROM} WHERE l.id = ? LIMIT 1`,
+    [lectureId]
+  );
+  return rows[0] ? toLectureDto(rows[0]) : null;
 }
 
-/** Require explicit `courseId`; verify row exists (no fallback, no auto-create). */
-async function requireExistingCourseId(courseId) {
-  const id = Number(courseId);
-  if (!Number.isFinite(id) || id <= 0) {
-    throw new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
-  }
-  const [courseRows] = await mysqlPool.query(`SELECT id FROM courses WHERE id = ? LIMIT 1`, [id]);
-  if (!courseRows[0]) {
-    throw courseNotFound({ code: 'COURSE_NOT_FOUND' });
-  }
-  return id;
+/** Validate chapter hierarchy; derive authoritative course_id (never trust client courseId). */
+async function resolveChapterOwnership(chapterId) {
+  const chapter = await assertChapterExists(chapterId);
+  return {
+    chapterId: chapter.id,
+    courseId: chapter.courseId,
+    subjectId: chapter.subjectId,
+  };
 }
 
 export async function countLecturesForCourse(courseId) {
@@ -47,15 +91,11 @@ export async function countLecturesForCourse(courseId) {
 
 export async function listLectures() {
   const [rows] = await mysqlPool.query(
-    `SELECT l.*, c.title AS course_title
-     FROM lectures l
-     INNER JOIN courses c ON c.id = l.course_id
+    `SELECT ${LECTURE_HIERARCHY_SELECT}
+     ${LECTURE_HIERARCHY_FROM}
      ORDER BY l.created_at DESC`
   );
-  return rows.map((row) => ({
-    ...toLecture(row),
-    courseTitle: row.course_title,
-  }));
+  return rows.map(toLectureDto);
 }
 
 export async function createLecture(payload) {
@@ -64,13 +104,14 @@ export async function createLecture(payload) {
     throw new ApiError(422, 'Invalid YouTube URL');
   }
 
-  const resolvedCourseId = await requireExistingCourseId(payload.courseId);
+  const { chapterId, courseId } = await resolveChapterOwnership(payload.chapterId);
 
   const [result] = await mysqlPool.query(
-    `INSERT INTO lectures (course_id, title, youtube_url, youtube_video_id, topic, sort_order, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO lectures (course_id, chapter_id, title, youtube_url, youtube_video_id, topic, sort_order, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      resolvedCourseId,
+      courseId,
+      chapterId,
       payload.title,
       payload.youtubeUrl,
       videoId,
@@ -80,8 +121,11 @@ export async function createLecture(payload) {
     ]
   );
 
-  const [rows] = await mysqlPool.query(`SELECT * FROM lectures WHERE id = ?`, [result.insertId]);
-  return toLecture(rows[0]);
+  const dto = await fetchLectureDto(result.insertId);
+  if (!dto) {
+    throw new ApiError(500, 'Lecture created but could not be loaded');
+  }
+  return dto;
 }
 
 export async function updateLecture(lectureId, payload) {
@@ -90,19 +134,24 @@ export async function updateLecture(lectureId, payload) {
     throw new ApiError(422, 'Invalid YouTube URL');
   }
 
-  const [existingRows] = await mysqlPool.query(`SELECT id, course_id FROM lectures WHERE id = ? LIMIT 1`, [lectureId]);
+  const [existingRows] = await mysqlPool.query(
+    `SELECT id FROM lectures WHERE id = ? LIMIT 1`,
+    [lectureId]
+  );
   if (!existingRows[0]) {
     return null;
   }
-  const resolvedCourseId = await requireExistingCourseId(payload.courseId);
+
+  const { chapterId, courseId } = await resolveChapterOwnership(payload.chapterId);
 
   await mysqlPool.query(
     `UPDATE lectures
-     SET course_id = ?, title = ?, youtube_url = ?, youtube_video_id = ?, topic = ?, sort_order = ?, is_active = ?,
+     SET course_id = ?, chapter_id = ?, title = ?, youtube_url = ?, youtube_video_id = ?, topic = ?, sort_order = ?, is_active = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
-      resolvedCourseId,
+      courseId,
+      chapterId,
       payload.title,
       payload.youtubeUrl,
       videoId,
@@ -113,8 +162,7 @@ export async function updateLecture(lectureId, payload) {
     ]
   );
 
-  const [rows] = await mysqlPool.query(`SELECT * FROM lectures WHERE id = ?`, [lectureId]);
-  return rows[0] ? toLecture(rows[0]) : null;
+  return fetchLectureDto(lectureId);
 }
 
 export async function deleteLecture(lectureId) {
