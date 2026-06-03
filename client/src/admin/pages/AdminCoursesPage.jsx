@@ -37,6 +37,7 @@ const initialDraftSubjects = () => [{ key: newDraftKey(), title: '', description
 
 export default function AdminCoursesPage() {
   const token = getAdminToken();
+  const [courses, setCourses] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');

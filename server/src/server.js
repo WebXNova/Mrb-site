@@ -12,7 +12,14 @@ import { startEmailQueueWorker } from './services/emailQueueWorker.service.js';
 import { getEmailProviderStatus } from './services/email.service.js';
 import { seedLocationTables } from './services/locationSeed.service.js';
 import { ensureEnrollmentAccessSchema } from './db/ensureEnrollmentAccessSchema.js';
+import { ensureTestsCourseSchema } from './db/ensureTestsCourseSchema.js';
+import { ensureTestsApplicationSchema } from './db/ensureTestsApplicationSchema.js';
+import { ensureCeeDbConstraints } from './db/ensureCeeDbConstraints.js';
 import { ensureCourseCatalogSchema } from './db/ensureCourseCatalogSchema.js';
+import {
+  shouldRunProtectionGridStartupValidation,
+  validateProtectionGridAtStartup,
+} from './security/cee/protectionGridValidator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,7 +106,15 @@ async function startServer() {
   await seedLocationTables(mysqlPool);
   await ensureCourseCatalogSchema(mysqlPool);
   await ensureEnrollmentAccessSchema(mysqlPool);
+  await ensureTestsCourseSchema(mysqlPool);
+  await ensureTestsApplicationSchema(mysqlPool);
+  await ensureCeeDbConstraints(mysqlPool);
   await assertRequiredAuthSchema();
+
+  if (shouldRunProtectionGridStartupValidation()) {
+    await validateProtectionGridAtStartup();
+    console.log('[CEE.protectionGrid] Startup validation passed (fail-closed grid active).');
+  }
 
   try {
     await connectRedis();

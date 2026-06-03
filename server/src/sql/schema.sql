@@ -217,97 +217,214 @@ CREATE TABLE IF NOT EXISTS lectures (
 );
 
 -- =====================================================
--- TESTS & ASSESSMENTS
+-- ASSESSMENT & TEST MANAGEMENT
+-- FK types: BIGINT (signed) — matches users.id, courses.id, subjects.id
+-- Dependency order: tests → question_bank → question_options,
+--   question_import_batches → test_questions → test_attempts →
+--   student_answers → test_results
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS tests (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  title VARCHAR(220) NOT NULL,
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  course_id BIGINT NOT NULL,
+  title VARCHAR(255) NOT NULL,
   description TEXT NULL,
-  subject VARCHAR(80) NOT NULL,
+  subject VARCHAR(80) NULL,
   category VARCHAR(80) NULL,
   sub_category VARCHAR(80) NULL,
+  test_type VARCHAR(50) NOT NULL DEFAULT 'standard',
   duration_minutes INT NOT NULL,
+  passing_percentage DECIMAL(5,2) NOT NULL DEFAULT 40.00,
   passing_marks INT NULL,
-  max_attempts INT DEFAULT 1,
-  negative_marking DECIMAL(6,2) NOT NULL DEFAULT 0,
-  shuffle_questions BOOLEAN DEFAULT FALSE,
-  shuffle_options BOOLEAN DEFAULT FALSE,
-  show_explanations BOOLEAN DEFAULT TRUE,
-  access_mode ENUM('private', 'public') NOT NULL DEFAULT 'private',
-  tags_json JSON NULL,
-  status ENUM('draft', 'published', 'archived') DEFAULT 'draft',
-  public_slug VARCHAR(180) NULL UNIQUE,
-  created_by BIGINT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+  max_attempts INT NOT NULL DEFAULT 1,
+  negative_marking DECIMAL(5,2) NOT NULL DEFAULT 0,
+  shuffle_questions TINYINT(1) NOT NULL DEFAULT 0,
+  shuffle_options TINYINT(1) NOT NULL DEFAULT 0,
+  show_explanations TINYINT(1) NOT NULL DEFAULT 1,
+  show_result_immediately TINYINT(1) NOT NULL DEFAULT 1,
+  show_answers_after_submit TINYINT(1) NOT NULL DEFAULT 0,
+  allow_retake TINYINT(1) NOT NULL DEFAULT 0,
+  access_mode VARCHAR(20) NOT NULL DEFAULT 'private',
+  tags_json TEXT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'DRAFT',
+  public_slug VARCHAR(120) NULL,
+  start_date DATETIME NULL,
+  end_date DATETIME NULL,
+  created_by BIGINT NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  UNIQUE KEY idx_tests_public_slug (public_slug),
+  KEY idx_course (course_id),
+  KEY idx_status (status),
+  KEY idx_dates (start_date, end_date),
+  KEY fk_tests_creator (created_by),
+  CONSTRAINT fk_tests_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tests_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS question_bank (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  course_id BIGINT NOT NULL,
+  subject_id BIGINT NULL,
+  topic VARCHAR(255) NULL,
+  difficulty VARCHAR(50) NULL,
+  question_type VARCHAR(50) NOT NULL,
+  question_text LONGTEXT NOT NULL,
+  explanation LONGTEXT NULL,
+  marks DECIMAL(8,2) NOT NULL DEFAULT 1.00,
+  created_by BIGINT NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  deleted_by BIGINT NULL,
+  KEY idx_course (course_id),
+  KEY idx_subject (subject_id),
+  KEY idx_type (question_type),
+  KEY idx_difficulty (difficulty),
+  KEY idx_qb_deleted_at (deleted_at),
+  KEY idx_qb_active_list (deleted_at, course_id, id),
+  KEY fk_qb_creator (created_by),
+  CONSTRAINT fk_qb_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_qb_subject FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+  CONSTRAINT fk_qb_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_qb_deleted_by FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT chk_qb_soft_delete_actor CHECK (deleted_at IS NULL OR deleted_by IS NOT NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- question_bank soft-delete hardening (deleted_by + indexes + CHECK):
+-- Up:       sql/migrations/question_bank_soft_delete_hardening.sql
+-- Rollback: sql/migrations/question_bank_soft_delete_hardening_rollback.sql
+-- Node:     src/db/ensureQuestionBankSoftDeleteSchema.js
+
+CREATE TABLE IF NOT EXISTS question_options (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  question_id BIGINT NOT NULL,
+  option_text LONGTEXT NOT NULL,
+  is_correct TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_question (question_id),
+  CONSTRAINT fk_option_question FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS question_import_batches (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uploaded_by BIGINT NOT NULL,
+  source_type VARCHAR(50) NOT NULL,
+  file_name VARCHAR(255) NULL,
+  total_questions INT NOT NULL DEFAULT 0,
+  successful_questions INT NOT NULL DEFAULT 0,
+  failed_questions INT NOT NULL DEFAULT 0,
+  status VARCHAR(50) NOT NULL DEFAULT 'COMPLETED',
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_uploaded_by (uploaded_by),
+  KEY idx_source (source_type),
+  CONSTRAINT fk_import_user FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS test_questions (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   test_id BIGINT NOT NULL,
-  question_text TEXT NOT NULL,
-  question_image_url VARCHAR(1000) NULL,
-  options_json JSON NOT NULL,
-  correct_option VARCHAR(10) NOT NULL,
-  explanation TEXT NOT NULL,
-  explanation_image_url VARCHAR(1000) NULL,
-  marks INT DEFAULT 1,
-  order_index INT DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_test_questions_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
-);
+  question_id BIGINT NOT NULL,
+  display_order INT NOT NULL DEFAULT 0,
+  marks_override DECIMAL(8,2) NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_test_question (test_id, question_id),
+  KEY idx_test (test_id),
+  KEY idx_question (question_id),
+  CONSTRAINT fk_tq_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tq_question FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS test_attempts (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   test_id BIGINT NOT NULL,
+  student_id BIGINT NOT NULL,
   user_id BIGINT NULL,
-  student_name VARCHAR(120) NULL,
-  access_code_label VARCHAR(50) NULL,
-  used_code_hash VARCHAR(255) NULL,
-  status ENUM('in_progress', 'submitted', 'expired') DEFAULT 'in_progress',
-  started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  expires_at DATETIME NOT NULL,
-  submitted_at DATETIME NULL,
+  student_name VARCHAR(255) NULL,
+  access_code_label VARCHAR(64) NULL DEFAULT 'DIRECT',
+  attempt_number INT NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  started_at DATETIME NOT NULL,
+  expires_at DATETIME NULL,
   last_activity_at DATETIME NULL,
   ip_address VARCHAR(64) NULL,
-  user_agent VARCHAR(300) NULL,
+  user_agent TEXT NULL,
   device_fingerprint VARCHAR(128) NULL,
-  attempt_nonce VARCHAR(120) NOT NULL,
+  used_code_hash VARCHAR(128) NULL,
+  attempt_nonce VARCHAR(64) NULL,
   result_id BIGINT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  submitted_at DATETIME NULL,
+  time_taken_seconds INT NULL,
+  score DECIMAL(10,2) NULL,
+  percentage DECIMAL(5,2) NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_attempt (test_id, student_id, attempt_number),
+  KEY idx_test (test_id),
+  KEY idx_student (student_id),
+  KEY idx_user (user_id),
+  KEY idx_status (status),
   CONSTRAINT fk_attempt_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
-  CONSTRAINT fk_attempt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-);
+  CONSTRAINT fk_attempt_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS test_attempt_answers (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+CREATE TABLE IF NOT EXISTS student_answers (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   attempt_id BIGINT NOT NULL,
   question_id BIGINT NOT NULL,
-  selected_option VARCHAR(10) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  selected_option_id BIGINT NULL,
+  is_correct TINYINT(1) NULL,
+  marks_awarded DECIMAL(8,2) NULL,
+  answered_at DATETIME NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_attempt_question (attempt_id, question_id),
-  CONSTRAINT fk_attempt_answer_attempt FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE,
-  CONSTRAINT fk_attempt_answer_question FOREIGN KEY (question_id) REFERENCES test_questions(id) ON DELETE CASCADE
-);
+  KEY idx_attempt (attempt_id),
+  KEY fk_sa_question (question_id),
+  KEY fk_sa_option (selected_option_id),
+  CONSTRAINT fk_sa_attempt FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sa_question FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sa_option FOREIGN KEY (selected_option_id) REFERENCES question_options(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS test_results (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  attempt_id BIGINT NOT NULL UNIQUE,
-  score INT NOT NULL,
-  max_score INT NOT NULL,
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  attempt_id BIGINT NOT NULL,
+  student_id BIGINT NOT NULL,
+  test_id BIGINT NOT NULL,
+  course_id BIGINT NOT NULL,
+  total_questions INT NOT NULL,
+  correct_answers INT NOT NULL DEFAULT 0,
+  wrong_answers INT NOT NULL DEFAULT 0,
+  skipped_answers INT NOT NULL DEFAULT 0,
+  score DECIMAL(10,2) NOT NULL,
+  max_score DECIMAL(10,2) NULL,
+  correct_count INT NULL,
+  wrong_count INT NULL,
+  skipped_count INT NULL,
+  time_taken_seconds INT NULL,
+  detail_json LONGTEXT NULL,
   percentage DECIMAL(5,2) NOT NULL,
-  correct_count INT NOT NULL DEFAULT 0,
-  wrong_count INT NOT NULL DEFAULT 0,
-  skipped_count INT NOT NULL DEFAULT 0,
-  time_taken_seconds INT NOT NULL DEFAULT 0,
-  detail_json JSON NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_result_attempt FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE
-);
+  grade VARCHAR(20) NULL,
+  rank_position INT NULL,
+  generated_at DATETIME NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_attempt_result (attempt_id),
+  KEY idx_student (student_id),
+  KEY idx_test (test_id),
+  KEY idx_course (course_id),
+  KEY idx_percentage (percentage),
+  CONSTRAINT fk_result_attempt FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_result_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_result_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
+  CONSTRAINT fk_result_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
 -- GEOGRAPHIC DATA: PROVINCES
@@ -1230,3 +1347,42 @@ SET @sql_lectures_add_chapter_idx := IF(
 PREPARE stmt_lectures_add_chapter_idx FROM @sql_lectures_add_chapter_idx;
 EXECUTE stmt_lectures_add_chapter_idx;
 DEALLOCATE PREPARE stmt_lectures_add_chapter_idx;
+
+-- CEE: tests.course_id for entitlement-scoped test access
+SET @tests_allow := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests'
+);
+SET @tests_course_col := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests' AND COLUMN_NAME = 'course_id'
+);
+SET @sql_tests_add_course := IF(
+  @tests_allow = 0 OR @tests_course_col > 0,
+  'SELECT 1',
+  'ALTER TABLE tests ADD COLUMN course_id BIGINT NULL AFTER id'
+);
+PREPARE stmt_tests_add_course FROM @sql_tests_add_course;
+EXECUTE stmt_tests_add_course;
+DEALLOCATE PREPARE stmt_tests_add_course;
+
+SET @tests_course_idx := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests'
+    AND INDEX_NAME IN ('idx_tests_course', 'idx_course')
+);
+SET @sql_tests_add_idx := IF(
+  @tests_allow = 0 OR @tests_course_idx > 0,
+  'SELECT 1',
+  'ALTER TABLE tests ADD KEY idx_course (course_id)'
+);
+PREPARE stmt_tests_add_idx FROM @sql_tests_add_idx;
+EXECUTE stmt_tests_add_idx;
+DEALLOCATE PREPARE stmt_tests_add_idx;
+
+
+
+
+
+
+

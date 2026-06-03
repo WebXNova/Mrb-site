@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "test:auth-storage": "node scripts/assert-no-auth-token-storage.mjs"
+    "test:auth-storage": "node scripts/assert-no-auth-token-storage.mjs",
+    "test:request-client-csrf": "node scripts/verify-request-client-csrf.mjs"
   },
   "dependencies": {
     "axios": "^1.16.0",

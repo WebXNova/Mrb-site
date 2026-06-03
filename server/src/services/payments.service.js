@@ -2,6 +2,7 @@ import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
 import { logActivity } from './activityLog.service.js';
+import { activateEnrollmentInTransaction } from './enrollmentLifecycle.service.js';
 import {
   createSafepayHostedCheckoutSession,
   extractSafepayTokenFromWebhook,
@@ -362,26 +363,13 @@ export async function fulfillSafepayWebhookVerified({ payload }) {
       return { ok: true, duplicate: true, orderId: order.id };
     }
 
-    await connection.query(
-      `UPDATE enrollments
-       SET access_status = 'inactive', updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = ? AND access_status = 'active' AND id <> ?`,
-      [locked.user_id, enrollmentId]
-    );
-
-    const [actRes] = await connection.query(
-      `UPDATE enrollments
-       SET status = 'approved',
-           access_status = 'active',
-           order_id = ?,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND user_id = ?`,
-      [order.id, enrollmentId, locked.user_id]
-    );
-    const activated = Number(actRes?.affectedRows ?? 0);
-    if (activated === 0) {
-      throw new ApiError(409, 'Enrollment activation failed (access_status / ownership)');
-    }
+    await activateEnrollmentInTransaction(connection, {
+      enrollmentId,
+      orderId: order.id,
+      actor: 'payment.webhook',
+      reason: 'safepay_paid',
+      requirePaidOrder: true,
+    });
 
     await connection.commit();
     logWebhookTx('paid + enrollment committed', { orderId: order.id, enrollmentId });

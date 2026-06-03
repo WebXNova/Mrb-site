@@ -1,7 +1,8 @@
 import mysql from 'mysql2/promise';
 import { env } from './env.js';
+import { installInstructionalPoolGuard } from './mysqlGuard.js';
 
-export const mysqlPool = mysql.createPool({
+const rawPool = mysql.createPool({
   host: env.mysql.host,
   port: env.mysql.port,
   user: env.mysql.user,
@@ -17,6 +18,9 @@ export const mysqlPool = mysql.createPool({
   /** Required so ad-hoc multi-statement SQL scripts can run via mysql CLI; never concatenate untrusted SQL. */
   multipleStatements: true,
 });
+
+/** Pool with optional CEE instructional table guard (production default). */
+export const mysqlPool = installInstructionalPoolGuard(rawPool);
 
 export async function verifyMySqlConnection() {
   const connection = await mysqlPool.getConnection();

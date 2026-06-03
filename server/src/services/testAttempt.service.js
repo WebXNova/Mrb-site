@@ -1,12 +1,35 @@
+/**
+ * CEE Test Attempt Service — entitlement-aware security boundary.
+ *
+ * All attempt operations resolve via secureAttemptContext (no controller trust).
+ * Instructional reads/writes use scopedQuery with course_id enforcement.
+ */
+
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
 import { getRedisClient } from '../config/redis.js';
-import { ApiError } from '../utils/apiError.js';
+import { assertCourseAccess } from './entitlement.service.js';
+import { scopedQuery } from '../security/cee/db/scopedQuery.js';
+import {
+  assertTestAccessibleForEntitlement,
+  resolveEntitledTestBySlug,
+} from '../security/cee/testEntitlement.service.js';
+import {
+  createAttemptScopedQuery,
+  assertQuestionBelongsToAttempt,
+  resolveSecureAttemptContext,
+} from './testAttempt/secureAttemptContext.js';
+import {
+  AttemptNotFoundError,
+  AttemptTokenInvalidError,
+  EntitlementRequiredError,
+} from '../errors/testAttempt/TestAttemptErrors.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 import { formatMySqlDateTime } from '../utils/dateTime.js';
+import { ApiError } from '../utils/apiError.js';
 
 const attemptRateMap = new Map();
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -53,232 +76,322 @@ function buildDeviceFingerprint(ipAddress, userAgent) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
+/**
+ * @param {string|null} rawToken
+ */
 export function verifyAttemptToken(rawToken) {
-  if (!rawToken) throw new ApiError(401, 'Attempt token is required');
+  if (!rawToken) {
+    throw new AttemptTokenInvalidError({ reason: 'missing_token' });
+  }
   try {
     const decoded = jwt.verify(rawToken, env.jwt.accessSecret);
-    if (decoded.type !== 'test_attempt') throw new ApiError(401, 'Invalid attempt token');
+    if (decoded.type !== 'test_attempt') {
+      throw new AttemptTokenInvalidError({ reason: 'invalid_token_type' });
+    }
     return decoded;
   } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(401, 'Invalid or expired attempt token');
+    if (error instanceof AttemptTokenInvalidError) throw error;
+    throw new AttemptTokenInvalidError({ reason: 'jwt_invalid_or_expired' });
   }
 }
 
-export async function consumeAttemptNonce({ slug, attemptId, tokenNonce }) {
-  const [rows] = await mysqlPool.query(
-    `SELECT a.id, a.attempt_nonce, a.test_id
-     FROM test_attempts a
-     INNER JOIN tests t ON t.id = a.test_id
-     WHERE a.id = ? AND t.public_slug = ?
-     LIMIT 1`,
-    [attemptId, slug]
-  );
-  const row = rows[0];
-  if (!row) throw new ApiError(404, 'Attempt not found');
-  if (!tokenNonce || row.attempt_nonce !== tokenNonce) {
-    throw new ApiError(401, 'Attempt token has been rotated. Retry with latest token.');
-  }
+/**
+ * Rotate attempt nonce after token validation (replay protection).
+ * @param {{ slug: string, attemptId: number, tokenNonce: string, userId: number, courseId: number, entitlement?: import('./entitlement.service.js').EntitlementContext }}
+ */
+export async function consumeAttemptNonce({ slug, attemptId, tokenNonce, userId, courseId, entitlement }) {
+  const ctx = await resolveSecureAttemptContext({
+    attemptId,
+    userId,
+    courseId,
+    slug,
+    entitlement,
+    tokenNonce,
+    requireInProgress: true,
+    auditContext: 'testAttempt.consumeAttemptNonce',
+  });
 
   const nextNonce = nanoid(24);
-  await mysqlPool.query(`UPDATE test_attempts SET attempt_nonce = ?, last_activity_at = CURRENT_TIMESTAMP WHERE id = ?`, [
-    nextNonce,
-    attemptId,
-  ]);
+  const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.consumeAttemptNonce.rotate');
+
+  await db.execute(
+    `UPDATE test_attempts a
+     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+     SET a.attempt_nonce = ?, a.last_activity_at = CURRENT_TIMESTAMP
+     WHERE a.id = ? AND a.user_id = ? AND a.status = 'in_progress'`,
+    [ctx.courseId, nextNonce, ctx.attempt.id, ctx.userId]
+  );
+
   return signAttemptToken({
     type: 'test_attempt',
-    attemptId,
-    testId: row.test_id,
+    attemptId: ctx.attempt.id,
+    testId: ctx.test.id,
     slug,
     nonce: nextNonce,
   });
 }
 
-export async function createPublicTestAttempt({ slug, studentName, ipAddress, userAgent, studentUser }) {
+/**
+ * Start a new entitled test attempt (verify-code / retry when allowed).
+ * @param {{ slug: string, studentName?: string|null, ipAddress?: string, userAgent?: string, studentUser: { id: number, name?: string }, entitlement: import('./entitlement.service.js').EntitlementContext }}
+ */
+export async function createEntitledTestAttempt({
+  slug,
+  studentName,
+  ipAddress,
+  userAgent,
+  studentUser,
+  entitlement,
+}) {
+  if (!entitlement?.courseId || !studentUser?.id) {
+    throw new EntitlementRequiredError({ context: 'testAttempt.createEntitledTestAttempt' });
+  }
+
+  const verified = await assertCourseAccess(Number(studentUser.id), entitlement.courseId);
+
   await checkVerifyRateLimit(slug, ipAddress);
 
-  const [rows] = await mysqlPool.query(
-    `SELECT id, title, duration_minutes, max_attempts, status
-     FROM tests
-     WHERE public_slug = ?
-     LIMIT 1`,
-    [slug]
-  );
-  const test = rows[0];
-  if (!test || test.status !== 'published') throw new ApiError(404, 'Published test not found');
+  const test = await resolveEntitledTestBySlug(slug, verified.courseId);
+  assertTestAccessibleForEntitlement(verified, test);
+
+  const db = createAttemptScopedQuery(verified, 'testAttempt.createEntitledTestAttempt');
 
   const normalizedStudent = normalizeStudentKey(studentName || studentUser?.name);
   const deviceFingerprint = buildDeviceFingerprint(ipAddress, userAgent);
-  const testMaxAttempts = Number(test.max_attempts || 1);
+  const testMaxAttempts = Number(test.maxAttempts ?? 1);
+
   if (testMaxAttempts > 0) {
-    const [attemptCountRows] = await mysqlPool.query(
+    const countRows = await db.rows(
       `SELECT COUNT(*) AS total
-       FROM test_attempts
-       WHERE test_id = ?
+       FROM test_attempts a
+       INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+       WHERE a.test_id = ?
          AND (
-           (user_id IS NOT NULL AND user_id = ?)
-           OR
-           (student_name IS NOT NULL AND LOWER(TRIM(student_name)) = ?)
-           OR device_fingerprint = ?
+           (a.user_id IS NOT NULL AND a.user_id = ?)
+           OR (a.student_name IS NOT NULL AND LOWER(TRIM(a.student_name)) = ?)
+           OR a.device_fingerprint = ?
          )`,
-      [test.id, studentUser?.id || 0, normalizedStudent || '__missing_student__', deviceFingerprint]
+      [verified.courseId, test.id, studentUser.id, normalizedStudent || '__missing_student__', deviceFingerprint]
     );
-    const usedAttempts = Number(attemptCountRows[0]?.total || 0);
+    const usedAttempts = Number(countRows[0]?.total ?? 0);
     if (usedAttempts >= testMaxAttempts) {
       throw new ApiError(403, 'Maximum attempts reached for this student/device');
     }
   }
 
-  const durationMinutes = Number(test.duration_minutes || 0);
+  const durationMinutes = Number(test.durationMinutes ?? 0);
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
   const expiresAtFormatted = formatMySqlDateTime(expiresAt, { fieldName: 'expires_at' });
   const attemptNonce = nanoid(24);
-  const [insertResult] = await mysqlPool.query(
+
+  const [insertResult] = await db.execute(
     `INSERT INTO test_attempts
-     (test_id, user_id, student_name, access_code_label, status, started_at, expires_at, last_activity_at, ip_address, user_agent, device_fingerprint, used_code_hash, attempt_nonce)
-     VALUES (?, ?, ?, ?, 'in_progress', CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)`,
+       (test_id, user_id, student_name, access_code_label, status, started_at, expires_at, last_activity_at, ip_address, user_agent, device_fingerprint, used_code_hash, attempt_nonce)
+     SELECT ?, ?, ?, 'DIRECT', 'in_progress', CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, ?, ?, ?, NULL, ?
+     FROM tests t
+     WHERE t.id = ? AND t.course_id = ? AND t.status = 'published'
+     LIMIT 1`,
     [
       test.id,
-      studentUser?.id || null,
+      studentUser.id,
       studentName || studentUser?.name || null,
-      'DIRECT',
       expiresAtFormatted,
       ipAddress || null,
       userAgent || null,
       deviceFingerprint,
-      null,
       attemptNonce,
+      test.id,
+      verified.courseId,
     ]
   );
-  const attemptId = insertResult.insertId;
 
-  const token = signAttemptToken({ type: 'test_attempt', attemptId, testId: test.id, slug, nonce: attemptNonce });
+  const attemptId = Number(insertResult?.insertId);
+  if (!Number.isInteger(attemptId) || attemptId <= 0) {
+    throw new ApiError(500, 'Failed to create test attempt');
+  }
+
+  const token = signAttemptToken({
+    type: 'test_attempt',
+    attemptId: Number(attemptId),
+    testId: test.id,
+    slug,
+    nonce: attemptNonce,
+  });
+
   return {
-    attemptId,
+    attemptId: Number(attemptId),
     attemptToken: token,
     startUrl: `${String(env.clientUrl || '').replace(/\/$/, '')}/tests/${slug}/start`,
   };
 }
 
-export async function getAttemptTestForStart({ slug, attemptId }) {
-  const [attemptRows] = await mysqlPool.query(
-    `SELECT a.id, a.status, a.started_at, a.expires_at, a.test_id, t.title, t.description, t.subject, t.duration_minutes, t.show_explanations
-     FROM test_attempts a
-     INNER JOIN tests t ON t.id = a.test_id
-     WHERE a.id = ? AND t.public_slug = ? AND t.status = 'published'
-     LIMIT 1`,
-    [attemptId, slug]
+/**
+ * @param {import('./testAttempt/secureAttemptContext.js').SecureAttemptContext} ctx
+ */
+async function loadEntitledQuestions(ctx) {
+  const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.loadQuestions');
+  const questions = await db.rows(
+    `SELECT q.id, q.question_text, q.question_image_url, q.options_json, q.marks, q.order_index
+     FROM test_questions q
+     INNER JOIN tests t ON t.id = q.test_id AND t.course_id = ?
+     WHERE q.test_id = ?
+     ORDER BY q.order_index ASC, q.id ASC`,
+    [ctx.courseId, ctx.attempt.test_id]
   );
-  const attempt = attemptRows[0];
-  if (!attempt) throw new ApiError(404, 'Attempt not found');
-  if (attempt.status !== 'in_progress') throw new ApiError(409, 'Attempt already submitted');
-  if (new Date(attempt.expires_at).getTime() < Date.now()) {
-    throw new ApiError(410, 'Attempt has expired. Submit is no longer allowed.');
-  }
 
-  const [questions] = await mysqlPool.query(
-    `SELECT id, question_text, question_image_url, options_json, marks, order_index
-     FROM test_questions
-     WHERE test_id = ?
-     ORDER BY order_index ASC, id ASC`,
-    [attempt.test_id]
-  );
+  return questions.map((row) => ({
+    id: row.id,
+    questionText: sanitizeRichHtml(row.question_text),
+    questionImageUrl: row.question_image_url,
+    options: JSON.parse(row.options_json || '[]').map((option) => ({ id: option.id, text: option.text })),
+    marks: row.marks,
+    orderIndex: row.order_index,
+  }));
+}
+
+/**
+ * Start attempt — load in-progress attempt + questions (getAttempt / loadQuestions).
+ * @param {{ slug: string, attemptId: number, userId: number, courseId: number, entitlement?: import('./entitlement.service.js').EntitlementContext, tokenNonce?: string }}
+ */
+export async function getAttemptTestForStart({ slug, attemptId, userId, courseId, entitlement, tokenNonce }) {
+  const ctx = await resolveSecureAttemptContext({
+    attemptId,
+    userId,
+    courseId,
+    slug,
+    entitlement,
+    tokenNonce,
+    requireInProgress: true,
+    auditContext: 'testAttempt.getAttemptTestForStart',
+  });
+
+  const questions = await loadEntitledQuestions(ctx);
 
   return {
     attempt: {
-      id: attempt.id,
-      startedAt: attempt.started_at,
-      expiresAt: attempt.expires_at,
-      status: attempt.status,
+      id: ctx.attempt.id,
+      startedAt: ctx.attempt.started_at,
+      expiresAt: ctx.attempt.expires_at,
+      status: ctx.attempt.status,
     },
     test: {
-      title: attempt.title,
-      description: attempt.description,
-      subject: attempt.subject,
-      durationMinutes: attempt.duration_minutes,
-      showExplanations: !!attempt.show_explanations,
+      title: ctx.test.title,
+      description: ctx.test.description,
+      subject: ctx.test.subject,
+      durationMinutes: ctx.test.duration_minutes,
+      showExplanations: !!ctx.test.show_explanations,
       questionCount: questions.length,
-      questions: questions.map((row) => ({
-        id: row.id,
-        questionText: sanitizeRichHtml(row.question_text),
-        questionImageUrl: row.question_image_url,
-        options: JSON.parse(row.options_json || '[]').map((option) => ({ id: option.id, text: option.text })),
-        marks: row.marks,
-        orderIndex: row.order_index,
-      })),
+      questions,
     },
   };
 }
 
-export async function saveAttemptAnswer({ attemptId, questionId, selectedOption }) {
-  const [attemptRows] = await mysqlPool.query(`SELECT id, status, expires_at FROM test_attempts WHERE id = ? LIMIT 1`, [
+/**
+ * @param {{ attemptId: number, questionId: number, selectedOption: string, userId: number, courseId: number, slug: string, entitlement?: import('./entitlement.service.js').EntitlementContext, tokenNonce?: string }}
+ */
+export async function saveAttemptAnswer({
+  attemptId,
+  questionId,
+  selectedOption,
+  userId,
+  courseId,
+  slug,
+  entitlement,
+  tokenNonce,
+}) {
+  const ctx = await resolveSecureAttemptContext({
     attemptId,
-  ]);
-  const attempt = attemptRows[0];
-  if (!attempt) throw new ApiError(404, 'Attempt not found');
-  if (attempt.status !== 'in_progress') throw new ApiError(409, 'Attempt is already finalized');
-  if (new Date(attempt.expires_at).getTime() < Date.now()) throw new ApiError(410, 'Attempt has expired');
+    userId,
+    courseId,
+    slug,
+    entitlement,
+    tokenNonce,
+    requireInProgress: true,
+    auditContext: 'testAttempt.saveAttemptAnswer',
+  });
+
+  await assertQuestionBelongsToAttempt(ctx, questionId);
 
   await mysqlPool.query(
     `INSERT INTO test_attempt_answers (attempt_id, question_id, selected_option, updated_at)
      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
      ON DUPLICATE KEY UPDATE selected_option = VALUES(selected_option), updated_at = CURRENT_TIMESTAMP`,
-    [attemptId, questionId, selectedOption]
+    [ctx.attempt.id, questionId, selectedOption]
   );
-  await mysqlPool.query(`UPDATE test_attempts SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?`, [attemptId]);
+
+  const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.saveAttemptAnswer.touch');
+  await db.execute(
+    `UPDATE test_attempts a
+     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+     SET a.last_activity_at = CURRENT_TIMESTAMP
+     WHERE a.id = ? AND a.user_id = ? AND a.status = 'in_progress'`,
+    [ctx.courseId, ctx.attempt.id, ctx.userId]
+  );
+
   return { success: true };
 }
 
-export async function submitAttempt({ attemptId }) {
+/**
+ * Submit in-progress attempt (transaction-safe, scoped reads).
+ * @param {{ attemptId: number, userId: number, courseId: number, slug: string, entitlement?: import('./entitlement.service.js').EntitlementContext, tokenNonce?: string }}
+ */
+export async function submitAttempt({ attemptId, userId, courseId, slug, entitlement, tokenNonce }) {
   const connection = await mysqlPool.getConnection();
   try {
     await connection.beginTransaction();
-    const [attemptRows] = await connection.query(
-      `SELECT a.id, a.status, a.started_at, a.expires_at, a.test_id, t.negative_marking
-       FROM test_attempts a
-       INNER JOIN tests t ON t.id = a.test_id
-       WHERE a.id = ?
-       FOR UPDATE`,
-      [attemptId]
-    );
-    const attempt = attemptRows[0];
-    if (!attempt) throw new ApiError(404, 'Attempt not found');
-    if (attempt.status !== 'in_progress') throw new ApiError(409, 'Attempt already submitted');
 
-    const [questionRows] = await connection.query(
-      `SELECT id, correct_option, marks, explanation, options_json, question_text
-       FROM test_questions
-       WHERE test_id = ?
-       ORDER BY order_index ASC, id ASC`,
-      [attempt.test_id]
+    const ctx = await resolveSecureAttemptContext({
+      attemptId,
+      userId,
+      courseId,
+      slug,
+      entitlement,
+      tokenNonce,
+      requireInProgress: true,
+      forUpdate: true,
+      connection,
+      auditContext: 'testAttempt.submitAttempt',
+    });
+
+    const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.submitAttempt', connection);
+
+    const questionRows = await db.rows(
+      `SELECT q.id, q.correct_option, q.marks, q.explanation, q.options_json, q.question_text
+       FROM test_questions q
+       INNER JOIN tests t ON t.id = q.test_id AND t.course_id = ?
+       WHERE q.test_id = ?
+       ORDER BY q.order_index ASC, q.id ASC`,
+      [ctx.courseId, ctx.attempt.test_id]
     );
+
     const [answerRows] = await connection.query(
       `SELECT question_id, selected_option FROM test_attempt_answers WHERE attempt_id = ?`,
-      [attemptId]
+      [ctx.attempt.id]
     );
     const answersMap = new Map(answerRows.map((row) => [Number(row.question_id), String(row.selected_option || '')]));
 
     let score = 0;
     let maxScore = 0;
     let correctCount = 0;
-    const negativeMarking = Number(attempt.negative_marking || 0);
+    const negativeMarking = Number(ctx.test.negative_marking || 0);
     let totalPenalty = 0;
+
     const details = questionRows.map((question) => {
       const marks = Number(question.marks || 1);
       maxScore += marks;
-      const selectedOption = answersMap.get(Number(question.id)) || '';
-      const isCorrect = selectedOption && selectedOption === question.correct_option;
+      const selected = answersMap.get(Number(question.id)) || '';
+      const isCorrect = selected && selected === question.correct_option;
       if (isCorrect) {
         score += marks;
         correctCount += 1;
-      } else if (selectedOption && negativeMarking > 0) {
+      } else if (selected && negativeMarking > 0) {
         totalPenalty += negativeMarking;
       }
       return {
         questionId: question.id,
         questionText: sanitizeRichHtml(question.question_text),
         options: JSON.parse(question.options_json || '[]'),
-        selectedOption,
+        selectedOption: selected,
         correctOption: question.correct_option,
         explanation: sanitizeRichHtml(question.explanation),
         isCorrect,
@@ -287,31 +400,62 @@ export async function submitAttempt({ attemptId }) {
     });
 
     score = Math.max(0, score - totalPenalty);
-
     const wrongCount = details.filter((item) => item.selectedOption && !item.isCorrect).length;
     const skippedCount = details.filter((item) => !item.selectedOption).length;
     const percentage = maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(2)) : 0;
     const timeTakenSeconds = Math.max(
       0,
-      Math.floor((Date.now() - new Date(attempt.started_at).getTime()) / 1000)
+      Math.floor((Date.now() - new Date(ctx.attempt.started_at).getTime()) / 1000)
     );
 
-    const [resultInsert] = await connection.query(
+    await db.execute(
       `INSERT INTO test_results
-       (attempt_id, score, max_score, percentage, correct_count, wrong_count, skipped_count, time_taken_seconds, detail_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [attemptId, score, maxScore, percentage, correctCount, wrongCount, skippedCount, timeTakenSeconds, JSON.stringify(details)]
+         (attempt_id, score, max_score, percentage, correct_count, wrong_count, skipped_count, time_taken_seconds, detail_json)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+       FROM test_attempts a
+       INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+       WHERE a.id = ? AND a.user_id = ?
+       LIMIT 1`,
+      [
+        ctx.attempt.id,
+        score,
+        maxScore,
+        percentage,
+        correctCount,
+        wrongCount,
+        skippedCount,
+        timeTakenSeconds,
+        JSON.stringify(details),
+        ctx.courseId,
+        ctx.attempt.id,
+        ctx.userId,
+      ]
     );
 
-    await connection.query(
-      `UPDATE test_attempts
-       SET status = 'submitted', submitted_at = CURRENT_TIMESTAMP, result_id = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [resultInsert.insertId, attemptId]
+    const resultRows = await db.rows(
+      `SELECT r.id AS result_id
+       FROM test_results r
+       INNER JOIN test_attempts a ON a.id = r.attempt_id
+       INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+       WHERE a.id = ? AND a.user_id = ?
+       ORDER BY r.id DESC LIMIT 1`,
+      [ctx.courseId, ctx.attempt.id, ctx.userId]
+    );
+    const resultId = resultRows[0]?.result_id;
+    if (!resultId) {
+      throw new ApiError(500, 'Failed to persist test result');
+    }
+
+    await db.execute(
+      `UPDATE test_attempts a
+       INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+       SET a.status = 'submitted', a.submitted_at = CURRENT_TIMESTAMP, a.result_id = ?, a.updated_at = CURRENT_TIMESTAMP
+       WHERE a.id = ? AND a.user_id = ? AND a.status = 'in_progress'`,
+      [ctx.courseId, resultId, ctx.attempt.id, ctx.userId]
     );
 
     await connection.commit();
-    return { attemptId, resultId: resultInsert.insertId };
+    return { attemptId: ctx.attempt.id, resultId: Number(resultId) };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -320,22 +464,48 @@ export async function submitAttempt({ attemptId }) {
   }
 }
 
-export async function getAttemptResult({ slug, attemptId }) {
-  const [rows] = await mysqlPool.query(
+/**
+ * Get submitted attempt result (getResult).
+ * @param {{ slug: string, attemptId: number, userId: number, courseId: number, entitlement?: import('./entitlement.service.js').EntitlementContext, tokenNonce?: string }}
+ */
+export async function getAttemptResult({ slug, attemptId, userId, courseId, entitlement, tokenNonce }) {
+  const ctx = await resolveSecureAttemptContext({
+    attemptId,
+    userId,
+    courseId,
+    slug,
+    entitlement,
+    tokenNonce,
+    requireSubmitted: true,
+    auditContext: 'testAttempt.getAttemptResult',
+  });
+
+  const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.getAttemptResult');
+
+  const rows = await db.rows(
     `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
-            t.title, t.subject
+            t.title AS test_title, t.subject
      FROM test_attempts a
-     INNER JOIN tests t ON t.id = a.test_id
-     INNER JOIN test_results r ON r.id = a.result_id
-     WHERE a.id = ? AND t.public_slug = ?
+     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+     INNER JOIN test_results r ON r.attempt_id = a.id
+     WHERE a.id = ? AND a.user_id = ? AND t.public_slug = ? AND a.status = 'submitted'
      LIMIT 1`,
-    [attemptId, slug]
+    [ctx.courseId, ctx.attempt.id, ctx.userId, slug]
   );
+
   const row = rows[0];
-  if (!row) throw new ApiError(404, 'Result not found');
+  if (!row) {
+    throw new AttemptNotFoundError({
+      attemptId: ctx.attempt.id,
+      userId: ctx.userId,
+      courseId: ctx.courseId,
+      reason: 'result_not_found',
+    });
+  }
+
   return {
     resultId: row.id,
-    testTitle: row.title,
+    testTitle: row.test_title,
     subject: row.subject,
     score: row.score,
     maxScore: row.max_score,
@@ -351,3 +521,13 @@ export async function getAttemptResult({ slug, attemptId }) {
     })),
   };
 }
+
+/** Aliases — security-equivalent entry points */
+export const startAttempt = createEntitledTestAttempt;
+export const retryAttempt = createEntitledTestAttempt;
+export const getAttempt = getAttemptTestForStart;
+export const loadQuestions = getAttemptTestForStart;
+export const getResult = getAttemptResult;
+
+/** @deprecated Use createEntitledTestAttempt */
+export const createPublicTestAttempt = createEntitledTestAttempt;

@@ -40,6 +40,7 @@ const testSchema = z.object({
   accessMode: z.enum(['private', 'public']).optional(),
   tags: z.array(z.string().min(1).max(40)).max(30).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
+  courseId: z.number().int().positive().optional().nullable(),
 });
 
 const questionSchema = z.object({

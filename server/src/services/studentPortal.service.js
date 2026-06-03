@@ -1,17 +1,74 @@
-import { mysqlPool } from '../config/mysql.js';
+/**
+ * Student instructional portal — entitlement-scoped reads (Phase 1D-B).
+ *
+ * All dashboard instructional data is bound to the user's single active enrollment.
+ * Fail-closed: no global catalog queries, no silent empty fallbacks on auth failures.
+ */
+
 import { countStudentQuestions } from './studentQuestions.service.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
-import { listActiveCourseRows } from './courseCatalogQueries.service.js';
+import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { toCoursePublicDto } from '../dto/course.dto.js';
+import {
+  assertCourseAccess,
+  assertEntitlementGrantable,
+  resolveActiveEntitlement,
+} from './entitlement.service.js';
+import { scopedQuery } from '../security/cee/db/scopedQuery.js';
+import {
+  CourseNotAccessibleError,
+  EnrollmentNotFoundError,
+} from '../errors/entitlement/EntitlementErrors.js';
+import { AttemptNotFoundError } from '../errors/testAttempt/TestAttemptErrors.js';
+import { assertResultOwnership } from '../security/cee/ownership/ownershipValidation.js';
 
-async function loadCourses() {
-  const rows = await listActiveCourseRows();
-  return (rows || []).map((row) => toCoursePublicDto(row)).filter(Boolean);
+/**
+ * Resolve and validate entitlement for dashboard instructional delivery.
+ * @param {number} studentId
+ * @returns {Promise<import('./entitlement.service.js').EntitlementContext>}
+ */
+async function requireDashboardEntitlement(studentId) {
+  const entitlement = await resolveActiveEntitlement(studentId);
+
+  if (!entitlement) {
+    throw new EnrollmentNotFoundError({ userId: studentId, context: 'student_dashboard' });
+  }
+
+  assertEntitlementGrantable(entitlement, { userId: studentId, courseId: entitlement.courseId });
+
+  return entitlement;
 }
 
-async function loadStudentLectures() {
-  const [lectures] = await mysqlPool.query(
-    `SELECT l.id, l.course_id, l.chapter_id, l.title, l.youtube_url, l.topic, l.sort_order,
+/**
+ * @param {number} courseId — entitled course only
+ */
+async function loadEntitledCourse(courseId) {
+  const row = await getCourseRowById(courseId, { activeOnly: true });
+  if (!row) {
+    throw new CourseNotAccessibleError({
+      courseId,
+      reason: 'course_inactive_or_missing',
+      context: 'student_dashboard',
+    });
+  }
+  const dto = toCoursePublicDto(row);
+  if (!dto) {
+    throw new CourseNotAccessibleError({
+      courseId,
+      reason: 'course_dto_invalid',
+      context: 'student_dashboard',
+    });
+  }
+  return dto;
+}
+
+/**
+ * Lectures for entitled course with full hierarchy (no orphan chapter_id NULL rows).
+ * @param {number} courseId
+ */
+async function loadEntitledLectures(courseId) {
+  const sql = `
+    SELECT l.id, l.course_id, l.chapter_id, l.title, l.youtube_url, l.topic, l.sort_order,
             c.title AS course_title,
             ch.title AS chapter_title,
             ch.order_index AS chapter_order_index,
@@ -19,100 +76,113 @@ async function loadStudentLectures() {
             s.title AS subject_title,
             s.order_index AS subject_order_index
      FROM lectures l
-     INNER JOIN courses c ON c.id = l.course_id
-     LEFT JOIN chapters ch ON ch.id = l.chapter_id
-     LEFT JOIN subjects s ON s.id = ch.subject_id
-     WHERE l.is_active = TRUE
-       AND c.is_active = TRUE
-       AND (
-         l.chapter_id IS NULL
-         OR (ch.is_active = TRUE AND s.is_active = TRUE)
-       )
-     ORDER BY s.order_index ASC, ch.order_index ASC, l.sort_order ASC, l.created_at ASC`
+     INNER JOIN courses c ON c.id = l.course_id AND c.is_active = TRUE
+     INNER JOIN chapters ch ON ch.id = l.chapter_id AND ch.is_active = TRUE
+     INNER JOIN subjects s ON s.id = ch.subject_id AND s.course_id = l.course_id AND s.is_active = TRUE
+     WHERE l.course_id = ?
+       AND l.is_active = TRUE
+     ORDER BY s.order_index ASC, ch.order_index ASC, l.sort_order ASC, l.created_at ASC`;
+
+  const db = scopedQuery({ courseId, context: 'studentPortal.loadEntitledLectures' });
+  return db.rows(sql, [courseId]);
+}
+
+/**
+ * Course-scoped published tests for entitled dashboard (CEE).
+ * @param {number} courseId
+ */
+async function loadEntitledTests(courseId) {
+  const db = scopedQuery({ courseId, context: 'studentPortal.loadEntitledTests' });
+  return db.rows(
+    `SELECT id, title, subject, category, sub_category, duration_minutes, max_attempts, public_slug
+     FROM tests
+     WHERE course_id = ? AND status = 'published'
+     ORDER BY updated_at DESC`,
+    [courseId]
   );
-  return lectures;
 }
 
-/** Older DBs may miss tests.category / tests.sub_category; don't fail the whole dashboard. */
-async function loadPublishedTests() {
-  try {
-    const [rows] = await mysqlPool.query(
-      `SELECT id, title, subject, category, sub_category, duration_minutes, max_attempts, public_slug
-       FROM tests
-       WHERE status = 'published'
-       ORDER BY updated_at DESC`
-    );
-    return rows;
-  } catch (error) {
-    if (error?.code !== 'ER_BAD_FIELD_ERROR') throw error;
-    try {
-      const [rows] = await mysqlPool.query(
-        `SELECT id, title, subject, duration_minutes, max_attempts, public_slug
-         FROM tests
-         WHERE status = 'published'
-         ORDER BY updated_at DESC`
-      );
-      return rows;
-    } catch {
-      const [rows] = await mysqlPool.query(
-        `SELECT id, title, subject, duration_minutes FROM tests ORDER BY updated_at DESC LIMIT 100`
-      );
-      return rows;
-    }
-  }
-}
-
-async function loadStudentResults(studentId) {
-  const [results] = await mysqlPool.query(
-    `SELECT a.id AS attempt_id, t.title AS test_title, t.public_slug, a.submitted_at, r.score, r.max_score, r.percentage
+/**
+ * Entitlement-scoped results — course_id + user_id (no cross-course leakage).
+ * @param {number} studentId
+ * @param {number} courseId
+ */
+async function loadEntitledStudentResults(studentId, courseId) {
+  const db = scopedQuery({
+    courseId,
+    context: 'studentPortal.loadEntitledStudentResults',
+    userId: studentId,
+  });
+  return db.rows(
+    `SELECT a.id AS attempt_id, t.title AS test_title, t.public_slug, a.submitted_at,
+            r.score, r.max_score, r.percentage
      FROM test_attempts a
-     INNER JOIN tests t ON t.id = a.test_id
      INNER JOIN test_results r ON r.attempt_id = a.id
+     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
      WHERE a.user_id = ?
      ORDER BY a.submitted_at DESC`,
-    [studentId]
+    [courseId, studentId]
   );
-  return results;
 }
 
+function mapLectureRow(row) {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    courseTitle: row.course_title,
+    chapterId: Number(row.chapter_id),
+    chapterTitle: String(row.chapter_title),
+    subjectId: Number(row.subject_id),
+    subjectTitle: String(row.subject_title),
+    title: row.title,
+    youtubeUrl: row.youtube_url,
+    topic: row.topic,
+    sortOrder: row.sort_order,
+  };
+}
+
+function mapTestRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    subject: row.subject,
+    category: row.category ?? null,
+    subCategory: row.sub_category ?? null,
+    durationMinutes: row.duration_minutes ?? null,
+    maxAttempts: row.max_attempts ?? null,
+    slug: row.public_slug ?? null,
+  };
+}
+
+/**
+ * Entitlement-scoped student dashboard. Requires active paid enrollment.
+ * @param {number} studentId
+ */
 export async function getStudentDashboard(studentId) {
-  const [courses, lecturesRows, tests, results, questionsAsked] = await Promise.all([
-    loadCourses().catch(() => []),
-    loadStudentLectures().catch(() => []),
-    loadPublishedTests().catch(() => []),
-    loadStudentResults(studentId).catch(() => []),
-    countStudentQuestions(studentId).catch(() => 0),
+  const entitlement = await requireDashboardEntitlement(studentId);
+  const courseId = entitlement.courseId;
+
+  const [course, lecturesRows, tests, results, questionsAsked] = await Promise.all([
+    loadEntitledCourse(courseId),
+    loadEntitledLectures(courseId),
+    loadEntitledTests(courseId),
+    loadEntitledStudentResults(studentId, courseId),
+    countStudentQuestions(studentId),
   ]);
 
-  const coursesList = courses || [];
-  const lectures = lecturesRows || [];
-
   return {
-    courses: coursesList,
-    lectures: lectures.map((row) => ({
-      id: row.id,
-      courseId: row.course_id,
-      courseTitle: row.course_title,
-      chapterId: row.chapter_id == null ? null : Number(row.chapter_id),
-      chapterTitle: row.chapter_title == null ? null : String(row.chapter_title),
-      subjectId: row.subject_id == null ? null : Number(row.subject_id),
-      subjectTitle: row.subject_title == null ? null : String(row.subject_title),
-      title: row.title,
-      youtubeUrl: row.youtube_url,
-      topic: row.topic,
-      sortOrder: row.sort_order,
-    })),
-    tests: tests.map((row) => ({
-      id: row.id,
-      title: row.title,
-      subject: row.subject,
-      category: row.category ?? null,
-      subCategory: row.sub_category ?? null,
-      durationMinutes: row.duration_minutes ?? null,
-      maxAttempts: row.max_attempts ?? null,
-      slug: row.public_slug ?? null,
-    })),
-    results: results.map((row) => ({
+    entitlement: {
+      enrollmentId: entitlement.enrollmentId,
+      courseId: entitlement.courseId,
+      accessStatus: entitlement.accessStatus,
+      enrollmentStatus: entitlement.enrollmentStatus,
+    },
+    /** Single entitled course only (array for existing client normalisers). */
+    courses: [course],
+    course,
+    lectures: (lecturesRows || []).map(mapLectureRow),
+    tests: (tests || []).map(mapTestRow),
+    results: (results || []).map((row) => ({
       attemptId: row.attempt_id,
       testTitle: row.test_title,
       slug: row.public_slug,
@@ -125,19 +195,41 @@ export async function getStudentDashboard(studentId) {
   };
 }
 
-export async function getStudentResultByAttempt(studentId, attemptId) {
-  const [rows] = await mysqlPool.query(
+export async function getStudentResultByAttempt(studentId, attemptId, entitledCourseId) {
+  const entitlement = await assertCourseAccess(studentId, entitledCourseId);
+  await assertResultOwnership({
+    attemptId,
+    userId: studentId,
+    entitlement,
+    context: 'studentPortal.getStudentResultByAttempt',
+  });
+
+  const db = scopedQuery({
+    courseId: entitlement.courseId,
+    context: 'studentPortal.getStudentResultByAttempt',
+    userId: studentId,
+  });
+
+  const rows = await db.rows(
     `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
             t.title AS test_title, t.subject
      FROM test_attempts a
      INNER JOIN test_results r ON r.attempt_id = a.id
-     INNER JOIN tests t ON t.id = a.test_id
-     WHERE a.id = ? AND a.user_id = ?
+     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ? AND t.course_id IS NOT NULL
+     WHERE a.id = ? AND a.user_id = ? AND a.status = 'submitted'
      LIMIT 1`,
-    [attemptId, studentId]
+    [entitlement.courseId, attemptId, studentId]
   );
+
   const row = rows[0];
-  if (!row) return null;
+  if (!row) {
+    throw new AttemptNotFoundError({
+      attemptId,
+      userId: studentId,
+      courseId: entitlement.courseId,
+      context: 'submitted_result_missing',
+    });
+  }
   return {
     resultId: row.id,
     testTitle: row.test_title,

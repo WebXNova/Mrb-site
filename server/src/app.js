@@ -1,6 +1,4 @@
 import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -16,16 +14,16 @@ import contactRoutes from './routes/contact.routes.js';
 import enrollmentRoutes from './routes/enrollment.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
 import locationsRoutes from './routes/locations.routes.js';
+import questionsRoutes from './routes/questions.routes.js';
 import { paymentsWebhookRouter, paymentsApiRouter } from './routes/payments.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { attachRequestContext } from './middleware/requestContext.js';
 import { sendError, sendSuccess } from './utils/httpEnvelope.js';
+import { applyCeeProtectionGrid } from './security/cee/protectionGrid.js';
+import secureMediaRoutes from './routes/secureMedia.routes.js';
 
 export const app = express();
 app.set('trust proxy', env.security.trustProxy);
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadsRoot = path.resolve(__dirname, '../uploads');
 
 const allowedOrigins = env.security.trustedOrigins;
 
@@ -91,7 +89,12 @@ app.use('/api/payments', paymentsWebhookRouter);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-app.use('/api/uploads', express.static(uploadsRoot));
+
+/** CEE Protection Grid — entitlement enforcement before instructional route handlers. */
+applyCeeProtectionGrid(app);
+
+/** Secure media (replaces express.static — entitlement required via grid). */
+app.use('/api/uploads', secureMediaRoutes);
 
 app.get('/api/health', (req, res) => {
   sendSuccess(res, { message: 'Server healthy' }, 200, { requestId: req.requestId });
@@ -123,6 +126,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/locations', locationsRoutes);
+app.use('/api/questions', questionsRoutes);
 app.use('/api/payments', paymentsApiRouter);
 
 app.use(notFoundHandler);

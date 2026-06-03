@@ -6,11 +6,13 @@ import {
   postSubmitAttempt,
   postVerifyTestCode,
 } from '../controllers/publicTests.controller.js';
-import { enforcePolicy } from '../auth/securityPolicy.js';
 
+/**
+ * CEE protection grid applies identity + entitlement to all /api/tests/* routes automatically.
+ */
 const router = Router();
 
-router.post('/:slug/verify-code', enforcePolicy({ auth: 'student', verified: true, maxRisk: 'elevated' }), postVerifyTestCode);
+router.post('/:slug/verify-code', postVerifyTestCode);
 router.get('/:slug/attempts/:attemptId/start', getStartTest);
 router.patch('/:slug/attempts/:attemptId/answers', patchSaveAnswer);
 router.post('/:slug/attempts/:attemptId/submit', postSubmitAttempt);

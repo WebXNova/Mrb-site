@@ -110,11 +110,14 @@ export async function getPublishedTestBySlug(publicSlug) {
 
 export async function createTest(payload, createdBy = null) {
   const tagsJson = JSON.stringify(Array.isArray(payload.tags) ? payload.tags : []);
+  const courseId = payload.courseId ?? payload.course_id ?? null;
+  const accessMode = payload.accessMode === 'public' ? 'private' : (payload.accessMode || 'private');
   const [result] = await mysqlPool.query(
     `INSERT INTO tests
-     (title, description, subject, category, sub_category, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (course_id, title, description, subject, category, sub_category, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
+      courseId,
       payload.title,
       payload.description || null,
       payload.subject,
@@ -127,7 +130,7 @@ export async function createTest(payload, createdBy = null) {
       payload.shuffleQuestions ?? false,
       payload.shuffleOptions ?? false,
       payload.showExplanations ?? true,
-      'public',
+      accessMode,
       tagsJson,
       payload.status || 'draft',
       createdBy,
@@ -138,12 +141,15 @@ export async function createTest(payload, createdBy = null) {
 
 export async function updateTest(testId, payload) {
   const tagsJson = JSON.stringify(Array.isArray(payload.tags) ? payload.tags : []);
+  const courseId = payload.courseId ?? payload.course_id ?? null;
+  const accessMode = payload.accessMode === 'public' ? 'private' : (payload.accessMode || 'private');
   await mysqlPool.query(
     `UPDATE tests
-     SET title = ?, description = ?, subject = ?, category = ?, sub_category = ?, duration_minutes = ?, passing_marks = ?, max_attempts = ?,
+     SET course_id = COALESCE(?, course_id), title = ?, description = ?, subject = ?, category = ?, sub_category = ?, duration_minutes = ?, passing_marks = ?, max_attempts = ?,
          negative_marking = ?, shuffle_questions = ?, shuffle_options = ?, show_explanations = ?, access_mode = ?, tags_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
+      courseId,
       payload.title,
       payload.description || null,
       payload.subject,
@@ -156,7 +162,7 @@ export async function updateTest(testId, payload) {
       payload.shuffleQuestions ?? false,
       payload.shuffleOptions ?? false,
       payload.showExplanations ?? true,
-      'public',
+      accessMode,
       tagsJson,
       payload.status || 'draft',
       testId,

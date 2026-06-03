@@ -9,9 +9,9 @@ import {
 import { getRefreshInFlightPromise, runSingleFlightRefresh } from '../auth/refreshManager';
 import { logAuthEvent } from '../observability/authTelemetry';
 import { createHttpError, inferApiFailureMessage } from './apiErrors';
+import { REFRESH_PATH, shouldAttachCsrf } from './csrfAttachPolicy.js';
 import { getApiBaseUrl, getRequestTimeoutMs } from './runtimeConfig';
 
-const REFRESH_PATH = '/auth/refresh';
 const MAX_TRANSIENT_REFRESH_RETRIES = 2;
 const CSRF_RETRY_DELAY_MS = 80;
 const CSRF_COOKIE_NAME = 'csrf_token';
@@ -94,18 +94,6 @@ function readCookie(name) {
     }
   }
   return '';
-}
-
-function shouldAttachCsrf(path, method = 'GET') {
-  const m = String(method || 'GET').toUpperCase();
-  const p = stripQuery(path);
-  if (p === REFRESH_PATH || p === '/auth/logout' || p === '/auth/student/logout' || p === '/auth/logout-all') {
-    return true;
-  }
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(m) && p.startsWith('/admin/')) return true;
-  /** Admin enrollment mutations use `/enrollments/admin` (outside `/api/admin` mount). */
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(m) && p.startsWith('/enrollments/admin')) return true;
-  return false;
 }
 
 function shouldRetryTransientRefresh(error, retryCount) {

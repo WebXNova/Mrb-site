@@ -1,6 +1,7 @@
 import { mysqlPool } from '../config/mysql.js';
 import { ENROLLMENT_BATCH_IDS } from '../constants/enrollmentBatches.js';
 import { ApiError } from '../utils/apiError.js';
+import { activateEnrollment } from './enrollmentLifecycle.service.js';
 
 function normalizePositiveInt(value, label) {
   const n = Number(value);
@@ -349,22 +350,47 @@ export async function getEnrollmentById(id) {
 
 export async function updateEnrollmentStatus({ enrollmentId, status, adminNote, reviewedBy }) {
   const normalizedStatus = normalizeStatus(status);
-  const existing = await getEnrollmentById(enrollmentId);
+  const eid = normalizePositiveInt(enrollmentId, 'enrollment_id');
+  const existing = await getEnrollmentById(eid);
   if (!existing) return null;
 
   if (normalizedStatus === 'approved') {
     if (!existing.orderId || existing.orderStatus !== 'paid') {
       throw new ApiError(409, 'Enrollment can only be approved after payment is confirmed');
     }
+    await activateEnrollment({
+      enrollmentId: eid,
+      orderId: existing.orderId,
+      actor: 'admin.approval',
+      reason: adminNote || 'admin_approved',
+      requirePaidOrder: true,
+    });
+  } else if (normalizedStatus === 'rejected') {
+    await mysqlPool.query(
+      `UPDATE enrollments
+       SET status = 'rejected',
+           access_status = 'inactive',
+           admin_note = ?,
+           reviewed_by = ?,
+           reviewed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [adminNote || null, reviewedBy || null, eid]
+    );
+    return getEnrollmentById(eid);
   }
 
   await mysqlPool.query(
     `UPDATE enrollments
-     SET status = ?, admin_note = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+     SET status = ?,
+         admin_note = ?,
+         reviewed_by = ?,
+         reviewed_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [normalizedStatus, adminNote || null, reviewedBy || null, normalizePositiveInt(enrollmentId, 'enrollment_id')]
+    [normalizedStatus, adminNote || null, reviewedBy || null, eid]
   );
-  return getEnrollmentById(enrollmentId);
+  return getEnrollmentById(eid);
 }
 
 export { normalizeStatus as normalizeEnrollmentStatus };
