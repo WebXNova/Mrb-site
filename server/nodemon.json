@@ -1,6 +1,13 @@
 {
-  "watch": ["src", "scripts/run-api-dev.mjs"],
-  "ext": "js,mjs,cjs,json",
-  "ignore": ["src/**/*.test.js", "uploads/**", "node_modules/**"],
-  "delay": 500
+  "watch": ["src"],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules",
+    "logs",
+    "*.log",
+    "temp",
+    "client"
+  ],
+  "delay": "800",
+  "restartable": "rs"
 }

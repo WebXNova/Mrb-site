@@ -11,7 +11,9 @@ export function toQuestionOptionDto(row) {
   if (!row) return null;
   return {
     id: Number(row.id),
+    option_key: row.option_key == null ? null : String(row.option_key),
     option_text: String(row.option_text ?? ''),
+    image_url: row.image_url == null ? null : String(row.image_url),
     is_correct: Boolean(Number(row.is_correct)),
     sort_order: Number(row.sort_order ?? 0),
     created_at: toIsoTimestamp(row.created_at),
@@ -30,6 +32,7 @@ export function toQuestionBankDto(row, options = []) {
     difficulty: row.difficulty == null ? null : String(row.difficulty),
     question_type: String(row.question_type ?? 'mcq'),
     question_text: String(row.question_text ?? ''),
+    question_image_url: row.question_image_url == null ? null : String(row.question_image_url),
     explanation: row.explanation == null ? null : String(row.explanation),
     marks: Number(row.marks),
     created_by: Number(row.created_by),

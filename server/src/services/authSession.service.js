@@ -3,8 +3,9 @@ import jwt from 'jsonwebtoken';
 import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
-import { logActivity } from './activityLog.service.js';
+import { logActivity } from '../services/activityLog.service.js';
 import { getRedisClient } from '../config/redis.js';
+import { startAuthTrace } from '../utils/authProfiling.js';
 
 const refreshBuckets = new Map();
 const mediumRiskAllowance = new Map();
@@ -264,18 +265,26 @@ export async function revokeAllAuthSessionsForUser(userId) {
 }
 
 /** Resolve cookie + DB state for refresh routing (revoked sessions → null). */
-export async function refreshContextFromToken(token, cookieName) {
+export async function refreshContextFromToken(token, cookieName, req = null) {
+  const trace = startAuthTrace(`refreshContextFromToken:${cookieName}`, req);
   try {
     const payload = verifyRefreshToken(token);
+    trace.step('verifyRefreshToken');
     const [rows] = await mysqlPool.query(
       `SELECT id, revoked_at, role_snapshot FROM auth_sessions WHERE id = ? LIMIT 1`,
       [payload.sid]
     );
+    trace.step('mysql.sessionById', { rowCount: rows.length });
     const row = rows[0];
-    if (!row || row.revoked_at) return null;
+    if (!row || row.revoked_at) {
+      trace.end('inactive');
+      return null;
+    }
     const role = row.role_snapshot === 'student' ? 'student' : 'admin';
+    trace.end('ok', { role });
     return { token, cookieName, role };
   } catch {
+    trace.end('error');
     return null;
   }
 }
@@ -344,16 +353,20 @@ export function verifyRefreshToken(refreshToken) {
  * Strict refresh rotation: verify JWT → load session FOR UPDATE → validate → update same row only.
  * Stale/wrong refresh: 401 only (no user-wide revoke).
  */
-export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp = null, userAgent = null } = {}) {
+export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp = null, userAgent = null, req = null } = {}) {
+  const trace = startAuthTrace('rotateAuthSessionByRefreshToken', req);
   const payload = verifyRefreshToken(refreshToken);
+  trace.step('verifyRefreshToken');
   const sid = String(payload.sid);
   const jtiFromJwt = String(payload.jti || '');
   const providedHash = hashRefreshToken(refreshToken);
 
   const connection = await mysqlPool.getConnection();
+  trace.step('mysql.getConnection');
   let transactionCommitted = false;
   try {
     await connection.beginTransaction();
+    trace.step('mysql.beginTransaction');
     const [rows] = await connection.query(
       `SELECT
          s.id,
@@ -379,12 +392,14 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
        FOR UPDATE`,
       [sid]
     );
+    trace.step('mysql.loadSessionForUpdate', { rowCount: rows.length });
     const session = rows[0];
 
     if (!session) {
       throw new ApiError(401, 'Invalid refresh token');
     }
     await assertRefreshSessionRateLimit(session.id);
+    trace.step('refreshRateLimit');
     if (session.revoked_at) {
       throw new ApiError(401, 'Session superseded by a new sign-in. Please sign in again.');
     }
@@ -478,6 +493,7 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
 
     await connection.commit();
     transactionCommitted = true;
+    trace.step('mysql.commit');
 
     const baseUser = {
       id: session.user_id,
@@ -489,6 +505,8 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
 
     if (role === 'student') {
       const [rows] = await mysqlPool.query(`SELECT is_verified FROM users WHERE id = ? LIMIT 1`, [session.user_id]);
+      trace.step('mysql.studentIsVerified');
+      trace.end('ok', { userId: session.user_id, role });
       return {
         accessToken,
         refreshToken: rotatedRefreshToken,
@@ -500,6 +518,7 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
       };
     }
 
+    trace.end('ok', { userId: session.user_id, role });
     return {
       accessToken,
       refreshToken: rotatedRefreshToken,
@@ -507,6 +526,7 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
       user: baseUser,
     };
   } catch (error) {
+    trace.end('error', { message: error instanceof Error ? error.message : String(error) });
     if (!transactionCommitted) {
       try {
         await connection.rollback();

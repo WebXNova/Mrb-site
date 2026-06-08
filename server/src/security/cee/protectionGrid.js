@@ -6,6 +6,7 @@
  */
 
 import { entitlementGuard, identityOnlyGuard } from './entitlementGuard.js';
+import { questionBankMediaGuard } from './questionBankMediaGuard.js';
 import {
   CeeUnknownProtectedRouteError,
   CeeProtectionGridDeniedError,
@@ -44,6 +45,13 @@ export const PROTECTION_GRID_RULES = [
   { pattern: /^\/api\/enrollments(?:\/|$)/i, policy: 'identity_only', label: 'enrollments' },
   { pattern: /^\/api\/payments\/create-session$/i, policy: 'identity_only', label: 'payments_create_session' },
 
+  // --- Question Bank media (identity at grid; staff/entitlement in secureMedia.service) ---
+  {
+    pattern: /^\/api\/uploads\/question-bank\//i,
+    policy: 'question_bank_media',
+    label: 'uploads_question_bank',
+  },
+
   // --- ENTITLEMENT REQUIRED (fail-closed instructional / premium) ---
   { pattern: /^\/api\/student(?:\/|$)/i, policy: 'entitlement', label: 'student_portal' },
   { pattern: /^\/api\/tests(?:\/|$)/i, policy: 'entitlement', label: 'tests' },
@@ -64,7 +72,9 @@ export const ROUTE_PROTECTION_TABLE = PROTECTION_GRID_RULES.map((r) => ({
       ? 'identityGuard + entitlementGuard'
       : r.policy === 'identity_only'
         ? 'identityGuard'
-        : 'none',
+        : r.policy === 'question_bank_media'
+          ? 'questionBankMediaGuard'
+          : 'none',
 }));
 
 /**
@@ -94,7 +104,9 @@ function middlewareStackForRule(rule) {
       ? 'identityGuard + entitlementGuard'
       : rule.policy === 'identity_only'
         ? 'identityGuard'
-        : 'none')
+        : rule.policy === 'question_bank_media'
+          ? 'questionBankMediaGuard'
+          : 'none')
   );
 }
 
@@ -142,6 +154,10 @@ export function ceeProtectionGridMiddleware() {
 
     if (rule.policy === 'identity_only') {
       return identityOnlyGuard(req, res, next);
+    }
+
+    if (rule.policy === 'question_bank_media') {
+      return questionBankMediaGuard(req, res, next);
     }
 
     if (rule.policy === 'entitlement') {

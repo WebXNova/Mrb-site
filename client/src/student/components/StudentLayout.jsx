@@ -9,6 +9,7 @@ const navItems = [
   { to: '/dashboard', label: 'Dashboard', end: true },
   { to: '/dashboard/lectures', label: 'Lectures' },
   { to: '/dashboard/tests', label: 'Tests' },
+  { to: '/dashboard/tests/history', label: 'Results' },
   { to: '/dashboard/questions/ask', label: 'Ask Doubt' },
   { to: '/dashboard/questions', label: 'My Questions' },
   { to: '/dashboard/profile', label: 'Profile' },

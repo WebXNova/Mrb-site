@@ -1,6 +1,6 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
-import { openEntitledMediaFile } from '../services/secureMedia.service.js';
+import { isAllowedMediaNamespace, openEntitledMediaFile } from '../services/secureMedia.service.js';
 
 export const getSecureUpload = asyncHandler(async (req, res) => {
   const namespace = String(req.params.namespace || '').trim();
@@ -8,9 +8,17 @@ export const getSecureUpload = asyncHandler(async (req, res) => {
   if (!namespace || !filename) {
     throw new ApiError(400, 'Invalid media path');
   }
+  if (!isAllowedMediaNamespace(namespace)) {
+    throw new ApiError(400, 'Invalid media namespace');
+  }
 
   const userId = Number(req.user?.id ?? req.cee?.userId);
-  const { stream, size, contentType } = await openEntitledMediaFile(userId, namespace, filename);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new ApiError(401, 'Authentication required');
+  }
+
+  const role = req.user?.role ?? null;
+  const { stream, size, contentType } = await openEntitledMediaFile(userId, namespace, filename, { role });
 
   res.setHeader('Content-Type', contentType);
   res.setHeader('Content-Length', String(size));

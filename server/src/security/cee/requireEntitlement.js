@@ -24,7 +24,10 @@ import { UnauthorizedError, EnrollmentNotFoundError } from '../../errors/entitle
 export async function requireEntitlement(userId, options = {}) {
   const uid = Number(userId);
   if (!Number.isInteger(uid) || uid <= 0) {
-    throw new UnauthorizedError({ reason: 'missing_user_id', context: 'cee_require_entitlement' });
+    throw new UnauthorizedError('Authentication required.', {
+      reason: 'missing_user_id',
+      context: 'cee_require_entitlement',
+    });
   }
 
   const requestedCourseId = options.courseId != null ? Number(options.courseId) : null;

@@ -11,11 +11,27 @@ import { logAuthEvent } from '../observability/authTelemetry';
 import { createHttpError, inferApiFailureMessage } from './apiErrors';
 import { REFRESH_PATH, shouldAttachCsrf } from './csrfAttachPolicy.js';
 import { getApiBaseUrl, getRequestTimeoutMs } from './runtimeConfig';
+import { isAuthDebugEnabled } from './runtimeConfig';
 
 const MAX_TRANSIENT_REFRESH_RETRIES = 2;
 const CSRF_RETRY_DELAY_MS = 80;
 const CSRF_COOKIE_NAME = 'csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
+
+function profileRequest(label, meta = {}) {
+  if (!isAuthDebugEnabled()) return { end() {} };
+  const t0 = performance.now();
+  // eslint-disable-next-line no-console
+  console.time(`[auth-request] ${label}`);
+  return {
+    end(outcome, extra = {}) {
+      const ms = Number((performance.now() - t0).toFixed(2));
+      // eslint-disable-next-line no-console
+      console.timeEnd(`[auth-request] ${label}`);
+      logAuthEvent('request.timing', { label, outcome, durationMs: ms, ...meta, ...extra });
+    },
+  };
+}
 
 function stripQuery(path) {
   return String(path || '').split('?')[0];
@@ -103,6 +119,7 @@ function shouldRetryTransientRefresh(error, retryCount) {
 
 async function postRefresh(scope, timeoutMs) {
   const requestUrl = `${getApiBaseUrl()}${REFRESH_PATH}`;
+  const profile = profileRequest(`POST ${REFRESH_PATH}`, { scope });
 
   for (let csrfAttempt = 0; csrfAttempt < 2; csrfAttempt += 1) {
     const csrfToken = readCookie(CSRF_COOKIE_NAME);
@@ -148,11 +165,13 @@ async function postRefresh(scope, timeoutMs) {
     if (response.ok) {
       const user = data?.data?.user || data?.data?.admin || data?.data?.student || null;
       if (!user || typeof user !== 'object' || user.id == null) {
+        profile.end('malformed');
         throw new AuthRefreshError('Malformed refresh response', {
           status: response.status,
           kind: RefreshFailureKind.MALFORMED_RESPONSE,
         });
       }
+      profile.end('ok', { status: response.status, csrfAttempt });
       return { user };
     }
 
@@ -172,6 +191,7 @@ async function postRefresh(scope, timeoutMs) {
     throw new AuthRefreshError(message || 'Session refresh failed', { status: response.status, kind });
   }
 
+  profile.end('csrf-failed');
   throw new AuthRefreshError('Session refresh failed', { status: 403, kind: RefreshFailureKind.CSRF_MISMATCH });
 }
 
@@ -290,6 +310,7 @@ export async function request(path, options = {}) {
   const prepared = buildBodyAndHeaders(body, headers);
   const csrfToken = shouldAttachCsrf(path, method) ? readCookie(CSRF_COOKIE_NAME) : '';
   const requestUrl = `${getApiBaseUrl()}${path}`;
+  const profile = profileRequest(`${method} ${stripQuery(path)}`, { authScope: authScope || 'none' });
 
   let response;
   try {
@@ -309,6 +330,7 @@ export async function request(path, options = {}) {
       signal
     );
   } catch (error) {
+    profile.end('network-error');
     if (error?.name === 'AbortError') {
       throw createHttpError('Request timeout', { status: 408 });
     }
@@ -325,7 +347,10 @@ export async function request(path, options = {}) {
   } catch {
     data = {};
   }
-  if (response.ok) return data;
+  if (response.ok) {
+    profile.end('ok', { status: response.status });
+    return data;
+  }
 
   if (response.status === 401) {
     logAuthEvent('request.401', { path: stripQuery(path), authScope: authScope || 'none' });
@@ -337,6 +362,7 @@ export async function request(path, options = {}) {
   if (response.status === 401 && retryOnUnauthorized && authScope && path !== REFRESH_PATH) {
     try {
       const nextToken = await refreshAccessToken(authScope, { timeoutMs });
+      profile.end('401-refreshed');
       return request(path, {
         ...options,
         token: nextToken,
@@ -344,6 +370,7 @@ export async function request(path, options = {}) {
         skipRefreshQueue: true,
       });
     } catch (error) {
+      profile.end('401-refresh-failed');
       if (error instanceof AuthRefreshError && isConfirmedAuthTerminationKind(error.kind)) {
         throw createHttpError('Session expired', {
           status: 401,
@@ -371,7 +398,9 @@ export async function request(path, options = {}) {
   }
 
   if (response.status === 401) {
+    profile.end('401');
     throw createHttpError(failMsg() || 'Unauthorized', { status: 401, refreshAlreadyTried: true });
   }
+  profile.end('error', { status: response.status });
   throw createHttpError(failMsg(), { status: response.status });
 }

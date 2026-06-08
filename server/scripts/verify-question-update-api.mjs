@@ -59,8 +59,10 @@ function testSchemaValidation() {
   const replaceOptions = updateQuestionBodySchema.safeParse({
     ...validPayload,
     options: [
-      { option_text: 'A', is_correct: false },
-      { option_text: 'B', is_correct: true },
+      { option_key: 'A', option_text: 'A', is_correct: false },
+      { option_key: 'B', option_text: 'B', is_correct: true },
+      { option_key: 'C', option_text: 'C', is_correct: false },
+      { option_key: 'D', option_text: 'D', is_correct: false },
     ],
   });
   assert(replaceOptions.success, 'replace options');
@@ -83,8 +85,10 @@ function testSchemaValidation() {
     !updateQuestionBodySchema.safeParse({
       ...validPayload,
       options: [
-        { option_text: '1', is_correct: false },
-        { option_text: '2', is_correct: false },
+        { option_key: 'A', option_text: '1', is_correct: false },
+        { option_key: 'B', option_text: '2', is_correct: false },
+        { option_key: 'C', option_text: '3', is_correct: false },
+        { option_key: 'D', option_text: '4', is_correct: false },
       ],
     }).success,
     'no correct answer'
@@ -93,9 +97,10 @@ function testSchemaValidation() {
     !updateQuestionBodySchema.safeParse({
       ...validPayload,
       options: [
-        { option_text: '1', is_correct: true },
-        { option_text: '2', is_correct: true },
-        { option_text: '3', is_correct: false },
+        { option_key: 'A', option_text: '1', is_correct: true },
+        { option_key: 'B', option_text: '2', is_correct: true },
+        { option_key: 'C', option_text: '3', is_correct: false },
+        { option_key: 'D', option_text: '4', is_correct: false },
       ],
     }).success,
     'multiple correct answers'
@@ -131,6 +136,7 @@ function testStaticArchitecture() {
       'UPDATE question_bank',
       'DELETE FROM question_options WHERE question_id = ?',
       'INSERT INTO question_options',
+      'option_key',
       'assertPhase1QuestionTypeSupported',
       "action: 'admin.question.update'",
       'QUESTION_UPDATED',

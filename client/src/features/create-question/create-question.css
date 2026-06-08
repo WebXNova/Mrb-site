@@ -1,0 +1,249 @@
+/* Create Question — minimal layout (Phase 1) */
+
+.cq-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cq-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+
+.cq-action-bar__left {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.cq-action-bar__title {
+  margin: 0;
+}
+
+.cq-action-bar__subtitle {
+  margin: 0.25rem 0 0;
+}
+
+.cq-action-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cq-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .cq-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cq-editor-panel,
+.cq-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cq-preview-panel--collapsed {
+  padding: var(--space-4);
+}
+
+.cq-preview-panel__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cq-section__hint {
+  margin-top: 0.35rem;
+}
+
+.cq-metadata-grid {
+  margin-top: var(--space-4);
+}
+
+.cq-textarea {
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  font: inherit;
+}
+
+.cq-ckeditor .ck-editor__editable {
+  min-height: 160px;
+}
+
+.cq-option-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.cq-option-card {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--space-4);
+  background: var(--color-ink-50, #f8fafc);
+}
+
+.cq-option-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.cq-option-card__label {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.cq-option-card__correct {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.cq-option-card__text-input {
+  width: 100%;
+}
+
+.cq-option-image {
+  margin-top: var(--space-3);
+}
+
+.cq-option-image__label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.cq-option-image__hint {
+  margin: 0 0 var(--space-2);
+}
+
+.cq-option-image__inputs {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 640px) {
+  .cq-option-image__inputs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.cq-option-image__preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cq-option-image__img {
+  max-width: 100%;
+  max-height: 160px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border, #e5e7eb);
+  background: #fff;
+}
+
+.cq-option-image__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.cq-preview__block + .cq-preview__block {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.cq-preview__label {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.cq-preview__meta {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.cq-preview__meta div {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+}
+
+.cq-preview__meta dt {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.cq-preview__meta dd {
+  margin: 0;
+}
+
+.cq-preview__text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cq-preview__empty {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.cq-preview__options {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cq-preview__option {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.cq-preview__option--correct {
+  font-weight: 600;
+}
+
+.cq-preview__option-label {
+  font-weight: 600;
+}
+
+.cq-preview__badge {
+  color: var(--color-success, #15803d);
+  font-size: 0.875rem;
+}

@@ -4,11 +4,11 @@
  */
 
 process.on('uncaughtException', (err) => {
-  console.error('UNCAUGHT EXCEPTION:');
-  console.error(err);
+  console.error('UNCAUGHT EXCEPTION:', err);
+  process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('UNHANDLED REJECTION:');
-  console.error(reason);
+process.on('unhandledRejection', (err) => {
+  console.error('UNHANDLED REJECTION:', err);
+  process.exit(1);
 });

@@ -30,6 +30,7 @@ import { getClientIp } from '../utils/network.js';
 import { assertCaptchaIfRequired } from '../services/abuseProtection.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import { isAdminRole } from '../utils/isAdminRole.js';
+import { startAuthTrace } from '../utils/authProfiling.js';
 
 function refreshCookieMaxAgeMs(refreshToken) {
   const decoded = jwt.decode(refreshToken);
@@ -463,8 +464,14 @@ export const logoutAll = asyncHandler(async (req, res) => {
 });
 
 export const studentMe = asyncHandler(async (req, res) => {
-  const profile = await getStudentMePayload(req.user.id);
-  if (!profile) throw new ApiError(404, 'Student not found');
+  const trace = startAuthTrace('studentMe', req);
+  const profile = await getStudentMePayload(req.user.id, req);
+  trace.step('getStudentMePayload');
+  if (!profile) {
+    trace.end('not-found');
+    throw new ApiError(404, 'Student not found');
+  }
+  trace.end('ok');
   sendSuccess(res, profile);
 });
 
@@ -477,13 +484,17 @@ const resendVerificationSchema = z.object({
 });
 
 export const refreshAuth = asyncHandler(async (req, res) => {
+  const trace = startAuthTrace('refreshAuth', req);
   assertTrustedOrigin(req);
+  trace.step('assertTrustedOrigin');
   const refreshContext = await readRefreshContext(req);
+  trace.step('readRefreshContext', { role: refreshContext.role });
   const clientIp = getClientIp(req);
   const userAgent = req.get('user-agent') || null;
   let rotated;
   try {
-    rotated = await rotateAuthSessionByRefreshToken(refreshContext.token, { clientIp, userAgent });
+    rotated = await rotateAuthSessionByRefreshToken(refreshContext.token, { clientIp, userAgent, req });
+    trace.step('rotateAuthSessionByRefreshToken');
   } catch (error) {
     await logActivity({
       role: refreshContext.role,
@@ -513,4 +524,5 @@ export const refreshAuth = asyncHandler(async (req, res) => {
     user: rotated.user,
     role: rotated.role,
   });
+  trace.end('ok', { role: rotated.role, userId: rotated.user.id });
 });

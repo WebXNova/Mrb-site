@@ -6,6 +6,10 @@
  */
 
 import { countStudentQuestions } from './studentQuestions.service.js';
+import {
+  loadTestSubjectPresentation,
+  loadTestSubjectPresentationBatch,
+} from './testSubjectPresentation.service.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { toCoursePublicDto } from '../dto/course.dto.js';
@@ -93,13 +97,23 @@ async function loadEntitledLectures(courseId) {
  */
 async function loadEntitledTests(courseId) {
   const db = scopedQuery({ courseId, context: 'studentPortal.loadEntitledTests' });
-  return db.rows(
-    `SELECT id, title, subject, category, sub_category, duration_minutes, max_attempts, public_slug
+  const rows = await db.rows(
+    `SELECT id, title, category, test_type, duration_minutes, max_attempts, public_slug
      FROM tests
      WHERE course_id = ? AND status = 'published'
      ORDER BY updated_at DESC`,
     [courseId]
   );
+  const { loadTestSubjectPresentationBatch } = await import('./testSubjectPresentation.service.js');
+  const presentationByTestId = await loadTestSubjectPresentationBatch(rows.map((row) => Number(row.id)));
+  return rows.map((row) => {
+    const presentation = presentationByTestId.get(Number(row.id));
+    return {
+      ...row,
+      subject_label: presentation?.displayLabel ?? null,
+      subject_ids: presentation?.subjectIds ?? [],
+    };
+  });
 }
 
 /**
@@ -145,9 +159,10 @@ function mapTestRow(row) {
   return {
     id: row.id,
     title: row.title,
-    subject: row.subject,
-    category: row.category ?? null,
-    subCategory: row.sub_category ?? null,
+    category: row.category ?? 'MDCAT',
+    testType: row.test_type ?? 'subject_wise',
+    subject: row.subject_label ?? null,
+    subjectIds: row.subject_ids ?? [],
     durationMinutes: row.duration_minutes ?? null,
     maxAttempts: row.max_attempts ?? null,
     slug: row.public_slug ?? null,
@@ -212,7 +227,7 @@ export async function getStudentResultByAttempt(studentId, attemptId, entitledCo
 
   const rows = await db.rows(
     `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
-            t.title AS test_title, t.subject
+            t.title AS test_title, t.id AS test_id
      FROM test_attempts a
      INNER JOIN test_results r ON r.attempt_id = a.id
      INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ? AND t.course_id IS NOT NULL
@@ -230,10 +245,12 @@ export async function getStudentResultByAttempt(studentId, attemptId, entitledCo
       context: 'submitted_result_missing',
     });
   }
+  const subjectPresentation = await loadTestSubjectPresentation(Number(row.test_id));
+
   return {
     resultId: row.id,
     testTitle: row.test_title,
-    subject: row.subject,
+    subject: subjectPresentation.displayLabel,
     score: row.score,
     maxScore: row.max_score,
     percentage: row.percentage,

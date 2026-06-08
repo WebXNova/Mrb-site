@@ -77,10 +77,13 @@ Boot → validateProtectionGridAtStartup() — namespaces, mounts, grid labels (
 
 ```text
 GET /api/uploads/:namespace/:filename
-  → CEE entitlement guard
+  → CEE grid policy (entitlement | question_bank_media | …)
   → assertMediaAccess(userId, namespace, filename)
   → student-qa: filename must start with {userId}-
-  → stream file (private, no-store)
+  → question-bank: filename must match /^[a-f0-9]{48}\.(jpg|png|webp)$/i
+      staff (admin|teacher): allowStaffRead
+      students: requireEntitlement
+  → stream file (private, no-store; no filesystem paths in responses)
 ```
 
 ## Phase 2 TODOs

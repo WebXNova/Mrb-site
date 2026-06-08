@@ -17,8 +17,13 @@ import {
   AttemptTokenInvalidError,
   CourseScopeViolationError,
   EntitlementRequiredError,
+  InvalidOptionError,
+  QuestionDeletedError,
+  QuestionNotInTestError,
   TestNotAccessibleError,
 } from '../../errors/testAttempt/TestAttemptErrors.js';
+import { mysqlPool } from '../../config/mysql.js';
+import { loadTestSubjectPresentation } from '../testSubjectPresentation.service.js';
 
 /**
  * @typedef {import('../entitlement.service.js').EntitlementContext} EntitlementContext
@@ -33,6 +38,7 @@ import {
  * @property {Date|string} started_at
  * @property {Date|string} expires_at
  * @property {Date|string|null} submitted_at
+ * @property {string|null} completion_reason
  * @property {string|null} attempt_nonce
  * @property {number|null} result_id
  */
@@ -50,6 +56,7 @@ import {
  * @property {number} show_explanations
  * @property {number} negative_marking
  * @property {number} max_attempts
+ * @property {number} passing_percentage
  */
 
 /**
@@ -79,11 +86,13 @@ import {
 const ATTEMPT_TEST_SELECT = `
   SELECT a.id,
          a.test_id,
+         a.student_id,
          a.user_id,
          a.status,
          a.started_at,
          a.expires_at,
          a.submitted_at,
+         a.completion_reason,
          a.attempt_nonce,
          a.result_id,
          t.id AS t_id,
@@ -92,11 +101,11 @@ const ATTEMPT_TEST_SELECT = `
          t.status AS test_status,
          t.title,
          t.description,
-         t.subject,
          t.duration_minutes,
          t.show_explanations,
          t.negative_marking,
-         t.max_attempts
+         t.max_attempts,
+         t.passing_percentage
   FROM test_attempts a
   INNER JOIN tests t ON t.id = a.test_id
     AND t.course_id = ?
@@ -122,10 +131,11 @@ export function createAttemptScopedQuery(entitlement, contextLabel, executor) {
  * @param {Record<string, unknown>} row
  * @returns {SecureAttemptContext}
  */
-function mapRowToSecureContext(row, entitlement) {
+function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
   const attempt = {
     id: Number(row.id),
     test_id: Number(row.test_id),
+    student_id: Number(row.student_id ?? row.user_id ?? 0),
     user_id: Number(row.user_id),
     status: String(row.status),
     started_at: row.started_at,
@@ -142,11 +152,12 @@ function mapRowToSecureContext(row, entitlement) {
     status: String(row.test_status),
     title: String(row.title || ''),
     description: row.description ?? null,
-    subject: row.subject ?? null,
+    subject: subjectLabel,
     duration_minutes: Number(row.duration_minutes ?? 0),
     show_explanations: Number(row.show_explanations ?? 0),
     negative_marking: Number(row.negative_marking ?? 0),
     max_attempts: Number(row.max_attempts ?? 0),
+    passing_percentage: Number(row.passing_percentage ?? 0),
   };
 
   return Object.freeze({
@@ -270,6 +281,9 @@ export async function resolveSecureAttemptContext(input) {
   if (input.tokenNonce != null) {
     const expected = String(input.tokenNonce);
     if (!expected || String(row.attempt_nonce) !== expected) {
+      auditAttemptDenial('attempt_token_nonce_mismatch', input, {
+        errorCode: 'ATTEMPT_TOKEN_INVALID',
+      });
       throw new AttemptTokenInvalidError({
         attemptId,
         userId,
@@ -278,7 +292,8 @@ export async function resolveSecureAttemptContext(input) {
     }
   }
 
-  const ctx = mapRowToSecureContext(row, entitlement);
+  const subjectPresentation = await loadTestSubjectPresentation(Number(row.t_id));
+  const ctx = mapRowToSecureContext(row, entitlement, subjectPresentation.displayLabel);
 
   if (input.requireInProgress) {
     if (ctx.attempt.status !== 'in_progress') {
@@ -307,9 +322,9 @@ export async function resolveSecureAttemptContext(input) {
 }
 
 /**
- * Validate question belongs to attempt's test (defense in depth).
+ * Validate question_bank.id is linked to attempt's test (defense in depth).
  * @param {SecureAttemptContext} ctx
- * @param {number} questionId
+ * @param {number} questionId question_bank.id
  * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
  */
 export async function assertQuestionBelongsToAttempt(ctx, questionId, executor) {
@@ -320,20 +335,66 @@ export async function assertQuestionBelongsToAttempt(ctx, questionId, executor) 
 
   const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.assertQuestionBelongsToAttempt', executor);
   const rows = await db.rows(
-    `SELECT q.id
-     FROM test_questions q
-     INNER JOIN tests t ON t.id = q.test_id AND t.course_id = ?
-     WHERE q.id = ? AND q.test_id = ?
+    `SELECT tq.question_id
+     FROM test_questions tq
+     INNER JOIN tests t ON t.id = tq.test_id AND t.course_id = ?
+     INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+     WHERE tq.test_id = ? AND tq.question_id = ?
      LIMIT 1`,
-    [ctx.courseId, qid, ctx.attempt.test_id]
+    [ctx.courseId, ctx.attempt.test_id, qid]
   );
 
-  if (!rows[0]) {
-    throw new CourseScopeViolationError({
+  if (rows[0]) {
+    return;
+  }
+
+  const deletedRows = await db.rows(
+    `SELECT tq.question_id
+     FROM test_questions tq
+     INNER JOIN tests t ON t.id = tq.test_id AND t.course_id = ?
+     LEFT JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+     WHERE tq.test_id = ? AND tq.question_id = ? AND qb.id IS NULL
+     LIMIT 1`,
+    [ctx.courseId, ctx.attempt.test_id, qid]
+  );
+
+  if (deletedRows[0]) {
+    throw new QuestionDeletedError({
       attemptId: ctx.attempt.id,
       questionId: qid,
       testId: ctx.attempt.test_id,
-      reason: 'question_not_in_entitled_test',
     });
+  }
+
+  throw new QuestionNotInTestError({
+    attemptId: ctx.attempt.id,
+    questionId: qid,
+    testId: ctx.attempt.test_id,
+  });
+}
+
+/**
+ * Validate question_options.id belongs to question_bank.id.
+ * @param {number} questionId
+ * @param {number} optionId
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
+ */
+export async function assertOptionBelongsToQuestion(questionId, optionId, executor = mysqlPool) {
+  const qid = Number(questionId);
+  const oid = Number(optionId);
+  if (!Number.isInteger(qid) || qid <= 0 || !Number.isInteger(oid) || oid <= 0) {
+    throw new InvalidOptionError({ questionId, optionId, reason: 'invalid_ids' });
+  }
+
+  const [rows] = await executor.query(
+    `SELECT id
+     FROM question_options
+     WHERE id = ? AND question_id = ?
+     LIMIT 1`,
+    [oid, qid]
+  );
+
+  if (!rows[0]) {
+    throw new InvalidOptionError({ questionId: qid, optionId: oid });
   }
 }

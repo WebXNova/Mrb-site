@@ -12,6 +12,7 @@ import {
   createQuestionBodySchema,
   updateQuestionBodySchema,
 } from '../src/validators/questionWrite.schema.js';
+import { standardMcqOptions } from './fixtures/standardMcqOptions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -24,10 +25,7 @@ function repeat(char, count) {
   return char.repeat(count);
 }
 
-const mcqOptions = [
-  { option_text: 'Wrong', is_correct: false },
-  { option_text: 'Correct', is_correct: true },
-];
+const mcqOptions = standardMcqOptions;
 
 const writeBase = {
   course_id: 1,
@@ -54,8 +52,10 @@ function testValidInput(schema, label) {
     topic: 'Biology',
     explanation: 'Because cells.',
     options: [
-      { option_text: repeat('a', MAX_OPTION_TEXT_LENGTH), is_correct: false },
-      { option_text: 'B', is_correct: true },
+      { option_key: 'A', option_text: repeat('a', MAX_OPTION_TEXT_LENGTH), is_correct: false },
+      { option_key: 'B', option_text: 'B', is_correct: true },
+      { option_key: 'C', option_text: 'C', is_correct: false },
+      { option_key: 'D', option_text: 'D', is_correct: false },
     ],
     question_text: repeat('q', MAX_QUESTION_TEXT_LENGTH),
   });
@@ -70,8 +70,10 @@ function testBoundaryInput(schema, label) {
       explanation: repeat('e', MAX_QUESTION_EXPLANATION_LENGTH),
       question_text: repeat('q', MAX_QUESTION_TEXT_LENGTH),
       options: [
-        { option_text: repeat('o', MAX_OPTION_TEXT_LENGTH), is_correct: false },
-        { option_text: 'ok', is_correct: true },
+        { option_key: 'A', option_text: repeat('o', MAX_OPTION_TEXT_LENGTH), is_correct: false },
+        { option_key: 'B', option_text: 'ok', is_correct: true },
+        { option_key: 'C', option_text: 'C', is_correct: false },
+        { option_key: 'D', option_text: 'D', is_correct: false },
       ],
     }).success,
     `${label} accepts exact boundary lengths`
@@ -101,8 +103,10 @@ function testOversizedInput(schema, label) {
     schema.safeParse({
       ...writeBase,
       options: [
-        { option_text: repeat('o', MAX_OPTION_TEXT_LENGTH + 1), is_correct: false },
-        { option_text: 'ok', is_correct: true },
+        { option_key: 'A', option_text: repeat('o', MAX_OPTION_TEXT_LENGTH + 1), is_correct: false },
+        { option_key: 'B', option_text: 'ok', is_correct: true },
+        { option_key: 'C', option_text: 'C', is_correct: false },
+        { option_key: 'D', option_text: 'D', is_correct: false },
       ],
     }),
     'option_text',
@@ -117,8 +121,8 @@ function testControllerValidatesBeforeService() {
   const controller = readFileSync(controllerPath, 'utf8');
 
   const postValidateIdx = controller.indexOf('createQuestionBodySchema.safeParse(req.body)');
-  const postServiceIdx = controller.indexOf('createMcqQuestion(parsed.data');
-  assert(postValidateIdx >= 0 && postServiceIdx > postValidateIdx, 'POST validates before createMcqQuestion');
+  const postServiceIdx = controller.indexOf('createQuestionService(parsed.data');
+  assert(postValidateIdx >= 0 && postServiceIdx > postValidateIdx, 'POST validates before createQuestionService');
 
   const putValidateIdx = controller.indexOf('updateQuestionBodySchema.safeParse(req.body)');
   const putServiceIdx = controller.indexOf('updateQuestion(questionId, parsed.data');

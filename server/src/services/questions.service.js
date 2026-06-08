@@ -4,7 +4,12 @@ import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { logActivity } from './activityLog.service.js';
 import { toQuestionBankDto, toQuestionSoftDeleteResultDto } from '../dto/question.dto.js';
 import { toQuestionListResponse } from '../dto/questionList.dto.js';
-import { MAX_MCQ_OPTIONS, PHASE_1_QUESTION_TYPE } from '../validators/questionWrite.schema.js';
+import { PHASE_1_QUESTION_TYPE } from '../validators/questionWrite.schema.js';
+import {
+  assertMcqBusinessRules,
+  assertPhase1QuestionTypeSupported,
+  assertQuestionWriteBusinessRules,
+} from './questionWriteRules.js';
 import {
   activeQuestionByIdLookup,
   buildActiveQuestionListQuery,
@@ -16,6 +21,14 @@ import {
   QuestionNotFoundError,
 } from '../errors/questionBank/QuestionBankErrors.js';
 import { AppError } from '../errors/base/AppError.js';
+import { applyQuestionWriteSecurity } from '../security/questionContentSecurity.js';
+import { normalizeMcqOptionsForInsert } from '../validators/questionOptions.validation.js';
+import { createQuestionService } from './createQuestion.service.js';
+import {
+  assertPersistedQuestionIntegrity,
+  validateQuestionIntegrity,
+} from './questionBankIntegrity.service.js';
+import { logTransactionRollback } from './questionBankIntegrityLog.js';
 
 const LOG_PREFIX = '[question-bank]';
 
@@ -55,67 +68,7 @@ function parsePositiveAdminId(adminId) {
   return id;
 }
 
-/**
- * Server-side MCQ integrity checks — never trust client validation alone.
- * @param {{ question_text: string, marks: number, options: Array<{ option_text: string, is_correct: boolean }>, question_type?: string }} payload
- * @param {{ maxOptions?: number }} [opts]
- */
-export function assertMcqBusinessRules(payload, { maxOptions = MAX_MCQ_OPTIONS } = {}) {
-  if (!payload.question_text || String(payload.question_text).trim() === '') {
-    throw invalidMcqPayload('question_text is required', 'INVALID_QUESTION_TEXT');
-  }
-
-  if (!Number.isFinite(payload.marks) || payload.marks <= 0) {
-    throw invalidMcqPayload('marks must be greater than 0', 'INVALID_MARKS');
-  }
-
-  const options = Array.isArray(payload.options) ? payload.options : [];
-  if (options.length < 2) {
-    throw invalidMcqPayload('At least 2 options are required', 'INSUFFICIENT_OPTIONS');
-  }
-
-  if (options.length > maxOptions) {
-    throw invalidMcqPayload(`At most ${maxOptions} options are allowed`, 'TOO_MANY_OPTIONS');
-  }
-
-  for (const opt of options) {
-    if (!opt.option_text || String(opt.option_text).trim() === '') {
-      throw invalidMcqPayload('Each option must have non-empty option_text', 'INVALID_OPTION_TEXT');
-    }
-  }
-
-  const correctCount = options.filter((opt) => Boolean(opt.is_correct)).length;
-  if (correctCount === 0) {
-    throw invalidMcqPayload('Exactly one option must be marked as correct', 'NO_CORRECT_OPTION');
-  }
-  if (correctCount > 1) {
-    throw invalidMcqPayload('Only one option may be marked as correct', 'MULTIPLE_CORRECT_OPTIONS');
-  }
-}
-
-/**
- * Phase 1 write guard — reject tf/essay until dedicated validators exist.
- * Future: branch to assertTfBusinessRules / assertEssayBusinessRules when FUTURE_QUESTION_TYPES ship.
- *
- * @param {string|undefined|null} questionType
- */
-export function assertPhase1QuestionTypeSupported(questionType) {
-  const normalized = String(questionType ?? PHASE_1_QUESTION_TYPE).trim().toLowerCase();
-  if (normalized !== PHASE_1_QUESTION_TYPE) {
-    throw invalidMcqPayload(
-      'Phase 1 supports MCQ questions only. question_type must be "mcq".',
-      'UNSUPPORTED_QUESTION_TYPE'
-    );
-  }
-}
-
-/**
- * @param {{ question_type?: string, question_text: string, marks: number, options?: Array<{ option_text: string, is_correct: boolean }> }} payload
- */
-export function assertQuestionWriteBusinessRules(payload) {
-  assertPhase1QuestionTypeSupported(payload.question_type);
-  assertMcqBusinessRules({ ...payload, question_type: PHASE_1_QUESTION_TYPE, options: payload.options ?? [] });
-}
+export { assertMcqBusinessRules, assertPhase1QuestionTypeSupported, assertQuestionWriteBusinessRules };
 
 async function assertCourseExists(courseId) {
   const row = await getCourseRowById(courseId);
@@ -139,7 +92,7 @@ async function fetchQuestionWithOptions(questionId, connection = mysqlPool) {
   }
 
   const [optionRows] = await connection.query(
-    `SELECT id, question_id, option_text, is_correct, sort_order, created_at, updated_at
+    `SELECT id, question_id, option_key, option_text, image_url, is_correct, sort_order, created_at, updated_at
      FROM question_options
      WHERE question_id = ?
      ORDER BY sort_order ASC, id ASC`,
@@ -150,15 +103,29 @@ async function fetchQuestionWithOptions(questionId, connection = mysqlPool) {
 }
 
 async function insertQuestionOptions(connection, questionId, options) {
-  for (let index = 0; index < options.length; index += 1) {
-    const option = options[index];
-    const sortOrder = option.sort_order != null ? option.sort_order : index;
+  const normalizedOptions = normalizeMcqOptionsForInsert(options);
 
+  for (const option of normalizedOptions) {
     await connection.query(
-      `INSERT INTO question_options (question_id, option_text, is_correct, sort_order)
-       VALUES (?, ?, ?, ?)`,
-      [questionId, option.option_text.trim(), option.is_correct ? 1 : 0, sortOrder]
+      `INSERT INTO question_options (question_id, option_key, option_text, image_url, is_correct, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        questionId,
+        option.option_key,
+        option.option_text.trim(),
+        option.image_url ?? null,
+        option.is_correct ? 1 : 0,
+        option.sort_order,
+      ]
     );
+  }
+
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS correct_count FROM question_options WHERE question_id = ? AND is_correct = 1`,
+    [questionId]
+  );
+  if (Number(rows[0]?.correct_count ?? 0) !== 1) {
+    throw invalidMcqPayload('Question options integrity check failed', 'CORRECT_OPTION_INTEGRITY_FAILED');
   }
 }
 
@@ -211,87 +178,9 @@ async function fetchSoftDeletedQuestionRow(connection, questionId) {
  * }} payload
  * @param {number} createdBy
  */
+/** @deprecated Prefer createQuestionService — kept for internal imports. */
 export async function createMcqQuestion(payload, createdBy) {
-  assertQuestionWriteBusinessRules({ ...payload, question_type: payload.question_type ?? 'mcq' });
-
-  if (!Number.isFinite(createdBy) || createdBy <= 0) {
-    throw new ApiError(401, 'Authenticated admin required', { code: 'UNAUTHORIZED' });
-  }
-
-  await assertCourseExists(payload.course_id);
-
-  const connection = await mysqlPool.getConnection();
-  try {
-    console.info(`${LOG_PREFIX} transaction started`, {
-      course_id: payload.course_id,
-      option_count: payload.options.length,
-      created_by: createdBy,
-    });
-
-    await connection.beginTransaction();
-
-    if (payload.subject_id != null) {
-      await assertSubjectBelongsToCourse(payload.subject_id, payload.course_id, connection);
-    }
-
-    const [insertResult] = await connection.query(
-      `INSERT INTO question_bank
-         (course_id, subject_id, topic, difficulty, question_type, question_text, explanation, marks, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        payload.course_id,
-        payload.subject_id ?? null,
-        payload.topic ?? null,
-        payload.difficulty ?? null,
-        PHASE_1_QUESTION_TYPE,
-        payload.question_text.trim(),
-        payload.explanation ?? null,
-        payload.marks,
-        createdBy,
-      ]
-    );
-
-    const questionId = Number(insertResult.insertId);
-    if (!Number.isFinite(questionId) || questionId <= 0) {
-      throw new ApiError(500, 'Question insert did not return a valid id', {
-        code: 'QUESTION_INSERT_FAILED',
-      });
-    }
-
-    console.info(`${LOG_PREFIX} question inserted`, { question_id: questionId });
-
-    await insertQuestionOptions(connection, questionId, payload.options);
-
-    console.info(`${LOG_PREFIX} options inserted`, {
-      question_id: questionId,
-      count: payload.options.length,
-    });
-
-    const created = await fetchQuestionWithOptions(questionId, connection);
-    await connection.commit();
-    console.info(`${LOG_PREFIX} commit completed`, { question_id: questionId });
-    return created;
-  } catch (error) {
-    console.error(`${LOG_PREFIX} transaction failed — rolling back`, {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      code: error?.code,
-      errno: error?.errno,
-      sqlMessage: error?.sqlMessage,
-    });
-    try {
-      await connection.rollback();
-      console.info(`${LOG_PREFIX} rollback completed`);
-    } catch (rollbackError) {
-      console.error(`${LOG_PREFIX} rollback failed`, {
-        message: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-        stack: rollbackError instanceof Error ? rollbackError.stack : undefined,
-      });
-    }
-    throw error;
-  } finally {
-    connection.release();
-  }
+  return createQuestionService(payload, createdBy);
 }
 
 /**
@@ -318,7 +207,12 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
     throw new ApiError(401, 'Authenticated admin required', { code: 'UNAUTHORIZED' });
   }
 
+  payload = applyQuestionWriteSecurity(payload);
   assertQuestionWriteBusinessRules(payload);
+  const { options: normalizedOptions } = validateQuestionIntegrity(payload, payload.options, {
+    questionId: id,
+    operation: 'update',
+  });
 
   const connection = await mysqlPool.getConnection();
   try {
@@ -346,6 +240,7 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
            difficulty = ?,
            question_type = ?,
            question_text = ?,
+           question_image_url = ?,
            explanation = ?,
            marks = ?
        WHERE id = ? AND deleted_at IS NULL`,
@@ -356,6 +251,7 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
         payload.difficulty ?? null,
         PHASE_1_QUESTION_TYPE,
         payload.question_text.trim(),
+        payload.question_image_url ?? null,
         payload.explanation ?? null,
         payload.marks,
         id,
@@ -367,7 +263,8 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
     }
 
     await connection.query(`DELETE FROM question_options WHERE question_id = ?`, [id]);
-    await insertQuestionOptions(connection, id, payload.options);
+    await insertQuestionOptions(connection, id, normalizedOptions);
+    await assertPersistedQuestionIntegrity(connection, id);
 
     const updated = await fetchQuestionWithOptions(id, connection);
 
@@ -400,13 +297,11 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
 
     return updated;
   } catch (error) {
-    console.error(`${LOG_PREFIX} update transaction failed — rolling back`, {
+    logTransactionRollback({
+      operation: 'update',
       question_id: id,
       message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
       code: error?.code,
-      errno: error?.errno,
-      sqlMessage: error?.sqlMessage,
     });
     try {
       await connection.rollback();

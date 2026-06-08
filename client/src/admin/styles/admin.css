@@ -173,6 +173,18 @@
   resize: vertical;
 }
 
+.admin-field__error {
+  color: var(--color-danger);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+}
+
+.admin-field__hint {
+  font-size: var(--fs-12);
+  color: var(--color-ink-500);
+  margin-top: var(--space-1);
+}
+
 .admin-table-wrap {
   overflow-x: auto;
 }
@@ -422,6 +434,78 @@
   border-color: var(--color-ink-200);
 }
 
+.admin-ckeditor .ck-editor__editable {
+  min-height: 180px;
+  font-size: var(--fs-14);
+}
+
+.admin-ckeditor .ck.ck-editor__main > .ck-editor__editable {
+  border-color: var(--color-ink-200);
+}
+
+.admin-ckeditor--invalid .ck.ck-editor__main > .ck-editor__editable {
+  border-color: var(--color-danger, #dc2626);
+}
+
+.admin-ckeditor--disabled {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.admin-question-image-inputs {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .admin-question-image-inputs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.admin-question-image-url__row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin-top: 0.35rem;
+}
+
+.admin-question-image-url__row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-question-image-preview {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.admin-question-image-preview__img {
+  max-width: min(100%, 360px);
+  max-height: 240px;
+  object-fit: contain;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-sm);
+  background: var(--color-ink-50, #f8fafc);
+}
+
+.admin-question-image-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-field__label-block {
+  display: block;
+  font-weight: 600;
+  font-size: var(--fs-14);
+  color: var(--color-ink-800, #1f2937);
+}
+
 .admin-login {
   min-height: 100vh;
   display: grid;
@@ -613,21 +697,7 @@
   }
 }
 
-@media (max-width: 960px) {
-  .admin-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-sidebar {
-    position: static;
-    height: auto;
-  }
-
-  .admin-topbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
+@media (max-width: 960px) and (min-width: 768px) {
   .admin-lectures-form__grid {
     grid-template-columns: 1fr;
   }

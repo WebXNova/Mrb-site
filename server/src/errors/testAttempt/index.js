@@ -6,6 +6,7 @@ export {
   TestNotAccessibleError,
   AttemptInvalidStateError,
   AttemptExpiredError,
+  AttemptExpiredStateError,
   AttemptTokenInvalidError,
   AttemptAccessDeniedError,
 } from './TestAttemptErrors.js';

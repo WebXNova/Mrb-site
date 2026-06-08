@@ -28,7 +28,7 @@ export default function StudentTestsPage() {
     <section className="admin-card">
       <div className="admin-row-actions" style={{ justifyContent: 'space-between' }}>
         <h2 className="heading-3">Available Tests</h2>
-        <Link className="btn btn--secondary btn--sm" to="/dashboard/tests/history">Test History</Link>
+        <Link className="btn btn--secondary btn--sm" to="/dashboard/tests/history">Results</Link>
       </div>
       <div className="admin-table-wrap" style={{ marginTop: '0.75rem' }}>
         <table className="admin-table">
@@ -39,7 +39,7 @@ export default function StudentTestsPage() {
             {tests.length ? tests.map((test) => (
               <tr key={test.id}>
                 <td>{test.title}</td>
-                <td>{[test.category, test.subCategory].filter(Boolean).join(' / ') || test.subject}</td>
+                <td>{test.category || 'MDCAT'}</td>
                 <td>{test.durationMinutes} min</td>
                 <td><Link to={`/tests/${test.slug}`}>Open Test</Link></td>
               </tr>

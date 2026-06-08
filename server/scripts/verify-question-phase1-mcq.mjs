@@ -14,6 +14,7 @@ import {
   assertQuestionWriteBusinessRules,
 } from '../src/services/questions.service.js';
 import { ApiError } from '../src/utils/apiError.js';
+import { standardMcqOptions } from './fixtures/standardMcqOptions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -33,10 +34,7 @@ function mustContain(fileRel, needles, label) {
   }
 }
 
-const mcqOptions = [
-  { option_text: 'Wrong', is_correct: false },
-  { option_text: 'Correct', is_correct: true },
-];
+const mcqOptions = standardMcqOptions;
 
 const createBase = {
   course_id: 1,
@@ -130,15 +128,24 @@ function testStaticGuards() {
     'schema phase1 constants'
   );
   mustContain(
-    'src/services/questions.service.js',
+    'src/services/createQuestion.service.js',
     [
-      'assertPhase1QuestionTypeSupported',
-      'UNSUPPORTED_QUESTION_TYPE',
-      'assertTfBusinessRules',
-      'PHASE_1_QUESTION_TYPE',
-      'await insertQuestionOptions(connection, id, payload.options)',
+      'createQuestionService',
+      'beginTransaction',
+      'assertExactlyOneCorrectInDatabase',
+      'option_key',
     ],
-    'service phase1 guards + always reinsert options'
+    'create service transaction + correct answer integrity'
+  );
+  mustContain(
+    'src/services/questionWriteRules.js',
+    ['assertPhase1QuestionTypeSupported', 'UNSUPPORTED_QUESTION_TYPE', 'normalizeMcqOptionsForInsert'],
+    'write rules enforce single correct A–D'
+  );
+  mustContain(
+    'src/services/questions.service.js',
+    ['PHASE_1_QUESTION_TYPE', 'await insertQuestionOptions(connection, id, normalizedOptions)', 'option_key'],
+    'update service always reinsert options'
   );
 
   const serviceText = readFileSync(path.join(root, 'src/services/questions.service.js'), 'utf8');

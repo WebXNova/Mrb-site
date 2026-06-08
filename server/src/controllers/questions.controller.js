@@ -2,7 +2,9 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import { logActivity } from '../services/activityLog.service.js';
-import { createMcqQuestion, deleteQuestion as deleteQuestionService, getQuestionById, listQuestions, updateQuestion } from '../services/questions.service.js';
+import { createQuestionService } from '../services/createQuestion.service.js';
+import { logInvalidPayloadAttempt } from '../services/questionBankIntegrityLog.js';
+import { deleteQuestion as deleteQuestionService, getQuestionById, listQuestions, updateQuestion } from '../services/questions.service.js';
 import { createQuestionBodySchema, updateQuestionBodySchema } from '../validators/questionWrite.schema.js';
 import { questionListQuerySchema } from '../validators/questionList.schema.js';
 import { parseQuestionIdParam } from '../validators/questionParams.schema.js';
@@ -17,7 +19,11 @@ function parseQuestionId(req) {
   return parsed.id;
 }
 
-export const postQuestion = asyncHandler(async (req, res) => {
+/**
+ * Create question — validates payload, enforces single correct answer, persists in transaction.
+ * Frontend correctness is not trusted; database enforces final consistency.
+ */
+export const createQuestion = asyncHandler(async (req, res) => {
   console.info(`${LOG_PREFIX} POST request received`, {
     path: req.originalUrl,
     course_id: req.body?.course_id ?? req.body?.courseId,
@@ -25,8 +31,14 @@ export const postQuestion = asyncHandler(async (req, res) => {
 
   const parsed = createQuestionBodySchema.safeParse(req.body);
   if (!parsed.success) {
-    console.warn(`${LOG_PREFIX} POST validation failed`, parsed.error.flatten());
-    throw new ApiError(422, 'Invalid question payload', parsed.error.flatten());
+    const details = parsed.error.flatten();
+    logInvalidPayloadAttempt({
+      path: req.originalUrl,
+      method: 'POST',
+      field_errors: details.fieldErrors,
+    });
+    console.warn(`${LOG_PREFIX} POST validation failed`, details);
+    throw new ApiError(422, 'Invalid question payload', details);
   }
 
   const createdBy = Number(req.user?.id);
@@ -34,7 +46,7 @@ export const postQuestion = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Authenticated admin required', { code: 'UNAUTHORIZED' });
   }
 
-  const created = await createMcqQuestion(parsed.data, createdBy);
+  const created = await createQuestionService(parsed.data, createdBy);
 
   try {
     await logActivity({
@@ -69,6 +81,9 @@ export const postQuestion = asyncHandler(async (req, res) => {
   );
 });
 
+/** Route alias — POST /api/admin/questions */
+export const postQuestion = createQuestion;
+
 export const getQuestions = asyncHandler(async (req, res) => {
   console.info(`${LOG_PREFIX} GET list request received`, { path: req.originalUrl });
 
@@ -99,8 +114,15 @@ export const putQuestion = asyncHandler(async (req, res) => {
 
   const parsed = updateQuestionBodySchema.safeParse(req.body);
   if (!parsed.success) {
-    console.warn(`${LOG_PREFIX} PUT validation failed`, parsed.error.flatten());
-    throw new ApiError(422, 'Invalid question update payload', parsed.error.flatten());
+    const details = parsed.error.flatten();
+    logInvalidPayloadAttempt({
+      path: req.originalUrl,
+      method: 'PUT',
+      question_id: questionId,
+      field_errors: details.fieldErrors,
+    });
+    console.warn(`${LOG_PREFIX} PUT validation failed`, details);
+    throw new ApiError(422, 'Invalid question update payload', details);
   }
 
   const adminId = Number(req.user?.id);

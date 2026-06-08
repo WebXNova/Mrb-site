@@ -50,8 +50,20 @@ const AdminChaptersPage = lazy(() => import('../admin/pages/AdminChaptersPage'))
 const AdminUsersPage = lazy(() => import('../admin/pages/AdminUsersPage'));
 const AdminLogsPage = lazy(() => import('../admin/pages/AdminLogsPage'));
 const AdminTestsPage = lazy(() => import('../admin/pages/AdminTestsPage'));
+const AdminTestCreatePage = lazy(() => import('../admin/pages/AdminTestCreatePage'));
+const AdminTestEditRedirectPage = lazy(() => import('../admin/pages/AdminTestEditRedirectPage'));
+const AdminTestEditBasicInfoPage = lazy(() => import('../admin/pages/AdminTestEditBasicInfoPage'));
+const AdminTestEditRulesPage = lazy(() => import('../admin/pages/AdminTestEditRulesPage'));
+const AdminTestEditSettingsPage = lazy(() => import('../admin/pages/AdminTestEditSettingsPage'));
+const AdminTestDetailsPage = lazy(() => import('../admin/pages/AdminTestDetailsPage'));
+const AdminTestRulesPage = lazy(() => import('../admin/pages/AdminTestRulesPage'));
+const AdminTestSettingsPage = lazy(() => import('../admin/pages/AdminTestSettingsPage'));
+const AdminTestQuestionsPage = lazy(() => import('../admin/pages/AdminTestQuestionsPage'));
 const AdminSettingsPage = lazy(() => import('../admin/pages/AdminSettingsPage'));
 const AdminQuestionsPage = lazy(() => import('../admin/pages/AdminQuestionsPage'));
+const CreateQuestionPage = lazy(() =>
+  import('../features/create-question/components/CreateQuestionPage')
+);
 const AdminRemarksPage = lazy(() => import('../admin/pages/AdminRemarksPage'));
 const AdminRegistrationsPage = lazy(() => import('../admin/pages/AdminRegistrationsPage'));
 
@@ -215,6 +227,7 @@ export default function AppRouter({ authStatus }) {
           >
             <Route index element={<AdminDashboardPage />} />
             <Route path="questions" element={<AdminQuestionsPage />} />
+            <Route path="question-bank/new" element={<CreateQuestionPage />} />
             <Route path="courses" element={<AdminCoursesPage />} />
             <Route path="courses/:id" element={<AdminCoursesPage />} />
             <Route path="courses/:courseId/subjects" element={<AdminCourseSubjectsPage />} />
@@ -222,6 +235,15 @@ export default function AppRouter({ authStatus }) {
             <Route path="chapters" element={<AdminChaptersPage />} />
             <Route path="lectures" element={<AdminLecturesPage />} />
             <Route path="lectures/:id" element={<AdminLecturesPage />} />
+            <Route path="tests/new" element={<AdminTestCreatePage />} />
+            <Route path="tests/:testId/edit" element={<AdminTestEditRedirectPage />} />
+            <Route path="tests/:testId/edit/basic-info" element={<AdminTestEditBasicInfoPage />} />
+            <Route path="tests/:testId/edit/rules" element={<AdminTestEditRulesPage />} />
+            <Route path="tests/:testId/edit/settings" element={<AdminTestEditSettingsPage />} />
+            <Route path="tests/:testId/details" element={<AdminTestDetailsPage />} />
+            <Route path="tests/:testId/rules" element={<AdminTestRulesPage />} />
+            <Route path="tests/:testId/settings" element={<AdminTestSettingsPage />} />
+            <Route path="tests/:testId/questions" element={<AdminTestQuestionsPage />} />
             <Route path="tests" element={<AdminTestsPage />} />
             <Route path="tests/:id" element={<AdminTestsPage />} />
             <Route path="users" element={<AdminUsersPage />} />

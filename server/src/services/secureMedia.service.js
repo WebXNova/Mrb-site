@@ -8,6 +8,13 @@ import { fileURLToPath } from 'url';
 import { createReadStream } from 'fs';
 import { MediaAccessDeniedError, MediaNotFoundError } from '../errors/media/MediaErrors.js';
 import { requireEntitlement } from '../security/cee/requireEntitlement.js';
+import { isQuestionBankStaffRole } from '../utils/isQuestionBankStaffRole.js';
+import {
+  QUESTION_BANK_CONTENT_TYPES,
+  QUESTION_BANK_FILENAME_PATTERN,
+  QUESTION_BANK_NAMESPACE,
+  SECURE_MEDIA_NAMESPACES,
+} from '../constants/secureMedia.constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.resolve(__dirname, '../../uploads');
@@ -16,7 +23,37 @@ const uploadsRoot = path.resolve(__dirname, '../../uploads');
 const NAMESPACE_POLICY = {
   'student-qa': { requiresEntitlement: true, bindToUserPrefix: true },
   'course-covers': { requiresEntitlement: false, adminOnly: true },
+  [QUESTION_BANK_NAMESPACE]: {
+    requiresEntitlement: true,
+    bindToUserPrefix: false,
+    allowStaffRead: true,
+    validateFilename: true,
+  },
 };
+
+export { QUESTION_BANK_NAMESPACE };
+
+/**
+ * @param {string} namespace
+ * @returns {boolean}
+ */
+export function isAllowedMediaNamespace(namespace) {
+  return SECURE_MEDIA_NAMESPACES.has(String(namespace || '').trim());
+}
+
+/**
+ * @param {string} filename
+ */
+function assertQuestionBankFilename(filename) {
+  const base = path.basename(String(filename || ''));
+  if (!QUESTION_BANK_FILENAME_PATTERN.test(base)) {
+    throw new MediaAccessDeniedError({
+      namespace: QUESTION_BANK_NAMESPACE,
+      reason: 'invalid_filename',
+      filename: base,
+    });
+  }
+}
 
 /**
  * @param {string} namespace
@@ -24,6 +61,10 @@ const NAMESPACE_POLICY = {
  */
 function resolveSafePath(namespace, filename) {
   const ns = String(namespace || '').trim();
+  if (!isAllowedMediaNamespace(ns)) {
+    throw new MediaAccessDeniedError({ namespace: ns, reason: 'unknown_namespace' });
+  }
+
   const base = path.basename(String(filename || ''));
   if (!ns || !base || base !== filename) {
     throw new MediaAccessDeniedError({ reason: 'invalid_path' });
@@ -31,26 +72,67 @@ function resolveSafePath(namespace, filename) {
   if (base.includes('..') || /[\\/]/.test(base)) {
     throw new MediaAccessDeniedError({ reason: 'path_traversal' });
   }
-  const full = path.resolve(uploadsRoot, ns, base);
-  if (!full.startsWith(path.resolve(uploadsRoot, ns))) {
+
+  if (ns === QUESTION_BANK_NAMESPACE) {
+    assertQuestionBankFilename(base);
+  }
+
+  const namespaceRoot = path.resolve(uploadsRoot, ns);
+  const full = path.resolve(namespaceRoot, base);
+  if (!full.startsWith(`${namespaceRoot}${path.sep}`) && full !== namespaceRoot) {
     throw new MediaAccessDeniedError({ reason: 'path_escape' });
   }
   return full;
 }
 
 /**
- * @param {number} userId
  * @param {string} namespace
  * @param {string} filename
  */
-export async function assertMediaAccess(userId, namespace, filename) {
-  const policy = NAMESPACE_POLICY[namespace];
+function resolveContentType(namespace, filename) {
+  const ext = path.extname(filename).toLowerCase();
+
+  if (namespace === QUESTION_BANK_NAMESPACE) {
+    const contentType = QUESTION_BANK_CONTENT_TYPES[ext];
+    if (!contentType) {
+      throw new MediaAccessDeniedError({
+        namespace,
+        reason: 'unsupported_extension',
+        filename,
+      });
+    }
+    return contentType;
+  }
+
+  if (ext === '.png') return 'image/png';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.gif') return 'image/gif';
+  return 'image/jpeg';
+}
+
+/**
+ * @param {number} userId
+ * @param {string} namespace
+ * @param {string} filename
+ * @param {{ role?: string|null }} [options]
+ */
+export async function assertMediaAccess(userId, namespace, filename, options = {}) {
+  const ns = String(namespace || '').trim();
+  const policy = NAMESPACE_POLICY[ns];
   if (!policy) {
-    throw new MediaAccessDeniedError({ namespace, reason: 'unknown_namespace' });
+    throw new MediaAccessDeniedError({ namespace: ns, reason: 'unknown_namespace' });
+  }
+
+  if (policy.validateFilename && ns === QUESTION_BANK_NAMESPACE) {
+    assertQuestionBankFilename(filename);
   }
 
   if (policy.adminOnly) {
-    throw new MediaAccessDeniedError({ namespace, reason: 'admin_only_namespace' });
+    throw new MediaAccessDeniedError({ namespace: ns, reason: 'admin_only_namespace' });
+  }
+
+  if (policy.allowStaffRead && isQuestionBankStaffRole(options.role)) {
+    return;
   }
 
   if (policy.requiresEntitlement) {
@@ -66,34 +148,31 @@ export async function assertMediaAccess(userId, namespace, filename) {
 }
 
 /**
+ * @param {number} userId
  * @param {string} namespace
  * @param {string} filename
+ * @param {{ role?: string|null }} [options]
  * @returns {Promise<{ stream: import('fs').ReadStream, size: number, contentType: string }>}
  */
-export async function openEntitledMediaFile(userId, namespace, filename) {
-  await assertMediaAccess(userId, namespace, filename);
-  const filePath = resolveSafePath(namespace, filename);
+export async function openEntitledMediaFile(userId, namespace, filename, options = {}) {
+  const ns = String(namespace || '').trim();
+  const base = path.basename(String(filename || '').trim());
+
+  await assertMediaAccess(userId, ns, base, options);
+  const filePath = resolveSafePath(ns, base);
 
   let stat;
   try {
     stat = await fs.stat(filePath);
   } catch {
-    throw new MediaNotFoundError({ namespace, filename });
+    throw new MediaNotFoundError({ namespace: ns, filename: base });
   }
 
   if (!stat.isFile()) {
-    throw new MediaNotFoundError({ namespace, filename });
+    throw new MediaNotFoundError({ namespace: ns, filename: base });
   }
 
-  const ext = path.extname(filename).toLowerCase();
-  const contentType =
-    ext === '.png'
-      ? 'image/png'
-      : ext === '.webp'
-        ? 'image/webp'
-        : ext === '.gif'
-          ? 'image/gif'
-          : 'image/jpeg';
+  const contentType = resolveContentType(ns, base);
 
   return {
     stream: createReadStream(filePath),

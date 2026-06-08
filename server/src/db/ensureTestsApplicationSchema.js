@@ -43,7 +43,6 @@ async function ensureTestsColumns(pool, db) {
 
   await addColumn(pool, db, 'tests', 'subject', 'subject VARCHAR(80) NULL AFTER description');
   await addColumn(pool, db, 'tests', 'category', 'category VARCHAR(80) NULL AFTER subject');
-  await addColumn(pool, db, 'tests', 'sub_category', 'sub_category VARCHAR(80) NULL AFTER category');
   await addColumn(pool, db, 'tests', 'passing_marks', 'passing_marks INT NULL AFTER duration_minutes');
   await addColumn(pool, db, 'tests', 'negative_marking', 'negative_marking DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER max_attempts');
   await addColumn(pool, db, 'tests', 'show_explanations', 'show_explanations TINYINT(1) NOT NULL DEFAULT 1 AFTER shuffle_options');
@@ -64,7 +63,7 @@ async function ensureTestsColumns(pool, db) {
   );
   if (testTypeMeta[0] && testTypeMeta[0].column_default == null) {
     await pool.query(
-      `ALTER TABLE tests MODIFY COLUMN test_type VARCHAR(50) NOT NULL DEFAULT 'standard'`
+      `ALTER TABLE tests MODIFY COLUMN test_type VARCHAR(50) NOT NULL DEFAULT 'subject_wise'`
     );
     console.log('[schema] Set tests.test_type default');
   }
@@ -84,6 +83,7 @@ async function ensureTestAttemptsColumns(pool, db) {
   await addColumn(pool, db, 'test_attempts', 'used_code_hash', 'used_code_hash VARCHAR(128) NULL AFTER device_fingerprint');
   await addColumn(pool, db, 'test_attempts', 'attempt_nonce', 'attempt_nonce VARCHAR(64) NULL AFTER used_code_hash');
   await addColumn(pool, db, 'test_attempts', 'result_id', 'result_id BIGINT NULL AFTER attempt_nonce');
+  await addColumn(pool, db, 'test_attempts', 'completion_reason', 'completion_reason VARCHAR(50) NULL AFTER submitted_at');
 
   if (
     (await columnExists(pool, db, 'test_attempts', 'user_id')) &&

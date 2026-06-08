@@ -24,7 +24,7 @@ const PROTECTED_TABLES = [
   'test_questions',
   'test_attempts',
   'test_results',
-  'test_attempt_answers',
+  'student_answers',
   'chapters',
   'subjects',
   'courses',

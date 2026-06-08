@@ -61,4 +61,13 @@ export const studentApi = {
   submitEnrollment: (payload) =>
     studentRequest('/enrollments/draft', { method: 'POST', body: payload, retryOnUnauthorized: true }),
   enrollmentStatus: () => studentRequest('/enrollments/me'),
+  testHistory: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    const qs = query.toString();
+    return studentRequest(`/student/test-history${qs ? `?${qs}` : ''}`);
+  },
 };

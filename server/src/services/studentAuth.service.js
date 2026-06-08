@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { createAuthSessionTokens, deleteAuthSessionsForUser, revokeAuthSessionByRefreshToken } from './authSession.service.js';
+import { startAuthTrace } from '../utils/authProfiling.js';
 
 const RESERVED_USERNAMES = new Set(['admin', 'support', 'root', 'system']);
 const FAKE_BCRYPT_HASH = '$2b$10$8fN0fSpA6W2VYJvA3pD6Guzf1u0lydBcbgQ9f7Q6w6v3zM4fM6x8S';
@@ -158,9 +159,15 @@ export async function logoutStudent(refreshToken) {
   await revokeAuthSessionByRefreshToken(refreshToken);
 }
 
-export async function getStudentMePayload(userId) {
+export async function getStudentMePayload(userId, req = null) {
+  const trace = startAuthTrace('getStudentMePayload', req);
   const row = await fetchStudentById(userId);
-  if (!row) return null;
+  trace.step('mysql.fetchStudentById', { found: Boolean(row) });
+  if (!row) {
+    trace.end('not-found');
+    return null;
+  }
+  trace.end('ok', { userId });
   return {
     id: row.id,
     email: row.email,

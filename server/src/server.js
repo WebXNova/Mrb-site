@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { verifyMySqlConnection, mysqlPool } from './config/mysql.js';
+import { checkPortInUse } from './utils/checkPortInUse.js';
 import { connectRedis } from './config/redis.js';
 import { startEmailQueueWorker } from './services/emailQueueWorker.service.js';
 import { getEmailProviderStatus } from './services/email.service.js';
@@ -14,6 +15,8 @@ import { seedLocationTables } from './services/locationSeed.service.js';
 import { ensureEnrollmentAccessSchema } from './db/ensureEnrollmentAccessSchema.js';
 import { ensureTestsCourseSchema } from './db/ensureTestsCourseSchema.js';
 import { ensureTestsApplicationSchema } from './db/ensureTestsApplicationSchema.js';
+import { ensureTestSubjectsSchema } from './db/ensureTestSubjectsSchema.js';
+import { ensureTestEnumConstraints } from './db/ensureTestEnumConstraints.js';
 import { ensureCeeDbConstraints } from './db/ensureCeeDbConstraints.js';
 import { ensureCourseCatalogSchema } from './db/ensureCourseCatalogSchema.js';
 import {
@@ -88,13 +91,32 @@ async function assertRequiredAuthSchema() {
 }
 
 async function startServer() {
+  if (global.__server_started__) {
+    console.log('Server already running, skipping duplicate start');
+    return;
+  }
+
+  const isInUse = await checkPortInUse(env.port);
+  if (isInUse) {
+    console.error(`Port ${env.port} already in use. Stop other process first.`);
+    console.error(`Find PID: netstat -ano | findstr :${env.port}`);
+    console.error('Stop it with: taskkill /PID <pid> /F');
+    process.exit(1);
+  }
+
   console.log('MySQL boot config:', {
     MYSQL_USER: process.env.MYSQL_USER,
     MYSQL_HOST: process.env.MYSQL_HOST,
     MYSQL_DATABASE: process.env.MYSQL_DATABASE,
   });
 
-  await verifyMySqlConnection();
+  try {
+    await verifyMySqlConnection();
+    console.log('DB Connected');
+  } catch (err) {
+    console.error('DB Connection Failed:', err?.message || err);
+    process.exit(1);
+  }
   const baseSchemaExists = await hasBaseSchema();
   if (!baseSchemaExists && String(process.env.SKIP_SCHEMA_SYNC).toLowerCase() !== 'true') {
     await runSchema();
@@ -108,6 +130,8 @@ async function startServer() {
   await ensureEnrollmentAccessSchema(mysqlPool);
   await ensureTestsCourseSchema(mysqlPool);
   await ensureTestsApplicationSchema(mysqlPool);
+  await ensureTestSubjectsSchema(mysqlPool);
+  await ensureTestEnumConstraints(mysqlPool);
   await ensureCeeDbConstraints(mysqlPool);
   await assertRequiredAuthSchema();
 
@@ -128,6 +152,8 @@ async function startServer() {
   const listenHostRaw = process.env.LISTEN_HOST ? String(process.env.LISTEN_HOST).trim() : '';
   /** Same host semantics for IPv4 vs IPv6; LISTEN_HOST unset = Node default (often :: dual-stack). */
   const listenHost = listenHostRaw || undefined;
+
+  global.__server_started__ = true;
 
   await new Promise((resolve, reject) => {
     const server = http.createServer(app);
@@ -165,4 +191,5 @@ async function startServer() {
 
 startServer().catch((error) => {
   console.error('Failed to start server:', error);
+  process.exit(1);
 });

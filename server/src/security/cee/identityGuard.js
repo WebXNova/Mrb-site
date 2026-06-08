@@ -32,11 +32,16 @@ export async function assertStudentIdentity(req, res, options = {}) {
     }
   } catch (error) {
     if (error instanceof ApiError && error.statusCode === 401) {
-      throw new UnauthorizedError({ reason: 'invalid_session', message: error.message });
+      throw new UnauthorizedError(error.message || 'Authentication required.', {
+        reason: 'invalid_session',
+      });
     }
     if (error instanceof ApiError && error.statusCode === 403) {
       throw error;
     }
-    throw new UnauthorizedError({ reason: 'identity_verification_failed' });
+    throw new UnauthorizedError('Authentication required.', {
+      reason: 'identity_verification_failed',
+      detail: error instanceof Error ? error.message : undefined,
+    });
   }
 }

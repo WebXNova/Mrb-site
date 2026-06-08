@@ -17,6 +17,9 @@ server/uploads/student-qa/*
 # Enrollment payment proof uploads (keep empty dir in git)
 server/uploads/enrollments/*
 !server/uploads/enrollments/.gitkeep
+# Question Bank image uploads (keep empty dir in git)
+server/uploads/question-bank/*
+!server/uploads/question-bank/.gitkeep
 .mongodb_data/
 node_modules/
 .env.local

@@ -3,6 +3,7 @@ import { getRedisClient, hasRedisErrored, isRedisReady } from '../config/redis.j
 import { logActivity } from '../services/activityLog.service.js';
 import { env } from '../config/env.js';
 import { getClientAsn, getClientIp, getIpSubnet } from '../utils/network.js';
+import { startAuthTrace } from '../utils/authProfiling.js';
 
 const buckets = new Map();
 const WINDOW_MS = 60 * 1000;
@@ -189,12 +190,14 @@ setInterval(() => {
 }, WINDOW_MS).unref();
 
 export async function authRateLimit(req, res, next) {
+  const trace = startAuthTrace(`authRateLimit:${req.path}`, req);
   if (
     env.abuse.requireRedisForCriticalAuthWrites &&
     !isRedisReady() &&
     hasRedisErrored() &&
     (req.path === '/student/register' || req.path === '/resend-verification')
   ) {
+    trace.end('redis-unavailable');
     return next(new ApiError(503, 'Service temporarily unavailable. Please retry shortly.'));
   }
 
@@ -202,7 +205,9 @@ export async function authRateLimit(req, res, next) {
   const subnet = getIpSubnet(ip);
   const key = `${req.path}:${ip}`;
   const current = await incrementCounter(`auth:ip:${key}`, WINDOW_MS);
+  trace.step('incrementCounter.ip', { count: current.count });
   const subnetCurrent = await incrementCounter(`auth:subnet:${req.path}:${subnet}`, WINDOW_MS);
+  trace.step('incrementCounter.subnet', { count: subnetCurrent.count });
 
   if (current.count > MAX_REQUESTS || subnetCurrent.count > env.verification.authPerSubnetPerMinute) {
     res.setHeader('Retry-After', '60');
@@ -212,6 +217,7 @@ export async function authRateLimit(req, res, next) {
       entityType: 'auth',
       metadata: { path: req.path, ip, subnet, count: current.count, subnetCount: subnetCurrent.count },
     });
+    trace.end('rate-limited');
     return next(new ApiError(429, 'Too many attempts. Please try again in a minute.'));
   }
 
@@ -219,13 +225,16 @@ export async function authRateLimit(req, res, next) {
     if (req.path === '/student/register' && env.security.authChallengeKey) {
       const challenge = req.get('x-auth-challenge');
       if (challenge !== env.security.authChallengeKey) {
+        trace.end('challenge-required');
         return next(new ApiError(429, 'Additional signup verification required'));
       }
     }
     const delayMs = Math.min((current.count - 2) * 250, MAX_DELAY_MS);
+    trace.step('sleep.beforeNext', { delayMs, count: current.count });
     await sleep(delayMs);
   }
 
+  trace.end('ok', { count: current.count });
   return next();
 }
 

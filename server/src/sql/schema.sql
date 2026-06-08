@@ -229,10 +229,8 @@ CREATE TABLE IF NOT EXISTS tests (
   course_id BIGINT NOT NULL,
   title VARCHAR(255) NOT NULL,
   description TEXT NULL,
-  subject VARCHAR(80) NULL,
-  category VARCHAR(80) NULL,
-  sub_category VARCHAR(80) NULL,
-  test_type VARCHAR(50) NOT NULL DEFAULT 'standard',
+  category VARCHAR(80) NOT NULL DEFAULT 'MDCAT',
+  test_type VARCHAR(50) NOT NULL DEFAULT 'subject_wise',
   duration_minutes INT NOT NULL,
   passing_percentage DECIMAL(5,2) NOT NULL DEFAULT 40.00,
   passing_marks INT NULL,
@@ -263,6 +261,16 @@ CREATE TABLE IF NOT EXISTS tests (
   CONSTRAINT fk_tests_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS test_subjects (
+  test_id BIGINT NOT NULL,
+  subject_id BIGINT NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (test_id, subject_id),
+  KEY idx_test_subjects_subject (subject_id),
+  CONSTRAINT fk_test_subjects_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
+  CONSTRAINT fk_test_subjects_subject FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS question_bank (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   course_id BIGINT NOT NULL,
@@ -271,6 +279,7 @@ CREATE TABLE IF NOT EXISTS question_bank (
   difficulty VARCHAR(50) NULL,
   question_type VARCHAR(50) NOT NULL,
   question_text LONGTEXT NOT NULL,
+  question_image_url VARCHAR(1000) NULL,
   explanation LONGTEXT NULL,
   marks DECIMAL(8,2) NOT NULL DEFAULT 1.00,
   created_by BIGINT NOT NULL,
@@ -296,18 +305,37 @@ CREATE TABLE IF NOT EXISTS question_bank (
 -- Up:       sql/migrations/question_bank_soft_delete_hardening.sql
 -- Rollback: sql/migrations/question_bank_soft_delete_hardening_rollback.sql
 -- Node:     src/db/ensureQuestionBankSoftDeleteSchema.js
+--
+-- question_bank / question_options image URL columns:
+-- Up:       sql/migrations/question_bank_option_image_urls.sql
+-- Rollback: sql/migrations/question_bank_option_image_urls_rollback.sql
 
 CREATE TABLE IF NOT EXISTS question_options (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   question_id BIGINT NOT NULL,
+  option_key CHAR(1) NOT NULL,
   option_text LONGTEXT NOT NULL,
+  image_url VARCHAR(1000) NULL,
   is_correct TINYINT(1) NOT NULL DEFAULT 0,
   sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_question (question_id),
-  CONSTRAINT fk_option_question FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE
+  UNIQUE KEY uq_question_option_key (question_id, option_key),
+  CONSTRAINT fk_option_question FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE,
+  CONSTRAINT chk_option_key_mcq CHECK (option_key IN ('A','B','C','D'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- option_key + single-correct triggers (existing DBs):
+-- Up:       sql/migrations/question_options_option_key.sql
+-- Rollback: sql/migrations/question_options_option_key_rollback.sql
+--
+-- option count / orphan / is_correct hardening:
+-- Up:       sql/migrations/question_options_integrity_hardening.sql
+-- Rollback: sql/migrations/question_options_integrity_hardening_rollback.sql
+
+
+
 
 CREATE TABLE IF NOT EXISTS question_import_batches (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -359,6 +387,7 @@ CREATE TABLE IF NOT EXISTS test_attempts (
   attempt_nonce VARCHAR(64) NULL,
   result_id BIGINT NULL,
   submitted_at DATETIME NULL,
+  completion_reason VARCHAR(50) NULL,
   time_taken_seconds INT NULL,
   score DECIMAL(10,2) NULL,
   percentage DECIMAL(5,2) NULL,
@@ -1380,9 +1409,145 @@ PREPARE stmt_tests_add_idx FROM @sql_tests_add_idx;
 EXECUTE stmt_tests_add_idx;
 DEALLOCATE PREPARE stmt_tests_add_idx;
 
+-- Tests type/category/subjects refactor (idempotent)
+UPDATE tests SET category = 'MDCAT' WHERE category IS NULL OR TRIM(category) = '';
 
+UPDATE tests
+SET test_type = 'mixed_subject'
+WHERE test_type IS NULL
+   OR TRIM(test_type) = ''
+   OR test_type NOT IN ('subject_wise', 'mixed_subject');
 
+SET @tests_sub_cat_col := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests' AND COLUMN_NAME = 'sub_category'
+);
+SET @sql_tests_drop_sub_cat := IF(
+  @tests_sub_cat_col = 0,
+  'SELECT 1',
+  'ALTER TABLE tests DROP COLUMN sub_category'
+);
+PREPARE stmt_tests_drop_sub_cat FROM @sql_tests_drop_sub_cat;
+EXECUTE stmt_tests_drop_sub_cat;
+DEALLOCATE PREPARE stmt_tests_drop_sub_cat;
 
+SET @tests_tbl_refactor := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests'
+);
+SET @sql_tests_category_default := IF(
+  @tests_tbl_refactor = 0,
+  'SELECT 1',
+  'ALTER TABLE tests MODIFY COLUMN category VARCHAR(80) NOT NULL DEFAULT ''MDCAT'''
+);
+PREPARE stmt_tests_category_default FROM @sql_tests_category_default;
+EXECUTE stmt_tests_category_default;
+DEALLOCATE PREPARE stmt_tests_category_default;
 
+SET @sql_tests_type_default := IF(
+  @tests_tbl_refactor = 0,
+  'SELECT 1',
+  'ALTER TABLE tests MODIFY COLUMN test_type VARCHAR(50) NOT NULL DEFAULT ''subject_wise'''
+);
+PREPARE stmt_tests_type_default FROM @sql_tests_type_default;
+EXECUTE stmt_tests_type_default;
+DEALLOCATE PREPARE stmt_tests_type_default;
+
+CREATE TABLE IF NOT EXISTS test_subjects (
+  test_id BIGINT NOT NULL,
+  subject_id BIGINT NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (test_id, subject_id),
+  KEY idx_test_subjects_subject (subject_id),
+  CONSTRAINT fk_test_subjects_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
+  CONSTRAINT fk_test_subjects_subject FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- P2 PATCH-6: drop legacy tests.subject VARCHAR (idempotent; run audit-test-subject-legacy.mjs first)
+SET @tests_legacy_subject_col := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests' AND COLUMN_NAME = 'subject'
+);
+SET @sql_drop_tests_legacy_subject := IF(
+  @tests_legacy_subject_col = 0,
+  'SELECT 1',
+  'ALTER TABLE tests DROP COLUMN subject'
+);
+PREPARE stmt_drop_tests_legacy_subject FROM @sql_drop_tests_legacy_subject;
+EXECUTE stmt_drop_tests_legacy_subject;
+DEALLOCATE PREPARE stmt_drop_tests_legacy_subject;
+
+-- P2 PATCH-7: strict enum CHECK constraints (after normalization above)
+SET @chk_tests_type_exists := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests' AND CONSTRAINT_NAME = 'chk_tests_test_type' AND CONSTRAINT_TYPE = 'CHECK'
+);
+SET @sql_add_chk_tests_type := IF(
+  @tests_tbl_refactor = 0,
+  'SELECT 1',
+  IF(
+    @chk_tests_type_exists > 0,
+    'SELECT 1',
+    'ALTER TABLE tests ADD CONSTRAINT chk_tests_test_type CHECK (test_type IN (''subject_wise'', ''mixed_subject''))'
+  )
+);
+PREPARE stmt_add_chk_tests_type FROM @sql_add_chk_tests_type;
+EXECUTE stmt_add_chk_tests_type;
+DEALLOCATE PREPARE stmt_add_chk_tests_type;
+
+SET @chk_tests_category_exists := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests' AND CONSTRAINT_NAME = 'chk_tests_category' AND CONSTRAINT_TYPE = 'CHECK'
+);
+SET @sql_add_chk_tests_category := IF(
+  @tests_tbl_refactor = 0,
+  'SELECT 1',
+  IF(
+    @chk_tests_category_exists > 0,
+    'SELECT 1',
+    'ALTER TABLE tests ADD CONSTRAINT chk_tests_category CHECK (category = ''MDCAT'')'
+  )
+);
+PREPARE stmt_add_chk_tests_category FROM @sql_add_chk_tests_category;
+EXECUTE stmt_add_chk_tests_category;
+DEALLOCATE PREPARE stmt_add_chk_tests_category;
+
+SET @chk_tests_status_exists := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'tests' AND CONSTRAINT_NAME = 'chk_tests_status' AND CONSTRAINT_TYPE = 'CHECK'
+);
+SET @sql_add_chk_tests_status := IF(
+  @tests_tbl_refactor = 0,
+  'SELECT 1',
+  IF(
+    @chk_tests_status_exists > 0,
+    'SELECT 1',
+    'ALTER TABLE tests ADD CONSTRAINT chk_tests_status CHECK (status IN (''INCOMPLETE'', ''DRAFT'', ''READY_FOR_PUBLISH'', ''published''))'
+  )
+);
+PREPARE stmt_add_chk_tests_status FROM @sql_add_chk_tests_status;
+EXECUTE stmt_add_chk_tests_status;
+DEALLOCATE PREPARE stmt_add_chk_tests_status;
+
+-- LMS: test_attempts.completion_reason (why an attempt ended)
+-- Up:       sql/migrations/test_attempts_completion_reason.sql
+-- Rollback: sql/migrations/test_attempts_completion_reason_rollback.sql
+-- Node:     src/db/ensureTestsApplicationSchema.js
+SET @ta_tbl := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'test_attempts'
+);
+SET @ta_completion_reason_col := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'test_attempts' AND COLUMN_NAME = 'completion_reason'
+);
+SET @sql_ta_add_completion_reason := IF(
+  @ta_tbl = 0 OR @ta_completion_reason_col > 0,
+  'SELECT 1',
+  'ALTER TABLE test_attempts ADD COLUMN completion_reason VARCHAR(50) NULL AFTER submitted_at'
+);
+PREPARE stmt_ta_add_completion_reason FROM @sql_ta_add_completion_reason;
+EXECUTE stmt_ta_add_completion_reason;
+DEALLOCATE PREPARE stmt_ta_add_completion_reason;
 
 

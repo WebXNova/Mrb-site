@@ -19,22 +19,31 @@ import {
   removeLecture,
 } from '../controllers/lectures.controller.js';
 import {
+  getTest,
   getTests,
-  getTestQuestions,
+  getTestCreateOptions,
   getTestResultsExport,
-  importFileUpload,
+  getTestCompletenessHandler,
+  getTestRules,
+  getTestSettings,
+  patchTestBasicInfo,
+  patchTestRules,
+  patchTestSettings,
   postDuplicateTest,
-  postTestQuestionsImportConfirm,
-  postTestQuestionsImportPreviewFile,
-  postTestQuestionsImportPreview,
   postTest,
-  postTestQuestion,
+  postTestPublish,
   putTest,
   putTestPublish,
-  putTestQuestion,
   removeTest,
-  removeTestQuestion,
 } from '../controllers/tests.controller.js';
+import {
+  deleteBulkUnlinkTestQuestions,
+  deleteUnlinkTestQuestion,
+  getAvailableTestQuestions,
+  getLinkedTestQuestions,
+  postLinkTestQuestion,
+  putReorderTestQuestions,
+} from '../controllers/testQuestions.controller.js';
 import {
   deleteAdminStudentQuestion,
   getAdminStudentQuestions,
@@ -54,10 +63,31 @@ import {
 } from '../controllers/subjects.controller.js';
 import courseBatchAdminRoutes from './courseBatch.routes.js';
 import chapterRoutes from './chapter.routes.js';
+import questionImportRoutes from './questionImportRoutes.js';
 import { courseImageUploadRateLimit } from '../middleware/courseImageUploadRateLimit.js';
 import { courseWizardWriteRateLimit } from '../middleware/courseWizardWriteRateLimit.js';
+import { testWriteRateLimit } from '../middleware/testWriteRateLimit.js';
+import { testQuestionBulkRateLimit } from '../middleware/testQuestionBulkRateLimit.js';
+import { rejectAdminBearer } from '../security/admin/rejectAdminBearer.js';
+import { adminCsrfProtection } from '../security/admin/adminCsrfProtection.js';
+import { requireQuestionBankStaff } from '../middleware/requireQuestionBankStaff.js';
+import {
+  questionBankImageUploadIpRateLimit,
+  questionBankImageUploadUserRateLimit,
+} from '../middleware/questionBankImageUploadRateLimit.js';
+import { postQuestionBankImage } from '../controllers/questionBankImageUpload.controller.js';
 
 const router = Router();
+
+router.post(
+  '/questions/upload-image',
+  rejectAdminBearer,
+  requireQuestionBankStaff,
+  adminCsrfProtection,
+  questionBankImageUploadIpRateLimit,
+  questionBankImageUploadUserRateLimit,
+  postQuestionBankImage
+);
 
 router.use(adminSecurityStack);
 router.use(enforcePolicy({ auth: 'admin', maxRisk: 'elevated' }));
@@ -95,6 +125,8 @@ router.delete('/courses/:courseId/subjects/:subjectId', deleteSubject);
 
 router.use('/chapters', chapterRoutes);
 
+router.use('/questions', questionImportRoutes);
+
 router.use(courseBatchAdminRoutes);
 
 router.get('/lectures', getLectures);
@@ -103,20 +135,28 @@ router.put('/lectures/:lectureId', putLecture);
 router.delete('/lectures/:lectureId', removeLecture);
 
 router.get('/tests', getTests);
-router.post('/tests', postTest);
+router.get('/tests/create-options', getTestCreateOptions);
+router.get('/tests/:testId', getTest);
+router.post('/tests', testWriteRateLimit, postTest);
+router.patch('/tests/:testId/basic-info', testWriteRateLimit, patchTestBasicInfo);
+router.get('/tests/:testId/completeness', getTestCompletenessHandler);
+router.get('/tests/:testId/rules', getTestRules);
+router.patch('/tests/:testId/rules', testWriteRateLimit, patchTestRules);
+router.get('/tests/:testId/settings', getTestSettings);
+router.patch('/tests/:testId/settings', testWriteRateLimit, patchTestSettings);
 router.put('/tests/:testId', putTest);
 router.delete('/tests/:testId', removeTest);
-router.put('/tests/:testId/publish', putTestPublish);
+router.post('/tests/:testId/publish', testWriteRateLimit, postTestPublish);
+router.put('/tests/:testId/publish', testWriteRateLimit, putTestPublish);
 router.post('/tests/:testId/duplicate', postDuplicateTest);
 router.get('/tests/:testId/results/export', getTestResultsExport);
 
-router.get('/tests/:testId/questions', getTestQuestions);
-router.post('/tests/:testId/questions', postTestQuestion);
-router.post('/tests/:testId/questions/import/preview', postTestQuestionsImportPreview);
-router.post('/tests/:testId/questions/import/preview-file', importFileUpload, postTestQuestionsImportPreviewFile);
-router.post('/tests/:testId/questions/import/confirm', postTestQuestionsImportConfirm);
-router.put('/tests/:testId/questions/:questionId', putTestQuestion);
-router.delete('/tests/:testId/questions/:questionId', removeTestQuestion);
+router.get('/tests/:testId/questions/available', getAvailableTestQuestions);
+router.put('/tests/:testId/questions/reorder', putReorderTestQuestions);
+router.get('/tests/:testId/questions', getLinkedTestQuestions);
+router.post('/tests/:testId/questions', testQuestionBulkRateLimit, postLinkTestQuestion);
+router.delete('/tests/:testId/questions', testQuestionBulkRateLimit, deleteBulkUnlinkTestQuestions);
+router.delete('/tests/:testId/questions/:questionId', deleteUnlinkTestQuestion);
 
 router.get('/student-questions', getAdminStudentQuestions);
 router.put('/student-questions/:id', putAdminStudentQuestionAnswer);

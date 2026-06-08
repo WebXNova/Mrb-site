@@ -140,6 +140,48 @@ export const adminApi = {
     return data;
   },
 
+  uploadQuestionBankImage: async (_token, file) => {
+    const CSRF_COOKIE_NAME = 'csrf_token';
+    const CSRF_HEADER_NAME = 'x-csrf-token';
+    function readCookie(name) {
+      if (typeof document === 'undefined') return '';
+      const prefix = `${encodeURIComponent(name)}=`;
+      const parts = document.cookie ? document.cookie.split('; ') : [];
+      for (const part of parts) {
+        if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
+      }
+      return '';
+    }
+    const csrfToken = readCookie(CSRF_COOKIE_NAME);
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await fetch(`${getApiBaseUrl()}/admin/questions/upload-image`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+      },
+      body: formData,
+    });
+    const rawText = await response.text();
+    let data = {};
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = {};
+    }
+    if (!response.ok) {
+      throw new Error(
+        inferApiFailureMessage(data, {
+          status: response.status,
+          statusText: response.statusText,
+          rawText,
+        }) || 'Question image upload failed'
+      );
+    }
+    return data;
+  },
+
   /**
    * List admin lectures. Server currently ignores query filters; callers may filter locally.
    * @param {Record<string, string | number>} [filters]
@@ -184,64 +226,43 @@ export const adminApi = {
   lectures: (token, options = {}) => http.get('/admin/lectures', { token, signal: options?.signal }),
 
   tests: (token) => http.get('/admin/tests', { token }),
-  createTest: (token, payload) => http.post('/admin/tests', payload, { token }),
-  updateTest: (token, testId, payload) => http.put(`/admin/tests/${testId}`, payload, { token }),
+  getTest: (token, testId) => http.get(`/admin/tests/${testId}`, { token }),
+  getTestCreateOptions: (token) => http.get('/admin/tests/create-options', { token }),
+  createTest: (token, payload) =>
+    http.post('/admin/tests', payload, { token }),
+  patchTestBasicInfo: (token, testId, payload) =>
+    http.patch(`/admin/tests/${testId}/basic-info`, payload, { token }),
+  getTestRules: (token, testId) => http.get(`/admin/tests/${testId}/rules`, { token }),
+  patchTestRules: (token, testId, payload) =>
+    http.patch(`/admin/tests/${testId}/rules`, payload, { token }),
+  getTestSettings: (token, testId) => http.get(`/admin/tests/${testId}/settings`, { token }),
+  patchTestSettings: (token, testId, payload) =>
+    http.patch(`/admin/tests/${testId}/settings`, payload, { token }),
+  getTestCompleteness: (token, testId) => http.get(`/admin/tests/${testId}/completeness`, { token }),
   deleteTest: (token, testId) => http.delete(`/admin/tests/${testId}`, { token }),
-  publishTest: (token, testId) => http.put(`/admin/tests/${testId}/publish`, {}, { token }),
+  publishTest: (token, testId) => http.post(`/admin/tests/${testId}/publish`, {}, { token }),
   duplicateTest: (token, testId) => http.post(`/admin/tests/${testId}/duplicate`, {}, { token }),
 
   testQuestions: (token, testId) => http.get(`/admin/tests/${testId}/questions`, { token }),
-  createTestQuestion: (token, testId, payload) =>
-    http.post(`/admin/tests/${testId}/questions`, payload, { token }),
-  previewAikenImport: (token, testId, content) =>
-    http.post(`/admin/tests/${testId}/questions/import/preview`, { content }, { token }),
-  previewImportFile: async (token, testId, file) => {
-    const CSRF_COOKIE_NAME = 'csrf_token';
-    const CSRF_HEADER_NAME = 'x-csrf-token';
-    function readCookie(name) {
-      if (typeof document === 'undefined') return '';
-      const prefix = `${encodeURIComponent(name)}=`;
-      const parts = document.cookie ? document.cookie.split('; ') : [];
-      for (const part of parts) {
-        if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
-      }
-      return '';
-    }
-    const csrfToken = readCookie(CSRF_COOKIE_NAME);
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await fetch(`${getApiBaseUrl()}/admin/tests/${testId}/questions/import/preview-file`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: formData,
+  availableTestQuestions: (token, testId, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null || String(value).trim() === '') return;
+      sp.set(key, String(value).trim());
     });
-    const rawText = await response.text();
-    let data = {};
-    try {
-      data = rawText ? JSON.parse(rawText) : {};
-    } catch {
-      data = {};
-    }
-    if (!response.ok)
-      throw new Error(
-        inferApiFailureMessage(data, {
-          status: response.status,
-          statusText: response.statusText,
-          rawText,
-        }) || 'File import preview failed'
-      );
-    return data;
+    const qs = sp.toString();
+    return http.get(`/admin/tests/${testId}/questions/available${qs ? `?${qs}` : ''}`, { token });
   },
-  confirmAikenImport: (token, testId, items) =>
-    http.post(`/admin/tests/${testId}/questions/import/confirm`, { items }, { token }),
-  updateTestQuestion: (token, testId, questionId, payload) =>
-    http.put(`/admin/tests/${testId}/questions/${questionId}`, payload, { token }),
-  deleteTestQuestion: (token, testId, questionId) =>
+  linkTestQuestion: (token, testId, payload) =>
+    http.post(`/admin/tests/${testId}/questions`, payload, { token }),
+  linkTestQuestionsBulk: (token, testId, questionIds) =>
+    http.post(`/admin/tests/${testId}/questions`, { question_ids: questionIds }, { token }),
+  unlinkTestQuestion: (token, testId, questionId) =>
     http.delete(`/admin/tests/${testId}/questions/${questionId}`, { token }),
+  unlinkTestQuestionsBulk: (token, testId, questionIds) =>
+    http.delete(`/admin/tests/${testId}/questions`, { token, body: { question_ids: questionIds } }),
+  reorderTestQuestions: (token, testId, items) =>
+    http.put(`/admin/tests/${testId}/questions/reorder`, items, { token }),
 
   studentQuestions: (token, subject = 'all') =>
     http.get(`/admin/student-questions?subject=${encodeURIComponent(subject)}`, { token }),
@@ -295,10 +316,16 @@ export const adminApi = {
 
 export const testsApi = {
   getPublicTestMeta: (slug) =>
-    http.get(`/tests/${slug}`, {
+    http.get(`/courses/public/tests/${slug}`, {
       token: null,
       retryOnUnauthorized: false,
       authScope: null,
+    }),
+  getTestPrep: (slug, studentToken) =>
+    http.get(`/tests/${slug}/prep`, {
+      authScope: null,
+      token: null,
+      headers: { Authorization: `Bearer ${studentToken}` },
     }),
   verifyCode: (slug, payload, studentToken) =>
     http.post(`/tests/${slug}/verify-code`, payload, {
@@ -329,5 +356,14 @@ export const testsApi = {
       authScope: null,
       token: null,
       headers: { Authorization: `Bearer ${attemptToken}` },
+    }),
+};
+
+export const resultApi = {
+  /** Official read-only result — JWT student auth; never grades on the client. */
+  fetchByAttemptId: (attemptId) =>
+    http.get(`/attempts/${attemptId}/result`, {
+      authScope: 'student',
+      retryOnUnauthorized: true,
     }),
 };

@@ -1,7 +1,60 @@
 import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
 import XLSX from 'xlsx';
-import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
+import { getCourseRowById } from './courseCatalogQueries.service.js';
+import { loadPublishedTestMetaBySlug } from './testQuestionComposition.service.js';
+import { sanitizePlainText } from '../utils/plainTextSanitizer.js';
+import { AppError } from '../errors/base/AppError.js';
+import { NOT_FOUND, PUBLISH_REQUIREMENTS_NOT_MET, UNAUTHORIZED } from '../errors/codes/ErrorCodes.js';
+
+import {
+  getTestCompletenessReport,
+  loadTestCompletenessRow,
+  syncTestLifecycleStatus,
+  TEST_LIFECYCLE_STATES,
+} from './testCompleteness.service.js';
+import { executePublishTestStatus } from './testLifecycle.service.js';
+import { validatePublishEligibility } from './testPublishEligibility.service.js';
+import {
+  enforceWizardWrite,
+  getFullTestValidationReport,
+  validateTestStateForCreate,
+} from './testValidation.service.js';
+import {
+  DEFAULT_TEST_CATEGORY,
+  loadTestSubjectIds,
+  normalizeSubjectIdsFromPayload,
+  replaceTestSubjects,
+  validateSubjectsForTest,
+} from './testSubjectValidation.service.js';
+import { parseStrictTestCategory, parseStrictTestType } from '../validators/testEnumGuards.js';
+import { LEGACY_ENDPOINT_DISABLED } from './testLifecycle.service.js';
+import {
+  logTestValidationFailure,
+  logSecurityEvent,
+  TEST_SECURITY_ACTIONS,
+} from './testSecurityAudit.service.js';
+import {
+  loadTestSubjectPresentation,
+  loadTestSubjectPresentationBatch,
+} from './testSubjectPresentation.service.js';
+
+const REQUIRED_COMPLETENESS_BINDINGS = [
+  ['getTestCompletenessReport', getTestCompletenessReport],
+  ['loadTestCompletenessRow', loadTestCompletenessRow],
+  ['syncTestLifecycleStatus', syncTestLifecycleStatus],
+];
+
+for (const [exportName, binding] of REQUIRED_COMPLETENESS_BINDINGS) {
+  if (typeof binding !== 'function') {
+    throw new Error(`Test completeness service failed to initialize: ${exportName} is not available.`);
+  }
+}
+
+/** Step 1 creates an incomplete shell — rules must be saved in Step 2. */
+const STEP1_DEFAULT_DURATION_MINUTES = 0;
+const STEP1_DEFAULT_MAX_ATTEMPTS = 0;
+const STEP1_DEFAULT_STATUS = TEST_LIFECYCLE_STATES.INCOMPLETE;
 
 function slugify(value) {
   return String(value || '')
@@ -20,7 +73,51 @@ function buildPublicLink(publicSlug) {
   return `${base}/tests/${publicSlug}`;
 }
 
-function toTest(row) {
+function toIsoOrNull(value) {
+  if (value == null) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  const parsed = new Date(typeof value === 'string' || typeof value === 'number' ? value : String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+/** @param {string|null|undefined} status */
+function normalizeSettingsStatusFromDb(status) {
+  const normalized = String(status || 'DRAFT').trim().toUpperCase();
+  return normalized === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT';
+}
+
+/** @param {'DRAFT'|'PUBLISHED'} status */
+function normalizeSettingsStatusToDb(status) {
+  return status === 'PUBLISHED' ? 'published' : 'DRAFT';
+}
+
+/**
+ * @param {number} testId
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} executor
+ */
+async function resolvePublicSlugForTest(testId, executor = mysqlPool) {
+  const [rows] = await executor.query(`SELECT id, title, public_slug FROM tests WHERE id = ? LIMIT 1`, [testId]);
+  const test = rows[0];
+  if (!test) return null;
+
+  if (test.public_slug) return String(test.public_slug);
+
+  const baseSlug = `${slugify(test.title) || 'test'}-${test.id}`;
+  let publicSlug = baseSlug;
+  let suffix = 1;
+  while (true) {
+    const [slugRows] = await executor.query(`SELECT id FROM tests WHERE public_slug = ? AND id <> ? LIMIT 1`, [
+      publicSlug,
+      testId,
+    ]);
+    if (!slugRows.length) break;
+    suffix += 1;
+    publicSlug = `${baseSlug}-${suffix}`;
+  }
+  return publicSlug;
+}
+
+function toTest(row, subjectIds = []) {
   let tags = [];
   try {
     tags = JSON.parse(row.tags_json || '[]');
@@ -29,19 +126,22 @@ function toTest(row) {
   }
   return {
     id: row.id,
+    courseId: row.course_id != null ? Number(row.course_id) : null,
     title: row.title,
     description: row.description,
-    subject: row.subject,
-    category: row.category,
-    subCategory: row.sub_category,
+    category: row.category || DEFAULT_TEST_CATEGORY,
+    testType: row.test_type || 'subject_wise',
+    subjectIds: Array.isArray(subjectIds) ? subjectIds : [],
+    subjectLabel: row.subject_label ?? null,
     durationMinutes: row.duration_minutes,
+    passingPercentage: row.passing_percentage != null ? Number(row.passing_percentage) : null,
     passingMarks: row.passing_marks,
     maxAttempts: row.max_attempts,
     negativeMarking: Number(row.negative_marking || 0),
     shuffleQuestions: !!row.shuffle_questions,
     shuffleOptions: !!row.shuffle_options,
     showExplanations: !!row.show_explanations,
-    accessMode: 'public',
+    accessMode: row.access_mode || 'private',
     tags,
     status: row.status,
     publicSlug: row.public_slug || null,
@@ -51,218 +151,577 @@ function toTest(row) {
   };
 }
 
-function toQuestion(row) {
-  return {
-    id: row.id,
-    testId: row.test_id,
-    questionText: sanitizeRichHtml(row.question_text),
-    questionImageUrl: row.question_image_url,
-    options: JSON.parse(row.options_json || '[]'),
-    correctOption: row.correct_option,
-    explanation: sanitizeRichHtml(row.explanation),
-    explanationImageUrl: row.explanation_image_url,
-    marks: row.marks,
-    orderIndex: row.order_index,
-  };
-}
-
-function toPublicQuestion(row) {
-  return {
-    id: row.id,
-    testId: row.test_id,
-    questionText: sanitizeRichHtml(row.question_text),
-    questionImageUrl: row.question_image_url,
-    options: JSON.parse(row.options_json || '[]').map((option) => ({
-      id: option.id,
-      text: option.text,
-    })),
-    marks: row.marks,
-    orderIndex: row.order_index,
-  };
-}
-
 export async function listTests() {
-  const [rows] = await mysqlPool.query(`SELECT * FROM tests ORDER BY created_at DESC`);
-  return rows.map(toTest);
+  const [rows] = await mysqlPool.query(
+    `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_percentage,
+            passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options,
+            show_explanations, access_mode, tags_json, status, public_slug, created_at, updated_at
+     FROM tests
+     WHERE deleted_at IS NULL
+     ORDER BY created_at DESC`
+  );
+  const presentationByTestId = await loadTestSubjectPresentationBatch(rows.map((row) => Number(row.id)));
+  return rows.map((row) => {
+    const tid = Number(row.id);
+    const presentation = presentationByTestId.get(tid);
+    return toTest(
+      {
+        ...row,
+        subject_label: presentation?.displayLabel ?? null,
+      },
+      presentation?.subjectIds ?? []
+    );
+  });
 }
 
 export async function getTestById(testId) {
-  const [rows] = await mysqlPool.query(`SELECT * FROM tests WHERE id = ? LIMIT 1`, [testId]);
-  return rows[0] ? toTest(rows[0]) : null;
+  const [rows] = await mysqlPool.query(
+    `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_percentage,
+            passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options,
+            show_explanations, access_mode, tags_json, status, public_slug, created_at, updated_at
+     FROM tests
+     WHERE id = ? AND deleted_at IS NULL
+     LIMIT 1`,
+    [testId]
+  );
+  if (!rows[0]) return null;
+  const presentation = await loadTestSubjectPresentation(testId);
+  return toTest({ ...rows[0], subject_label: presentation.displayLabel }, presentation.subjectIds);
 }
 
-export async function getPublishedTestBySlug(publicSlug) {
+/**
+ * @param {number} testId
+ */
+async function getActiveTestRowById(testId) {
+  const tid = Number(testId);
+  if (!Number.isInteger(tid) || tid <= 0) return null;
   const [rows] = await mysqlPool.query(
-    `SELECT * FROM tests WHERE public_slug = ? AND status = 'published' LIMIT 1`,
-    [publicSlug]
+    `SELECT id, duration_minutes, max_attempts, passing_percentage, passing_marks, negative_marking
+     FROM tests
+     WHERE id = ? AND deleted_at IS NULL
+     LIMIT 1`,
+    [tid]
   );
-  const testRow = rows[0];
-  if (!testRow) return null;
-  const [questionRows] = await mysqlPool.query(
-    `SELECT * FROM test_questions WHERE test_id = ? ORDER BY order_index ASC, id ASC`,
-    [testRow.id]
-  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Step 2 read model — rules & scoring fields only.
+ * @param {number} testId
+ */
+export async function getTestRulesById(testId) {
+  const row = await getActiveTestRowById(testId);
+  if (!row) {
+    throw new AppError({
+      message: 'Test was not found.',
+      errorCode: NOT_FOUND,
+      httpStatus: 404,
+      isOperational: true,
+      metadata: { testId: Number(testId) },
+    });
+  }
+
   return {
-    ...toTest(testRow),
-    questions: questionRows.map(toPublicQuestion),
+    testId: Number(row.id),
+    duration_minutes: Number(row.duration_minutes),
+    max_attempts: Number(row.max_attempts),
+    passing_percentage: row.passing_percentage == null ? null : Number(row.passing_percentage),
+    passing_marks: row.passing_marks == null ? null : Number(row.passing_marks),
+    negative_marking: Number(row.negative_marking ?? 0),
   };
 }
 
-export async function createTest(payload, createdBy = null) {
-  const tagsJson = JSON.stringify(Array.isArray(payload.tags) ? payload.tags : []);
-  const courseId = payload.courseId ?? payload.course_id ?? null;
-  const accessMode = payload.accessMode === 'public' ? 'private' : (payload.accessMode || 'private');
-  const [result] = await mysqlPool.query(
-    `INSERT INTO tests
-     (course_id, title, description, subject, category, sub_category, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      courseId,
-      payload.title,
-      payload.description || null,
-      payload.subject,
-      payload.category || null,
-      payload.subCategory || null,
-      payload.durationMinutes,
-      payload.passingMarks || null,
-      payload.maxAttempts || 1,
-      Number(payload.negativeMarking || 0),
-      payload.shuffleQuestions ?? false,
-      payload.shuffleOptions ?? false,
-      payload.showExplanations ?? true,
-      accessMode,
-      tagsJson,
-      payload.status || 'draft',
-      createdBy,
-    ]
-  );
-  return getTestById(result.insertId);
-}
+/**
+ * Step 2 — update rules & scoring on an existing test.
+ * @param {number} testId
+ * @param {{
+ *   duration_minutes: number,
+ *   max_attempts: number,
+ *   passing_percentage?: number,
+ *   passing_marks?: number|null,
+ *   negative_marking?: number,
+ * }} payload
+ */
+export async function updateTestRules(testId, payload) {
+  const tid = Number(testId);
+  await enforceWizardWrite(tid, 'rules', mysqlPool, { allowPublishedMaintenance: true });
 
-export async function updateTest(testId, payload) {
-  const tagsJson = JSON.stringify(Array.isArray(payload.tags) ? payload.tags : []);
-  const courseId = payload.courseId ?? payload.course_id ?? null;
-  const accessMode = payload.accessMode === 'public' ? 'private' : (payload.accessMode || 'private');
+  const existing = await getActiveTestRowById(tid);
+  if (!existing) {
+    throw new AppError({
+      message: 'Test was not found.',
+      errorCode: NOT_FOUND,
+      httpStatus: 404,
+      isOperational: true,
+      metadata: { testId: tid },
+    });
+  }
+
+  const durationMinutes = Number(payload.duration_minutes);
+  const maxAttempts = Number(payload.max_attempts);
+  const passingPercentage =
+    payload.passing_percentage === undefined
+      ? Number(existing.passing_percentage ?? 40)
+      : Number(payload.passing_percentage);
+  const passingMarks =
+    payload.passing_marks === undefined
+      ? existing.passing_marks == null
+        ? null
+        : Number(existing.passing_marks)
+      : payload.passing_marks == null
+        ? null
+        : Number(payload.passing_marks);
+  const negativeMarking =
+    payload.negative_marking === undefined
+      ? Number(existing.negative_marking ?? 0)
+      : Number(payload.negative_marking);
+
   await mysqlPool.query(
     `UPDATE tests
-     SET course_id = COALESCE(?, course_id), title = ?, description = ?, subject = ?, category = ?, sub_category = ?, duration_minutes = ?, passing_marks = ?, max_attempts = ?,
-         negative_marking = ?, shuffle_questions = ?, shuffle_options = ?, show_explanations = ?, access_mode = ?, tags_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [
-      courseId,
-      payload.title,
-      payload.description || null,
-      payload.subject,
-      payload.category || null,
-      payload.subCategory || null,
-      payload.durationMinutes,
-      payload.passingMarks || null,
-      payload.maxAttempts || 1,
-      Number(payload.negativeMarking || 0),
-      payload.shuffleQuestions ?? false,
-      payload.shuffleOptions ?? false,
-      payload.showExplanations ?? true,
-      accessMode,
-      tagsJson,
-      payload.status || 'draft',
-      testId,
-    ]
+     SET duration_minutes = ?,
+         max_attempts = ?,
+         passing_percentage = ?,
+         passing_marks = ?,
+         negative_marking = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND deleted_at IS NULL`,
+    [durationMinutes, maxAttempts, passingPercentage, passingMarks, negativeMarking, tid]
   );
-  return getTestById(testId);
+
+  const report = await syncTestLifecycleStatus(tid);
+
+  return {
+    testId: tid,
+    updated: true,
+    lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+  };
 }
 
-export async function deleteTest(testId) {
-  const [result] = await mysqlPool.query(`DELETE FROM tests WHERE id = ?`, [testId]);
+/**
+ * @param {number} testId
+ */
+async function getActiveTestSettingsRow(testId) {
+  const tid = Number(testId);
+  if (!Number.isInteger(tid) || tid <= 0) return null;
+  const [rows] = await mysqlPool.query(
+    `SELECT id, title, shuffle_questions, shuffle_options, show_explanations,
+            show_result_immediately, show_answers_after_submit, allow_retake,
+            access_mode, status, start_date, end_date, public_slug
+     FROM tests
+     WHERE id = ? AND deleted_at IS NULL
+     LIMIT 1`,
+    [tid]
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Step 3 read model — settings & access fields only.
+ * @param {number} testId
+ */
+export async function getTestSettingsById(testId) {
+  const row = await getActiveTestSettingsRow(testId);
+  if (!row) {
+    throw new AppError({
+      message: 'Test was not found.',
+      errorCode: NOT_FOUND,
+      httpStatus: 404,
+      isOperational: true,
+      metadata: { testId: Number(testId) },
+    });
+  }
+
+  const report = await getTestCompletenessReport(Number(testId));
+
+  return {
+    testId: Number(row.id),
+    shuffle_questions: Boolean(Number(row.shuffle_questions)),
+    shuffle_options: Boolean(Number(row.shuffle_options)),
+    show_explanations: Boolean(Number(row.show_explanations)),
+    show_result_immediately: Boolean(Number(row.show_result_immediately)),
+    show_answers_after_submit: Boolean(Number(row.show_answers_after_submit)),
+    allow_retake: Boolean(Number(row.allow_retake)),
+    access_mode: row.access_mode === 'public' ? 'public' : 'private',
+    lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+    start_date: toIsoOrNull(row.start_date),
+    end_date: toIsoOrNull(row.end_date),
+  };
+}
+
+/**
+ * Step 3 — update behavioral settings and access control.
+ * @param {number} testId
+ * @param {Record<string, unknown>} payload
+ */
+export async function updateTestSettings(testId, payload) {
+  const tid = Number(testId);
+  await enforceWizardWrite(tid, 'settings', mysqlPool, { allowPublishedMaintenance: true });
+
+  const existing = await getActiveTestSettingsRow(tid);
+  if (!existing) {
+    throw new AppError({
+      message: 'Test was not found.',
+      errorCode: NOT_FOUND,
+      httpStatus: 404,
+      isOperational: true,
+      metadata: { testId: tid },
+    });
+  }
+
+  const startDate = payload.start_date == null ? null : new Date(payload.start_date);
+  const endDate = payload.end_date == null ? null : new Date(payload.end_date);
+
+  await mysqlPool.query(
+    `UPDATE tests
+     SET shuffle_questions = ?,
+         shuffle_options = ?,
+         show_explanations = ?,
+         show_result_immediately = ?,
+         show_answers_after_submit = ?,
+         allow_retake = ?,
+         access_mode = ?,
+         start_date = ?,
+         end_date = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND deleted_at IS NULL`,
+    [
+      payload.shuffle_questions ? 1 : 0,
+      payload.shuffle_options ? 1 : 0,
+      payload.show_explanations ? 1 : 0,
+      payload.show_result_immediately ? 1 : 0,
+      payload.show_answers_after_submit ? 1 : 0,
+      payload.allow_retake ? 1 : 0,
+      payload.access_mode,
+      startDate,
+      endDate,
+      tid,
+    ]
+  );
+
+  const report = await syncTestLifecycleStatus(tid);
+
+  return {
+    testId: tid,
+    lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+  };
+}
+
+export async function getPublishedTestBySlug(publicSlug) {
+  return loadPublishedTestMetaBySlug(publicSlug);
+}
+
+/**
+ * Step 1 — create test container (basic info only). Server applies safe defaults for NOT NULL columns.
+ * @param {{
+ *   course_id: number,
+ *   title: string,
+ *   description?: string|null,
+ *   category?: string|null,
+ *   test_type: 'subject_wise'|'mixed_subject',
+ *   subject_id?: number,
+ *   subject_ids?: number[],
+ * }} payload
+ * @param {number|null} createdBy
+ */
+export async function createTestBasicInfo(payload, createdBy) {
+  const creatorId = Number(createdBy);
+  if (!Number.isInteger(creatorId) || creatorId <= 0) {
+    throw new AppError({
+      message: 'Authenticated admin user is required to create a test.',
+      errorCode: UNAUTHORIZED,
+      httpStatus: 401,
+      isOperational: true,
+    });
+  }
+
+  const courseId = Number(payload.course_id);
+  const course = await getCourseRowById(courseId);
+  if (!course) {
+    throw new AppError({
+      message: 'Course was not found.',
+      errorCode: NOT_FOUND,
+      httpStatus: 404,
+      isOperational: true,
+      metadata: { courseId },
+    });
+  }
+
+  const title = sanitizePlainText(payload.title, { maxLength: 120 });
+  const description =
+    payload.description == null ? null : sanitizePlainText(payload.description, { maxLength: 500 });
+  const category = parseStrictTestCategory(payload.category);
+  const testType = parseStrictTestType(payload.test_type);
+
+  const normalizedSubjectIds = normalizeSubjectIdsFromPayload(testType, payload);
+
+  validateTestStateForCreate({
+    course_id: courseId,
+    title,
+    category,
+    test_type: testType,
+    status: STEP1_DEFAULT_STATUS,
+  });
+
+  const connection = await mysqlPool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await validateSubjectsForTest(courseId, testType, normalizedSubjectIds, connection);
+
+    const [result] = await connection.query(
+      `INSERT INTO tests
+         (course_id, title, description, category, test_type, duration_minutes, max_attempts, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        courseId,
+        title,
+        description,
+        category,
+        testType,
+        STEP1_DEFAULT_DURATION_MINUTES,
+        STEP1_DEFAULT_MAX_ATTEMPTS,
+        STEP1_DEFAULT_STATUS,
+        creatorId,
+      ]
+    );
+
+    const testId = Number(result.insertId);
+    await replaceTestSubjects(testId, normalizedSubjectIds, connection);
+    await connection.commit();
+    await syncTestLifecycleStatus(testId);
+
+    return {
+      testId,
+      status: STEP1_DEFAULT_STATUS,
+      test_type: testType,
+      category,
+      subject_ids: normalizedSubjectIds,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Step 1 — update basic info on an existing non-published test.
+ * @param {number} testId
+ * @param {Parameters<typeof createTestBasicInfo>[0]} payload
+ */
+export async function updateTestBasicInfo(testId, payload) {
+  const tid = Number(testId);
+  await enforceWizardWrite(tid, 'basic', mysqlPool, { allowPublishedMaintenance: true });
+
+  const courseId = Number(payload.course_id);
+  const course = await getCourseRowById(courseId);
+  if (!course) {
+    throw new AppError({
+      message: 'Course was not found.',
+      errorCode: NOT_FOUND,
+      httpStatus: 404,
+      isOperational: true,
+      metadata: { courseId },
+    });
+  }
+
+  const title = sanitizePlainText(payload.title, { maxLength: 120 });
+  const description =
+    payload.description == null ? null : sanitizePlainText(payload.description, { maxLength: 500 });
+  const category = parseStrictTestCategory(payload.category);
+  const testType = parseStrictTestType(payload.test_type);
+  const normalizedSubjectIds = normalizeSubjectIdsFromPayload(testType, payload);
+
+  validateTestStateForCreate({
+    course_id: courseId,
+    title,
+    category,
+    test_type: testType,
+  });
+
+  const connection = await mysqlPool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await validateSubjectsForTest(courseId, testType, normalizedSubjectIds, connection);
+
+    await connection.query(
+      `UPDATE tests
+       SET course_id = ?,
+           title = ?,
+           description = ?,
+           category = ?,
+           test_type = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND deleted_at IS NULL`,
+      [courseId, title, description, category, testType, tid]
+    );
+
+    await replaceTestSubjects(tid, normalizedSubjectIds, connection);
+    await connection.commit();
+
+    const report = await syncTestLifecycleStatus(tid);
+    return {
+      testId: tid,
+      updated: true,
+      test_type: testType,
+      category,
+      subject_ids: normalizedSubjectIds,
+      lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/** @deprecated Use createTestBasicInfo via POST /admin/tests only. */
+export async function createTest(payload, createdBy = null) {
+  logSecurityEvent({
+    action: TEST_SECURITY_ACTIONS.LEGACY_ENDPOINT_ACCESS,
+    reason: 'createTest_service_deprecated',
+    errorCode: LEGACY_ENDPOINT_DISABLED,
+    outcome: 'denied',
+    metadata: { createdBy },
+  });
+  throw new AppError({
+    message: 'Use POST /admin/tests (wizard Step 1) instead.',
+    errorCode: LEGACY_ENDPOINT_DISABLED,
+    httpStatus: 410,
+    isOperational: true,
+  });
+}
+
+export async function deleteTest(testId, options = {}) {
+  const tid = Number(testId);
+  logSecurityEvent({
+    action: TEST_SECURITY_ACTIONS.TEST_DELETE,
+    testId: tid,
+    userId: options.userId ?? null,
+    reason: 'test_hard_delete',
+    outcome: 'allowed',
+  });
+  const [result] = await mysqlPool.query(`DELETE FROM tests WHERE id = ?`, [tid]);
   return result.affectedRows > 0;
 }
 
-export async function publishTest(testId) {
-  const [rows] = await mysqlPool.query(`SELECT id, title, public_slug FROM tests WHERE id = ? LIMIT 1`, [testId]);
-  const test = rows[0];
-  if (!test) return null;
+/**
+ * @param {number} testId
+ * @param {{ userId?: number|null }} [options]
+ */
+export async function publishTest(testId, options = {}) {
+  const tid = Number(testId);
 
-  let publicSlug = test.public_slug;
-  if (!publicSlug) {
-    const baseSlug = `${slugify(test.title) || 'test'}-${test.id}`;
-    publicSlug = baseSlug;
-    let suffix = 1;
-    while (true) {
-      const [slugRows] = await mysqlPool.query(`SELECT id FROM tests WHERE public_slug = ? AND id <> ? LIMIT 1`, [
-        publicSlug,
-        testId,
-      ]);
-      if (!slugRows.length) break;
-      suffix += 1;
-      publicSlug = `${baseSlug}-${suffix}`;
-    }
+  await validatePublishEligibility(tid, mysqlPool, {
+    throwOnFailure: true,
+    userId: options.userId,
+  });
+
+  const syncReport = await syncTestLifecycleStatus(tid);
+  if (!syncReport || syncReport.lifecycle_status !== TEST_LIFECYCLE_STATES.READY_FOR_PUBLISH) {
+    logTestValidationFailure({
+      testId: tid,
+      userId: options.userId ?? null,
+      errorCode: PUBLISH_REQUIREMENTS_NOT_MET,
+      reason: 'LIFECYCLE_NOT_READY_FOR_PUBLISH',
+      action: TEST_SECURITY_ACTIONS.PUBLISH_FAILED,
+      metadata: { lifecycle_status: syncReport?.lifecycle_status ?? null },
+    });
+    throw new AppError({
+      message: 'Test lifecycle is not ready for publish.',
+      errorCode: PUBLISH_REQUIREMENTS_NOT_MET,
+      httpStatus: 400,
+      isOperational: true,
+      metadata: { testId: tid, lifecycle_status: syncReport?.lifecycle_status ?? null },
+    });
   }
 
-  await mysqlPool.query(
-    `UPDATE tests
-     SET status = 'published', public_slug = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [publicSlug, testId]
-  );
-  const publishedTest = await getTestById(testId);
-  return publishedTest;
+  const publicSlug = await resolvePublicSlugForTest(tid);
+  await executePublishTestStatus(tid, publicSlug);
+  return getTestById(tid);
+}
+
+export async function getTestCompleteness(testId) {
+  const report = await getFullTestValidationReport(testId);
+  if (!report) {
+    throw new AppError({
+      message: 'Test was not found.',
+      errorCode: NOT_FOUND,
+      httpStatus: 404,
+      isOperational: true,
+      metadata: { testId: Number(testId) },
+    });
+  }
+  return {
+    testId: Number(testId),
+    ...report,
+  };
 }
 
 export async function duplicateTest(testId, createdBy = null) {
-  const [rows] = await mysqlPool.query(`SELECT * FROM tests WHERE id = ? LIMIT 1`, [testId]);
-  const source = rows[0];
-  if (!source) return null;
+  const connection = await mysqlPool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  const [insertResult] = await mysqlPool.query(
-    `INSERT INTO tests
-     (title, description, subject, category, sub_category, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)`,
-    [
-      `${source.title} (Copy)`,
-      source.description,
-      source.subject,
-      source.category,
-      source.sub_category,
-      source.duration_minutes,
-      source.passing_marks,
-      source.max_attempts,
-      Number(source.negative_marking || 0),
-      source.shuffle_questions,
-      source.shuffle_options,
-      source.show_explanations,
-      'public',
-      source.tags_json || JSON.stringify([]),
-      createdBy,
-    ]
-  );
+    const [rows] = await connection.query(`SELECT * FROM tests WHERE id = ? LIMIT 1`, [testId]);
+    const source = rows[0];
+    if (!source) {
+      await connection.rollback();
+      return null;
+    }
 
-  const newTestId = insertResult.insertId;
-  const [questionRows] = await mysqlPool.query(
-    `SELECT question_text, question_image_url, options_json, correct_option, explanation, explanation_image_url, marks, order_index
-     FROM test_questions
-     WHERE test_id = ?
-     ORDER BY order_index ASC, id ASC`,
-    [testId]
-  );
-  for (const row of questionRows) {
-    await mysqlPool.query(
-      `INSERT INTO test_questions
-       (test_id, question_text, question_image_url, options_json, correct_option, explanation, explanation_image_url, marks, order_index)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    const [insertResult] = await connection.query(
+      `INSERT INTO tests
+       (course_id, title, description, category, test_type, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
       [
-        newTestId,
-        row.question_text,
-        row.question_image_url,
-        row.options_json,
-        row.correct_option,
-        row.explanation,
-        row.explanation_image_url,
-        row.marks,
-        row.order_index,
+        source.course_id,
+        `${source.title} (Copy)`,
+        source.description,
+        source.category || DEFAULT_TEST_CATEGORY,
+        source.test_type || 'mixed_subject',
+        source.duration_minutes,
+        source.passing_marks,
+        source.max_attempts,
+        Number(source.negative_marking || 0),
+        source.shuffle_questions,
+        source.shuffle_options,
+        source.show_explanations,
+        source.access_mode || 'private',
+        source.tags_json || JSON.stringify([]),
+        createdBy,
       ]
     );
-  }
 
-  return getTestById(newTestId);
+    const newTestId = Number(insertResult.insertId);
+
+    const [subjectRows] = await connection.query(
+      `SELECT subject_id FROM test_subjects WHERE test_id = ?`,
+      [testId]
+    );
+    if (subjectRows.length) {
+      const values = subjectRows.map((row) => [newTestId, Number(row.subject_id)]);
+      await connection.query(`INSERT INTO test_subjects (test_id, subject_id) VALUES ?`, [values]);
+    }
+
+    await connection.query(
+      `INSERT INTO test_questions (test_id, question_id, display_order, marks_override)
+       SELECT ?, tq.question_id, tq.display_order, tq.marks_override
+       FROM test_questions tq
+       INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+       WHERE tq.test_id = ?`,
+      [newTestId, testId]
+    );
+
+    await connection.commit();
+    return getTestById(newTestId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function exportTestResultsWorkbook(testId) {
@@ -303,7 +762,7 @@ export async function exportTestResultsWorkbook(testId) {
     const scoreText = `${Number(row.score || 0)}/${Number(row.max_score || 0)}`;
     const base = [row.student_name, scoreText, Number(row.time_taken_seconds || 0), row.submitted_at];
     for (let i = 0; i < maxQuestionCount; i += 1) {
-      const answer = detail[i]?.selectedOption || '';
+      const answer = detail[i]?.selectedOption || detail[i]?.selectedOptionText || '';
       base.push(answer);
     }
     return base;
@@ -318,357 +777,4 @@ export async function exportTestResultsWorkbook(testId) {
     filename: `${slugify(testRows[0].title || 'test-results') || 'test-results'}-results.xlsx`,
     buffer: fileBuffer,
   };
-}
-
-export function parseSpreadsheetRows(buffer) {
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) return [];
-  const worksheet = workbook.Sheets[firstSheetName];
-  const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-  return rows.map((row) => ({
-    questionText: row.Question || row.question || '',
-    options: [
-      { id: 'A', text: row['Option A'] || row.optionA || row.A || '' },
-      { id: 'B', text: row['Option B'] || row.optionB || row.B || '' },
-      { id: 'C', text: row['Option C'] || row.optionC || row.C || '' },
-      { id: 'D', text: row['Option D'] || row.optionD || row.D || '' },
-    ],
-    correctOption: String(row['Correct Answer'] || row.correctAnswer || row.answer || '').trim(),
-    explanation: row.Explanation || row.explanation || '',
-    marks: Number(row.Marks || row.marks || 1),
-  }));
-}
-
-export function parseWordRows(content) {
-  const text = String(content || '').replace(/\r\n/g, '\n').trim();
-  if (!text) return [];
-  const blocks = text.split(/\n\s*\n+/).map((block) => block.trim()).filter(Boolean);
-  return blocks.map((block) => {
-    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-    let questionText = '';
-    const options = [];
-    let correctOption = '';
-    let explanation = '';
-    let inExplanation = false;
-
-    for (const line of lines) {
-      const optionMatch = line.match(/^([A-Da-d])[\)\.\:]\s+(.+)$/);
-      const answerMatch = line.match(/^answer\s*[:\-]\s*([A-Da-d])$/i);
-      const explanationMatch = line.match(/^explanation\s*[:\-]\s*(.*)$/i);
-      const questionMatch = line.match(/^question\s*[:\-]\s*(.+)$/i);
-
-      if (optionMatch) {
-        options.push({ id: optionMatch[1].toUpperCase(), text: optionMatch[2].trim() });
-        inExplanation = false;
-        continue;
-      }
-      if (answerMatch) {
-        correctOption = answerMatch[1].toUpperCase();
-        inExplanation = false;
-        continue;
-      }
-      if (explanationMatch) {
-        explanation = explanationMatch[1].trim();
-        inExplanation = true;
-        continue;
-      }
-      if (questionMatch) {
-        questionText = questionMatch[1].trim();
-        inExplanation = false;
-        continue;
-      }
-
-      if (inExplanation) {
-        explanation = `${explanation} ${line}`.trim();
-      } else if (!questionText) {
-        questionText = line;
-      } else if (!options.length) {
-        questionText = `${questionText} ${line}`.trim();
-      }
-    }
-
-    return {
-      questionText,
-      options,
-      correctOption,
-      explanation,
-      marks: 1,
-    };
-  });
-}
-
-export async function listTestQuestions(testId) {
-  const [rows] = await mysqlPool.query(
-    `SELECT * FROM test_questions WHERE test_id = ? ORDER BY order_index ASC, id ASC`,
-    [testId]
-  );
-  return rows.map(toQuestion);
-}
-
-export async function createTestQuestion(testId, payload) {
-  const safeQuestionText = sanitizeRichHtml(payload.questionText);
-  const safeExplanation = sanitizeRichHtml(payload.explanation);
-  const [orderRows] = await mysqlPool.query(
-    `SELECT COALESCE(MAX(order_index), -1) AS max_order FROM test_questions WHERE test_id = ?`,
-    [testId]
-  );
-  const nextOrder = Number(orderRows[0]?.max_order ?? -1) + 1;
-  const [result] = await mysqlPool.query(
-    `INSERT INTO test_questions
-     (test_id, question_text, question_image_url, options_json, correct_option, explanation, explanation_image_url, marks, order_index)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      testId,
-      safeQuestionText,
-      payload.questionImageUrl || null,
-      JSON.stringify(payload.options),
-      payload.correctOption,
-      safeExplanation,
-      payload.explanationImageUrl || null,
-      payload.marks || 1,
-      payload.orderIndex ?? nextOrder,
-    ]
-  );
-  const [rows] = await mysqlPool.query(`SELECT * FROM test_questions WHERE id = ? LIMIT 1`, [result.insertId]);
-  return rows[0] ? toQuestion(rows[0]) : null;
-}
-
-export async function updateTestQuestion(questionId, payload) {
-  const safeQuestionText = sanitizeRichHtml(payload.questionText);
-  const safeExplanation = sanitizeRichHtml(payload.explanation);
-  await mysqlPool.query(
-    `UPDATE test_questions
-     SET question_text = ?, question_image_url = ?, options_json = ?, correct_option = ?, explanation = ?, explanation_image_url = ?, marks = ?, order_index = ?
-     WHERE id = ?`,
-    [
-      safeQuestionText,
-      payload.questionImageUrl || null,
-      JSON.stringify(payload.options),
-      payload.correctOption,
-      safeExplanation,
-      payload.explanationImageUrl || null,
-      payload.marks || 1,
-      payload.orderIndex ?? 0,
-      questionId,
-    ]
-  );
-  const [rows] = await mysqlPool.query(`SELECT * FROM test_questions WHERE id = ? LIMIT 1`, [questionId]);
-  return rows[0] ? toQuestion(rows[0]) : null;
-}
-
-export async function deleteTestQuestion(questionId) {
-  const [result] = await mysqlPool.query(`DELETE FROM test_questions WHERE id = ?`, [questionId]);
-  return result.affectedRows > 0;
-}
-
-function normalizeOptionId(value) {
-  return String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace('.', '')
-    .replace(')', '');
-}
-
-function stripHtml(value) {
-  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function validateImportedQuestion(item) {
-  const errors = [];
-  const rawQuestion = sanitizeRichHtml(item.questionText);
-  const normalizedQuestion = stripHtml(rawQuestion);
-  const normalizedOptions = Array.isArray(item.options)
-    ? item.options
-        .map((option) => ({
-          id: normalizeOptionId(option.id),
-          text: String(option.text || '').trim(),
-        }))
-        .filter((option) => option.id && option.text)
-    : [];
-  const correctOption = normalizeOptionId(item.correctOption);
-  const explanation = sanitizeRichHtml(item.explanation);
-
-  if (!normalizedQuestion) {
-    errors.push('Question text is required');
-  }
-  if (normalizedOptions.length < 2) {
-    errors.push('At least 2 valid options are required');
-  }
-  const uniqueOptionIds = new Set(normalizedOptions.map((option) => option.id));
-  if (uniqueOptionIds.size !== normalizedOptions.length) {
-    errors.push('Option ids must be unique');
-  }
-  if (!correctOption) {
-    errors.push('Exactly one ANSWER is required');
-  } else if (!normalizedOptions.some((option) => option.id === correctOption)) {
-    errors.push('ANSWER must match one provided option id');
-  }
-  if (!explanation) {
-    errors.push('Explanation is required');
-  }
-
-  return {
-    questionText: rawQuestion,
-    questionImageUrl: String(item.questionImageUrl || '').trim(),
-    options: normalizedOptions,
-    correctOption,
-    explanation,
-    explanationImageUrl: String(item.explanationImageUrl || '').trim(),
-    marks: Number(item.marks || 1),
-    orderIndex: Number(item.orderIndex || 0),
-    errors,
-    valid: errors.length === 0,
-  };
-}
-
-export function parseAikenPayload(content) {
-  const lines = String(content || '').replace(/\r\n/g, '\n').split('\n');
-  const parsed = [];
-  let current = null;
-  let parsedCount = 0;
-
-  function startQuestion(questionText, sourceLine) {
-    parsedCount += 1;
-    current = {
-      sourceOrder: parsedCount,
-      sourceLine,
-      questionText: String(questionText || '').trim(),
-      options: [],
-      correctOption: '',
-      explanation: '',
-      _answerCount: 0,
-      _errors: [],
-    };
-  }
-
-  function finalizeQuestion() {
-    if (!current) return;
-    if (current._answerCount === 0) {
-      current._errors.push('Missing ANSWER line');
-    }
-    if (current._answerCount > 1) {
-      current._errors.push('Multiple ANSWER lines found');
-    }
-    const validated = validateImportedQuestion({
-      questionText: current.questionText,
-      options: current.options,
-      correctOption: current.correctOption,
-      explanation: current.explanation,
-      marks: 1,
-      orderIndex: parsed.length,
-    });
-    const combinedErrors = [...new Set([...current._errors, ...validated.errors])];
-    parsed.push({
-      sourceOrder: current.sourceOrder,
-      sourceLine: current.sourceLine,
-      questionText: validated.questionText,
-      options: validated.options,
-      correctOption: validated.correctOption,
-      explanation: validated.explanation,
-      marks: validated.marks,
-      orderIndex: parsed.length,
-      valid: combinedErrors.length === 0,
-      errors: combinedErrors,
-    });
-    current = null;
-  }
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const rawLine = lines[i];
-    const line = rawLine.trim();
-
-    if (!line) continue;
-
-    const optionMatch = line.match(/^([A-Za-z])[\)\.\:]\s+(.+)$/);
-    const answerMatch = line.match(/^ANSWER\s*:\s*([A-Za-z])$/i);
-
-    if (!current) {
-      startQuestion(line, i + 1);
-      continue;
-    }
-
-    if (optionMatch) {
-      current.options.push({
-        id: normalizeOptionId(optionMatch[1]),
-        text: optionMatch[2].trim(),
-      });
-      continue;
-    }
-
-    if (answerMatch) {
-      current.correctOption = normalizeOptionId(answerMatch[1]);
-      current._answerCount += 1;
-      finalizeQuestion();
-      continue;
-    }
-
-    if (current.options.length === 0) {
-      current.questionText = `${current.questionText} ${line}`.trim();
-      continue;
-    }
-
-    current._errors.push(`Unrecognized line format: "${line}"`);
-  }
-
-  finalizeQuestion();
-
-  return {
-    items: parsed,
-    summary: {
-      total: parsed.length,
-      valid: parsed.filter((item) => item.valid).length,
-      invalid: parsed.filter((item) => !item.valid).length,
-    },
-  };
-}
-
-export async function bulkInsertImportedQuestions(testId, items) {
-  const connection = await mysqlPool.getConnection();
-  try {
-    await connection.beginTransaction();
-    const [orderRows] = await connection.query(
-      `SELECT COALESCE(MAX(order_index), -1) AS max_order FROM test_questions WHERE test_id = ?`,
-      [testId]
-    );
-    let nextOrder = Number(orderRows[0]?.max_order ?? -1) + 1;
-
-    const inserted = [];
-    for (const rawItem of items) {
-      const normalized = validateImportedQuestion(rawItem);
-      if (!normalized.valid) {
-        throw new Error(
-          `Invalid import row at sourceOrder ${rawItem.sourceOrder || '?'}: ${normalized.errors.join(', ')}`
-        );
-      }
-      const [result] = await connection.query(
-        `INSERT INTO test_questions
-         (test_id, question_text, question_image_url, options_json, correct_option, explanation, explanation_image_url, marks, order_index)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          testId,
-          normalized.questionText,
-          normalized.questionImageUrl || null,
-          JSON.stringify(normalized.options),
-          normalized.correctOption,
-          normalized.explanation,
-          normalized.explanationImageUrl || null,
-          normalized.marks || 1,
-          nextOrder,
-        ]
-      );
-      nextOrder += 1;
-      const [rows] = await connection.query(`SELECT * FROM test_questions WHERE id = ? LIMIT 1`, [
-        result.insertId,
-      ]);
-      if (rows[0]) inserted.push(toQuestion(rows[0]));
-    }
-    await connection.commit();
-    return inserted;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
 }

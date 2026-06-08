@@ -11,6 +11,7 @@ import {
   questionListQuerySchema,
 } from '../src/validators/questionList.schema.js';
 import { createQuestionBodySchema, updateQuestionBodySchema } from '../src/validators/questionWrite.schema.js';
+import { standardMcqOptions } from './fixtures/standardMcqOptions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -29,10 +30,7 @@ function expectDifficultyError(result, label) {
   );
 }
 
-const mcqOptions = [
-  { option_text: 'Wrong', is_correct: false },
-  { option_text: 'Correct', is_correct: true },
-];
+const mcqOptions = standardMcqOptions;
 
 const writeBase = {
   course_id: 1,
