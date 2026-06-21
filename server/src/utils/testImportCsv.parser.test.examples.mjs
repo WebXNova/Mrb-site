@@ -7,9 +7,12 @@ import { serializeTestExportCsv } from './testExportCsv.serializer.js';
 import { buildTestExportJsonDocument } from './testExportJson.serializer.js';
 import {
   detectTestImportFormat,
+  detectCsvImportFormat,
   parseCsvRows,
   parseTestImportCsv,
   csvRowsToImportPackage,
+  TESTMOZ_IMPORT_FORMAT,
+  MRB_NATIVE_CSV_FORMAT,
 } from './testImportCsv.parser.js';
 import { validateTestImportFile } from '../services/testImportValidation.service.js';
 import { TEST_EXPORT_CSV_VERSION } from '../constants/testRichContent.constants.js';
@@ -36,6 +39,9 @@ console.log('\n[detectTestImportFormat]');
 assert(detectTestImportFormat('{"version":"1.0"}') === 'json', 'detects JSON object');
 assert(detectTestImportFormat('export_version,title\n1.0,Test') === 'csv', 'detects CSV header');
 assert(detectTestImportFormat('  export_version,title') === 'csv', 'detects CSV with leading whitespace');
+assert(detectTestImportFormat('HTML\n"<p>Question</p>",1,one') === 'csv', 'detects Testmoz HTML marker');
+assert(detectCsvImportFormat(parseCsvRows('HTML\n"<p>Question</p>",1,one')) === TESTMOZ_IMPORT_FORMAT, 'classifies Testmoz CSV internally');
+assert(detectCsvImportFormat(parseCsvRows('export_version,title\n1.0,Test')) === MRB_NATIVE_CSV_FORMAT, 'classifies MRB native CSV internally');
 
 const exportDocument = buildTestExportJsonDocument({
   test_id: 10,
@@ -99,6 +105,37 @@ assert(validation.format === 'csv', 'reports csv format');
 if (validation.valid) {
   const prepared = validation.preparedQuestions[0].prepared;
   assert(prepared.question_html.includes('<strong>'), 'validation preserves rich HTML');
+}
+
+console.log('\n[Testmoz CSV import]');
+const testmozCsv = [
+  'HTML',
+  'GROUP,Physics',
+  '"<p>Question with <strong>HTML</strong> <img src=""https://example.com/q.png"" alt=""q""></p>",1,one,"<p>Explanation <em>HTML</em></p>"',
+  '*,<p>Correct Option</p>',
+  ',<p>Option B</p>',
+  ',<p>Option C</p>',
+  ',<p>Option D</p>',
+].join('\n');
+
+const testmozParsed = parseTestImportCsv(testmozCsv);
+assert(testmozParsed.ok === true, 'parseTestImportCsv succeeds on Testmoz CSV');
+if (testmozParsed.ok) {
+  const question = testmozParsed.package.questions[0];
+  assert(question.question_html.includes('<strong>HTML</strong>'), 'preserves Testmoz question HTML');
+  assert(question.question_html.includes('https://example.com/q.png'), 'preserves image URL inside HTML');
+  assert(question.explanation_html.includes('<em>HTML</em>'), 'preserves Testmoz explanation HTML');
+  assert(question.options[0].is_correct === true, 'detects Testmoz correct option marker');
+  assert(question.options[0].option_html.includes('Correct Option'), 'preserves Testmoz option HTML');
+}
+
+console.log('\n[validateTestImportFile Testmoz CSV]');
+const testmozValidation = await validateTestImportFile(testmozCsv, 3, 'csv');
+assert(testmozValidation.valid === true, 'Testmoz CSV passes full import validation');
+if (testmozValidation.valid) {
+  const prepared = testmozValidation.preparedQuestions[0].prepared;
+  assert(prepared.question_html.includes('<img src="https://example.com/q.png"'), 'validation preserves image tag URL');
+  assert(prepared.explanation_html.includes('<em>HTML</em>'), 'validation preserves explanation formatting');
 }
 
 console.log('\n[reject bad CSV version]');
