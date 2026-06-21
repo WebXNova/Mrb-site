@@ -4,9 +4,26 @@ import {
   courseWizardBatchItemSchema,
   courseWizardSubjectItemSchema,
 } from '@course-wizard-schema';
-
+import { sanitizeWizardBatch } from './courseWizardDefaults.js';
 export function validateDetailsStep(course) {
   return courseWizardCourseSchema.safeParse(course);
+}
+
+export function validateAdmissionStep(course) {
+  const status = String(course?.admission_status || 'CLOSED').trim().toUpperCase();
+  if (!['OPEN', 'CLOSED'].includes(status)) {
+    return {
+      success: false,
+      errors: { admission_status: 'Admission status must be OPEN or CLOSED' },
+      message: 'Invalid admission status',
+    };
+  }
+  return { success: true };
+}
+
+/** @deprecated Schedule step removed — admission lives on batch delivery. */
+export function validateScheduleStep(course) {
+  return validateAdmissionStep(course);
 }
 
 export function validatePricingStep(pricing) {
@@ -18,7 +35,7 @@ export function validateBatchesStep(batches) {
     return { success: true, data: batches };
   }
   for (let i = 0; i < batches.length; i += 1) {
-    const r = courseWizardBatchItemSchema.safeParse(batches[i]);
+    const r = courseWizardBatchItemSchema.safeParse(sanitizeWizardBatch(batches[i]));
     if (!r.success) return { success: false, index: i, error: r.error };
   }
   return { success: true, data: batches };

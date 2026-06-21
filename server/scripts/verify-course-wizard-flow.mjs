@@ -17,6 +17,14 @@ import { checkIdempotency, storeIdempotencyResponse } from '../src/services/idem
 import { ApiError } from '../src/utils/apiError.js';
 
 async function resetTables() {
+  await mysqlPool.query('DELETE FROM orders');
+  await mysqlPool.query('DELETE FROM enrollments');
+  await mysqlPool.query('DELETE FROM lecture_progress');
+  await mysqlPool.query('DELETE FROM lectures');
+  await mysqlPool.query(
+    `DELETE ch FROM chapters ch
+     INNER JOIN subjects s ON s.id = ch.subject_id`
+  );
   await mysqlPool.query('DELETE FROM subjects');
   await mysqlPool.query('DELETE FROM course_batches');
   await mysqlPool.query('DELETE FROM course_pricing');
@@ -50,8 +58,8 @@ function draftPayload() {
     batches: [
       {
         title: 'Draft Batch',
-        start_date: start.toISOString().slice(0, 10),
-        end_date: end.toISOString().slice(0, 10),
+        start_date: start.toISOString(),
+        end_date: end.toISOString(),
         enrollment_open_at: open,
         enrollment_close_at: close,
         total_seats: 30,
@@ -62,7 +70,6 @@ function draftPayload() {
         is_active: true,
         allow_enrollment: true,
         show_publicly: true,
-        certificate_enabled: false,
         recordings_enabled: true,
       },
     ],
@@ -98,8 +105,8 @@ function publishPayload() {
     batches: [
       {
         title: 'Publish Batch',
-        start_date: start.toISOString().slice(0, 10),
-        end_date: end.toISOString().slice(0, 10),
+        start_date: start.toISOString(),
+        end_date: end.toISOString(),
         enrollment_open_at: open,
         enrollment_close_at: close,
         total_seats: 40,
@@ -110,7 +117,6 @@ function publishPayload() {
         is_active: true,
         allow_enrollment: true,
         show_publicly: true,
-        certificate_enabled: false,
         recordings_enabled: true,
       },
     ],
@@ -184,6 +190,8 @@ async function testDatetimeNormalization() {
   await createCourseWizardTransaction(publishPayload(), null, {});
   await assertDatetimeNormalized('course_batches', 'enrollment_open_at');
   await assertDatetimeNormalized('course_batches', 'enrollment_close_at');
+  await assertDatetimeNormalized('course_batches', 'start_date');
+  await assertDatetimeNormalized('course_batches', 'end_date');
   const [pricing] = await mysqlPool.query('SELECT starts_at, ends_at FROM course_pricing ORDER BY id DESC LIMIT 1');
   if (pricing[0].starts_at) {
     if (String(pricing[0].starts_at).includes('T')) throw new Error('[datetime] pricing.starts_at has "T"');

@@ -19,7 +19,8 @@ export default function BasicInfoForm({
   onChange,
   onToggleMixedSubject,
   onSubmit,
-  submitLabel = 'Save Draft',
+  submitLabel = 'Save',
+  embedded = false,
 }) {
   const titleLen = String(form.title ?? '').trim().length;
   const descriptionLen = String(form.description ?? '').trim().length;
@@ -35,9 +36,9 @@ export default function BasicInfoForm({
     return <p className="admin-error">{optionsError}</p>;
   }
 
-  return (
-    <form className="admin-test-form" onSubmit={readOnly ? (event) => event.preventDefault() : onSubmit} noValidate>
-      <h2 className="heading-4">Basic Info</h2>
+  const fields = (
+    <>
+      <h2 className="heading-4">General</h2>
 
       <div className="admin-form-grid" style={{ marginTop: 'var(--space-4)' }}>
         <div className="admin-field">
@@ -198,10 +199,10 @@ export default function BasicInfoForm({
         {fieldErrors.description ? <div className="admin-field__error">{fieldErrors.description}</div> : null}
       </div>
 
-      {error ? <p className="admin-error">{error}</p> : null}
-      {success ? <p className="admin-success">{success}</p> : null}
+      {!embedded && error ? <p className="admin-error">{error}</p> : null}
+      {!embedded && success ? <p className="admin-success">{success}</p> : null}
 
-      {!readOnly ? (
+      {!embedded && !readOnly ? (
         <div className="admin-test-form__footer">
           <button
             className="btn btn--primary"
@@ -213,6 +214,16 @@ export default function BasicInfoForm({
           </button>
         </div>
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return <section className="admin-test-form-section">{fields}</section>;
+  }
+
+  return (
+    <form className="admin-test-form" onSubmit={readOnly ? (event) => event.preventDefault() : onSubmit} noValidate>
+      {fields}
     </form>
   );
 }

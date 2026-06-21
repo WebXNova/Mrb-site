@@ -1,5 +1,7 @@
 /**
- * Scoped grep: forbidden course-domain strings must not appear in contract files.
+ * Scoped contract guard: legacy course catalog fields must not leak into contract files.
+ * Uses targeted patterns (not naive word grep) to avoid false positives such as
+ * `subject.service.js`, `metadata: {`, or nested `price_amount`.
  */
 import { readFileSync } from 'fs';
 import path from 'path';
@@ -27,34 +29,91 @@ const CLIENT_FILES = [
   'src/admin/pages/AdminCoursesPage.jsx',
 ];
 
-const PATTERNS = [
-  { re: /\bslug\b/, label: 'slug' },
-  { re: /\baccent_color\b|\baccentColor\b/, label: 'accent_color' },
-  { re: /\blectures_count\b/, label: 'lectures_count' },
-  { re: /\bstudents_enrolled\b/, label: 'students_enrolled' },
-  { re: /\brating\b/, label: 'rating' },
-  { re: /\bprice\b/, label: 'price' },
-  { re: /\boriginal_price\b|\boriginalPrice\b/, label: 'original_price' },
-  { re: /\bsubject\b/, label: 'subject' },
+/** @param {string} line */
+function stripLineComment(line) {
+  return line.replace(/\/\/.*$/, '').trim();
+}
+
+/**
+ * Legacy course catalog fields that must not appear in contract-layer source.
+ * Each test receives a single non-comment line.
+ * @type {Array<{ label: string, test: (line: string) => boolean }>}
+ */
+const LINE_CHECKS = [
+  {
+    label: 'slug',
+    test: (line) =>
+      /\b(?:row|course)\.slug\b/.test(line) ||
+      /['"]slug['"]\s*:/.test(line) ||
+      /\bslug\s+VARCHAR/.test(line),
+  },
+  {
+    label: 'accent_color',
+    test: (line) => /\baccent_color\b|\baccentColor\b/.test(line),
+  },
+  {
+    label: 'lectures_count',
+    test: (line) => /\blectures_count\b/.test(line),
+  },
+  {
+    label: 'students_enrolled',
+    test: (line) => /\bstudents_enrolled\b/.test(line),
+  },
+  {
+    label: 'rating',
+    test: (line) => /\b(?:row|course)\.rating\b/.test(line) || /['"]rating['"]\s*:/.test(line),
+  },
+  {
+    label: 'price',
+    test: (line) => {
+      if (/price_amount|original_price_amount|course_pricing|coursePricing/.test(line)) return false;
+      return /\bcourses\s*\.\s*price\b/.test(line) || /\b(?:row|course)\.price\b/.test(line);
+    },
+  },
+  {
+    label: 'original_price',
+    test: (line) => {
+      if (/original_price_amount/.test(line)) return false;
+      return /\bcourses\s*\.\s*original_price\b/.test(line) || /\b(?:row|course)\.original_price\b/.test(line);
+    },
+  },
+  {
+    label: 'courses.subject',
+    test: (line) => {
+      if (/subject\.service|\/subjects|listPublicSubjects|subjects\.controller|subjectSeed/.test(line)) {
+        return false;
+      }
+      return (
+        /\bcourses\s*\.\s*subject\b/.test(line) ||
+        /\brow\.subject\b/.test(line) ||
+        /\bsubject\s+VARCHAR\s*\(\s*80\s*\)/.test(line) ||
+        /INSERT\s+INTO\s+courses\b[\s\S]*\bsubject\b/.test(line) ||
+        /UPDATE\s+courses\b[\s\S]*\bsubject\b/.test(line) ||
+        /['"]subject['"]\s*:/.test(line)
+      );
+    },
+  },
 ];
 
+function scanFile(relPath, rootDir) {
+  const text = readFileSync(path.join(rootDir, relPath), 'utf8');
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = stripLineComment(lines[i]);
+    if (!line) continue;
+    for (const { label, test } of LINE_CHECKS) {
+      if (test(line)) {
+        throw new Error(
+          `[verify-course-contract-grep] forbidden "${label}" in ${path.relative(siteRoot, path.join(rootDir, relPath))}:${i + 1}`
+        );
+      }
+    }
+  }
+}
+
 try {
-  for (const rel of SERVER_FILES) {
-    const text = readFileSync(path.join(serverRoot, rel), 'utf8');
-    for (const { re, label } of PATTERNS) {
-      if (re.test(text)) {
-        throw new Error(`[verify-course-contract-grep] forbidden "${label}" in server/${rel}`);
-      }
-    }
-  }
-  for (const rel of CLIENT_FILES) {
-    const text = readFileSync(path.join(siteRoot, 'client', rel), 'utf8');
-    for (const { re, label } of PATTERNS) {
-      if (re.test(text)) {
-        throw new Error(`[verify-course-contract-grep] forbidden "${label}" in client/${rel}`);
-      }
-    }
-  }
+  for (const rel of SERVER_FILES) scanFile(rel, serverRoot);
+  for (const rel of CLIENT_FILES) scanFile(rel, path.join(siteRoot, 'client'));
   console.log('verify-course-contract-grep: OK');
 } catch (e) {
   console.error(e.message || e);

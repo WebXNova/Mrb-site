@@ -3,8 +3,7 @@ import { ApiError } from '../utils/apiError.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import {
   listCitiesByDistrictId,
-  listDivisionsByProvinceId,
-  listDistrictsByDivisionId,
+  listDistrictsByProvinceId,
   listIntermediateBoards,
   listProvinces,
 } from '../services/location.service.js';
@@ -26,15 +25,9 @@ export const getProvinces = asyncHandler(async (_req, res) => {
   sendSuccess(res, data);
 });
 
-export const getDivisions = asyncHandler(async (req, res) => {
-  const provinceId = readRequiredQueryId(req, 'province_id');
-  const data = await listDivisionsByProvinceId(provinceId);
-  sendSuccess(res, data);
-});
-
 export const getDistricts = asyncHandler(async (req, res) => {
-  const divisionId = readRequiredQueryId(req, 'division_id');
-  const data = await listDistrictsByDivisionId(divisionId);
+  const provinceId = readRequiredQueryId(req, 'province_id');
+  const data = await listDistrictsByProvinceId(provinceId);
   sendSuccess(res, data);
 });
 

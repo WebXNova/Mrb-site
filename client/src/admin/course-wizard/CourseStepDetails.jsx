@@ -1,4 +1,12 @@
-const LEVEL_OPTIONS = ['beginner', 'intermediate', 'advanced'];
+import PremiumFormField from '../components/courses/PremiumFormField';
+import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
+import ThumbnailDropzone from '../components/courses/ThumbnailDropzone';
+
+const LEVEL_OPTIONS = [
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' },
+];
 
 export default function CourseStepDetails({
   course,
@@ -14,106 +22,113 @@ export default function CourseStepDetails({
 }) {
   return (
     <div className="admin-course-wizard-step">
-      <div className="admin-form-grid" style={{ gridTemplateColumns: '1fr' }}>
-        <div className="admin-field">
-          <label htmlFor="wiz_title">Title</label>
+      <div className="premium-form-grid premium-form-grid--2col">
+        <PremiumFormField
+          id="wiz_title"
+          label="Course title"
+          required
+          counter={`${titleLen} / 180`}
+          counterWarn={titleLen > 160}
+          error={fieldErrors.title}
+          hint="A clear, descriptive name shown across the catalog and student dashboard."
+          className="premium-form-grid__span-2"
+        >
           <input
             id="wiz_title"
+            className="premium-field__input"
             name="title"
             value={course.title}
             onChange={onChange}
             autoComplete="off"
+            placeholder="e.g. Physics from zero to hero"
             aria-invalid={Boolean(fieldErrors.title)}
+            maxLength={180}
           />
-          <div className="admin-courses__muted" style={{ marginTop: '0.25rem', fontSize: 'var(--fs-12)' }}>
-            {titleLen} / 180 (min 3)
-          </div>
-          {fieldErrors.title ? (
-            <div className="admin-field__error" role="alert">
-              {fieldErrors.title}
-            </div>
-          ) : null}
-        </div>
-        <div className="admin-field">
-          <label htmlFor="wiz_level">Level</label>
-          <select id="wiz_level" name="level" value={course.level} onChange={onChange}>
+        </PremiumFormField>
+
+        <PremiumFormField
+          id="wiz_level"
+          label="Difficulty level"
+          required
+          hint="Helps students find courses matched to their experience."
+        >
+          <select id="wiz_level" className="premium-field__select" name="level" value={course.level} onChange={onChange}>
             {LEVEL_OPTIONS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {lvl}
+              <option key={lvl.value} value={lvl.value}>
+                {lvl.label}
               </option>
             ))}
           </select>
-        </div>
-        <div className="admin-field">
-          <label className="admin-field__inline">
-            <input type="checkbox" name="is_active" checked={!!course.is_active} onChange={onChange} /> Active in catalog
-            when published
-          </label>
-        </div>
-        <div className="admin-field">
-          <label htmlFor="wiz_short">Short description</label>
+        </PremiumFormField>
+
+        <PremiumFormField id="wiz_visibility" label="Catalog visibility">
+          <AdminToggleSwitch
+            id="wiz_visibility"
+            name="is_active"
+            checked={!!course.is_active}
+            onChange={onChange}
+            label="Active in catalog when published"
+            hint="Inactive courses stay hidden from public listings."
+          />
+        </PremiumFormField>
+
+        <PremiumFormField
+          id="wiz_short"
+          label="Short description"
+          counter={`${shortDescriptionLen} / 512`}
+          hint="Optional summary for course cards and search results."
+          className="premium-form-grid__span-2"
+        >
           <textarea
             id="wiz_short"
+            className="premium-field__textarea"
             name="short_description"
             value={course.short_description ?? ''}
             onChange={onChange}
-            rows={2}
+            rows={3}
             maxLength={512}
-            placeholder="Optional listing summary"
+            placeholder="Brief overview students see before enrolling"
           />
-          <div className="admin-courses__muted" style={{ marginTop: '0.25rem', fontSize: 'var(--fs-12)' }}>
-            {shortDescriptionLen} / 512
-          </div>
-        </div>
-        <div className="admin-field">
-          <label htmlFor="wiz_desc">Full description</label>
+        </PremiumFormField>
+
+        <PremiumFormField
+          id="wiz_desc"
+          label="Full description"
+          required
+          counter={`${descriptionLen} characters (min 30)`}
+          counterWarn={descriptionLen > 0 && descriptionLen < 30}
+          error={fieldErrors.description}
+          hint="Detailed overview of outcomes, syllabus highlights, and who this course is for."
+          className="premium-form-grid__span-2"
+        >
           <textarea
             id="wiz_desc"
+            className="premium-field__textarea"
             name="description"
             value={course.description}
             onChange={onChange}
             rows={8}
+            placeholder="Describe what students will learn, prerequisites, and course structure…"
             aria-invalid={Boolean(fieldErrors.description)}
           />
-          <div className="admin-courses__muted" style={{ marginTop: '0.25rem', fontSize: 'var(--fs-12)' }}>
-            {descriptionLen} characters (min 30)
-          </div>
-          {fieldErrors.description ? (
-            <div className="admin-field__error" role="alert">
-              {fieldErrors.description}
-            </div>
-          ) : null}
-        </div>
-        <div className="admin-field">
-          <label htmlFor="wiz_thumb">Thumbnail</label>
-          <input
+        </PremiumFormField>
+
+        <PremiumFormField
+          id="wiz_thumb"
+          label="Course thumbnail"
+          required
+          hint="Required before publish. Use a high-quality image (16:9 works best)."
+          className="premium-form-grid__span-2"
+        >
+          <ThumbnailDropzone
             id="wiz_thumb"
-            ref={imageInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={onImageChange}
-            disabled={imageUploading}
+            inputRef={imageInputRef}
+            imageUrl={course.thumbnail_url}
+            uploading={imageUploading}
+            onFileChange={onImageChange}
+            onClear={onClearImage}
           />
-          <small className="admin-courses__muted">
-            {imageUploading ? 'Uploading…' : 'JPEG, PNG, or WebP. Max 5 MB.'}
-          </small>
-          {course.thumbnail_url ? (
-            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-              <img
-                src={course.thumbnail_url}
-                alt="Course thumbnail preview"
-                style={{ maxWidth: '220px', borderRadius: '8px', border: '1px solid var(--color-border, #e5e7eb)' }}
-              />
-              <button type="button" className="btn btn--ghost btn--sm" onClick={onClearImage}>
-                Remove image
-              </button>
-            </div>
-          ) : (
-            <p className="admin-courses__muted" style={{ marginTop: '0.5rem' }}>
-              Preview appears here after upload (required before publish).
-            </p>
-          )}
-        </div>
+        </PremiumFormField>
       </div>
     </div>
   );

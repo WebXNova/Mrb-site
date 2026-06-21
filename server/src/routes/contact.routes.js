@@ -1,8 +1,21 @@
 import { Router } from 'express';
-import { postContactRemark } from '../controllers/contactRemarks.controller.js';
+import {
+  getPublicPostedRemarks,
+  postContactRemark,
+} from '../controllers/contactRemarks.controller.js';
+import {
+  contactRemarkSubmitIpHourlyLimit,
+  contactRemarkSubmitIpMinuteLimit,
+} from '../middleware/contactRemarkSubmitRateLimit.js';
 
 const router = Router();
 
-router.post('/remarks', postContactRemark);
+router.get('/remarks/posted', getPublicPostedRemarks);
+router.post(
+  '/remarks',
+  contactRemarkSubmitIpMinuteLimit,
+  contactRemarkSubmitIpHourlyLimit,
+  postContactRemark
+);
 
 export default router;

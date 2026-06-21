@@ -1,4 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
+import { createStripHtmlOptions } from './sanitizeHtmlPolicy.js';
 
 /**
  * Strip all HTML and normalize whitespace for plain-text storage fields.
@@ -6,10 +7,7 @@ import sanitizeHtml from 'sanitize-html';
  * @param {{ maxLength?: number }} [options]
  */
 export function sanitizePlainText(value, { maxLength } = {}) {
-  const stripped = sanitizeHtml(String(value ?? ''), {
-    allowedTags: [],
-    allowedAttributes: {},
-  })
+  const stripped = sanitizeHtml(String(value ?? ''), createStripHtmlOptions())
     .replace(/\s+/g, ' ')
     .trim();
 

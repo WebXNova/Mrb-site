@@ -18,6 +18,7 @@ export const ACTIVE_ATTEMPT_STATUS = 'in_progress';
  *   maxAttempts: number,
  *   attemptsUsed: number,
  *   activeAttemptId?: number|null,
+ *   allowRetake?: boolean,
  * }} input
  * @returns {{
  *   status: StudentTestListingStatus,
@@ -29,6 +30,7 @@ export const ACTIVE_ATTEMPT_STATUS = 'in_progress';
 export function computeStudentTestListingStatus(input) {
   const maxAttempts = Number(input.maxAttempts ?? 1);
   const attemptsUsed = Math.max(0, Number(input.attemptsUsed ?? 0));
+  const allowRetake = input.allowRetake == null ? true : Boolean(input.allowRetake);
   const activeAttemptId =
     input.activeAttemptId == null || input.activeAttemptId === ''
       ? null
@@ -50,6 +52,15 @@ export function computeStudentTestListingStatus(input) {
   }
 
   if (maxAttempts > 0 && attemptsUsed >= maxAttempts) {
+    return {
+      status: 'completed',
+      active_attempt_id: null,
+      attempts_used: attemptsUsed,
+      attempts_remaining: 0,
+    };
+  }
+
+  if (!allowRetake && attemptsUsed > 0) {
     return {
       status: 'completed',
       active_attempt_id: null,

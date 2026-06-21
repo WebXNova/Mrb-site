@@ -7,7 +7,7 @@ const emptyForm = { title: '', description: '' };
  * Full Subjects editor for one course. Used on the dedicated route and embedded
  * in the main admin courses page.
  */
-export default function AdminCourseSubjectsPanel({ token, courseId, embedded = false }) {
+export default function AdminCourseSubjectsPanel({ token, courseId, embedded = false, onSubjectsChange }) {
   const courseIdValid = Number.isFinite(Number(courseId)) && Number(courseId) > 0;
   const numericCourseId = Number(courseId);
 
@@ -33,6 +33,7 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
       const response = await adminApi.subjects(token, numericCourseId, { includeInactive: true });
       const list = Array.isArray(response?.data) ? response.data : [];
       setAllSubjects(list);
+      onSubjectsChange?.(list);
     } catch (err) {
       setError(err.message || 'Failed to load Subjects');
     } finally {
@@ -173,18 +174,19 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
 
     const next = allSubjects.slice();
     [next[canonicalIndex], next[neighborIndex]] = [next[neighborIndex], next[canonicalIndex]];
+    const optimistic = next.map((s, i) => ({ ...s, orderIndex: i }));
+    setAllSubjects(optimistic);
+    onSubjectsChange?.(optimistic);
 
     setReordering(true);
-    setError('');
-    setSuccess('');
     try {
       const orderedIds = next.map((s) => Number(s.id));
       const response = await adminApi.reorderSubjects(token, numericCourseId, orderedIds);
-      const updated = Array.isArray(response?.data) ? response.data : [];
+      const updated = Array.isArray(response?.data) ? response.data : optimistic;
       setAllSubjects(updated);
-      setSuccess('Order saved.');
-    } catch (err) {
-      setError(err.message || 'Failed to save new order');
+      onSubjectsChange?.(updated);
+    } catch {
+      await loadSubjects();
     } finally {
       setReordering(false);
     }

@@ -1,6 +1,6 @@
 -- CEE DB constraints (idempotent manual migration companion to ensureCeeDbConstraints.js)
--- Enrollment one-active-per-user is enforced in application code (enrollmentLifecycle.service.js).
--- No triggers or stored procedures required.
+-- Enrollment one-active-per-user: DB unique index on enrollments.active_user_id (startup migration).
+-- Application activation still flows through enrollmentLifecycle.service.js.
 
 -- 1) Orphan audit (must return 0 before NOT NULL)
 -- SELECT id, title FROM tests WHERE course_id IS NULL;

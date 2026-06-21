@@ -109,5 +109,6 @@ export {
   buildSecurityAuditRecord,
   formatSecurityAuditLine,
   auditEntitlementFailure,
+  auditEntitlementGranted,
   isEntitlementAuditError,
 } from './audit/index.js';

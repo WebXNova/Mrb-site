@@ -26,7 +26,7 @@ export const LOCK_ATTEMPT_FOR_UPDATE_SQL = `
 export const LOCK_ATTEMPT_SUBMIT_SQL = `
   UPDATE test_attempts
   SET status = 'submitted',
-      submitted_at = CURRENT_TIMESTAMP,
+      submitted_at = UTC_TIMESTAMP(),
       completion_reason = 'submitted',
       updated_at = CURRENT_TIMESTAMP
   WHERE id = ?

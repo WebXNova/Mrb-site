@@ -4,18 +4,81 @@ import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { isAdminRole } from '../utils/isAdminRole.js';
 import { startAuthTrace } from '../utils/authProfiling.js';
+import { logBearerTokenRejected, isProductionAuthMode } from './authSecurity.service.js';
 
 function parseBearer(authHeader) {
   return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 }
 
-function readAccessToken(req, role) {
-  const cookieName = role === 'student' ? 'student_access_token' : 'admin_access_token';
+function accessCookieNameForRole(role) {
+  if (role === 'student') return 'student_access_token';
+  if (role === 'teacher') return 'teacher_access_token';
+  return 'admin_access_token';
+}
+
+function shouldRejectBearerInProduction(role) {
+  return isProductionAuthMode() && (role === 'student' || role === 'teacher');
+}
+
+/**
+ * Production student/teacher flows: HttpOnly cookie only — reject Authorization Bearer.
+ * @param {import('express').Request} req
+ * @param {'student'|'teacher'|'admin'} role
+ */
+export function readAccessToken(req, role) {
+  const cookieName = accessCookieNameForRole(role);
   const cookieToken = req.cookies?.[cookieName] || null;
   const bearerToken = parseBearer(req.headers.authorization);
 
+  if (shouldRejectBearerInProduction(role) && bearerToken) {
+    void logBearerTokenRejected(req, role);
+    throw new ApiError(401, 'Cookie authentication required in production', {
+      code: 'BEARER_REJECTED_IN_PRODUCTION',
+      error_code: 'BEARER_REJECTED_IN_PRODUCTION',
+    });
+  }
+
   return cookieToken || bearerToken || null;
 }
+
+/**
+ * Cookie-first token resolution for multi-role upload/media guards.
+ * @param {import('express').Request} req
+ * @returns {{ token: string|null, source: 'cookie'|'bearer'|null }}
+ */
+export function readMultiRealmAccessToken(req) {
+  const cookieToken =
+    req.cookies?.teacher_access_token ||
+    req.cookies?.student_access_token ||
+    req.cookies?.admin_access_token ||
+    null;
+  const bearerToken = parseBearer(req.headers.authorization);
+  if (cookieToken) return { token: cookieToken, source: 'cookie' };
+  if (bearerToken) return { token: bearerToken, source: 'bearer' };
+  return { token: null, source: null };
+}
+
+/**
+ * Production student/teacher flows: reject Bearer even on multi-role guards.
+ * @param {import('express').Request} req
+ * @param {'cookie'|'bearer'|null} source
+ * @param {string} role
+ */
+export function assertRealmBearerAllowedInProduction(req, source, role) {
+  if (shouldRejectBearerInProduction(role) && source === 'bearer') {
+    void logBearerTokenRejected(req, role === 'teacher' ? 'teacher' : 'student');
+    throw new ApiError(401, 'Cookie authentication required in production', {
+      code: 'BEARER_REJECTED_IN_PRODUCTION',
+      error_code: 'BEARER_REJECTED_IN_PRODUCTION',
+    });
+  }
+}
+
+/** @deprecated Use assertRealmBearerAllowedInProduction */
+export const assertStudentBearerAllowedInProduction = assertRealmBearerAllowedInProduction;
+
+/** Teacher Bearer rejection on multi-role upload/media guards. */
+export const assertTeacherBearerAllowedInProduction = assertRealmBearerAllowedInProduction;
 
 function verifyAccessJwt(token) {
   const secrets = [env.jwt.accessSecret, ...env.jwt.previousAccessSecrets];
@@ -58,9 +121,12 @@ export async function evaluateAccessRequest(req, { expectedRole }) {
     if (expectedRole === 'student' && payload.role !== 'student') {
       throw new ApiError(403, 'Student access required');
     }
+    if (expectedRole === 'teacher' && payload.role !== 'teacher') {
+      throw new ApiError(403, 'Teacher access required');
+    }
 
     const [rows] = await mysqlPool.query(
-      `SELECT s.id, s.token_version_snapshot, u.token_version
+      `SELECT s.id, s.token_version_snapshot, u.token_version, u.status AS user_status
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = ? AND s.user_id = ? AND s.revoked_at IS NULL AND s.expires_at > NOW()
@@ -71,6 +137,9 @@ export async function evaluateAccessRequest(req, { expectedRole }) {
     const session = rows[0];
     if (!session) {
       throw new ApiError(401, 'Session expired. Please sign in again.');
+    }
+    if (String(session.user_status || '').toLowerCase() !== 'active') {
+      throw new ApiError(401, 'Account is suspended');
     }
     const tokenVersion = Number(payload.tokenVersion);
     if (tokenVersion !== Number(session.token_version_snapshot) || tokenVersion !== Number(session.token_version)) {

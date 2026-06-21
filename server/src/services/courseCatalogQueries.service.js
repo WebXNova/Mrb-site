@@ -7,6 +7,7 @@ import { mysqlPool } from '../config/mysql.js';
  */
 export const COURSE_CORE_COLUMNS_QUALIFIED = `
   c.id, c.title, c.description, c.short_description, c.level, c.image_url,
+  c.start_date, c.end_date, c.admission_status,
   c.is_active, c.created_by, c.created_at, c.updated_at
 `;
 
@@ -49,27 +50,73 @@ function buildCatalogSelect({ activeOnly = false } = {}) {
 }
 
 export async function listAllCourseRows() {
+  try {
+    const [rows] = await mysqlPool.query(
+      `${buildCatalogSelect({ activeOnly: false })} ORDER BY c.created_at DESC`
+    );
+    return rows;
+  } catch (error) {
+    if (!isMissingPricingSchemaError(error)) throw error;
+    const [rows] = await mysqlPool.query(
+      `${buildCatalogSelectCoreOnly({ activeOnly: false })} ORDER BY c.created_at DESC`
+    );
+    return rows;
+  }
+}
+
+function isMissingPricingSchemaError(error) {
+  const code = String(error?.code || '');
+  return code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_FIELD_ERROR';
+}
+
+function buildCatalogSelectCoreOnly({ activeOnly = false } = {}) {
+  return `
+    SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}
+    FROM courses c
+    ${activeOnly ? 'WHERE c.is_active = TRUE' : ''}
+  `;
+}
+
+export async function listActiveCourseRowsWithoutPricing() {
   const [rows] = await mysqlPool.query(
-    `${buildCatalogSelect({ activeOnly: false })} ORDER BY c.created_at DESC`
+    `${buildCatalogSelectCoreOnly({ activeOnly: true })} ORDER BY c.created_at DESC`
   );
   return rows;
 }
 
 export async function listActiveCourseRows() {
-  const [rows] = await mysqlPool.query(
-    `${buildCatalogSelect({ activeOnly: true })} ORDER BY c.created_at DESC`
-  );
-  return rows;
+  try {
+    const [rows] = await mysqlPool.query(
+      `${buildCatalogSelect({ activeOnly: true })} ORDER BY c.created_at DESC`
+    );
+    return rows;
+  } catch (error) {
+    if (!isMissingPricingSchemaError(error)) throw error;
+    return listActiveCourseRowsWithoutPricing();
+  }
 }
 
 export async function getCourseRowById(courseId, { activeOnly = false } = {}) {
-  const sql = `
+  const baseSql = `
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}, ${PRICING_PROJECTION}
     FROM courses c
     ${EFFECTIVE_PRICING_JOIN}
     WHERE c.id = ?${activeOnly ? ' AND c.is_active = TRUE' : ''}
     LIMIT 1
   `;
-  const [rows] = await mysqlPool.query(sql, [courseId]);
-  return rows[0] || null;
+  const fallbackSql = `
+    SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}
+    FROM courses c
+    WHERE c.id = ?${activeOnly ? ' AND c.is_active = TRUE' : ''}
+    LIMIT 1
+  `;
+
+  try {
+    const [rows] = await mysqlPool.query(baseSql, [courseId]);
+    return rows[0] || null;
+  } catch (error) {
+    if (!isMissingPricingSchemaError(error)) throw error;
+    const [rows] = await mysqlPool.query(fallbackSql, [courseId]);
+    return rows[0] || null;
+  }
 }

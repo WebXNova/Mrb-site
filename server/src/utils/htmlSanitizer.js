@@ -1,19 +1,12 @@
-import sanitizeHtml from 'sanitize-html';
+import { sanitizeQuestionHtml } from './questionHtmlSanitizer.js';
 
-const ALLOWED_TAGS = ['b', 'i', 'em', 'p', 'ul', 'li', 'br', 'strong', 'a'];
-const ALLOWED_ATTRIBUTES = {
-  a: ['href', 'target', 'rel'],
-};
-const ALLOWED_SCHEMES = ['http', 'https', 'mailto'];
-
+/**
+ * Sanitize rich HTML returned to students (attempt load, results, grading review).
+ * Delegates to the question-bank allowlist — never use a weaker parallel policy.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
 export function sanitizeRichHtml(value) {
-  return sanitizeHtml(String(value || ''), {
-    allowedTags: ALLOWED_TAGS,
-    allowedAttributes: ALLOWED_ATTRIBUTES,
-    allowedSchemes: ALLOWED_SCHEMES,
-    enforceHtmlBoundary: true,
-    transformTags: {
-      a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer', target: '_blank' }),
-    },
-  }).trim();
+  return sanitizeQuestionHtml(value);
 }

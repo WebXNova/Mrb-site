@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import {
   formatHistoryPercentage,
   formatHistoryScore,
-  formatPassFail,
   formatSubmittedDate,
 } from '../utils/formatDisplay';
 
@@ -18,10 +17,12 @@ function StatusBadge({ status, available }) {
 
 function HistoryRow({ item }) {
   const detailPath = `/dashboard/tests/${item.testId}/results/${item.attemptId}`;
+  const isDark = Boolean(item.resultAvailable);
 
   return (
-    <tr>
+    <tr className={isDark ? 'th-table__row th-table__row--dark' : 'th-table__row'}>
       <td data-label="Test">{item.testTitle}</td>
+      <td data-label="Subject">{item.subjectLabel || '—'}</td>
       <td data-label="Score">{formatHistoryScore(item.score, item.maxScore)}</td>
       <td data-label="Percentage">{formatHistoryPercentage(item.percentage)}</td>
       <td data-label="Result">
@@ -30,7 +31,7 @@ function HistoryRow({ item }) {
       <td data-label="Submitted">{formatSubmittedDate(item.submittedAt)}</td>
       <td data-label="Actions">
         {item.resultAvailable ? (
-          <Link className="btn btn--secondary btn--sm" to={detailPath}>
+          <Link className="th-table__action" to={detailPath}>
             View details
           </Link>
         ) : (
@@ -43,14 +44,19 @@ function HistoryRow({ item }) {
 
 function HistoryCard({ item }) {
   const detailPath = `/dashboard/tests/${item.testId}/results/${item.attemptId}`;
+  const isDark = Boolean(item.resultAvailable);
 
   return (
-    <article className="th-card">
+    <article className={`th-card ${isDark ? 'th-card--dark' : ''}`.trim()}>
       <header className="th-card__header">
         <h3 className="th-card__title">{item.testTitle}</h3>
         <StatusBadge status={item.status} available={item.resultAvailable} />
       </header>
       <dl className="th-card__meta">
+        <div>
+          <dt>Subject</dt>
+          <dd>{item.subjectLabel || '—'}</dd>
+        </div>
         <div>
           <dt>Score</dt>
           <dd>{formatHistoryScore(item.score, item.maxScore)}</dd>
@@ -65,7 +71,7 @@ function HistoryCard({ item }) {
         </div>
       </dl>
       {item.resultAvailable ? (
-        <Link className="btn btn--secondary btn--sm th-card__action" to={detailPath}>
+        <Link className="th-card__action" to={detailPath}>
           View details
         </Link>
       ) : (
@@ -80,11 +86,12 @@ export default function HistoryList({ items }) {
 
   return (
     <>
-      <div className="th-table-wrap" role="region" aria-label="Results table">
-        <table className="th-table">
+      <div className="th-table-wrap th-table-wrap--dark" role="region" aria-label="Results table">
+        <table className="th-table th-table--dark">
           <thead>
             <tr>
               <th scope="col">Test</th>
+              <th scope="col">Subject</th>
               <th scope="col">Score</th>
               <th scope="col">Percentage</th>
               <th scope="col">Result</th>

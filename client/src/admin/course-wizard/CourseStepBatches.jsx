@@ -1,14 +1,20 @@
 import { COURSE_WIZARD_BATCH_TIMEZONES } from '@course-wizard-schema';
+import { fromLocalDatetimeValue, toLocalDatetimeValue } from '../../course/batchPresentation';
+import CourseAdmissionStatusField from './CourseAdmissionStatusField.jsx';
 
 const BATCH_STATUSES = ['draft', 'published', 'upcoming', 'enrollment_open', 'running', 'completed', 'cancelled', 'archived'];
 
 /**
- * Single-batch editor.
- *
- * The wizard architecture now enforces exactly ONE batch per course.
- * This component always renders and edits `batches[0]` only.
+ * Single-batch operational delivery editor with course admission status.
  */
-export default function CourseStepBatches({ batches, onBatchChange, fieldErrors }) {
+export default function CourseStepBatches({
+  course,
+  onCourseChange,
+  batches,
+  onBatchChange,
+  fieldErrors = {},
+  batchFieldErrors = {},
+}) {
   const b = batches[0];
 
   if (!b) {
@@ -21,17 +27,26 @@ export default function CourseStepBatches({ batches, onBatchChange, fieldErrors 
     );
   }
 
-  const errorMessage = fieldErrors[0];
+  const errorMessage = batchFieldErrors[0];
 
   return (
     <div className="admin-course-wizard-step">
       <p className="admin-courses__muted">
-        Operational delivery only — no description field. Enrollment must close before the batch start date.
-        This wizard supports exactly one batch per course; edit the batch instead of adding more.
+        Configure cohort delivery and whether new students can enroll. Course run dates are taken from
+        the batch schedule below.
       </p>
-      <fieldset className="admin-card" style={{ marginTop: '1rem', padding: '1rem' }}>
+
+      <div style={{ marginTop: '1rem' }}>
+        <CourseAdmissionStatusField
+          admissionStatus={course.admission_status}
+          onChange={onCourseChange}
+          fieldErrors={fieldErrors}
+        />
+      </div>
+
+      <fieldset className="admin-card" style={{ marginTop: '1.25rem', padding: '1rem' }}>
         <legend className="heading-4" style={{ padding: '0 0.25rem' }}>
-          Batch
+          Batch delivery
         </legend>
         {errorMessage ? (
           <div className="admin-field__error" role="alert" style={{ marginBottom: '0.75rem' }}>
@@ -64,27 +79,19 @@ export default function CourseStepBatches({ batches, onBatchChange, fieldErrors 
             </select>
           </div>
           <div className="admin-field">
-            <label>Start date</label>
-            <input type="date" value={b.start_date} onChange={(e) => onBatchChange(0, { start_date: e.target.value })} />
-          </div>
-          <div className="admin-field">
-            <label>End date</label>
-            <input type="date" value={b.end_date} onChange={(e) => onBatchChange(0, { end_date: e.target.value })} />
-          </div>
-          <div className="admin-field">
-            <label>Enrollment opens</label>
+            <label>Course start date & time</label>
             <input
               type="datetime-local"
-              value={toLocalDatetimeValue(b.enrollment_open_at)}
-              onChange={(e) => onBatchChange(0, { enrollment_open_at: fromLocalDatetimeValue(e.target.value) })}
+              value={toLocalDatetimeValue(b.start_date)}
+              onChange={(e) => onBatchChange(0, { start_date: fromLocalDatetimeValue(e.target.value) })}
             />
           </div>
           <div className="admin-field">
-            <label>Enrollment closes</label>
+            <label>Course end date & time</label>
             <input
               type="datetime-local"
-              value={toLocalDatetimeValue(b.enrollment_close_at)}
-              onChange={(e) => onBatchChange(0, { enrollment_close_at: fromLocalDatetimeValue(e.target.value) })}
+              value={toLocalDatetimeValue(b.end_date)}
+              onChange={(e) => onBatchChange(0, { end_date: fromLocalDatetimeValue(e.target.value) })}
             />
           </div>
           <div className="admin-field">
@@ -127,30 +134,10 @@ export default function CourseStepBatches({ batches, onBatchChange, fieldErrors 
             <label className="admin-field__inline">
               <input
                 type="checkbox"
-                checked={!!b.allow_enrollment}
-                onChange={(e) => onBatchChange(0, { allow_enrollment: e.target.checked })}
-              />{' '}
-              Allow enrollment
-            </label>
-          </div>
-          <div className="admin-field">
-            <label className="admin-field__inline">
-              <input
-                type="checkbox"
                 checked={!!b.show_publicly}
                 onChange={(e) => onBatchChange(0, { show_publicly: e.target.checked })}
               />{' '}
               Show publicly
-            </label>
-          </div>
-          <div className="admin-field">
-            <label className="admin-field__inline">
-              <input
-                type="checkbox"
-                checked={!!b.certificate_enabled}
-                onChange={(e) => onBatchChange(0, { certificate_enabled: e.target.checked })}
-              />{' '}
-              Certificate enabled
             </label>
           </div>
           <div className="admin-field">
@@ -167,18 +154,4 @@ export default function CourseStepBatches({ batches, onBatchChange, fieldErrors 
       </fieldset>
     </div>
   );
-}
-
-function toLocalDatetimeValue(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function fromLocalDatetimeValue(local) {
-  if (!local) return '';
-  const d = new Date(local);
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }

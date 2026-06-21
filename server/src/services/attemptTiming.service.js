@@ -1,11 +1,11 @@
 /**
- * Attempt timer timing — single MySQL clock for started_at / expires_at.
+ * Attempt timer timing — UTC MySQL clock for started_at / expires_at.
  *
- * All attempt inserts use CURRENT_TIMESTAMP + DATE_ADD so started_at and
- * expires_at share the same timezone basis (MySQL session time).
+ * Attempt inserts use UTC_TIMESTAMP(); parsing and expiry SQL use the same UTC basis.
  */
 
 import { ApiError } from '../utils/apiError.js';
+import { parseTestAvailabilityInstant } from './testAvailabilityWindow.service.js';
 
 /**
  * @param {unknown} durationMinutes
@@ -27,33 +27,60 @@ export function assertValidTestDurationMinutes(durationMinutes, meta = {}) {
 }
 
 /**
- * Parse MySQL DATETIME (naive local wall-clock) or Date to epoch ms.
+ * Parse MySQL DATETIME / ISO to epoch ms (UTC semantics — G-RT-03).
  * @param {unknown} value
  * @returns {number}
  */
 export function parseMySqlDateTimeToMs(value) {
-  if (value == null || value === '') {
-    return NaN;
+  const ms = parseTestAvailabilityInstant(value);
+  return ms == null ? NaN : ms;
+}
+
+/**
+ * Compute elapsed seconds from attempt start to authoritative UTC now.
+ * Matches UTC_TIMESTAMP() storage — do not use `new Date(mysqlDatetime)` (local TZ drift).
+ *
+ * @param {unknown} startedAt — MySQL DATETIME string (UTC semantics)
+ * @param {number} nowMs — authoritative UTC ms (prefer getAvailabilityNowMs)
+ * @returns {number}
+ */
+export function computeAttemptTimeTakenSeconds(startedAt, nowMs) {
+  const startedMs = parseMySqlDateTimeToMs(startedAt);
+  const now = Number(nowMs);
+  if (!Number.isFinite(startedMs) || !Number.isFinite(now)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((now - startedMs) / 1000));
+}
+
+/**
+ * Resolve display time taken — trust persisted `time_taken_seconds` when present.
+ * Timestamp derivation is fallback only (started_at is UTC; submitted_at may be legacy local).
+ *
+ * @param {{
+ *   startedAt?: unknown,
+ *   submittedAt?: unknown,
+ *   storedSeconds?: unknown,
+ * }} input
+ * @returns {number}
+ */
+export function resolveAttemptTimeTakenSeconds({ startedAt, submittedAt, storedSeconds }) {
+  if (storedSeconds != null && storedSeconds !== '') {
+    const stored = Number(storedSeconds);
+    if (Number.isFinite(stored) && stored >= 0) {
+      return stored;
+    }
   }
 
-  if (value instanceof Date) {
-    return value.getTime();
+  if (startedAt != null && submittedAt != null) {
+    const startedMs = parseMySqlDateTimeToMs(startedAt);
+    const submittedMs = parseMySqlDateTimeToMs(submittedAt);
+    if (Number.isFinite(startedMs) && Number.isFinite(submittedMs)) {
+      return Math.max(0, Math.floor((submittedMs - startedMs) / 1000));
+    }
   }
 
-  const raw = String(value).trim();
-  if (!raw) {
-    return NaN;
-  }
-
-  const mysqlLocalMatch = raw.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/
-  );
-  if (mysqlLocalMatch) {
-    const [, y, mo, d, hh, mm, ss] = mysqlLocalMatch.map(Number);
-    return new Date(y, mo - 1, d, hh, mm, ss).getTime();
-  }
-
-  return new Date(raw).getTime();
+  return 0;
 }
 
 /**

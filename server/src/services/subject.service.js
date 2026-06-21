@@ -1,7 +1,7 @@
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
-import { toSubjectAdminDto } from '../dto/subject.dto.js';
+import { toSubjectAdminDto, toSubjectPublicDto } from '../dto/subject.dto.js';
 
 function subjectNotFound() {
   return new ApiError(404, 'Subject not found', { code: 'SUBJECT_NOT_FOUND' });
@@ -24,6 +24,53 @@ async function nextOrderIndex(conn, courseId) {
   return Number(rows[0]?.next_idx ?? 0);
 }
 
+/**
+ * Make room at `fromIndex` by incrementing existing rows (insert / move-down semantics).
+ * @param {import('mysql2/promise').PoolConnection} conn
+ * @param {number} courseId
+ * @param {number} fromIndex
+ */
+async function shiftSubjectOrderIndexesAtOrAbove(conn, courseId, fromIndex) {
+  await conn.query(
+    `UPDATE subjects
+     SET order_index = order_index + 1
+     WHERE course_id = ? AND order_index >= ?`,
+    [courseId, fromIndex]
+  );
+}
+
+/**
+ * Move one subject to `targetIndex` and renumber the course to contiguous 0..n-1.
+ * @param {import('mysql2/promise').PoolConnection} conn
+ * @param {number} courseId
+ * @param {number} subjectId
+ * @param {number} targetIndex
+ */
+async function reorderSubjectInCourse(conn, courseId, subjectId, targetIndex) {
+  const [rows] = await conn.query(
+    `SELECT id FROM subjects WHERE course_id = ? ORDER BY order_index ASC, id ASC FOR UPDATE`,
+    [courseId]
+  );
+  const ids = rows.map((r) => Number(r.id));
+  const sid = Number(subjectId);
+  const currentIdx = ids.indexOf(sid);
+  if (currentIdx < 0) throw subjectNotFound();
+
+  const target = Math.max(0, Math.min(Math.trunc(Number(targetIndex)), ids.length - 1));
+  if (target === currentIdx) return;
+
+  ids.splice(currentIdx, 1);
+  ids.splice(target, 0, sid);
+
+  for (let i = 0; i < ids.length; i += 1) {
+    await conn.query(`UPDATE subjects SET order_index = ? WHERE id = ? AND course_id = ?`, [
+      i,
+      ids[i],
+      courseId,
+    ]);
+  }
+}
+
 export async function listSubjectsForCourse(courseId, { includeInactive = false } = {}) {
   await assertCourseExists(courseId);
   let sql = `SELECT id, course_id, title, description, order_index, is_active, created_at, updated_at
@@ -35,6 +82,23 @@ export async function listSubjectsForCourse(courseId, { includeInactive = false 
   sql += ' ORDER BY order_index ASC, id ASC';
   const [rows] = await mysqlPool.query(sql, params);
   return rows.map(toSubjectAdminDto);
+}
+
+/** Active subjects for an active public catalog course. */
+export async function listPublicSubjectsForCourse(courseId) {
+  const cid = Number(courseId);
+  if (!Number.isFinite(cid) || cid <= 0) {
+    throw new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
+  }
+  const course = await getCourseRowById(cid, { activeOnly: true });
+  if (!course) throw courseNotFound();
+  const [rows] = await mysqlPool.query(
+    `SELECT id, course_id, title, description, order_index, is_active, created_at, updated_at
+     FROM subjects WHERE course_id = ? AND is_active = TRUE
+     ORDER BY order_index ASC, id ASC`,
+    [cid]
+  );
+  return rows.map(toSubjectPublicDto);
 }
 
 export async function getSubjectForCourse(courseId, subjectId) {
@@ -54,19 +118,11 @@ export async function createSubject(courseId, { title, description = null, order
   const connection = await mysqlPool.getConnection();
   try {
     await connection.beginTransaction();
+    await connection.query(`SELECT id FROM subjects WHERE course_id = ? FOR UPDATE`, [courseId]);
     let idx;
     if (orderIndex != null && Number.isFinite(Number(orderIndex))) {
-      idx = Number(orderIndex);
-      const [collision] = await connection.query(
-        `SELECT id FROM subjects WHERE course_id = ? AND order_index = ? LIMIT 1 FOR UPDATE`,
-        [courseId, idx]
-      );
-      if (collision.length > 0) {
-        await connection.rollback();
-        throw new ApiError(409, 'orderIndex collides with an existing subject in this course', {
-          code: 'ORDER_INDEX_COLLISION',
-        });
-      }
+      idx = Math.max(0, Math.trunc(Number(orderIndex)));
+      await shiftSubjectOrderIndexesAtOrAbove(connection, courseId, idx);
     } else {
       idx = await nextOrderIndex(connection, courseId);
     }
@@ -117,25 +173,45 @@ export async function updateSubject(courseId, subjectId, patch) {
   const wasActive = Boolean(Number(existing.is_active));
   const title = patch.title !== undefined ? patch.title : existing.title;
   const description = patch.description !== undefined ? patch.description : existing.description;
-  const orderIndex = patch.orderIndex !== undefined ? patch.orderIndex : existing.order_index;
   const isActive = patch.isActive !== undefined ? patch.isActive : wasActive;
+  const orderChanging =
+    patch.orderIndex !== undefined && Number(patch.orderIndex) !== Number(existing.order_index);
 
-  // If orderIndex is explicitly changed via PATCH, guard against collisions inside the same course.
-  if (patch.orderIndex !== undefined && Number(patch.orderIndex) !== Number(existing.order_index)) {
-    const [collision] = await mysqlPool.query(
-      `SELECT id FROM subjects WHERE course_id = ? AND order_index = ? AND id <> ? LIMIT 1`,
-      [courseId, orderIndex, subjectId]
-    );
-    if (collision.length > 0) {
-      throw new ApiError(409, 'orderIndex collides with an existing subject in this course', {
-        code: 'ORDER_INDEX_COLLISION',
-      });
+  if (orderChanging) {
+    const connection = await mysqlPool.getConnection();
+    try {
+      await connection.beginTransaction();
+      await reorderSubjectInCourse(connection, courseId, subjectId, Number(patch.orderIndex));
+      await connection.query(
+        `UPDATE subjects SET title = ?, description = ?, is_active = ? WHERE id = ? AND course_id = ?`,
+        [title, description, isActive, subjectId, courseId]
+      );
+      const [rows] = await connection.query(
+        `SELECT id, course_id, title, description, order_index, is_active, created_at, updated_at
+         FROM subjects WHERE id = ? AND course_id = ? LIMIT 1`,
+        [subjectId, courseId]
+      );
+      await connection.commit();
+      return {
+        dto: toSubjectAdminDto(rows[0]),
+        activated: !wasActive && isActive === true,
+        deactivated: wasActive && isActive === false,
+      };
+    } catch (e) {
+      try {
+        await connection.rollback();
+      } catch {
+        /* already rolled back */
+      }
+      throw e;
+    } finally {
+      connection.release();
     }
   }
 
   await mysqlPool.query(
     `UPDATE subjects SET title = ?, description = ?, order_index = ?, is_active = ? WHERE id = ? AND course_id = ?`,
-    [title, description, orderIndex, isActive, subjectId, courseId]
+    [title, description, existing.order_index, isActive, subjectId, courseId]
   );
   const [rows] = await mysqlPool.query(
     `SELECT id, course_id, title, description, order_index, is_active, created_at, updated_at
@@ -238,4 +314,100 @@ async function getSubjectRow(courseId, subjectId) {
     [subjectId, courseId]
   );
   return rows[0] || null;
+}
+
+function normalizeSubjectTitleKey(title) {
+  return String(title || '').trim().toLowerCase();
+}
+
+/**
+ * Active subjects deduplicated by title for teacher assignment UI.
+ * Each entry uses the lowest subject id as the canonical id and tracks all
+ * related course-scoped subject ids with the same title (for routing).
+ */
+export async function listUniqueActiveSubjectsForAdmin() {
+  const [rows] = await mysqlPool.query(
+    `SELECT id, title
+     FROM subjects
+     WHERE is_active = TRUE
+     ORDER BY title ASC, id ASC`
+  );
+
+  const groups = new Map();
+  for (const row of rows) {
+    const titleKey = normalizeSubjectTitleKey(row.title);
+    if (!titleKey) continue;
+    const id = Number(row.id);
+    const title = String(row.title || '').trim();
+    if (!groups.has(titleKey)) {
+      groups.set(titleKey, {
+        id,
+        title,
+        titleKey,
+        relatedSubjectIds: [id],
+      });
+      continue;
+    }
+    const group = groups.get(titleKey);
+    group.relatedSubjectIds.push(id);
+    group.id = Math.min(group.id, id);
+  }
+
+  return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+}
+
+/**
+ * Expand canonical unique subject ids to all active subject ids sharing the same title.
+ * Ensures teachers receive questions across all courses for a given subject name.
+ */
+export async function expandSubjectIdsForTeacherAssignment(canonicalIds, connection = mysqlPool) {
+  const ids = [...new Set((canonicalIds || []).map((id) => Number(id)).filter((id) => id > 0))];
+  if (!ids.length) return [];
+
+  const [titleRows] = await connection.query(
+    `SELECT DISTINCT LOWER(TRIM(title)) AS title_key
+     FROM subjects
+     WHERE id IN (?) AND is_active = TRUE`,
+    [ids]
+  );
+  const titleKeys = titleRows.map((row) => row.title_key).filter(Boolean);
+  if (!titleKeys.length) return [];
+
+  const [allRows] = await connection.query(
+    `SELECT id
+     FROM subjects
+     WHERE is_active = TRUE AND LOWER(TRIM(title)) IN (?)
+     ORDER BY id ASC`,
+    [titleKeys]
+  );
+
+  return [...new Set(allRows.map((row) => Number(row.id)))];
+}
+
+/** Map stored subject ids to unique canonical ids for teacher edit forms. */
+export async function mapSubjectIdsToUniqueCanonicalIds(subjectIds) {
+  const ids = [...new Set((subjectIds || []).map((id) => Number(id)).filter((id) => id > 0))];
+  if (!ids.length) return [];
+
+  const uniqueSubjects = await listUniqueActiveSubjectsForAdmin();
+  return uniqueSubjects
+    .filter((subject) => subject.relatedSubjectIds.some((relatedId) => ids.includes(relatedId)))
+    .map((subject) => subject.id);
+}
+
+/** Unique subject titles assigned to a teacher (for admin list display). */
+export async function listUniqueSubjectTitlesForTeacher(teacherId, connection = mysqlPool) {
+  const tid = Number(teacherId);
+  if (!tid) return [];
+
+  const [rows] = await connection.query(
+    `SELECT DISTINCT TRIM(s.title) AS title
+     FROM teacher_subjects ts
+     INNER JOIN subjects s ON s.id = ts.subject_id
+     WHERE ts.teacher_id = ? AND s.is_active = TRUE
+     ORDER BY title ASC`,
+    [tid]
+  );
+
+  return rows.map((row) => String(row.title || '').trim()).filter(Boolean);
 }

@@ -12,31 +12,39 @@ import {
   registerStudent,
 } from '../services/studentAuth.service.js';
 import {
-  pickActiveRefreshContext,
+  getTeacherMePayload,
+  loginTeacher,
+  logoutTeacher,
+} from '../services/teacherAuth.service.js';
+import {
   revokeAllAuthSessionsForUser,
   refreshContextFromToken,
   rotateAuthSessionByRefreshToken,
   verifyRefreshToken,
 } from '../services/authSession.service.js';
 import { logActivity } from '../services/activityLog.service.js';
-import { assertLoginNotLocked, recordLoginResult } from '../middleware/rateLimit.js';
+import { assertLoginNotLocked, recordLoginResult, consumeForgotPasswordEmailRateLimit } from '../middleware/rateLimit.js';
 import { CSRF_COOKIE_NAME, issueCsrfToken } from '../middleware/csrf.js';
 import {
   createAndSendVerificationToken,
   resendVerificationEmail,
   verifyEmailByToken,
 } from '../services/emailVerification.service.js';
+import { createAndSendPasswordResetToken, resetStudentPassword } from '../services/passwordReset.service.js';
+import { verifyGoogleIdToken } from '../services/googleAuth.service.js';
+import { loginOrRegisterStudentWithGoogle } from '../services/googleStudentAuth.service.js';
 import { getClientIp } from '../utils/network.js';
 import { assertCaptchaIfRequired } from '../services/abuseProtection.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import { isAdminRole } from '../utils/isAdminRole.js';
 import { startAuthTrace } from '../utils/authProfiling.js';
+import { applyAuthResponseSecurityHeaders } from '../utils/authResponseHeaders.js';
 
 function refreshCookieMaxAgeMs(refreshToken) {
   const decoded = jwt.decode(refreshToken);
   const expMs = decoded?.exp ? decoded.exp * 1000 - Date.now() : null;
   if (expMs != null && expMs > 0) return Math.ceil(expMs);
-  return 7 * 24 * 60 * 60 * 1000;
+  return env.security.refreshCookieMaxAgeMs;
 }
 
 function setRefreshCookie(res, name, refreshToken) {
@@ -46,28 +54,60 @@ function setRefreshCookie(res, name, refreshToken) {
     secure: env.security.refreshCookieSecure,
     path: env.security.refreshCookiePath,
     maxAge: refreshCookieMaxAgeMs(refreshToken),
+    ...(env.nodeEnv === 'production' ? { priority: 'high' } : {}),
   });
 }
 
+function accessCookieName(role) {
+  if (role === 'student') return 'student_access_token';
+  if (role === 'teacher') return 'teacher_access_token';
+  return 'admin_access_token';
+}
+
 function setAccessCookie(res, role, accessToken) {
-  const name = role === 'student' ? 'student_access_token' : 'admin_access_token';
+  const name = accessCookieName(role);
   res.cookie(name, accessToken, {
     httpOnly: true,
     sameSite: env.security.accessCookieSameSite,
     secure: env.security.accessCookieSecure,
     path: env.security.accessCookiePath,
     maxAge: env.security.accessCookieMaxAgeMs,
+    ...(env.nodeEnv === 'production' ? { priority: 'high' } : {}),
   });
 }
 
 function clearAccessCookie(res, role) {
-  const name = role === 'student' ? 'student_access_token' : 'admin_access_token';
+  const name = accessCookieName(role);
   res.clearCookie(name, {
     httpOnly: true,
     sameSite: env.security.accessCookieSameSite,
     secure: env.security.accessCookieSecure,
     path: env.security.accessCookiePath,
   });
+}
+
+function clearRealmCookies(res, role) {
+  if (role === 'student') {
+    clearRefreshCookie(res, 'student_refresh_token');
+    clearAccessCookie(res, 'student');
+    return;
+  }
+  if (role === 'teacher') {
+    clearRefreshCookie(res, 'teacher_refresh_token');
+    clearAccessCookie(res, 'teacher');
+    return;
+  }
+  clearRefreshCookie(res, 'admin_refresh_token');
+  clearAccessCookie(res, 'admin');
+}
+
+function clearAllRealmCookies(res) {
+  clearRefreshCookie(res, 'admin_refresh_token');
+  clearRefreshCookie(res, 'student_refresh_token');
+  clearRefreshCookie(res, 'teacher_refresh_token');
+  clearAccessCookie(res, 'admin');
+  clearAccessCookie(res, 'student');
+  clearAccessCookie(res, 'teacher');
 }
 
 function clearRefreshCookie(res, name) {
@@ -94,7 +134,7 @@ function setCsrfCookie(res, token = issueCsrfToken()) {
     sameSite,
     secure,
     path: env.security.csrfCookiePath,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: env.security.refreshCookieMaxAgeMs,
   });
 }
 
@@ -118,8 +158,9 @@ function clearCsrfCookie(res) {
 async function readRefreshContext(req) {
   const adminRefreshToken = req.cookies?.admin_refresh_token;
   const studentRefreshToken = req.cookies?.student_refresh_token;
+  const teacherRefreshToken = req.cookies?.teacher_refresh_token;
   const requestedRole = String(req.get('x-auth-role') || '').trim().toLowerCase();
-  if (!adminRefreshToken && !studentRefreshToken) {
+  if (!adminRefreshToken && !studentRefreshToken && !teacherRefreshToken) {
     throw new ApiError(401, 'Refresh token required');
   }
   if (requestedRole === 'admin') {
@@ -136,11 +177,24 @@ async function readRefreshContext(req) {
     if (ctx.role !== 'student') throw new ApiError(403, 'Student refresh token required');
     return ctx;
   }
-  if (adminRefreshToken && studentRefreshToken) {
-    return pickActiveRefreshContext(adminRefreshToken, studentRefreshToken);
+  if (requestedRole === 'teacher') {
+    if (!teacherRefreshToken) throw new ApiError(401, 'Teacher refresh token required');
+    const ctx = await refreshContextFromToken(teacherRefreshToken, 'teacher_refresh_token');
+    if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
+    if (ctx.role !== 'teacher') throw new ApiError(403, 'Teacher refresh token required');
+    return ctx;
+  }
+  const activeTokens = [adminRefreshToken, studentRefreshToken, teacherRefreshToken].filter(Boolean);
+  if (activeTokens.length > 1) {
+    throw new ApiError(400, 'Ambiguous refresh context. Provide x-auth-role header.');
   }
   if (adminRefreshToken) {
     const ctx = await refreshContextFromToken(adminRefreshToken, 'admin_refresh_token');
+    if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
+    return ctx;
+  }
+  if (teacherRefreshToken) {
+    const ctx = await refreshContextFromToken(teacherRefreshToken, 'teacher_refresh_token');
     if (!ctx) throw new ApiError(401, 'Invalid or expired refresh token');
     return ctx;
   }
@@ -149,14 +203,62 @@ async function readRefreshContext(req) {
   return ctx;
 }
 
+function resolveTrustedRequestOrigin(req) {
+  const origin = String(req.get('origin') || '').trim();
+  if (origin) return origin;
+
+  // Same-origin GET (e.g. Vite /api proxy) often omits Origin; derive from Referer when present.
+  const referer = String(req.get('referer') || '').trim();
+  if (referer) {
+    try {
+      return new URL(referer).origin;
+    } catch {
+      // ignore malformed referer
+    }
+  }
+
+  // Reverse-proxy / first-party boot requests may omit both Origin and Referer.
+  const host = String(req.get('host') || '').trim();
+  if (host) {
+    const forwardedProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
+    const proto =
+      forwardedProto === 'https' || forwardedProto === 'http'
+        ? forwardedProto
+        : req.secure
+          ? 'https'
+          : 'http';
+    return `${proto}://${host}`;
+  }
+
+  return '';
+}
+
 function assertTrustedOrigin(req) {
-  const origin = req.get('origin');
-  if (!origin || !String(origin).trim()) {
+  const origin = resolveTrustedRequestOrigin(req);
+  if (!origin) {
     throw new ApiError(403, 'Origin header required');
   }
   if (!env.security.trustedOrigins.includes(origin)) {
     throw new ApiError(403, 'Origin not allowed');
   }
+}
+
+async function logAuthSessionEnd(req, role, action) {
+  await logActivity({
+    userId: req.user?.id ?? null,
+    role,
+    action,
+    entityType: 'auth',
+    metadata: {
+      ipAddress: getClientIp(req),
+      userAgent: req.get('user-agent') || null,
+      sessionId: req.user?.sid || null,
+    },
+  });
+}
+
+function finalizeAuthSuccessResponse(res) {
+  applyAuthResponseSecurityHeaders(res);
 }
 
 const loginSchema = z.object({
@@ -205,14 +307,28 @@ const registerSchema = z.object({
   password: strongPasswordSchema,
 });
 
+const googleAuthSchema = z
+  .object({
+    credential: z.string().trim().min(20).max(8192),
+  })
+  .strict();
+
 /**
  * Establishes a browser-readable CSRF cookie at CSRF_COOKIE_PATH (typically `/`).
  * Trusted Origin only; does not authenticate. Used after deploy/path changes so the SPA can read `csrf_token` before refresh/logout POSTs.
  */
 export const issueCsrfSession = asyncHandler(async (req, res) => {
-  assertTrustedOrigin(req);
-  setCsrfCookie(res);
-  res.status(204).send();
+  try {
+    assertTrustedOrigin(req);
+    setCsrfCookie(res);
+    res.status(204).send();
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(503, 'Could not establish CSRF session', {
+      code: 'CSRF_SESSION_UNAVAILABLE',
+      metadata: { reason: error instanceof Error ? error.message : String(error) },
+    });
+  }
 });
 
 export const adminLogin = asyncHandler(async (req, res) => {
@@ -237,8 +353,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     }
     throw error;
   }
-  clearRefreshCookie(res, 'student_refresh_token');
-  clearAccessCookie(res, 'student');
+  clearRealmCookies(res, 'admin');
   setRefreshCookie(res, 'admin_refresh_token', result.refreshToken);
   setAccessCookie(res, 'admin', result.accessToken);
   setCsrfCookie(res);
@@ -248,9 +363,10 @@ export const adminLogin = asyncHandler(async (req, res) => {
     role: result.admin.role,
     action: 'admin.login',
     entityType: 'auth',
-    metadata: { email: result.admin.email },
+    metadata: { email: result.admin.email, ipAddress: clientIp, userAgent },
   });
 
+  finalizeAuthSuccessResponse(res);
   sendSuccess(res, { admin: result.admin });
 });
 
@@ -260,8 +376,8 @@ export const adminLogout = asyncHandler(async (req, res) => {
   await logoutAdmin(refreshToken);
   clearRefreshCookie(res, 'admin_refresh_token');
   clearAccessCookie(res, 'admin');
-  clearCsrfCookie(res);
-  await logActivity({ role: 'admin', action: 'admin.logout', entityType: 'auth' });
+  await logAuthSessionEnd(req, 'admin', 'admin.logout');
+  finalizeAuthSuccessResponse(res);
   sendSuccess(res, { message: 'Logged out' });
 });
 
@@ -271,8 +387,8 @@ export const studentLogout = asyncHandler(async (req, res) => {
   await logoutStudent(refreshToken);
   clearRefreshCookie(res, 'student_refresh_token');
   clearAccessCookie(res, 'student');
-  clearCsrfCookie(res);
-  await logActivity({ role: 'student', action: 'student.logout', entityType: 'auth' });
+  await logAuthSessionEnd(req, 'student', 'student.logout');
+  finalizeAuthSuccessResponse(res);
   sendSuccess(res, { message: 'Logged out' });
 });
 
@@ -329,11 +445,11 @@ export const studentRegister = asyncHandler(async (req, res) => {
       source: 'signup_auto_login',
     },
   });
-  clearRefreshCookie(res, 'admin_refresh_token');
-  clearAccessCookie(res, 'admin');
+  clearRealmCookies(res, 'student');
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
   setAccessCookie(res, 'student', result.accessToken);
   setCsrfCookie(res);
+  finalizeAuthSuccessResponse(res);
   sendSuccess(res, { student: result.student }, 201);
 });
 
@@ -344,10 +460,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   const clientIp = getClientIp(req);
   const userAgent = req.get('user-agent') || null;
   await verifyEmailByToken({ rawToken: token, ipAddress: clientIp, userAgent });
-  clearRefreshCookie(res, 'student_refresh_token');
-  clearRefreshCookie(res, 'admin_refresh_token');
-  clearAccessCookie(res, 'student');
-  clearAccessCookie(res, 'admin');
+  clearAllRealmCookies(res);
   clearCsrfCookie(res);
   res.setHeader('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -398,6 +511,91 @@ export const resendVerification = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: normalizedMessage });
 });
 
+export const studentForgotPassword = asyncHandler(async (req, res) => {
+  // eslint-disable-next-line no-console
+  console.log('Forgot password endpoint hit');
+  const startedAt = Date.now();
+  const normalizedMessage = 'If the email exists, a password reset link has been sent.';
+  const parsed = studentForgotPasswordSchema.safeParse(req.body);
+  if (parsed.success) {
+    const email = parsed.data.email.toLowerCase();
+    const clientIp = getClientIp(req);
+    await assertCaptchaIfRequired({
+      action: 'student_forgot_password',
+      ipAddress: clientIp,
+      captchaToken: req.body?.captchaToken || req.get('x-captcha-token') || '',
+    });
+    try {
+      const [rows] = await mysqlPool.query(
+        `SELECT id, email, full_name, status
+         FROM users
+         WHERE email = ? AND role = 'student'
+         LIMIT 1`,
+        [email]
+      );
+      const user = rows[0];
+      if (user && user.status === 'active') {
+        const emailAllowed = await consumeForgotPasswordEmailRateLimit(email);
+        if (emailAllowed) {
+          await createAndSendPasswordResetToken({
+            userId: user.id,
+            email: user.email,
+            fullName: user.full_name,
+            ipAddress: clientIp,
+            userAgent: req.get('user-agent') || null,
+          });
+        }
+      }
+    } catch (error) {
+      await logActivity({
+        role: 'system',
+        action: 'password_reset.request_failed',
+        entityType: 'auth',
+        metadata: { email, reason: error.message },
+      });
+    }
+  }
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, 250 - (Date.now() - startedAt))));
+  sendSuccess(res, { message: normalizedMessage });
+});
+
+export const studentResetPassword = asyncHandler(async (req, res) => {
+  const parsedBody = studentResetPasswordSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    const rawToken = String(req.body?.token || '').trim();
+    if (!/^[a-f0-9]{64}$/i.test(rawToken)) {
+      throw new ApiError(400, 'Invalid or expired reset link');
+    }
+    throw new ApiError(422, 'Invalid reset payload', parsedBody.error.flatten());
+  }
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+  try {
+    await resetStudentPassword({
+      rawToken: parsedBody.data.token,
+      newPassword: parsedBody.data.password,
+      ipAddress: clientIp,
+      userAgent,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      await logActivity({
+        role: 'system',
+        action: 'password_reset.consume_failed',
+        entityType: 'auth',
+        metadata: { reason: error.message, ipAddress: clientIp },
+      });
+    }
+    throw error;
+  }
+  clearAllRealmCookies(res);
+  clearCsrfCookie(res);
+  res.setHeader('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  sendSuccess(res, { message: 'Password updated successfully. Please sign in again.' });
+});
+
 export const studentLogin = asyncHandler(async (req, res) => {
   assertTrustedOrigin(req);
   const parsed = studentLoginSchema.safeParse(req.body);
@@ -436,12 +634,155 @@ export const studentLogin = asyncHandler(async (req, res) => {
       source: 'direct_login',
     },
   });
-  clearRefreshCookie(res, 'admin_refresh_token');
-  clearAccessCookie(res, 'admin');
+  clearRealmCookies(res, 'student');
   setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
   setAccessCookie(res, 'student', result.accessToken);
   setCsrfCookie(res);
+  finalizeAuthSuccessResponse(res);
   sendSuccess(res, { student: result.student });
+});
+
+export const studentGoogleAuth = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  if (!env.google.clientId) {
+    throw new ApiError(503, 'Google Sign-In is not configured');
+  }
+  const parsed = googleAuthSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new ApiError(422, 'Invalid Google sign-in payload', parsed.error.flatten());
+  }
+
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+
+  let profile;
+  try {
+    profile = await verifyGoogleIdToken(parsed.data.credential);
+  } catch (error) {
+    await recordLoginResult({
+      identifier: 'google',
+      ipAddress: clientIp,
+      success: false,
+      role: 'student',
+      source: 'student.google',
+    });
+    throw error;
+  }
+
+  const normalizedDomain = profile.email.split('@')[1];
+  if (env.abuse.blockedEmailDomains.includes(normalizedDomain)) {
+    throw new ApiError(422, 'Email domain is not allowed');
+  }
+
+  const loginIdentifier = profile.email;
+  await assertLoginNotLocked(loginIdentifier, clientIp);
+
+  let result;
+  try {
+    result = await loginOrRegisterStudentWithGoogle(profile, { clientIp, userAgent });
+    await recordLoginResult({
+      identifier: loginIdentifier,
+      ipAddress: clientIp,
+      success: true,
+      role: 'student',
+      source: 'student.google',
+    });
+  } catch (error) {
+    await recordLoginResult({
+      identifier: loginIdentifier,
+      ipAddress: clientIp,
+      success: false,
+      role: 'student',
+      source: 'student.google',
+    });
+    throw error;
+  }
+
+  await logActivity({
+    userId: result.student.id,
+    role: result.student.role,
+    action: result.isNewUser ? 'student.register' : 'student.login',
+    entityType: 'auth',
+    metadata: {
+      email: result.student.email,
+      username: result.student.username,
+      ipAddress: clientIp,
+      userAgent,
+      source: 'google_oauth',
+      isNewUser: result.isNewUser,
+      oauthLinked: Boolean(result.linkedExistingAccount),
+      provider: 'google',
+    },
+  });
+
+  clearRealmCookies(res, 'student');
+  setRefreshCookie(res, 'student_refresh_token', result.refreshToken);
+  setAccessCookie(res, 'student', result.accessToken);
+  setCsrfCookie(res);
+  finalizeAuthSuccessResponse(res);
+  sendSuccess(res, { student: result.student, isNewUser: result.isNewUser });
+});
+
+export const teacherLogin = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  const parsed = studentLoginSchema.safeParse(req.body);
+  if (!parsed.success) throw new ApiError(422, 'Invalid login payload', parsed.error.flatten());
+  const identifier = parsed.data.identifier.trim();
+  if (!identifier) throw new ApiError(422, 'Invalid login payload');
+  const loginIdentifier = identifier.toLowerCase();
+  const clientIp = getClientIp(req);
+  const userAgent = req.get('user-agent') || null;
+  await assertLoginNotLocked(loginIdentifier, clientIp);
+  let result;
+  try {
+    result = await loginTeacher({
+      identifier,
+      password: parsed.data.password,
+      authContext: { clientIp, userAgent },
+    });
+    await recordLoginResult({ identifier: loginIdentifier, ipAddress: clientIp, success: true, role: 'teacher', source: 'teacher.login' });
+  } catch (error) {
+    await recordLoginResult({ identifier: loginIdentifier, ipAddress: clientIp, success: false, role: 'teacher', source: 'teacher.login' });
+    if (error instanceof ApiError && error.statusCode === 401) {
+      throw new ApiError(401, 'Invalid credentials');
+    }
+    throw error;
+  }
+  await logActivity({
+    userId: result.teacher.id,
+    role: result.teacher.role,
+    action: 'teacher.login',
+    entityType: 'auth',
+    metadata: {
+      email: result.teacher.email,
+      username: result.teacher.username,
+      ipAddress: clientIp,
+      userAgent,
+    },
+  });
+  const { logTeacherLogin } = await import('../services/teacherActivityLog.service.js');
+  void logTeacherLogin(result.teacher.id, { ipAddress: clientIp, userAgent });
+  clearRealmCookies(res, 'teacher');
+  setRefreshCookie(res, 'teacher_refresh_token', result.refreshToken);
+  setAccessCookie(res, 'teacher', result.accessToken);
+  setCsrfCookie(res);
+  finalizeAuthSuccessResponse(res);
+  sendSuccess(res, { teacher: result.teacher });
+});
+
+export const teacherLogout = asyncHandler(async (req, res) => {
+  assertTrustedOrigin(req);
+  const refreshToken = req.cookies?.teacher_refresh_token;
+  await logoutTeacher(refreshToken);
+  clearRefreshCookie(res, 'teacher_refresh_token');
+  clearAccessCookie(res, 'teacher');
+  await logAuthSessionEnd(req, 'teacher', 'teacher.logout');
+  if (req.user?.id) {
+    const { logTeacherLogout } = await import('../services/teacherActivityLog.service.js');
+    void logTeacherLogout(req.user.id, { ipAddress: getClientIp(req) });
+  }
+  finalizeAuthSuccessResponse(res);
+  sendSuccess(res, { message: 'Logged out' });
 });
 
 export const logoutAll = asyncHandler(async (req, res) => {
@@ -449,17 +790,10 @@ export const logoutAll = asyncHandler(async (req, res) => {
   const refreshContext = await readRefreshContext(req);
   const payload = verifyRefreshToken(refreshContext.token);
   await revokeAllAuthSessionsForUser(Number(payload.sub));
-  clearRefreshCookie(res, 'admin_refresh_token');
-  clearRefreshCookie(res, 'student_refresh_token');
-  clearAccessCookie(res, 'admin');
-  clearAccessCookie(res, 'student');
+  clearAllRealmCookies(res);
   clearCsrfCookie(res);
-  await logActivity({
-    userId: Number(payload.sub),
-    role: refreshContext.role === 'student' ? 'student' : 'admin',
-    action: 'auth.logout_all',
-    entityType: 'auth',
-  });
+  await logAuthSessionEnd(req, refreshContext.role, 'auth.logout_all');
+  finalizeAuthSuccessResponse(res);
   sendSuccess(res, { message: 'Logged out from all sessions' });
 });
 
@@ -475,6 +809,14 @@ export const studentMe = asyncHandler(async (req, res) => {
   sendSuccess(res, profile);
 });
 
+export const teacherMe = asyncHandler(async (req, res) => {
+  const profile = await getTeacherMePayload(req.user.id);
+  if (!profile) {
+    throw new ApiError(404, 'Teacher not found');
+  }
+  sendSuccess(res, profile);
+});
+
 const verifyEmailBodySchema = z.object({
   token: z.string().trim().min(64).max(64),
 });
@@ -482,6 +824,21 @@ const verifyEmailBodySchema = z.object({
 const resendVerificationSchema = z.object({
   email: z.string().trim().email(),
 });
+
+const studentForgotPasswordSchema = z.object({
+  email: z.string().trim().email(),
+});
+
+const studentResetPasswordSchema = z
+  .object({
+    token: z.string().trim().regex(/^[a-f0-9]{64}$/i),
+    password: strongPasswordSchema,
+    confirmPassword: z.string().optional(),
+  })
+  .refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
 export const refreshAuth = asyncHandler(async (req, res) => {
   const trace = startAuthTrace('refreshAuth', req);
@@ -510,16 +867,22 @@ export const refreshAuth = asyncHandler(async (req, res) => {
   if (refreshContext.role === 'student' && rotated.role !== 'student') {
     throw new ApiError(403, 'Student refresh token required');
   }
-  setRefreshCookie(res, refreshContext.cookieName, rotated.refreshToken);
+  if (refreshContext.role === 'teacher' && rotated.role !== 'teacher') {
+    throw new ApiError(403, 'Teacher refresh token required');
+  }
+  if (!rotated.skipRefreshCookie && rotated.refreshToken) {
+    setRefreshCookie(res, refreshContext.cookieName, rotated.refreshToken);
+  }
   setAccessCookie(res, refreshContext.role, rotated.accessToken);
   setCsrfCookie(res);
   await logActivity({
     userId: rotated.user.id,
-    role: rotated.role === 'student' ? 'student' : 'admin',
+    role: rotated.role,
     action: 'auth.refresh',
     entityType: 'auth',
-    metadata: { role: rotated.role },
+    metadata: { role: rotated.role, ipAddress: clientIp, userAgent },
   });
+  finalizeAuthSuccessResponse(res);
   sendSuccess(res, {
     user: rotated.user,
     role: rotated.role,

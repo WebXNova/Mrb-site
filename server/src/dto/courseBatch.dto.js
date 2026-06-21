@@ -1,4 +1,5 @@
 import { COURSE_BATCH_PUBLIC_STATUSES } from '../constants/courseBatchStatus.js';
+import { parseBatchTimestamp } from '../utils/batchDateTime.js';
 
 /** @param {unknown} v */
 function toIsoTimestamp(v) {
@@ -9,13 +10,15 @@ function toIsoTimestamp(v) {
 }
 
 /** @param {unknown} v */
-function toDateOnlyString(v) {
+function toBatchTimestampIso(v) {
   if (v == null) return null;
-  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString().slice(0, 10);
+  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString();
   const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+    return new Date(`${s.replace(' ', 'T')}Z`).toISOString();
+  }
+  const ms = parseBatchTimestamp(v);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
 /**
@@ -29,23 +32,28 @@ export function computeSeatsRemaining(row, _opts = {}) {
 }
 
 /**
- * Whether enrollment is currently open (server-side, do not trust clients).
+ * Whether the batch is publicly selectable (delivery schedule + seats).
+ * Course-level admission_status gates new enrollments.
  * @param {Record<string, unknown>} row
  * @param {{ now?: Date }} [opts]
  */
-export function computeEnrollmentOpen(row, opts = {}) {
+export function computeBatchSelectable(row, opts = {}) {
   const now = opts.now instanceof Date ? opts.now : new Date();
   const t = now.getTime();
   const status = String(row.status || '').toLowerCase();
   if (!row.is_active) return false;
-  if (row.allow_enrollment != null && !Number(row.allow_enrollment)) return false;
   if (['draft', 'cancelled', 'archived', 'completed'].includes(status)) return false;
-  const open = Date.parse(String(row.enrollment_open_at ?? ''));
-  const close = Date.parse(String(row.enrollment_close_at ?? ''));
-  if (!Number.isFinite(open) || !Number.isFinite(close)) return false;
-  if (t < open || t > close) return false;
+  const start = parseBatchTimestamp(row.start_date);
+  const end = parseBatchTimestamp(row.end_date);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+  if (t > end) return false;
   if (computeSeatsRemaining(row) <= 0) return false;
   return COURSE_BATCH_PUBLIC_STATUSES.includes(status);
+}
+
+/** @deprecated Use computeBatchSelectable — enrollment gating is course-level. */
+export function computeEnrollmentOpen(row, opts = {}) {
+  return computeBatchSelectable(row, opts);
 }
 
 /**
@@ -59,21 +67,17 @@ export function toCourseBatchPublicDto(row, opts = {}) {
     id: Number(row.id),
     title: String(row.title ?? ''),
     code: String(row.code ?? ''),
-    start_date: toDateOnlyString(row.start_date),
-    end_date: toDateOnlyString(row.end_date),
-    enrollment_open_at: toIsoTimestamp(row.enrollment_open_at),
-    enrollment_close_at: toIsoTimestamp(row.enrollment_close_at),
+    start_date: toBatchTimestampIso(row.start_date),
+    end_date: toBatchTimestampIso(row.end_date),
     total_seats: Number(row.total_seats ?? 0),
     seats_remaining: seatsRemaining,
     instructor_name: row.instructor_name == null ? null : String(row.instructor_name),
     schedule_label: row.schedule_label == null ? null : String(row.schedule_label),
     timezone: String(row.timezone ?? 'UTC'),
     status: String(row.status ?? '').toLowerCase(),
-    allow_enrollment: row.allow_enrollment == null ? true : Boolean(Number(row.allow_enrollment)),
     show_publicly: row.show_publicly == null ? true : Boolean(Number(row.show_publicly)),
-    certificate_enabled: row.certificate_enabled == null ? false : Boolean(Number(row.certificate_enabled)),
     recordings_enabled: row.recordings_enabled == null ? true : Boolean(Number(row.recordings_enabled)),
-    enrollment_open: computeEnrollmentOpen(row, opts),
+    batch_selectable: computeBatchSelectable(row, opts),
     created_at: toIsoTimestamp(row.created_at),
     updated_at: toIsoTimestamp(row.updated_at),
   };

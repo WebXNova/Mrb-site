@@ -52,6 +52,16 @@ export const STUDENT_TEST_ATTEMPT_AGGREGATE_JOIN_SQL = `
   ) att ON att.test_id = t.id
 `;
 
+export const STUDENT_TEST_TOTAL_MARKS_JOIN_SQL = `
+  LEFT JOIN (
+    SELECT tq.test_id,
+           COALESCE(SUM(COALESCE(tq.marks_override, qb.marks, 1)), 0) AS total_marks
+    FROM test_questions tq
+    INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+    GROUP BY tq.test_id
+  ) tm ON tm.test_id = t.id
+`;
+
 /**
  * Page eligible tests with attempt status aggregates for a student.
  * Params: studentId, ...blockingStatuses, publishedStatus, studentId, studentId, limit, offset
@@ -60,14 +70,22 @@ export const LIST_STUDENT_ELIGIBLE_TESTS_SQL = `
   SELECT
     t.id,
     t.title,
+    t.category,
     t.duration_minutes,
     t.max_attempts,
-    t.passing_percentage,
+    t.allow_retake,
+    t.passing_marks,
+    COALESCE(tm.total_marks, 0) AS total_marks,
+    t.public_slug,
+    t.start_date,
+    t.end_date,
+    t.updated_at,
     COALESCE(att.attempts_used, 0) AS attempts_used,
     att.active_attempt_id
   FROM tests t
   ${STUDENT_OWNED_COURSES_JOIN_SQL}
   ${STUDENT_TEST_ATTEMPT_AGGREGATE_JOIN_SQL}
+  ${STUDENT_TEST_TOTAL_MARKS_JOIN_SQL}
   ${STUDENT_ELIGIBLE_TEST_WHERE_SQL}
   ORDER BY t.updated_at DESC, t.id DESC
   LIMIT ? OFFSET ?

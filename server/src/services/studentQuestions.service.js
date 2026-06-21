@@ -2,19 +2,25 @@ import path from 'path';
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 
+import {
+  validateStudentQuestionWords,
+} from '../utils/qaWordValidation.js';
+
 const SUBJECTS = new Set(['physics', 'chemistry', 'biology', 'english', 'logical_reasoning']);
-const MIN_WORDS_TEXT_ONLY = 10;
-const MIN_WORDS_WITH_IMAGE = 5;
 
 function mapRow(row) {
   if (!row) return null;
   return {
     id: row.id,
     userId: row.user_id,
+    courseId: row.course_id != null ? Number(row.course_id) : null,
+    subjectId: row.subject_id != null ? Number(row.subject_id) : null,
+    assignedTeacherId: row.assigned_teacher_id != null ? Number(row.assigned_teacher_id) : null,
     subject: row.subject,
     title: row.title,
     body: row.body,
     attachmentUrl: row.attachment_url ?? null,
+    audioUrl: row.audio_url ?? null,
     answer: row.answer,
     status: row.status,
     answeredAt: row.answered_at,
@@ -23,13 +29,6 @@ function mapRow(row) {
     studentName: row.student_name ?? null,
     studentEmail: row.student_email ?? null,
   };
-}
-
-function countWords(text) {
-  return String(text || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
 }
 
 function normalizeAttachmentUrl(raw) {
@@ -67,19 +66,16 @@ export async function createStudentQuestion(userId, { subject, body, imageUrl })
     );
   }
   const trimmed = String(body || '').trim();
+  if (!trimmed && !imageUrl) {
+    throw new ApiError(400, 'Message text cannot be empty');
+  }
   if (trimmed.length > 12000) {
     throw new ApiError(400, 'Question is too long');
   }
   const attachmentUrl = normalizeAttachmentUrl(imageUrl);
-  const words = countWords(trimmed);
-  const minWords = attachmentUrl ? MIN_WORDS_WITH_IMAGE : MIN_WORDS_TEXT_ONLY;
-  if (words < minWords) {
-    throw new ApiError(
-      400,
-      attachmentUrl
-        ? `Please write at least ${MIN_WORDS_WITH_IMAGE} words to describe your image (you have ${words}).`
-        : `Please write at least ${MIN_WORDS_TEXT_ONLY} words in your question (you have ${words}).`,
-    );
+  const wordCheck = validateStudentQuestionWords(trimmed, Boolean(attachmentUrl));
+  if (!wordCheck.ok) {
+    throw new ApiError(400, wordCheck.message, { code: wordCheck.code });
   }
   const title = deriveTitle(trimmed);
   try {

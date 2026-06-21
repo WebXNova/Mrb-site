@@ -23,10 +23,14 @@ function fail(msg) {
 console.log('Student answer save API verification\n');
 
 const routesSrc = await fs.readFile(path.join(root, '../src/routes/student.routes.js'), 'utf8');
-if (routesSrc.includes("router.post('/attempts/:attemptId/answer', postStudentAttemptAnswer)")) {
-  ok('route POST /attempts/:attemptId/answer registered');
+if (
+  routesSrc.includes("'/attempts/:attemptId/answer'") &&
+  routesSrc.includes('requireCsrf') &&
+  routesSrc.includes('postStudentAttemptAnswer')
+) {
+  ok('route POST /attempts/:attemptId/answer registered with CSRF');
 } else {
-  fail('save answer route missing');
+  fail('save answer route missing CSRF protection');
 }
 
 const { postStudentAttemptAnswer } = await import('../src/controllers/studentAttempts.controller.js');

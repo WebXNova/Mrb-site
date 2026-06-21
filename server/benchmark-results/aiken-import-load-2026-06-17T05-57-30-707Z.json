@@ -1,0 +1,268 @@
+{
+  "suite": "aiken-import-load",
+  "startedAt": "2026-06-17T05:57:30.707Z",
+  "completedAt": "2026-06-17T06:01:45.746Z",
+  "fixtures": {
+    "courseId": 36,
+    "userId": 3
+  },
+  "limitsMs": {
+    "10": 2000,
+    "50": 2000,
+    "100": 2000,
+    "250": 5000,
+    "500": 10000
+  },
+  "eventLoopBlockThresholdMs": 500,
+  "results": [
+    {
+      "runId": "benchmark-10-1781675851062",
+      "questionCount": 10,
+      "success": false,
+      "imported": 0,
+      "failed": 10,
+      "failureRate": 1,
+      "batchId": 2,
+      "apiResponseMs": 5280.36,
+      "dbInsertMs": 3885.83,
+      "nonDbMs": 1394.53,
+      "dbQueryCount": 124,
+      "dbMaxQueryMs": 1461.98,
+      "memoryBefore": {
+        "rssMb": 54.78,
+        "heapUsedMb": 13.42,
+        "heapTotalMb": 30.18,
+        "externalMb": 2.22
+      },
+      "memoryAfter": {
+        "rssMb": 61.43,
+        "heapUsedMb": 19.35,
+        "heapTotalMb": 30.93,
+        "externalMb": 2.37
+      },
+      "memoryDeltaMb": 5.93,
+      "cpu": {
+        "userMs": 266,
+        "systemMs": 31,
+        "totalMs": 297
+      },
+      "eventLoop": {
+        "maxLagMs": 159.65,
+        "meanLagMs": 31.05,
+        "p99LagMs": 33.69
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "import failed: unknown error",
+          "expected 10 imported, got 0 (failed=10)",
+          "apiResponseMs 5280.36 exceeded limit 2000ms"
+        ],
+        "warnings": [
+          "event loop max lag 159.65ms (warn > 100ms)"
+        ],
+        "limitMs": 2000
+      }
+    },
+    {
+      "runId": "benchmark-50-1781675856889",
+      "questionCount": 50,
+      "success": false,
+      "imported": 0,
+      "failed": 50,
+      "failureRate": 1,
+      "batchId": 3,
+      "apiResponseMs": 22054.05,
+      "dbInsertMs": 12053.75,
+      "nonDbMs": 10000.3,
+      "dbQueryCount": 604,
+      "dbMaxQueryMs": 488.68,
+      "memoryBefore": {
+        "rssMb": 61.59,
+        "heapUsedMb": 19.49,
+        "heapTotalMb": 30.93,
+        "externalMb": 2.37
+      },
+      "memoryAfter": {
+        "rssMb": 67.83,
+        "heapUsedMb": 16.29,
+        "heapTotalMb": 18.43,
+        "externalMb": 2.32
+      },
+      "memoryDeltaMb": -3.2,
+      "cpu": {
+        "userMs": 1016,
+        "systemMs": 188,
+        "totalMs": 1204
+      },
+      "eventLoop": {
+        "maxLagMs": 48.46,
+        "meanLagMs": 29.95,
+        "p99LagMs": 34.7
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "import failed: unknown error",
+          "expected 50 imported, got 0 (failed=50)",
+          "apiResponseMs 22054.05 exceeded limit 2000ms"
+        ],
+        "warnings": [],
+        "limitMs": 2000
+      }
+    },
+    {
+      "runId": "benchmark-100-1781675879538",
+      "questionCount": 100,
+      "success": false,
+      "imported": 0,
+      "failed": 100,
+      "failureRate": 1,
+      "batchId": 4,
+      "apiResponseMs": 37182.34,
+      "dbInsertMs": 19606.88,
+      "nonDbMs": 17575.46,
+      "dbQueryCount": 1204,
+      "dbMaxQueryMs": 416.53,
+      "memoryBefore": {
+        "rssMb": 67.82,
+        "heapUsedMb": 16.43,
+        "heapTotalMb": 18.43,
+        "externalMb": 2.32
+      },
+      "memoryAfter": {
+        "rssMb": 69.56,
+        "heapUsedMb": 20.47,
+        "heapTotalMb": 28.18,
+        "externalMb": 2.47
+      },
+      "memoryDeltaMb": 4.04,
+      "cpu": {
+        "userMs": 1563,
+        "systemMs": 157,
+        "totalMs": 1720
+      },
+      "eventLoop": {
+        "maxLagMs": 98.96,
+        "meanLagMs": 29.8,
+        "p99LagMs": 34.28
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "import failed: unknown error",
+          "expected 100 imported, got 0 (failed=100)",
+          "apiResponseMs 37182.34 exceeded limit 2000ms"
+        ],
+        "warnings": [],
+        "limitMs": 2000
+      }
+    },
+    {
+      "runId": "benchmark-250-1781675917078",
+      "questionCount": 250,
+      "success": false,
+      "imported": 0,
+      "failed": 250,
+      "failureRate": 1,
+      "batchId": 5,
+      "apiResponseMs": 107174.43,
+      "dbInsertMs": 53132.33,
+      "nonDbMs": 54042.1,
+      "dbQueryCount": 3004,
+      "dbMaxQueryMs": 2376.3,
+      "memoryBefore": {
+        "rssMb": 69.57,
+        "heapUsedMb": 20.72,
+        "heapTotalMb": 28.18,
+        "externalMb": 2.47
+      },
+      "memoryAfter": {
+        "rssMb": 74.36,
+        "heapUsedMb": 20.29,
+        "heapTotalMb": 27.18,
+        "externalMb": 2.55
+      },
+      "memoryDeltaMb": -0.43,
+      "cpu": {
+        "userMs": 3265,
+        "systemMs": 484,
+        "totalMs": 3749
+      },
+      "eventLoop": {
+        "maxLagMs": 6073.35,
+        "meanLagMs": 32.05,
+        "p99LagMs": 34.57
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "import failed: unknown error",
+          "expected 250 imported, got 0 (failed=250)",
+          "apiResponseMs 107174.43 exceeded limit 5000ms",
+          "event loop max lag 6073.35ms exceeds block threshold 500ms"
+        ],
+        "warnings": [],
+        "limitMs": 5000
+      }
+    },
+    {
+      "runId": "benchmark-500-1781676024697",
+      "questionCount": 500,
+      "success": false,
+      "imported": 0,
+      "failed": 500,
+      "failureRate": 1,
+      "batchId": 6,
+      "apiResponseMs": 80626.65,
+      "dbInsertMs": 42592.03,
+      "nonDbMs": 38034.62,
+      "dbQueryCount": 6004,
+      "dbMaxQueryMs": 284.19,
+      "memoryBefore": {
+        "rssMb": 52.5,
+        "heapUsedMb": 14.99,
+        "heapTotalMb": 19.68,
+        "externalMb": 2.23
+      },
+      "memoryAfter": {
+        "rssMb": 61.36,
+        "heapUsedMb": 19,
+        "heapTotalMb": 30.68,
+        "externalMb": 2.38
+      },
+      "memoryDeltaMb": 4.01,
+      "cpu": {
+        "userMs": 6265,
+        "systemMs": 937,
+        "totalMs": 7202
+      },
+      "eventLoop": {
+        "maxLagMs": 39.71,
+        "meanLagMs": 28.38,
+        "p99LagMs": 34.21
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "import failed: unknown error",
+          "expected 500 imported, got 0 (failed=500)",
+          "apiResponseMs 80626.65 exceeded limit 10000ms"
+        ],
+        "warnings": [],
+        "limitMs": 10000
+      }
+    }
+  ],
+  "summary": {
+    "totalRuns": 5,
+    "passedRuns": 0,
+    "failedRuns": 5,
+    "eventLoopBlocked": true
+  }
+}

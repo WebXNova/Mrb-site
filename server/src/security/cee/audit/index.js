@@ -18,4 +18,5 @@ export {
   isEntitlementAuditError,
   buildRouteLabelFromRequest,
   auditEntitlementFailure,
+  auditEntitlementGranted,
 } from './entitlementAudit.js';

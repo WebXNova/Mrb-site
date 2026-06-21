@@ -1,0 +1,328 @@
+/**
+ * Student Doubts workspace — full-bleed, portal-integrated chat layout.
+ * No outer card/box; same surface as the student content area + dark mode.
+ */
+
+/* Fill the main column edge-to-edge (no padded card inset) */
+.student-shell .student-content.sp-portal-content:has(.tq-ws--student) {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+  overflow: hidden;
+}
+
+.student-shell .student-content.sp-portal-content:has(.tq-ws--student) .sp-route-view {
+  animation: none;
+}
+
+.student-shell .tq-ws.tq-ws--student {
+  --sq-ws-bg: var(--sp-bg-secondary);
+  --sq-ws-surface: var(--sp-bg-secondary);
+  --sq-ws-surface-muted: var(--sp-bg-secondary);
+  --sq-ws-border: var(--sp-border);
+  --sq-ws-text: var(--sp-text-primary);
+  --sq-ws-text-muted: var(--sp-text-secondary);
+  --sq-ws-text-subtle: var(--sp-text-tertiary);
+  --sq-ws-accent: var(--sp-accent);
+  --sq-ws-accent-hover: var(--sp-accent-hover);
+  --sq-ws-accent-soft: var(--sp-accent-soft);
+  --sq-ws-chat-bg: var(--sp-bg-secondary);
+  --sq-ws-chat-header: var(--sp-bg-secondary);
+  --sq-ws-bubble-out: var(--sp-accent-soft);
+  --sq-ws-bubble-in: var(--sp-white);
+  --sq-ws-bubble-shadow: none;
+  --sq-ws-system-bg: var(--sp-accent-soft);
+  --sq-ws-system-text: var(--sp-text-secondary);
+  --sq-ws-avatar-bg: linear-gradient(135deg, var(--sp-accent), var(--sp-accent-hover));
+
+  margin: 0;
+  min-height: calc(100dvh - var(--sp-header-height));
+  border: none;
+  border-radius: 0;
+  background: var(--sq-ws-bg);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws__sidebar {
+  background: var(--sq-ws-surface);
+  border-color: var(--sq-ws-border);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__toolbar,
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__filters {
+  border-color: var(--sq-ws-border);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__search {
+  border-color: var(--sq-ws-border);
+  background: var(--sp-white);
+  color: var(--sq-ws-text);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__search::placeholder {
+  color: var(--sq-ws-text-subtle);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__search:focus {
+  outline-color: var(--sq-ws-accent);
+  border-color: var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__filter {
+  border-color: var(--sq-ws-border);
+  background: var(--sp-white);
+  color: var(--sq-ws-text-muted);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__filter--active {
+  background: var(--sq-ws-accent-soft);
+  border-color: var(--sq-ws-accent);
+  color: var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__filter-count {
+  background: var(--sq-ws-surface-muted);
+  color: var(--sq-ws-text-muted);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__item {
+  border-color: var(--sq-ws-border);
+  background: transparent;
+  color: var(--sq-ws-text);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__item:hover {
+  background: var(--sq-ws-accent-soft);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__item--active {
+  background: var(--sq-ws-accent-soft);
+  box-shadow: inset 3px 0 0 var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__avatar {
+  background: var(--sq-ws-avatar-bg);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__student,
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__preview,
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__meta-line {
+  color: var(--sq-ws-text-muted);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__student {
+  color: var(--sq-ws-text);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__time,
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__state {
+  color: var(--sq-ws-text-subtle);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws-inbox__unread-badge {
+  background: var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-ws__center {
+  background: var(--sq-ws-chat-bg);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat {
+  background: var(--sq-ws-chat-bg);
+  color: var(--sq-ws-text);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__header,
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__footer {
+  background: var(--sq-ws-chat-header);
+  border-color: var(--sq-ws-border);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__contact-name {
+  color: var(--sq-ws-text);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__contact-status,
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__icon-btn {
+  color: var(--sq-ws-text-muted);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__icon-btn:hover:not(:disabled) {
+  background: var(--sq-ws-accent-soft);
+  color: var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__avatar {
+  background: var(--sq-ws-avatar-bg);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__messages {
+  background-color: var(--sq-ws-chat-bg);
+  background-image: none;
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__date-pill span {
+  color: var(--sq-ws-text-muted);
+  background: var(--sp-white);
+  box-shadow: var(--sp-shadow-sm);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__bubble--in {
+  background: var(--sq-ws-bubble-in);
+  border: 1px solid var(--sq-ws-border);
+  box-shadow: none;
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__bubble--out,
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__bubble--student {
+  background: var(--sq-ws-bubble-out);
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__sender {
+  color: #e5425c;
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__sender--you {
+  color: var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__text {
+  color: var(--sq-ws-text);
+  overflow: visible;
+  max-height: none;
+  display: block;
+  -webkit-line-clamp: unset;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__bubble--in {
+  background: var(--sp-surface-card, var(--sp-white));
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__meta,
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__bubble--student .tq-wa-chat__meta {
+  color: var(--sq-ws-text-subtle);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__ticks {
+  color: var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__system-msg {
+  color: var(--sq-ws-system-text);
+  background: var(--sq-ws-system-bg);
+}
+
+.student-shell .tq-ws.tq-ws--student .tq-wa-chat__composer-wrap {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__bar {
+  background: var(--sp-white);
+  border-color: var(--sq-ws-border);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__bar:focus-within:not(.sqachat-wa-composer__bar--recording) {
+  border-color: var(--sq-ws-accent);
+  box-shadow: var(--sp-focus-ring);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__input {
+  color: var(--sq-ws-text);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__input::placeholder {
+  color: var(--sq-ws-text-subtle);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__icon-btn--attach,
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__icon-btn--mic {
+  color: var(--sq-ws-text-muted);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__icon-btn--attach:hover,
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__icon-btn--mic:hover:not(:disabled) {
+  background: var(--sq-ws-accent-soft);
+  color: var(--sq-ws-accent);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__icon-btn--send {
+  background: var(--sq-ws-accent);
+  box-shadow: none;
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__icon-btn--send:hover:not(:disabled) {
+  background: var(--sq-ws-accent-hover);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__status-hint,
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__wordcount,
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__char-counter,
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__hints-desktop {
+  color: var(--sq-ws-text-subtle);
+}
+
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__preview--image img,
+.student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__preview--voice {
+  border-color: var(--sq-ws-border);
+  background: var(--sp-white);
+}
+
+.student-shell .tq-ws.tq-ws--student .admin-stat-card__label,
+.student-shell .tq-ws.tq-ws--student .admin-error {
+  color: var(--sq-ws-text-muted);
+}
+
+/* Dark mode — one continuous surface with the portal */
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student {
+  --sq-ws-bg: #0f172a;
+  --sq-ws-surface: #0f172a;
+  --sq-ws-surface-muted: #0f172a;
+  --sq-ws-chat-bg: #0f172a;
+  --sq-ws-chat-header: #0f172a;
+  --sq-ws-bubble-out: rgba(59, 130, 246, 0.22);
+  --sq-ws-bubble-in: #1e293b;
+  --sq-ws-system-bg: rgba(59, 130, 246, 0.16);
+  --sq-ws-system-text: var(--sp-text-secondary);
+}
+
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student .tq-ws-inbox__search,
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student .tq-ws-inbox__filter,
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__bar,
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student .tq-wa-chat__date-pill span,
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__preview--image img,
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__preview--voice {
+  background: #1e293b;
+}
+
+[data-student-theme='dark'] .student-shell .tq-ws.tq-ws--student .sqachat-wa-composer__bar--recording {
+  background: #1e293b;
+}
+
+@media (max-width: 1023px) {
+  .student-shell .tq-ws.tq-ws--student {
+    min-height: calc(100dvh - var(--sp-header-height) - var(--sp-bottom-nav-height));
+  }
+}
+
+@media (max-width: 820px) {
+  .student-shell .tq-ws.tq-ws--student {
+    min-height: calc(100dvh - var(--sp-header-height) - var(--sp-bottom-nav-height));
+    border: none;
+  }
+
+  .student-shell .tq-ws.tq-ws--student.tq-ws--chat-open .tq-ws__center {
+    background: var(--sq-ws-bg);
+  }
+
+  .student-shell .tq-ws.tq-ws--student .tq-ws__sidebar--left {
+    min-height: auto;
+  }
+}

@@ -1,12 +1,70 @@
 import rateLimit from 'express-rate-limit';
+import { logActivity } from '../services/activityLog.service.js';
 import { ApiError } from '../utils/apiError.js';
+import { getClientIp } from '../utils/network.js';
 
-export const courseImageUploadRateLimit = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
+const IP_WINDOW_MS = 60 * 1000;
+const IP_MAX = 30;
+const USER_WINDOW_MS = 60 * 60 * 1000;
+const USER_MAX = 20;
+
+async function logUploadRateLimitAbuse(req, limitType) {
+  try {
+    await logActivity({
+      userId: req.user?.id ?? null,
+      role: req.user?.role ?? 'system',
+      action: 'admin.course.upload.rate_limit',
+      entityType: 'course_image_upload',
+      metadata: {
+        limitType,
+        method: req.method,
+        path: req.originalUrl || req.path,
+        ipAddress: getClientIp(req),
+        userId: req.user?.id ?? null,
+      },
+    });
+  } catch {
+    // Audit failure must not block the 429 response.
+  }
+}
+
+function createUploadRateLimitHandler(limitType, retryAfterMs) {
+  return function uploadRateLimitHandler(req, res, next) {
+    res.setHeader('Retry-After', String(Math.ceil(retryAfterMs / 1000)));
+    void logUploadRateLimitAbuse(req, limitType);
+    next(
+      new ApiError(429, 'Too many course image uploads. Please try again shortly.', {
+        code: 'RATE_LIMITED',
+        limitType,
+      })
+    );
+  };
+}
+
+/** Per-IP burst protection for course thumbnail uploads. */
+export const courseImageUploadIpRateLimit = rateLimit({
+  windowMs: IP_WINDOW_MS,
+  max: IP_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  handler(_req, _res, next) {
-    next(new ApiError(429, 'Too many image uploads. Please try again shortly.', { code: 'RATE_LIMITED' }));
+  keyGenerator(req) {
+    return `course-image-upload:ip:${getClientIp(req)}`;
   },
+  handler: createUploadRateLimitHandler('upload_ip', IP_WINDOW_MS),
 });
+
+/** Per-authenticated-user hourly cap for course thumbnail uploads. */
+export const courseImageUploadUserRateLimit = rateLimit({
+  windowMs: USER_WINDOW_MS,
+  max: USER_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator(req) {
+    const userId = req.user?.id ?? 'anonymous';
+    return `course-image-upload:user:${userId}`;
+  },
+  handler: createUploadRateLimitHandler('upload_user', USER_WINDOW_MS),
+});
+
+/** @deprecated Use courseImageUploadIpRateLimit + courseImageUploadUserRateLimit */
+export const courseImageUploadRateLimit = courseImageUploadIpRateLimit;

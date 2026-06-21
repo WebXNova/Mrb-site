@@ -3,6 +3,7 @@ import Safepay from '@sfpy/node-core';
 import { TextDecoder } from 'node:util';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
+import { majorUnitsToMinorUnits } from './safepayWebhookSettlement.js';
 
 function safepayApiHost() {
   return env.safepay.apiHost;
@@ -47,11 +48,12 @@ function getSafepayClient() {
  * Safepay session API expects smallest units (paisas); adjust if dashboard shows wrong totals.
  */
 function toMinorUnits(amount, currency) {
-  const n = Number(amount);
-  if (!Number.isFinite(n) || n <= 0) {
+  void currency;
+  try {
+    return majorUnitsToMinorUnits(amount);
+  } catch {
     throw new ApiError(400, 'Invalid payment amount');
   }
-  return Math.round(n * 100);
 }
 
 function formatTrackerForLog(token) {
@@ -494,28 +496,11 @@ export function extractSafepayTransactionIdFromWebhook(payload) {
   return null;
 }
 
-export function isSafepayPaymentSuccessEvent(payload) {
-  const state = String(
-    payload?.data?.tracker?.state || payload?.data?.state || payload?.tracker?.state || ''
-  ).toUpperCase();
-  if (state === 'TRACKER_ENDED') return true;
-
-  const type = String(
-    payload?.type || payload?.event || payload?.event_type || ''
-  ).toLowerCase();
-
-  if (type.includes('payment.failed') || type.includes('payment.canceled') || type.includes('payment.cancelled')) {
-    return false;
-  }
-  if (type.includes('fail') || type.includes('cancel')) return false;
-
-  if (type.includes('payment.succeeded') || type.includes('payments.succeeded')) {
-    return true;
-  }
-  if (type.includes('complete') || type.includes('paid') || type.includes('success') || type.includes('captured')) {
-    return true;
-  }
-  if (!type && !state) return true;
-  if (type.includes('tracker_started')) return false;
-  return true;
-}
+export {
+  ALLOWED_SUCCESS_EVENTS,
+  ALLOWED_SUCCESS_EVENT_TYPES,
+  ALLOWED_SUCCESS_TRACKER_STATES,
+  classifySafepayWebhookEvent,
+  isSafepayPaymentSuccessEvent,
+  logSafepayWebhookEventDecision,
+} from './safepayWebhookEventValidation.js';

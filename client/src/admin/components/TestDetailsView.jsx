@@ -1,5 +1,6 @@
 import TestStatusBadge, { formatTestStatusLabel } from './TestStatusBadge';
 import { TestWizardProgress } from './TestWizardProgress';
+import TestPublishActions from './TestPublishActions';
 
 function DetailRow({ label, value }) {
   return (
@@ -33,12 +34,34 @@ function formatDate(iso) {
 /**
  * Read-only summary of all test wizard data.
  */
-export default function TestDetailsView({ test, rules, settings, completeness, courseTitle, questionCount }) {
+export default function TestDetailsView({
+  testId,
+  test,
+  rules,
+  settings,
+  completeness,
+  courseTitle,
+  questionCount,
+  onPublished,
+  publishSummary = null,
+  summaryLoading = false,
+  readOnly = false,
+}) {
   const subjectIds = Array.isArray(test?.subjectIds) ? test.subjectIds.join(', ') : '—';
+  const canPublish = Boolean(completeness?.can_publish) && !readOnly;
 
   return (
     <div className="admin-test-details">
-      <TestWizardProgress completeness={completeness} showMissingDetails />
+      <TestWizardProgress completeness={completeness} showMissingDetails readOnly={readOnly} testId={testId} activeStep="publish" />
+
+      {canPublish ? (
+        <TestPublishActions
+          testId={testId}
+          completeness={completeness}
+          summaryLoading={summaryLoading}
+          onPublished={onPublished}
+        />
+      ) : null}
 
       <DetailSection title="Overview">
         <DetailRow label="Test ID" value={test?.id} />
@@ -48,7 +71,7 @@ export default function TestDetailsView({ test, rules, settings, completeness, c
         <DetailRow label="Category" value={test?.category} />
         <DetailRow label="Test type" value={test?.testType} />
         <DetailRow label="Subjects" value={test?.subjectLabel || subjectIds} />
-        <DetailRow label="Linked questions" value={questionCount} />
+        <DetailRow label="Questions" value={questionCount} />
         <DetailRow label="Description" value={test?.description || '—'} />
         <DetailRow label="Public link" value={test?.publicLink || '—'} />
         <DetailRow label="Created" value={formatDate(test?.createdAt)} />
@@ -58,8 +81,8 @@ export default function TestDetailsView({ test, rules, settings, completeness, c
       <DetailSection title="Rules & scoring">
         <DetailRow label="Duration" value={rules?.duration_minutes != null ? `${rules.duration_minutes} min` : '—'} />
         <DetailRow label="Max attempts" value={rules?.max_attempts} />
-        <DetailRow label="Passing %" value={rules?.passing_percentage} />
         <DetailRow label="Passing marks" value={rules?.passing_marks} />
+        <DetailRow label="Total marks" value={publishSummary?.total_marks ?? '—'} />
         <DetailRow label="Negative marking" value={rules?.negative_marking} />
       </DetailSection>
 

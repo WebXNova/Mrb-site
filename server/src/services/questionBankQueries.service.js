@@ -19,11 +19,14 @@ export const QB_ACTIVE_WHERE = 'deleted_at IS NULL';
 export const QB_LIST_COLUMNS = `
   ${QB_ALIAS}.id,
   ${QB_ALIAS}.question_text,
+  ${QB_ALIAS}.topic,
   ${QB_ALIAS}.difficulty,
   ${QB_ALIAS}.course_id,
   ${QB_ALIAS}.subject_id,
   ${QB_ALIAS}.marks,
-  ${QB_ALIAS}.created_at
+  ${QB_ALIAS}.created_at,
+  c.title AS course_title,
+  s.title AS subject_title
 `;
 
 /** Selector/minimal columns for test builder and pickers. */
@@ -45,7 +48,10 @@ export const QB_DETAIL_COLUMNS = `
   difficulty,
   question_type,
   question_text,
+  question_html,
+  question_image_url,
   explanation,
+  explanation_html,
   marks,
   created_by,
   created_at,
@@ -78,6 +84,7 @@ export function sanitizeQuestionSearchTerm(value) {
  * Admin list / search / filter / pagination predicates (active questions only).
  * @param {{
  *   search?: string,
+ *   topic?: string,
  *   course_id?: number,
  *   subject_id?: number,
  *   difficulty?: string,
@@ -107,6 +114,14 @@ export function buildQuestionListFilters(filters) {
     if (term) {
       extraConditions.push(`${QB_ALIAS}.question_text LIKE ?`);
       extraParams.push(`%${term}%`);
+    }
+  }
+
+  if (filters.topic != null && String(filters.topic).trim() !== '') {
+    const topicTerm = sanitizeQuestionSearchTerm(filters.topic);
+    if (topicTerm) {
+      extraConditions.push(`${QB_ALIAS}.topic LIKE ?`);
+      extraParams.push(`%${topicTerm}%`);
     }
   }
 
@@ -157,6 +172,8 @@ export function buildActiveQuestionListQuery(filterResult, { limit, offset, colu
     countParams: params,
     listSql: `SELECT ${columns}
               FROM ${QB_TABLE} ${QB_ALIAS}
+              LEFT JOIN courses c ON c.id = ${QB_ALIAS}.course_id
+              LEFT JOIN subjects s ON s.id = ${QB_ALIAS}.subject_id
               WHERE ${whereClause}
               ORDER BY ${orderBy}
               LIMIT ? OFFSET ?`,

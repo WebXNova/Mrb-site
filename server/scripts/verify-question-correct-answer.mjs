@@ -42,7 +42,7 @@ function testValidateOptions() {
   } catch (error) {
     caught = error;
   }
-  assert(caught instanceof ApiError && caught.code === 'MULTIPLE_CORRECT_OPTIONS', 'reject multiple correct');
+  assert(caught instanceof ApiError && caught.code === 'MCQ_MULTIPLE_CORRECT_OPTIONS', 'reject multiple correct');
 
   caught = null;
   try {
@@ -50,7 +50,7 @@ function testValidateOptions() {
   } catch (error) {
     caught = error;
   }
-  assert(caught instanceof ApiError && caught.code === 'INVALID_OPTION_COUNT', 'reject wrong count');
+  assert(caught instanceof ApiError && caught.code === 'MCQ_INVALID_OPTION_COUNT', 'reject wrong count');
 }
 
 function testCreateSchema() {

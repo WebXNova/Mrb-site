@@ -1,4 +1,9 @@
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
+import {
+  resolveExplanationHtml,
+  resolveOptionHtml,
+  resolveQuestionHtml,
+} from '../utils/richHtmlContent.js';
 
 /** @param {Record<string, unknown>} row */
 function toIsoTimestamp(value) {
@@ -14,7 +19,7 @@ function toIsoTimestamp(value) {
 export function toTestQuestionOptionAdminDto(optionRow) {
   return {
     optionId: Number(optionRow.id),
-    optionText: String(optionRow.option_text ?? ''),
+    optionText: sanitizeRichHtml(resolveOptionHtml(optionRow)),
     isCorrect: Boolean(Number(optionRow.is_correct)),
     sortOrder: Number(optionRow.sort_order ?? 0),
   };
@@ -26,7 +31,7 @@ export function toTestQuestionOptionAdminDto(optionRow) {
 export function toTestQuestionOptionStudentDto(optionRow) {
   return {
     optionId: Number(optionRow.id),
-    optionText: String(optionRow.option_text ?? ''),
+    optionText: sanitizeRichHtml(resolveOptionHtml(optionRow)),
     sortOrder: Number(optionRow.sort_order ?? 0),
   };
 }
@@ -45,8 +50,11 @@ export function toLinkedTestQuestionAdminDto(linkRow, optionRows = []) {
     displayOrder: Number(linkRow.display_order ?? 0),
     marksOverride,
     effectiveMarks: marksOverride ?? bankMarks,
-    questionText: sanitizeRichHtml(linkRow.question_text),
-    explanation: linkRow.explanation == null ? null : sanitizeRichHtml(linkRow.explanation),
+    questionText: sanitizeRichHtml(resolveQuestionHtml(linkRow)),
+    explanation:
+      resolveExplanationHtml(linkRow) == null
+        ? null
+        : sanitizeRichHtml(resolveExplanationHtml(linkRow)),
     marks: bankMarks,
     difficulty: linkRow.difficulty == null ? null : String(linkRow.difficulty),
     topic: linkRow.topic == null ? null : String(linkRow.topic),
@@ -65,11 +73,13 @@ export function toLinkedTestQuestionAdminDto(linkRow, optionRows = []) {
 export function toLinkedTestQuestionStudentDto(linkRow, optionRows = []) {
   const bankMarks = Number(linkRow.marks ?? 1);
   const marksOverride = linkRow.marks_override == null ? null : Number(linkRow.marks_override);
+  const effectiveMarks = marksOverride ?? bankMarks;
   return {
     questionId: Number(linkRow.question_id),
     displayOrder: Number(linkRow.display_order ?? 0),
-    marks: marksOverride ?? bankMarks,
-    questionText: sanitizeRichHtml(linkRow.question_text),
+    marks: effectiveMarks,
+    effectiveMarks,
+    questionText: sanitizeRichHtml(resolveQuestionHtml(linkRow)),
     options: optionRows.map(toTestQuestionOptionStudentDto),
   };
 }

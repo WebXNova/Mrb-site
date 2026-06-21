@@ -200,11 +200,12 @@ export async function sendEmailNow({ to, subject, html, text, outboxId = null, u
   }
 }
 
-export async function sendEmail({ to, subject, html, text, userId = null }) {
+export async function sendEmail({ to, subject, html, text, userId = null, template = 'verification' }) {
+  const safeTemplate = String(template || 'verification').trim().slice(0, 120) || 'verification';
   const [outboxResult] = await mysqlPool.query(
     `INSERT INTO email_outbox (user_id, template, recipient_email, payload_json, status)
-     VALUES (?, 'verification', ?, ?, 'queued')`,
-    [userId, to, JSON.stringify({ to, subject, html, text })]
+     VALUES (?, ?, ?, ?, 'queued')`,
+    [userId, safeTemplate, to, JSON.stringify({ to, subject, html, text })]
   );
   const outboxId = Number(outboxResult.insertId);
   const queue = getEmailQueue();

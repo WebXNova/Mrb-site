@@ -25,23 +25,31 @@ import {
 } from './testAttempt/secureAttemptContext.js';
 import { loadTestSubjectPresentation } from './testSubjectPresentation.service.js';
 import {
-  loadComposedTestQuestions,
   mapComposedQuestionsForStudentAttempt,
   summarizeComposedQuestionOptions,
 } from './testQuestionComposition.service.js';
+import {
+  initializeAttemptDeliveryLayout,
+  isShuffleEnabled,
+  loadComposedQuestionsWithAttemptLayout,
+} from './attemptDeliveryLayout.service.js';
 import { LOAD_SAVED_ANSWERS_SQL } from './studentAttemptLoad.queries.js';
 import { gradeComposedAttempt, parseSelectedOptionId } from './testAttempt/gradeComposedAttempt.js';
 import {
+  AttemptExpiredError,
   AttemptNotFoundError,
   AttemptTokenInvalidError,
   EntitlementRequiredError,
   InvalidOptionError,
+  TestNotAccessibleError,
 } from '../errors/testAttempt/TestAttemptErrors.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 import { ApiError } from '../utils/apiError.js';
 import {
   assertValidTestDurationMinutes,
+  computeAttemptTimeTakenSeconds,
   logAttemptTimeCalculation,
+  resolveAttemptTimeTakenSeconds,
 } from './attemptTiming.service.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import {
@@ -50,15 +58,75 @@ import {
 } from './testSecurityAudit.service.js';
 import {
   COUNT_ENTITLED_STUDENT_ATTEMPTS_SQL,
+  buildInsertEntitledTestAttemptParams,
   INSERT_ENTITLED_TEST_ATTEMPT_SQL,
   LOCK_ACTIVE_ENTITLED_ATTEMPT_SQL,
+  LOCK_ENTITLED_TEST_FOR_START_SQL,
   NEXT_ENTITLED_ATTEMPT_NUMBER_SQL,
 } from './testAttempt.queries.js';
 import { INSERT_TEST_RESULT_SQL } from './testResult.queries.js';
 import { derivePassStatus } from '../result/passStatus.js';
+import {
+  assertStudentResultVisible,
+  sanitizeGradingDetailItems,
+} from './testResultVisibility.service.js';
+import {
+  recordAttemptCreation,
+  recordAttemptSubmission,
+} from '../observability/studentRuntimeMetrics.service.js';
+import {
+  emitStudentRuntimeAudit,
+  STUDENT_RUNTIME_AUDIT_EVENTS,
+} from '../observability/studentRuntimeObservability.service.js';
 import { expireAttemptIfExpired } from './attemptExpiry.service.js';
+import {
+  assertCanCreateNewTestAttempt,
+} from './testRetakePolicy.service.js';
+import { COUNT_STUDENT_ATTEMPTS_FOR_TEST_SQL } from './testRetakePolicy.queries.js';
+import {
+  assertTestAvailabilityWindow,
+  AVAILABILITY_PHASE,
+  fetchUtcNowMs,
+  getAvailabilityNowMs,
+  parseTestAvailabilityInstant,
+  toAvailabilityIso,
+} from './testAvailabilityWindow.service.js';
+import {
+  finalizeAttemptAfterResult,
+  loadAttemptSubmissionState,
+  resolveSubmitAttemptOutcome,
+} from './testSubmitRecovery.service.js';
 
 const logger = new StructuredLogger({ service: 'testAttempt' });
+
+/**
+ * @param {import('./testAttempt/secureAttemptContext.js').SecureAttemptContext} ctx
+ * @param {number} resultId
+ * @param {{ recovered?: boolean, outcome?: string|null }} [meta]
+ */
+function buildSlugSubmitSuccess(ctx, resultId, meta = {}) {
+  recordAttemptSubmission({ stack: 'slug' });
+  emitStudentRuntimeAudit({
+    event: STUDENT_RUNTIME_AUDIT_EVENTS.ATTEMPT_SUBMITTED,
+    stack: 'slug',
+    operation: 'submitAttempt',
+    outcome: meta.recovered ? 'recovered' : 'success',
+    userId: ctx.userId,
+    courseId: ctx.courseId,
+    attemptId: ctx.attempt.id,
+    testId: ctx.attempt.test_id,
+    metadata: {
+      resultId: Number(resultId),
+      recovered: Boolean(meta.recovered),
+      recoveryOutcome: meta.outcome ?? null,
+    },
+  });
+  return {
+    attemptId: ctx.attempt.id,
+    resultId: Number(resultId),
+    recovered: Boolean(meta.recovered),
+  };
+}
 
 /**
  * Hard guard — never INSERT without a validated student identity.
@@ -71,6 +139,66 @@ export function assertStudentIdForAttemptInsert(studentId) {
     throw new Error('MISSING_STUDENT_ID');
   }
   return normalizedStudentId;
+}
+
+/**
+ * Fail-closed guard before entitled attempt INSERT — ids must be positive integers.
+ *
+ * @param {{ testId: unknown, courseId: unknown, studentId: unknown, slug?: string }} input
+ */
+export function assertEntitledAttemptInsertContext({ testId, courseId, studentId, slug }) {
+  const tid = Number(testId);
+  const cid = Number(courseId);
+  const sid = Number(studentId);
+
+  if (!Number.isInteger(tid) || tid <= 0) {
+    logger.error('ATTEMPT_INSERT_INVALID_CONTEXT', {
+      event: 'ATTEMPT_INSERT_INVALID_CONTEXT',
+      reason: 'invalid_test_id',
+      testId,
+      courseId: cid,
+      studentId: sid,
+      slug: slug ?? null,
+    });
+    throw new ApiError(400, 'Invalid test id for attempt creation.', {
+      code: 'INVALID_TEST_ID',
+      testId,
+      slug: slug ?? null,
+    });
+  }
+
+  if (!Number.isInteger(cid) || cid <= 0) {
+    logger.error('ATTEMPT_INSERT_INVALID_CONTEXT', {
+      event: 'ATTEMPT_INSERT_INVALID_CONTEXT',
+      reason: 'invalid_course_id',
+      testId: tid,
+      courseId,
+      studentId: sid,
+      slug: slug ?? null,
+    });
+    throw new ApiError(400, 'Invalid course id for attempt creation.', {
+      code: 'INVALID_COURSE_ID',
+      courseId,
+      slug: slug ?? null,
+    });
+  }
+
+  if (!Number.isInteger(sid) || sid <= 0) {
+    logger.error('ATTEMPT_INSERT_INVALID_CONTEXT', {
+      event: 'ATTEMPT_INSERT_INVALID_CONTEXT',
+      reason: 'invalid_student_id',
+      testId: tid,
+      courseId: cid,
+      studentId,
+      slug: slug ?? null,
+    });
+    throw new ApiError(400, 'Invalid student id for attempt creation.', {
+      code: 'INVALID_STUDENT_ID',
+      slug: slug ?? null,
+    });
+  }
+
+  return { testId: tid, courseId: cid, studentId: sid };
 }
 
 /**
@@ -271,7 +399,6 @@ export async function createEntitledTestAttempt({
   });
 
   const deviceFingerprint = buildDeviceFingerprint(ipAddress, userAgent);
-  const testMaxAttempts = Number(test.maxAttempts ?? 1);
 
   const connection = await mysqlPool.getConnection();
 
@@ -284,6 +411,22 @@ export async function createEntitledTestAttempt({
       connection
     );
 
+    const nowMs = await fetchUtcNowMs(connection);
+
+    const [[testWindowRow]] = await connection.query(LOCK_ENTITLED_TEST_FOR_START_SQL, [
+      testId,
+      verified.courseId,
+    ]);
+    if (!testWindowRow) {
+      throw new ApiError(404, 'Test not found');
+    }
+
+    assertTestAvailabilityWindow(testWindowRow, {
+      phase: AVAILABILITY_PHASE.ANY_ACCESS,
+      nowMs,
+      context: 'testAttempt.createEntitledTestAttempt',
+    });
+
     const [activeRows] = await connection.query(LOCK_ACTIVE_ENTITLED_ATTEMPT_SQL, [
       verified.courseId,
       testId,
@@ -295,11 +438,18 @@ export async function createEntitledTestAttempt({
     if (activeAttempt) {
       const expiredNow = await expireAttemptIfExpired({
         attemptId: activeAttempt.id,
-        nowMs: Date.now(),
+        nowMs,
         executor: connection,
       });
 
       if (!expiredNow) {
+        assertTestAvailabilityWindow(testWindowRow, {
+          phase: AVAILABILITY_PHASE.IN_PROGRESS,
+          nowMs,
+          attemptStartedAt: activeAttempt.started_at,
+          context: 'testAttempt.createEntitledTestAttempt.resume',
+        });
+
         const resumeAttemptId = Number(activeAttempt.id);
         const resumeNonce = String(activeAttempt.attempt_nonce || '');
         if (!resumeNonce) {
@@ -325,44 +475,50 @@ export async function createEntitledTestAttempt({
           resumed: true,
         });
 
+        recordAttemptCreation({ stack: 'slug', resumed: true });
+        emitStudentRuntimeAudit({
+          event: STUDENT_RUNTIME_AUDIT_EVENTS.ATTEMPT_CREATED,
+          stack: 'slug',
+          operation: 'startOrResume',
+          outcome: 'success',
+          userId: normalizedStudentId,
+          courseId: verified.courseId,
+          attemptId: resumeAttemptId,
+          testId,
+          slug: normalizedSlug,
+          metadata: { resumed: true },
+        });
+
         return {
           attemptId: resumeAttemptId,
           attemptToken: resumeToken,
           testId,
-          startedAt: activeAttempt.started_at == null ? null : String(activeAttempt.started_at),
-          expiresAt: activeAttempt.expires_at == null ? null : String(activeAttempt.expires_at),
+          startedAt: toAvailabilityIso(activeAttempt.started_at),
+          expiresAt: toAvailabilityIso(activeAttempt.expires_at),
           startUrl: `${String(env.clientUrl || '').replace(/\/$/, '')}/tests/${normalizedSlug}/start`,
           resumed: true,
         };
       }
     }
 
-    if (testMaxAttempts > 0) {
-      const countRows = await db.rows(COUNT_ENTITLED_STUDENT_ATTEMPTS_SQL, [
-        verified.courseId,
-        testId,
-        normalizedStudentId,
-        normalizedStudentId,
-      ]);
-      const usedAttempts = Number(countRows[0]?.total ?? 0);
-      if (usedAttempts >= testMaxAttempts) {
-        logSecurityEvent({
-          action: TEST_SECURITY_ACTIONS.TEST_ATTEMPT_DENIED,
-          userId: normalizedStudentId,
-          testId,
-          reason: 'max_attempts_reached',
-          outcome: 'denied',
-          context: 'testAttempt.createEntitledTestAttempt',
-          metadata: {
-            slug: normalizedSlug,
-            courseId: verified.courseId,
-            attemptsUsed: usedAttempts,
-            maxAttempts: testMaxAttempts,
-          },
-        });
-        throw new ApiError(403, 'Maximum attempts reached for this student/device');
-      }
-    }
+    assertTestAvailabilityWindow(testWindowRow, {
+      phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
+      nowMs,
+      context: 'testAttempt.createEntitledTestAttempt.create',
+    });
+
+    const [[countRow]] = await connection.query(COUNT_STUDENT_ATTEMPTS_FOR_TEST_SQL, [
+      testId,
+      normalizedStudentId,
+      normalizedStudentId,
+    ]);
+    const totalAttempts = Number(countRow?.total ?? 0);
+
+    assertCanCreateNewTestAttempt(
+      testWindowRow,
+      { totalAttempts, hasActiveAttempt: false },
+      { testId, context: 'testAttempt.createEntitledTestAttempt' }
+    );
 
     const [[nextRow]] = await connection.query(NEXT_ENTITLED_ATTEMPT_NUMBER_SQL, [
       testId,
@@ -370,7 +526,7 @@ export async function createEntitledTestAttempt({
     ]);
     const attemptNumber = Number(nextRow?.next_attempt ?? 1);
 
-    const durationMinutes = assertValidTestDurationMinutes(test.durationMinutes, {
+    const durationMinutes = assertValidTestDurationMinutes(testWindowRow.duration_minutes ?? test.durationMinutes, {
       testId,
       context: 'testAttempt.createEntitledTestAttempt',
     });
@@ -387,25 +543,79 @@ export async function createEntitledTestAttempt({
 
     assertStudentIdForAttemptInsert(normalizedStudentId);
 
-    const [insertResult] = await db.execute(INSERT_ENTITLED_TEST_ATTEMPT_SQL, [
+    assertEntitledAttemptInsertContext({
       testId,
-      normalizedStudentId,
-      normalizedStudentId,
-      displayName,
+      courseId: verified.courseId,
+      studentId: normalizedStudentId,
+      slug: normalizedSlug,
+    });
+
+    const insertParams = buildInsertEntitledTestAttemptParams({
+      testId,
+      courseId: verified.courseId,
+      studentId: normalizedStudentId,
+      studentName: displayName,
       attemptNumber,
       durationMinutes,
-      ipAddress || null,
-      userAgent || null,
+      ipAddress: ipAddress || null,
+      userAgent: userAgent || null,
       deviceFingerprint,
       attemptNonce,
-      testId,
-      verified.courseId,
-    ]);
+    });
 
+    const [insertResult] = await db.execute(INSERT_ENTITLED_TEST_ATTEMPT_SQL, insertParams);
+
+    const affectedRows = Number(insertResult?.affectedRows ?? 0);
     const attemptId = Number(insertResult?.insertId);
-    if (!Number.isInteger(attemptId) || attemptId <= 0) {
-      throw new ApiError(500, 'Failed to create test attempt');
+    if (affectedRows === 0 || !Number.isInteger(attemptId) || attemptId <= 0) {
+      logger.error('ATTEMPT_INSERT_ZERO_ROWS', {
+        event: 'ATTEMPT_INSERT_ZERO_ROWS',
+        testId,
+        courseId: verified.courseId,
+        studentId: normalizedStudentId,
+        slug: normalizedSlug,
+        attemptNumber,
+        durationMinutes,
+        affectedRows,
+        insertId: insertResult?.insertId ?? null,
+        insertParams: {
+          testId: insertParams[0],
+          studentId: insertParams[1],
+          userId: insertParams[2],
+          studentName: insertParams[3],
+          attemptNumber: insertParams[4],
+          durationMinutes: insertParams[5],
+          whereTestId: insertParams[10],
+          whereCourseId: insertParams[11],
+          retakeStudentId: insertParams[12],
+          retakeUserId: insertParams[13],
+        },
+        allowRetake: testWindowRow.allow_retake,
+        maxAttempts: testWindowRow.max_attempts,
+      });
+      logSecurityEvent({
+        action: TEST_SECURITY_ACTIONS.TEST_ATTEMPT_DENIED,
+        userId: normalizedStudentId,
+        testId,
+        reason: 'attempt_create_insert_denied',
+        outcome: 'denied',
+        context: 'testAttempt.createEntitledTestAttempt',
+        metadata: { slug: normalizedSlug, allowRetake: testWindowRow.allow_retake, affectedRows },
+      });
+      throw new ApiError(403, 'Cannot start a new attempt for this test.', {
+        code: 'ATTEMPT_CREATE_DENIED',
+        testId,
+      });
     }
+
+    await initializeAttemptDeliveryLayout({
+      attemptId,
+      testId,
+      shuffleQuestions: isShuffleEnabled(testWindowRow.shuffle_questions),
+      shuffleOptions: isShuffleEnabled(testWindowRow.shuffle_options),
+      attemptNonce,
+      connection,
+    });
 
     const [[timingRow]] = await connection.query(
       `SELECT a.started_at, a.expires_at
@@ -450,12 +660,26 @@ export async function createEntitledTestAttempt({
       resumed: false,
     });
 
+    recordAttemptCreation({ stack: 'slug', resumed: false });
+    emitStudentRuntimeAudit({
+      event: STUDENT_RUNTIME_AUDIT_EVENTS.ATTEMPT_CREATED,
+      stack: 'slug',
+      operation: 'startOrResume',
+      outcome: 'success',
+      userId: normalizedStudentId,
+      courseId: verified.courseId,
+      attemptId,
+      testId,
+      slug: normalizedSlug,
+      metadata: { resumed: false, attemptNumber },
+    });
+
     return {
       attemptId,
       attemptToken: token,
       testId,
-      startedAt: timingRow?.started_at == null ? null : String(timingRow.started_at),
-      expiresAt: timingRow?.expires_at == null ? null : String(timingRow.expires_at),
+      startedAt: toAvailabilityIso(timingRow?.started_at),
+      expiresAt: toAvailabilityIso(timingRow?.expires_at),
       startUrl: `${String(env.clientUrl || '').replace(/\/$/, '')}/tests/${normalizedSlug}/start`,
       resumed: false,
     };
@@ -502,15 +726,20 @@ export async function createEntitledTestAttempt({
 }
 
 /**
- * Loads exam questions via question_bank composition (single source of truth).
+ * Loads exam questions via question_bank composition with per-attempt delivery layout (G-RT-05).
  * @param {import('./testAttempt/secureAttemptContext.js').SecureAttemptContext} ctx
  * @param {import('mysql2/promise').PoolConnection} [connection]
  */
 async function loadEntitledQuestions(ctx, connection) {
-  const composed = await loadComposedTestQuestions(ctx.attempt.test_id, {
+  const composed = await loadComposedQuestionsWithAttemptLayout({
+    attemptId: ctx.attempt.id,
+    testId: ctx.attempt.test_id,
+    shuffleQuestions: isShuffleEnabled(ctx.test.shuffle_questions),
+    shuffleOptions: isShuffleEnabled(ctx.test.shuffle_options),
+    deliveryLayoutJson: ctx.attempt.delivery_layout_json,
+    attemptNonce: ctx.attempt.attempt_nonce,
     audience: 'student',
     connection,
-    logOrphans: true,
   });
   return mapComposedQuestionsForStudentAttempt(composed);
 }
@@ -565,8 +794,8 @@ export async function getAttemptTestForStart({ slug, attemptId, userId, courseId
   return {
     attempt: {
       id: ctx.attempt.id,
-      startedAt: ctx.attempt.started_at,
-      expiresAt: ctx.attempt.expires_at,
+      startedAt: toAvailabilityIso(ctx.attempt.started_at),
+      expiresAt: toAvailabilityIso(ctx.attempt.expires_at),
       status: ctx.attempt.status,
     },
     test: {
@@ -655,7 +884,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       slug,
       entitlement,
       tokenNonce,
-      requireInProgress: true,
+      requireInProgress: false,
       forUpdate: true,
       connection,
       auditContext: 'testAttempt.submitAttempt',
@@ -663,10 +892,45 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
 
     const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.submitAttempt', connection);
 
-    const composedQuestions = await loadComposedTestQuestions(ctx.attempt.test_id, {
+    const preflight = await resolveSubmitAttemptOutcome(db, {
+      attemptId: ctx.attempt.id,
+      courseId: ctx.courseId,
+      userId: ctx.userId,
+      status: ctx.attempt.status,
+      resultId: ctx.attempt.result_id,
+    });
+
+    const submitRecoveryMeta =
+      preflight.action === 'proceed' && preflight.recovered
+        ? { recovered: preflight.recovered, outcome: preflight.outcome }
+        : null;
+
+    if (preflight.action === 'complete') {
+      await connection.commit();
+      return buildSlugSubmitSuccess(ctx, preflight.resultId, {
+        recovered: preflight.recovered,
+        outcome: preflight.outcome,
+      });
+    }
+
+    const nowMs = await getAvailabilityNowMs(connection);
+    const expiresMs = parseTestAvailabilityInstant(ctx.attempt.expires_at);
+    if (expiresMs != null && nowMs > expiresMs) {
+      throw new AttemptExpiredError({
+        attemptId: ctx.attempt.id,
+        expiresAt: ctx.attempt.expires_at,
+      });
+    }
+
+    const composedQuestions = await loadComposedQuestionsWithAttemptLayout({
+      attemptId: ctx.attempt.id,
+      testId: ctx.attempt.test_id,
+      shuffleQuestions: isShuffleEnabled(ctx.test.shuffle_questions),
+      shuffleOptions: isShuffleEnabled(ctx.test.shuffle_options),
+      deliveryLayoutJson: ctx.attempt.delivery_layout_json,
+      attemptNonce: ctx.attempt.attempt_nonce,
       audience: 'admin',
       connection,
-      logOrphans: true,
     });
 
     const [answerRows] = await connection.query(
@@ -686,39 +950,68 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       skippedCount,
       percentage,
       details,
-    } = gradeComposedAttempt(composedQuestions, answersMap, negativeMarking);
-    const timeTakenSeconds = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(ctx.attempt.started_at).getTime()) / 1000)
+    } = gradeComposedAttempt(
+      composedQuestions,
+      answersMap,
+      negativeMarking,
+      ctx.test.passing_marks
     );
+    const timeTakenSeconds = computeAttemptTimeTakenSeconds(ctx.attempt.started_at, nowMs);
+    logAttemptTimeCalculation(logger, {
+      attemptId: ctx.attempt.id,
+      startedAt: ctx.attempt.started_at,
+      nowMs,
+      timeTakenSeconds,
+      context: 'testAttempt.submitAttempt',
+    });
 
     const studentId = assertStudentIdForAttemptInsert(
       ctx.attempt.student_id ?? ctx.userId
     );
     const totalQuestions = composedQuestions.length;
     const passStatus = derivePassStatus({
-      percentage,
-      passingPercentage: ctx.test.passing_percentage,
+      score,
+      passingMarks: ctx.test.passing_marks,
     });
 
-    await db.execute(INSERT_TEST_RESULT_SQL, [
-      totalQuestions,
-      correctCount,
-      wrongCount,
-      skippedCount,
-      score,
-      maxScore,
-      percentage,
-      correctCount,
-      wrongCount,
-      skippedCount,
-      passStatus,
-      timeTakenSeconds,
-      JSON.stringify(details),
-      ctx.courseId,
-      ctx.attempt.id,
-      studentId,
-    ]);
+    try {
+      await db.execute(INSERT_TEST_RESULT_SQL, [
+        totalQuestions,
+        correctCount,
+        wrongCount,
+        skippedCount,
+        score,
+        maxScore,
+        percentage,
+        correctCount,
+        wrongCount,
+        skippedCount,
+        passStatus,
+        timeTakenSeconds,
+        JSON.stringify(details),
+        ctx.courseId,
+        ctx.attempt.id,
+        studentId,
+      ]);
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY') {
+        const recovery = await resolveSubmitAttemptOutcome(db, {
+          attemptId: ctx.attempt.id,
+          courseId: ctx.courseId,
+          userId: ctx.userId,
+          status: 'in_progress',
+          resultId: ctx.attempt.result_id,
+        });
+        if (recovery.action === 'complete') {
+          await connection.commit();
+          return buildSlugSubmitSuccess(ctx, recovery.resultId, {
+            recovered: true,
+            outcome: recovery.outcome,
+          });
+        }
+      }
+      throw error;
+    }
 
     const resultRows = await db.rows(
       `SELECT r.id AS result_id
@@ -734,16 +1027,55 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       throw new ApiError(500, 'Failed to persist test result');
     }
 
-    await db.execute(
-      `UPDATE test_attempts a
-       INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
-       SET a.status = 'submitted', a.submitted_at = CURRENT_TIMESTAMP, a.completion_reason = ?, a.result_id = ?, a.updated_at = CURRENT_TIMESTAMP
-       WHERE a.id = ? AND a.user_id = ? AND a.status = 'in_progress'`,
-      [ctx.courseId, 'submitted', resultId, ctx.attempt.id, ctx.userId]
-    );
+    const affected = await finalizeAttemptAfterResult(db, {
+      attemptId: ctx.attempt.id,
+      courseId: ctx.courseId,
+      userId: ctx.userId,
+      resultId: Number(resultId),
+    });
+
+    if (affected === 0) {
+      const recovery = await resolveSubmitAttemptOutcome(db, {
+        attemptId: ctx.attempt.id,
+        courseId: ctx.courseId,
+        userId: ctx.userId,
+        status: ctx.attempt.status,
+        resultId: ctx.attempt.result_id,
+      });
+      if (recovery.action === 'complete') {
+        await connection.commit();
+        return buildSlugSubmitSuccess(ctx, recovery.resultId, {
+          recovered: recovery.recovered,
+          outcome: recovery.outcome,
+        });
+      }
+
+      const submissionState = await loadAttemptSubmissionState(db, {
+        attemptId: ctx.attempt.id,
+        courseId: ctx.courseId,
+        userId: ctx.userId,
+      });
+      logger.error('submitAttempt finalize returned zero affected rows', {
+        event: 'SUBMIT_FINALIZE_FAILED',
+        attemptId: ctx.attempt.id,
+        userId: ctx.userId,
+        courseId: ctx.courseId,
+        testId: ctx.attempt.test_id,
+        slug: ctx.test.public_slug,
+        resultId: Number(resultId),
+        attemptStatus: submissionState?.status ?? ctx.attempt.status,
+        attemptResultId: submissionState?.attempt_result_id ?? ctx.attempt.result_id,
+        persistedResultId: submissionState?.result_id ?? null,
+        recoveryAction: recovery.action,
+      });
+      throw new ApiError(500, 'Failed to finalize attempt submission', {
+        code: 'SUBMIT_FINALIZE_FAILED',
+        attemptId: ctx.attempt.id,
+      });
+    }
 
     await connection.commit();
-    return { attemptId: ctx.attempt.id, resultId: Number(resultId) };
+    return buildSlugSubmitSuccess(ctx, resultId, submitRecoveryMeta ?? undefined);
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -772,7 +1104,8 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
 
   const rows = await db.rows(
     `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
-            t.title AS test_title, t.id AS test_id
+            t.title AS test_title, t.id AS test_id,
+            t.show_result_immediately, t.show_answers_after_submit, t.show_explanations
      FROM test_attempts a
      INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
      INNER JOIN test_results r ON r.attempt_id = a.id
@@ -791,7 +1124,14 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
     });
   }
 
+  assertStudentResultVisible(row, {
+    attemptId: ctx.attempt.id,
+    context: 'testAttempt.getAttemptResult',
+  });
+
   const subjectPresentation = await loadTestSubjectPresentation(Number(row.test_id));
+  const rawDetails = JSON.parse(row.detail_json || '[]');
+  const details = sanitizeGradingDetailItems(rawDetails, row);
 
   return {
     resultId: row.id,
@@ -803,12 +1143,12 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
     correctCount: row.correct_count,
     wrongCount: row.wrong_count,
     skippedCount: row.skipped_count,
-    timeTakenSeconds: row.time_taken_seconds,
-    details: JSON.parse(row.detail_json || '[]').map((item) => ({
-      ...item,
-      questionText: sanitizeRichHtml(item.questionText),
-      explanation: sanitizeRichHtml(item.explanation),
-    })),
+    timeTakenSeconds: resolveAttemptTimeTakenSeconds({
+      startedAt: ctx.attempt.started_at,
+      submittedAt: ctx.attempt.submitted_at,
+      storedSeconds: row.time_taken_seconds,
+    }),
+    ...(details ? { details } : {}),
   };
 }
 

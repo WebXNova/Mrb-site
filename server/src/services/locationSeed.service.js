@@ -21,10 +21,9 @@ function extractInsertBlock(schemaSql, tableName) {
  */
 async function ensureFallbackCityPerBareDistrict(pool) {
   await pool.query(`
-    INSERT IGNORE INTO cities (province_id, division_id, district_id, name, slug, is_other_option, is_active, sort_order)
+    INSERT IGNORE INTO cities (province_id, district_id, name, slug, is_other_option, is_active, sort_order)
     SELECT
       d.province_id,
-      d.division_id,
       d.id,
       CONCAT(d.name, ' (Other)'),
       CONCAT(d.slug, '-city-fallback'),
@@ -41,7 +40,7 @@ async function ensureFallbackCityPerBareDistrict(pool) {
 
 export async function seedLocationTables(pool) {
   const schemaSql = await fs.readFile(schemaPath, 'utf8');
-  const statements = ['provinces', 'divisions', 'districts', 'cities'].map((table) => extractInsertBlock(schemaSql, table));
+  const statements = ['provinces', 'districts', 'cities'].map((table) => extractInsertBlock(schemaSql, table));
 
   for (const statement of statements) {
     await pool.query(statement);

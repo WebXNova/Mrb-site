@@ -6,9 +6,8 @@ Full-stack learning platform for MRB students.
 
 - Frontend: React + Vite + custom CSS
 - Backend: Node.js + Express
-- Databases:
-  - MySQL (structured entities)
-  - MongoDB (activity logs and flexible documents)
+- Database: MySQL (structured entities)
+- Cache/Queue: Redis (sessions, rate limits, email queue)
 
 ## Apps
 
@@ -32,7 +31,18 @@ cp .env.example .env
 npm run dev
 ```
 
-Make sure MySQL and MongoDB are running and env values are configured.
+Make sure MySQL and Redis are running and env values are configured.
+
+## Production deployment
+
+For Ubuntu 24.04 VPS (PM2 + Nginx + MySQL + Redis):
+
+```bash
+cp .env.example server/.env   # configure secrets
+./deploy.sh
+```
+
+See [docs/deployment/README.md](docs/deployment/README.md) for full setup.
 
 ## Security notes
 

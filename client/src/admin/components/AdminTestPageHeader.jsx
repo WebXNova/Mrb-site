@@ -1,9 +1,10 @@
+import { adminRoute } from '../../config/adminPaths';
 import { Link } from 'react-router-dom';
 
 export default function AdminTestPageHeader({
   title,
   subtitle,
-  backTo = '/admin/tests',
+  backTo = adminRoute('tests'),
   backLabel = 'Back to Tests',
   previousTo,
   previousLabel = 'Previous',

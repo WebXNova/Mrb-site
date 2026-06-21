@@ -69,7 +69,7 @@ const validation = read('src/services/testValidation.service.js');
 
 const integrity = read('src/services/testSubjectIntegrity.service.js');
 
-const linkService = read('src/services/testQuestionLink.service.js');
+const composition = read('src/services/testQuestionComposition.service.js');
 
 const lifecycle = read('src/services/testLifecycle.service.js');
 
@@ -91,11 +91,9 @@ assertMatch('integrity — validateTestComposition', integrity, /validateTestCom
 
 
 
-assertMatch('link — enforceQuestionMutationPreconditions', linkService, /enforceQuestionMutationPreconditions/);
+assertMatch('composition — composed loader', composition, /loadComposedTestQuestions/);
 
-assertMatch('link — available IN filter', linkService, /subject_id IN/);
-
-assertNoBypass('link service — no empty subject bypass', linkService);
+assertNoMatch('legacy link service — removed', composition, /listAvailableQuestionsForTest/);
 
 
 

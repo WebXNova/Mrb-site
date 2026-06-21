@@ -1,0 +1,84 @@
+/**
+ * MRB Student Portal — Design Tokens
+ * Mobile-first spacing, typography, breakpoints, motion
+ */
+
+:root {
+  /* Spacing scale */
+  --sp-space-1: 4px;
+  --sp-space-2: 8px;
+  --sp-space-3: 16px;
+  --sp-space-4: 24px;
+  --sp-space-5: 32px;
+  --sp-space-6: 48px;
+  --sp-space-7: 64px;
+
+  /* Breakpoints (reference) */
+  --sp-bp-tablet: 768px;
+  --sp-bp-desktop: 1024px;
+  --sp-bp-lg: 1280px;
+
+  /* Container padding */
+  --sp-container-px: var(--sp-space-3);
+
+  /* Typography — mobile first */
+  --sp-text-hero: 1.5rem;
+  --sp-text-stat: 1.25rem;
+  --sp-text-card-title: 1rem;
+  --sp-text-body: 0.875rem;
+  --sp-text-label: 0.6875rem;
+
+  /* Layout */
+  --sp-sidebar-width: 280px;
+  --sp-header-height: 64px;
+  --sp-bottom-nav-height: 64px;
+  --sp-content-max: 1280px;
+
+  /* Motion */
+  --sp-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --sp-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --sp-transition: 0.3s var(--sp-ease);
+  --sp-duration-hero: 600ms;
+  --sp-duration-stagger: 100ms;
+  --sp-duration-count: 800ms;
+  --sp-duration-progress: 1000ms;
+  --sp-duration-route: 400ms;
+
+  /* Touch */
+  --sp-touch-min: 44px;
+
+  /* Z-index */
+  --sp-z-header: 90;
+  --sp-z-sidebar: 100;
+  --sp-z-overlay: 95;
+  --sp-z-bottom-nav: 85;
+  --sp-z-search: 110;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sp-container-px: var(--sp-space-5);
+    --sp-text-hero: 1.75rem;
+    --sp-text-stat: 1.5rem;
+    --sp-text-card-title: 1.125rem;
+    --sp-text-body: 0.9375rem;
+    --sp-text-label: 0.75rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --sp-container-px: var(--sp-space-6);
+    --sp-text-hero: 2rem;
+    --sp-text-stat: 1.75rem;
+    --sp-text-card-title: 1.25rem;
+    --sp-text-body: 1rem;
+    --sp-text-label: 0.8125rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --sp-container-px: var(--sp-space-7);
+  }
+}

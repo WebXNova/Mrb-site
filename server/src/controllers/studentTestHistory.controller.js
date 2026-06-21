@@ -4,7 +4,7 @@ import { sendSuccess } from '../utils/httpEnvelope.js';
 
 /**
  * GET /api/student/test-history
- * Query: page, pageSize, search, status (all|pass|fail)
+ * Query: page, pageSize, search, status (all|pass|fail), subjectId, dateRange (all|today|week|month), submittedDate (YYYY-MM-DD)
  */
 export const getStudentTestHistoryHandler = asyncHandler(async (req, res) => {
   const data = await getStudentTestHistory(req.user.id, {
@@ -12,6 +12,9 @@ export const getStudentTestHistoryHandler = asyncHandler(async (req, res) => {
     pageSize: req.query.pageSize,
     search: req.query.search,
     status: req.query.status,
+    subjectId: req.query.subjectId,
+    dateRange: req.query.dateRange,
+    submittedDate: req.query.submittedDate,
   });
   sendSuccess(res, data);
 });

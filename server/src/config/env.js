@@ -3,6 +3,8 @@ import 'dotenv/config';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parseJwtDurationMs, DEFAULT_REFRESH_MS } from '../utils/jwtDuration.js';
+import { parseMysqlPoolConfigFromEnv } from './mysqlPoolConfig.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,13 +32,14 @@ function required(name, fallback = null) {
 }
 
 /**
- * Strict JWT validation (kept as-is but safe)
+ * JWT secret loader — strength checks when present; missing values are allowed at import
+ * and enforced by validateProductionStartupConfig() in production.
  */
-function requiredJwtSecret(name) {
-  const value = required(name);
+function loadJwtSecret(name) {
+  const value = required(name, '');
 
   if (!value) {
-    throw new Error(`Missing required env variable: ${name}`);
+    return '';
   }
 
   const lowered = String(value).toLowerCase();
@@ -93,6 +96,28 @@ function parseNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * Positive integer env var: missing/empty → fallback; present but invalid → throw at import.
+ */
+function parsePositiveIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return fallback;
+  }
+
+  const trimmed = String(raw).trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${name} must be a positive integer (received "${raw}")`);
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer (received "${raw}")`);
+  }
+
+  return parsed;
+}
+
 function parseEmailProvider(value) {
   const normalized = String(value || 'smtp').trim().toLowerCase();
 
@@ -138,6 +163,8 @@ function buildTrustedOrigins() {
   if (nodeEnv !== 'production') {
     origins.add('http://localhost:5173');
     origins.add('http://localhost:5174');
+    origins.add('http://127.0.0.1:5173');
+    origins.add('http://127.0.0.1:5174');
   }
 
   return [...origins];
@@ -219,21 +246,38 @@ export const env = {
     user: required('MYSQL_USER', ''),
     password: required('MYSQL_PASSWORD', ''),
     database: required('MYSQL_DATABASE', ''),
+    pool: parseMysqlPoolConfigFromEnv(),
   },
 
   redis: {
     url: process.env.REDIS_URL || '',
   },
 
+  queue: {
+    emailQueueName: String(process.env.EMAIL_QUEUE_NAME || 'mrb-email').trim() || 'mrb-email',
+    /** When true, /api/email/provider-feedback is armed (secrets required in production). */
+    emailWebhookEnabled: parseBoolean(process.env.EMAIL_WEBHOOK_ENABLED, nodeEnv === 'production'),
+    emailWebhookSecret: stripCred(process.env.EMAIL_WEBHOOK_SECRET || ''),
+    emailWebhookSignatureSecret: stripCred(process.env.EMAIL_WEBHOOK_SIGNATURE_SECRET || ''),
+    emailWebhookToleranceSeconds: parseNumber(process.env.EMAIL_WEBHOOK_TOLERANCE_SECONDS, 300),
+    emailWebhookMaxPayloadBytes: parseNumber(process.env.EMAIL_WEBHOOK_MAX_BYTES, 65536),
+    emailWebhookReplayTtlSeconds: parseNumber(process.env.EMAIL_WEBHOOK_REPLAY_TTL_SECONDS, 600),
+    /** Production default: reject webhooks when Redis replay dedupe is unavailable. */
+    emailWebhookRequireRedisReplay: parseBoolean(
+      process.env.EMAIL_WEBHOOK_REQUIRE_REDIS_REPLAY,
+      nodeEnv === 'production'
+    ),
+  },
+
   jwt: {
-    accessSecret: requiredJwtSecret('JWT_ACCESS_SECRET'),
-    refreshSecret: requiredJwtSecret('JWT_REFRESH_SECRET'),
+    accessSecret: loadJwtSecret('JWT_ACCESS_SECRET'),
+    refreshSecret: loadJwtSecret('JWT_REFRESH_SECRET'),
     previousAccessSecrets: parseCsv(process.env.JWT_ACCESS_PREVIOUS_SECRETS),
     previousRefreshSecrets: parseCsv(process.env.JWT_REFRESH_PREVIOUS_SECRETS),
     issuer: process.env.JWT_ISSUER || 'mrb-learning',
     audience: process.env.JWT_AUDIENCE || 'mrb-learning-clients',
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '90d',
   },
 
   security: {
@@ -243,11 +287,23 @@ export const env = {
     refreshCookieSameSite: parseSameSite(process.env.REFRESH_COOKIE_SAMESITE, 'lax'),
     refreshCookieSecure: parseBoolean(process.env.REFRESH_COOKIE_SECURE, nodeEnv === 'production'),
     refreshCookiePath: process.env.REFRESH_COOKIE_PATH || '/api/auth',
+    /** Aligns refresh + CSRF cookie Max-Age with JWT_REFRESH_EXPIRES_IN. */
+    refreshCookieMaxAgeMs: parseJwtDurationMs(process.env.JWT_REFRESH_EXPIRES_IN || '90d', DEFAULT_REFRESH_MS),
+    /** Grace window for legitimate multi-tab refresh races (ms). */
+    refreshReplayGraceMs: Number(process.env.AUTH_REFRESH_REPLAY_GRACE_MS || 60_000),
     csrfCookiePath: process.env.CSRF_COOKIE_PATH || '/',
     accessCookieSameSite: parseSameSite(process.env.ACCESS_COOKIE_SAMESITE, 'lax'),
     accessCookieSecure: parseBoolean(process.env.ACCESS_COOKIE_SECURE, nodeEnv === 'production'),
     accessCookiePath: process.env.ACCESS_COOKIE_PATH || '/api',
     accessCookieMaxAgeMs: Number(process.env.ACCESS_COOKIE_MAX_AGE_MS || 15 * 60 * 1000),
+    /**
+     * Attempt JWT transport: cookie (production default) | dual | bearer
+     * cookie = HttpOnly only, no token in JSON, Bearer rejected
+     */
+    attemptTokenMode: process.env.ATTEMPT_TOKEN_MODE || (nodeEnv === 'production' ? 'cookie' : 'dual'),
+    attemptCookieSameSite: parseSameSite(process.env.ATTEMPT_COOKIE_SAMESITE, 'strict'),
+    attemptCookieSecure: parseBoolean(process.env.ATTEMPT_COOKIE_SECURE, nodeEnv === 'production'),
+    attemptCookiePath: process.env.ATTEMPT_COOKIE_PATH || '/api/tests',
     trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
     authChallengeKey: process.env.AUTH_CHALLENGE_KEY || '',
   },
@@ -298,6 +354,112 @@ export const env = {
     blockedEmailDomains,
   },
 
+  /** Student test runtime — G-RT-02 legacy deprecation (default: disabled / 410). */
+  runtime: {
+    allowLegacyStudentEndpoints: parseBoolean(process.env.LEGACY_RUNTIME_ALLOW, false),
+  },
+
+  /** Q&A image upload limits (student-qa + teacher-qa). */
+  qaUpload: {
+    maxBytes: parseNumber(process.env.QA_IMAGE_UPLOAD_MAX_BYTES, 5 * 1024 * 1024),
+    maxWidth: parseNumber(process.env.QA_IMAGE_UPLOAD_MAX_WIDTH, 8000),
+    maxHeight: parseNumber(process.env.QA_IMAGE_UPLOAD_MAX_HEIGHT, 8000),
+    maxPixels: parseNumber(process.env.QA_IMAGE_UPLOAD_MAX_PIXELS, 64_000_000),
+  },
+
+  /** Q&A voice recording upload limits (student-qa + teacher-qa). */
+  qaAudioUpload: {
+    maxBytes: parseNumber(process.env.QA_AUDIO_UPLOAD_MAX_BYTES, 10 * 1024 * 1024),
+    maxDurationSec: parseNumber(process.env.QA_AUDIO_UPLOAD_MAX_DURATION_SEC, 120),
+    minDurationSec: parseNumber(process.env.QA_AUDIO_UPLOAD_MIN_DURATION_SEC, 1),
+  },
+
+  /** Q&A audit logging — retry, dead-letter, and alerting. */
+  qaAuditLog: {
+    maxRetries: parseNumber(process.env.QA_AUDIT_LOG_MAX_RETRIES, 3),
+    retryDelayMs: parseNumber(process.env.QA_AUDIT_LOG_RETRY_DELAY_MS, 100),
+    dlqEnabled: parseBoolean(process.env.QA_AUDIT_LOG_DLQ_ENABLED, true),
+    dlqDir: String(process.env.QA_AUDIT_LOG_DLQ_DIR || 'data/qa-audit-dlq').trim(),
+    stdoutEnabled: parseBoolean(process.env.QA_AUDIT_LOG_STDOUT_ENABLED, false),
+    alertThreshold: parseNumber(process.env.QA_AUDIT_LOG_ALERT_THRESHOLD, 5),
+    alertWindowMs: parseNumber(process.env.QA_AUDIT_LOG_ALERT_WINDOW_MS, 60_000),
+  },
+
+  /** Teacher Q&A answer upload rate limits (image + audio). */
+  teacherUploadRateLimit: {
+    requireRedis: parseBoolean(process.env.TEACHER_UPLOAD_REQUIRE_REDIS, nodeEnv === 'production'),
+    image: {
+      burstSessionPerMinute: parseNumber(process.env.TEACHER_UPLOAD_IMAGE_BURST_SESSION_PER_MIN, 5),
+      burstIpPerMinute: parseNumber(process.env.TEACHER_UPLOAD_IMAGE_BURST_IP_PER_MIN, 8),
+      teacherPerHour: parseNumber(process.env.TEACHER_UPLOAD_IMAGE_TEACHER_PER_HOUR, 30),
+      teacherPerDay: parseNumber(process.env.TEACHER_UPLOAD_IMAGE_TEACHER_PER_DAY, 100),
+      ipPerHour: parseNumber(process.env.TEACHER_UPLOAD_IMAGE_IP_PER_HOUR, 45),
+      ipPerDay: parseNumber(process.env.TEACHER_UPLOAD_IMAGE_IP_PER_DAY, 120),
+    },
+    audio: {
+      burstSessionPerMinute: parseNumber(process.env.TEACHER_UPLOAD_AUDIO_BURST_SESSION_PER_MIN, 3),
+      burstIpPerMinute: parseNumber(process.env.TEACHER_UPLOAD_AUDIO_BURST_IP_PER_MIN, 5),
+      teacherPerHour: parseNumber(process.env.TEACHER_UPLOAD_AUDIO_TEACHER_PER_HOUR, 18),
+      teacherPerDay: parseNumber(process.env.TEACHER_UPLOAD_AUDIO_TEACHER_PER_DAY, 50),
+      ipPerHour: parseNumber(process.env.TEACHER_UPLOAD_AUDIO_IP_PER_HOUR, 25),
+      ipPerDay: parseNumber(process.env.TEACHER_UPLOAD_AUDIO_IP_PER_DAY, 70),
+    },
+  },
+
+  /** Q&A orphan upload cleanup (student-qa + teacher-qa). */
+  qaUploadCleanup: {
+    orphanTtlHours: parseNumber(process.env.QA_UPLOAD_CLEANUP_ORPHAN_TTL_HOURS, 24),
+    tempTtlHours: parseNumber(process.env.QA_UPLOAD_CLEANUP_TEMP_TTL_HOURS, 1),
+    quarantineRetentionDays: parseNumber(process.env.QA_UPLOAD_CLEANUP_QUARANTINE_RETENTION_DAYS, 30),
+    batchSize: parseNumber(process.env.QA_UPLOAD_CLEANUP_BATCH_SIZE, 100),
+    scheduleEnabled: parseBoolean(process.env.QA_UPLOAD_CLEANUP_SCHEDULE_ENABLED, false),
+    intervalMinutes: parseNumber(process.env.QA_UPLOAD_CLEANUP_INTERVAL_MINUTES, 360),
+    mode: String(process.env.QA_UPLOAD_CLEANUP_MODE || 'quarantine').trim().toLowerCase(),
+  },
+
+  /** activity_logs retention — purge rows older than retention window. */
+  activityLogRetention: {
+    retentionDays: parseNumber(process.env.ACTIVITY_LOG_RETENTION_DAYS, 90),
+    batchSize: parseNumber(process.env.ACTIVITY_LOG_RETENTION_BATCH_SIZE, 500),
+    batchPauseMs: parseNumber(process.env.ACTIVITY_LOG_RETENTION_BATCH_PAUSE_MS, 50),
+    maxBatchesPerRun: parseNumber(process.env.ACTIVITY_LOG_RETENTION_MAX_BATCHES_PER_RUN, 200),
+    scheduleEnabled: parseBoolean(
+      process.env.ACTIVITY_LOG_RETENTION_SCHEDULE_ENABLED,
+      nodeEnv === 'production'
+    ),
+    intervalMinutes: parseNumber(process.env.ACTIVITY_LOG_RETENTION_INTERVAL_MINUTES, 1440),
+  },
+
+  /** idempotency_keys cleanup — purge expired replay protection rows. */
+  idempotencyCleanup: {
+    batchSize: parseNumber(process.env.IDEMPOTENCY_CLEANUP_BATCH_SIZE, 500),
+    batchPauseMs: parseNumber(process.env.IDEMPOTENCY_CLEANUP_BATCH_PAUSE_MS, 50),
+    maxBatchesPerRun: parseNumber(process.env.IDEMPOTENCY_CLEANUP_MAX_BATCHES_PER_RUN, 200),
+    scheduleEnabled: parseBoolean(
+      process.env.IDEMPOTENCY_CLEANUP_SCHEDULE_ENABLED,
+      nodeEnv === 'production'
+    ),
+    intervalMinutes: parseNumber(process.env.IDEMPOTENCY_CLEANUP_INTERVAL_MINUTES, 360),
+  },
+
+  /** processed_webhooks retention — purge replay ledger rows older than retention window. */
+  processedWebhooksRetention: {
+    retentionDays: parseNumber(process.env.PROCESSED_WEBHOOKS_RETENTION_DAYS, 90),
+    batchSize: parseNumber(process.env.PROCESSED_WEBHOOKS_RETENTION_BATCH_SIZE, 500),
+    batchPauseMs: parseNumber(process.env.PROCESSED_WEBHOOKS_RETENTION_BATCH_PAUSE_MS, 50),
+    maxBatchesPerRun: parseNumber(process.env.PROCESSED_WEBHOOKS_RETENTION_MAX_BATCHES_PER_RUN, 200),
+    scheduleEnabled: parseBoolean(
+      process.env.PROCESSED_WEBHOOKS_RETENTION_SCHEDULE_ENABLED,
+      nodeEnv === 'production'
+    ),
+    intervalMinutes: parseNumber(process.env.PROCESSED_WEBHOOKS_RETENTION_INTERVAL_MINUTES, 1440),
+  },
+
+  /** Teacher Q&A opaque thread identifiers (HMAC). Validated at server startup. */
+  teacherThread: {
+    previousSecrets: parseCsv(process.env.TEACHER_THREAD_PREVIOUS_SECRETS),
+  },
+
   verification: {
     challengeThresholdPerIpPerHour: parseNumber(
       process.env.VERIFICATION_CHALLENGE_THRESHOLD_PER_IP_PER_HOUR,
@@ -328,6 +490,36 @@ export const env = {
       process.env.SAFEPAY_WEBHOOK_PER_IP_PER_MINUTE,
       240
     ),
+  },
+
+  passwordReset: {
+    tokenTtlMinutes: parsePositiveIntEnv('PASSWORD_RESET_TOKEN_TTL_MINUTES', 45),
+    retentionHours: parsePositiveIntEnv('PASSWORD_RESET_RETENTION_HOURS', 72),
+    maxPerEmailPerHour: parsePositiveIntEnv('PASSWORD_RESET_MAX_PER_EMAIL_PER_HOUR', 3),
+    cooldownSeconds: parsePositiveIntEnv('PASSWORD_RESET_COOLDOWN_SECONDS', 90),
+  },
+
+  /** Google Identity Services / OAuth (student sign-in). */
+  google: {
+    clientId: stripCred(process.env.GOOGLE_CLIENT_ID || ''),
+  },
+
+  /** Course catalog media — signed public URLs or token-based enrolled access. */
+  media: {
+    /** When true (default), public catalog API emits signed thumbnail URLs. When false, public catalog hides thumbnails. */
+    publicCatalogMedia: parseBoolean(process.env.PUBLIC_CATALOG_MEDIA, true),
+    catalogSignedUrlTtlSeconds: parseNumber(process.env.CATALOG_MEDIA_SIGNED_URL_TTL_SECONDS, 86400),
+    signingSecret: stripCred(process.env.MEDIA_SIGNING_SECRET || ''),
+  },
+
+  /**
+   * Admin secret path — loaded and validated in adminSecretPath.config.js (fail-closed at startup).
+   * Intentionally not duplicated here to avoid accidental logging; import getAdminApiMountPath() instead.
+   */
+  adminSecretPath: {
+    envKey: 'ADMIN_SECRET_PATH',
+    previousEnvKey: 'ADMIN_SECRET_PATH_PREVIOUS',
+    minSegmentLength: 16,
   },
 };
 

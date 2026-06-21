@@ -23,10 +23,10 @@ function fail(msg) {
 console.log('Student test start API verification\n');
 
 const routesSrc = await fs.readFile(path.join(root, '../src/routes/student.routes.js'), 'utf8');
-if (routesSrc.includes("router.post('/tests/:testId/start', postStudentTestStart)")) {
-  ok('route POST /tests/:testId/start registered');
+if (routesSrc.includes("router.post('/tests/:testId/start', requireCsrf, postStudentTestStart)")) {
+  ok('route POST /tests/:testId/start registered with CSRF');
 } else {
-  fail('start route missing');
+  fail('start route missing CSRF protection');
 }
 
 const { postStudentTestStart } = await import('../src/controllers/studentTests.controller.js');

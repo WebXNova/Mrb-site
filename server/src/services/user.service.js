@@ -116,13 +116,7 @@ export async function dashboardStats() {
   };
 }
 
-export async function updateUserStatus(userId, status) {
-  await mysqlPool.query(
-    `UPDATE users
-     SET status = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [status, userId]
-  );
+export async function getUserSummary(userId) {
   const [rows] = await mysqlPool.query(
     `SELECT id, email, username, full_name, role, status, created_at
      FROM users
@@ -141,4 +135,14 @@ export async function updateUserStatus(userId, status) {
     status: row.status,
     createdAt: row.created_at,
   };
+}
+
+export async function updateUserStatus(userId, status) {
+  await mysqlPool.query(
+    `UPDATE users
+     SET status = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [status, userId]
+  );
+  return getUserSummary(userId);
 }

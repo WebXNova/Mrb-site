@@ -39,7 +39,8 @@ const composition = read('src/services/testQuestionComposition.service.js');
 
 assertMatch('publish engine exists', publishEngine, /export async function validatePublishEligibility/);
 assertMatch('publish engine — evaluate', publishEngine, /export async function evaluatePublishEligibility/);
-assertMatch('publish engine — active questions', publishEngine, /countActiveComposedQuestionsForTest/);
+assertMatch('publish engine — quiz draft gate', publishEngine, /NO_QUIZ_DRAFT/);
+assertMatch('completeness — draft-aware step4', completeness, /evaluateStep4/);
 assertMatch('publish engine — INVALID_TEST_COMPOSITION normalize', publishEngine, /INVALID_TEST_COMPOSITION/);
 assertMatch('publish engine — lifecycle READY', publishEngine, /READY_FOR_PUBLISH/);
 
@@ -173,12 +174,12 @@ if (!courses[0]) {
         Number(subjects[0].id),
       ]);
 
-      // Case 2 — subjects but no questions
+      // Case 2 — subjects but no quiz draft
       report = await evaluatePublishEligibility(testId, connection);
-      if (report.valid || !report.errors.includes('NO_QUESTIONS')) {
-        throw new Error('Case 2 DB: no questions must fail NO_QUESTIONS');
+      if (report.valid || !report.errors.includes('NO_QUIZ_DRAFT')) {
+        throw new Error(`Case 2 DB: no draft must fail NO_QUIZ_DRAFT, got errors=${report.errors}`);
       }
-      console.log('PASS Case 2 — no questions (DB)');
+      console.log('PASS Case 2 — no quiz draft (DB)');
 
       const [qb] = await connection.query(
         `SELECT id FROM question_bank WHERE course_id = ? AND deleted_at IS NULL LIMIT 1`,
@@ -191,20 +192,55 @@ if (!courses[0]) {
         ]);
 
         report = await evaluatePublishEligibility(testId, connection);
-        if (!report.valid || report.lifecycle_status !== TEST_LIFECYCLE_STATES.READY_FOR_PUBLISH) {
-          throw new Error(`Case 7: expected READY_FOR_PUBLISH, got ${report.lifecycle_status} errors=${report.errors}`);
+        if (report.valid || !report.errors.includes('NO_QUIZ_DRAFT')) {
+          throw new Error(`Case 7a: legacy links without draft must fail NO_QUIZ_DRAFT, errors=${report.errors}`);
         }
-        console.log('PASS Case 7 — fully valid test eligible (DB)');
+        console.log('PASS Case 7a — legacy links without draft blocked (DB)');
 
-        // Case 6 — soft-delete linked question; junction row remains
+        // Case 6 — soft-delete linked question; junction row remains, still no draft
         await connection.query(`UPDATE question_bank SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?`, [
           Number(qb[0].id),
         ]);
         report = await evaluatePublishEligibility(testId, connection);
-        if (report.valid || !report.errors.includes('NO_QUESTIONS')) {
-          throw new Error('Case 6: deleted-only links must fail NO_QUESTIONS');
+        if (report.valid || !report.errors.includes('NO_QUIZ_DRAFT')) {
+          throw new Error(`Case 6: deleted-only links without draft must fail NO_QUIZ_DRAFT, errors=${report.errors}`);
         }
-        console.log('PASS Case 6 — deleted linked questions only (DB)');
+        console.log('PASS Case 6 — deleted linked questions without draft (DB)');
+
+        const draftPayload = JSON.stringify({
+          version: 1,
+          testId,
+          storageKey: String(testId),
+          questions: [
+            {
+              id: 'q-1',
+              title: '',
+              questionType: 'multiple_choice',
+              questionText: '<p>Publish gate sample?</p>',
+              points: 1,
+              collapsed: false,
+              showExplanation: false,
+              explanation: '',
+              choices: [
+                { id: 'c1', text: 'A', isCorrect: true },
+                { id: 'c2', text: 'B', isCorrect: false },
+              ],
+            },
+          ],
+          totalPoints: 1,
+          savedAt: new Date().toISOString(),
+        });
+        await connection.query(
+          `INSERT INTO test_quiz_drafts (test_id, draft_payload, version, created_by)
+           VALUES (?, ?, 1, ?)`,
+          [testId, draftPayload, createdBy]
+        );
+
+        report = await evaluatePublishEligibility(testId, connection);
+        if (!report.valid || report.lifecycle_status !== TEST_LIFECYCLE_STATES.READY_FOR_PUBLISH) {
+          throw new Error(`Case 7b: expected READY_FOR_PUBLISH with draft, got ${report.lifecycle_status} errors=${report.errors}`);
+        }
+        console.log('PASS Case 7b — valid quiz draft eligible (DB)');
       } else {
         console.log('SKIP Case 6/7 — no question_bank row for course');
       }

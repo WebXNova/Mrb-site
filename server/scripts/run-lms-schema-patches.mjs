@@ -36,7 +36,7 @@ async function verify() {
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tests'
-       AND COLUMN_NAME IN ('course_id', 'duration_minutes', 'max_attempts', 'passing_percentage', 'status')`,
+       AND COLUMN_NAME IN ('course_id', 'duration_minutes', 'max_attempts', 'passing_marks', 'status')`,
     [db]
   );
 

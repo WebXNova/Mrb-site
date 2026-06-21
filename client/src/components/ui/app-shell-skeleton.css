@@ -1,0 +1,140 @@
+.app-shell-skeleton {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+}
+
+.app-skeleton {
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--color-ink-50) 0%,
+    var(--color-ink-100) 50%,
+    var(--color-ink-50) 100%
+  );
+  background-size: 200% 100%;
+  animation: app-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes app-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.app-shell-skeleton__nav {
+  border-bottom: 1px solid var(--color-ink-100);
+  padding: var(--space-4) var(--space-6);
+}
+
+.app-shell-skeleton__nav-inner {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.app-skeleton--logo {
+  width: 8.5rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+}
+
+.app-shell-skeleton__nav-links {
+  display: none;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.app-skeleton--nav-link {
+  width: 4.5rem;
+  height: 1rem;
+}
+
+.app-skeleton--nav-action {
+  width: 6rem;
+  height: 2.25rem;
+  border-radius: var(--radius-full);
+}
+
+.app-shell-skeleton__main {
+  flex: 1;
+  width: 100%;
+}
+
+.app-shell-skeleton__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-skeleton--eyebrow {
+  width: 5.5rem;
+  height: 0.875rem;
+}
+
+.app-skeleton--title {
+  width: min(100%, 28rem);
+  height: 2.5rem;
+}
+
+.app-skeleton--line {
+  width: 100%;
+  height: 1rem;
+}
+
+.app-skeleton--line-short {
+  width: min(100%, 18rem);
+  height: 1rem;
+}
+
+.app-skeleton--card {
+  width: 100%;
+  height: 10rem;
+  margin-top: var(--space-4);
+  border-radius: var(--radius-lg);
+}
+
+.app-shell-skeleton__footer {
+  border-top: 1px solid var(--color-ink-100);
+  padding: var(--space-8) var(--space-6);
+}
+
+.app-shell-skeleton__footer-inner {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-skeleton--footer-line {
+  width: min(100%, 12rem);
+  height: 0.875rem;
+}
+
+@media (min-width: 768px) {
+  .app-shell-skeleton__nav {
+    padding-inline: var(--space-8);
+  }
+
+  .app-shell-skeleton__nav-links {
+    display: flex;
+  }
+
+  .app-shell-skeleton__footer {
+    padding-inline: var(--space-8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-skeleton {
+    animation: none;
+  }
+}

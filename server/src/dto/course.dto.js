@@ -9,6 +9,9 @@
  */
 
 import { toCoursePricingPublicDto } from './coursePricing.dto.js';
+import { toCourseResponse } from '../dtos/course.dto.js';
+import { env } from '../config/env.js';
+import { parseCatalogMediaUploadPath, signCatalogMediaUrl } from '../services/catalogMediaSign.service.js';
 
 const LEVEL_ALLOWED = ['beginner', 'intermediate', 'advanced'];
 
@@ -56,6 +59,20 @@ function resolveThumbnailUrl(row) {
 }
 
 /**
+ * Public catalog thumbnails: signed URLs when PUBLIC_CATALOG_MEDIA=true; hidden for internal uploads when false.
+ * @param {ReturnType<typeof normalizeCourseRow>|null} n
+ */
+function resolvePublicThumbnailUrl(n) {
+  const raw = n?.thumbnail_url;
+  if (!raw) return null;
+  if (parseCatalogMediaUploadPath(raw)) {
+    if (!env.media.publicCatalogMedia) return null;
+    return signCatalogMediaUrl(raw);
+  }
+  return raw;
+}
+
+/**
  * Resolve short_description: stored column, else derive from full description.
  * @param {Record<string, unknown>} row
  */
@@ -100,6 +117,9 @@ export function normalizeCourseRow(row) {
     is_active: row.is_active !== undefined && row.is_active !== null ? !!row.is_active : true,
     created_by: Number.isFinite(createdByRaw) ? createdByRaw : null,
     pricing: resolvePricing(row),
+    start_date: row.start_date ?? null,
+    end_date: row.end_date ?? null,
+    admission_status: row.admission_status ?? 'CLOSED',
     created_at: row.created_at ?? null,
     updated_at: row.updated_at ?? null,
   };
@@ -111,14 +131,21 @@ export function normalizeCourseRow(row) {
  */
 export function toCoursePublicApi(n) {
   if (!n) return null;
+  const base = toCourseResponse(n);
+  if (!base) return null;
   return {
-    id: n.id,
-    title: n.title,
+    id: base.id,
+    title: base.title,
     description: n.description,
     short_description: n.short_description,
     level: n.level,
-    thumbnail_url: n.thumbnail_url,
+    thumbnail_url: resolvePublicThumbnailUrl(n),
     pricing: n.pricing ?? null,
+    start_date: base.start_date,
+    end_date: base.end_date,
+    admission_status: base.admission_status,
+    is_enrollment_open: base.is_enrollment_open,
+    enrollment_message: base.enrollment_message,
     created_at: toIsoTimestamp(n.created_at) ?? '',
     updated_at: toIsoTimestamp(n.updated_at) ?? '',
   };

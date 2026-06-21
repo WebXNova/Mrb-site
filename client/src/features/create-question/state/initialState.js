@@ -45,7 +45,7 @@ export function createInitialCreateQuestionState() {
       loading: false,
       errors: {},
       isDirty: false,
-      previewVisible: true,
+      previewVisible: false,
     },
   };
 }

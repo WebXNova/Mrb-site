@@ -30,7 +30,24 @@ export const CEE_PROTECTED_NAMESPACES = Object.freeze([
     label: 'tests',
     requiredPolicy: 'entitlement',
     mountPaths: Object.freeze(['/api/tests']),
-    routeModules: Object.freeze(['src/routes/tests.routes.js']),
+    routeModules: Object.freeze([
+      'src/routes/tests.routes.js',
+      'src/routes/testQuizDraft.routes.js',
+    ]),
+  }),
+  Object.freeze({
+    namespace: '/api/attempt',
+    label: 'legacy_attempt_runtime',
+    requiredPolicy: 'entitlement',
+    mountPaths: Object.freeze(['/api/attempt']),
+    routeModules: Object.freeze(['src/routes/legacyRuntime.routes.js']),
+  }),
+  Object.freeze({
+    namespace: '/api/attempts',
+    label: 'legacy_attempts_runtime',
+    requiredPolicy: 'entitlement',
+    mountPaths: Object.freeze(['/api/attempts']),
+    routeModules: Object.freeze(['src/routes/legacyRuntime.routes.js']),
   }),
   Object.freeze({
     namespace: '/api/uploads',

@@ -21,7 +21,7 @@ import {
   loadTestCompletenessRow,
   TEST_LIFECYCLE_STATES,
 } from './testCompleteness.service.js';
-import { countActiveComposedQuestionsForTest } from './testQuestionComposition.service.js';
+import { resolveTestQuestionAuthority } from './testQuestionAuthority.service.js';
 import { loadTestSubjectIds } from './testSubjectValidation.service.js';
 import {
   buildValidationReport,
@@ -33,9 +33,14 @@ import {
   logTestValidationFailure,
   TEST_SECURITY_ACTIONS,
 } from './testSecurityAudit.service.js';
+import { McqValidationError } from '../validation/mcq/McqValidationError.js';
+import { collectMcqPublishValidationIssues, MCQ_PUBLISH_ERROR_CODE } from './mcqPublishValidation.service.js';
+import { INVALID_MCQ_FOR_PUBLISH } from '../errors/codes/ErrorCodes.js';
 
 export const PUBLISH_ELIGIBILITY_CODES = Object.freeze({
   NO_QUESTIONS: 'NO_QUESTIONS',
+  NO_QUIZ_DRAFT: 'NO_QUIZ_DRAFT',
+  INVALID_MCQ: INVALID_MCQ_FOR_PUBLISH,
 });
 
 /**
@@ -51,6 +56,10 @@ export function normalizePublishEligibilityErrors(errors) {
  */
 function primaryPublishErrorCode(errors) {
   const normalized = normalizePublishEligibilityErrors(errors);
+  if (normalized.includes(PUBLISH_ELIGIBILITY_CODES.INVALID_MCQ)) return PUBLISH_ELIGIBILITY_CODES.INVALID_MCQ;
+  if (normalized.includes(PUBLISH_ELIGIBILITY_CODES.NO_QUIZ_DRAFT)) {
+    return PUBLISH_ELIGIBILITY_CODES.NO_QUIZ_DRAFT;
+  }
   if (normalized.includes(PUBLISH_ELIGIBILITY_CODES.NO_QUESTIONS)) return PUBLISH_ELIGIBILITY_CODES.NO_QUESTIONS;
   if (normalized.includes(INVALID_TEST_COMPOSITION)) return INVALID_TEST_COMPOSITION;
   if (normalized.includes(INVALID_TEST_STATE)) return INVALID_TEST_STATE;
@@ -93,7 +102,9 @@ export function throwPublishEligibilityFailure(report, auditContext = {}) {
  */
 function publishMessageForCode(code) {
   const messages = {
-    [PUBLISH_ELIGIBILITY_CODES.NO_QUESTIONS]: 'Test must have at least one active linked question.',
+    [PUBLISH_ELIGIBILITY_CODES.INVALID_MCQ]: 'One or more MCQ questions are invalid and must be fixed before publish.',
+    [PUBLISH_ELIGIBILITY_CODES.NO_QUIZ_DRAFT]: 'Test must have a saved quiz draft before publish.',
+    [PUBLISH_ELIGIBILITY_CODES.NO_QUESTIONS]: 'Test must have at least one valid question in the quiz draft.',
     [INVALID_TEST_COMPOSITION]: 'Test composition is invalid for publishing.',
     [INVALID_TEST_STATE]: 'Test state is invalid for publishing.',
     [PUBLISH_REQUIREMENTS_NOT_MET]: 'Test does not meet publish requirements.',
@@ -128,25 +139,36 @@ export async function evaluatePublishEligibility(testId, executor = mysqlPool) {
     errors.push(...compositionReport.errors);
   }
 
-  const activeQuestionCount = await countActiveComposedQuestionsForTest(tid, executor);
+  const authority = await resolveTestQuestionAuthority(tid, executor, { testRow: row });
   const subjectIds = await loadTestSubjectIds(tid, executor);
   const completenessRow = await loadTestCompletenessRow(tid, executor);
   const wizardReport = evaluateTestCompleteness(
     completenessRow || row,
-    activeQuestionCount,
+    authority.questionCount,
     'publish',
-    subjectIds
+    subjectIds,
+    authority
   );
 
   if (!wizardReport.step1_complete) errors.push(PUBLISH_REQUIREMENTS_NOT_MET);
   if (!wizardReport.step2_complete) errors.push(PUBLISH_REQUIREMENTS_NOT_MET);
   if (!wizardReport.step3_complete) errors.push(PUBLISH_REQUIREMENTS_NOT_MET);
-  if (!wizardReport.step4_complete || activeQuestionCount < 1) {
+
+  if (!authority.hasQuizDraft) {
+    errors.push(PUBLISH_ELIGIBILITY_CODES.NO_QUIZ_DRAFT);
+  } else if (authority.draftQuestionCount < 1) {
+    errors.push(PUBLISH_ELIGIBILITY_CODES.NO_QUESTIONS);
+  } else if (!wizardReport.step4_complete) {
     errors.push(PUBLISH_ELIGIBILITY_CODES.NO_QUESTIONS);
   }
 
   if (wizardReport.lifecycle_status !== TEST_LIFECYCLE_STATES.READY_FOR_PUBLISH) {
     errors.push(PUBLISH_REQUIREMENTS_NOT_MET);
+  }
+
+  const mcqFailures = await collectMcqPublishValidationIssues(tid, executor, { authority });
+  if (mcqFailures.length > 0) {
+    errors.push(PUBLISH_ELIGIBILITY_CODES.INVALID_MCQ);
   }
 
   const normalizedErrors = normalizePublishEligibilityErrors(errors);
@@ -156,10 +178,14 @@ export async function evaluatePublishEligibility(testId, executor = mysqlPool) {
     state: stateReport,
     composition: compositionReport,
     wizard: wizardReport,
-    active_question_count: activeQuestionCount,
+    question_authority: authority,
+    active_question_count: authority.runtimeComposedCount,
+    draft_question_count: authority.draftQuestionCount,
+    effective_question_count: authority.questionCount,
     lifecycle_status: wizardReport.lifecycle_status,
     can_publish: normalizedErrors.length === 0,
     missing_fields: wizardReport.missing_fields,
+    mcq_validation_failures: mcqFailures,
   });
 }
 
@@ -188,6 +214,20 @@ export async function validatePublishEligibility(testId, executor = mysqlPool, o
   }
 
   if (throwOnFailure && !report.valid) {
+    if (report.errors?.includes(PUBLISH_ELIGIBILITY_CODES.INVALID_MCQ) && report.mcq_validation_failures?.length) {
+      const issues = report.mcq_validation_failures.flatMap((failure) =>
+        failure.issues.map((issue) => ({
+          ...issue,
+          source: failure.source,
+          questionId: failure.questionId,
+        }))
+      );
+      throw new McqValidationError(issues, {
+        context: 'publish',
+        pathPrefix: `tests[${tid}]`,
+        publishErrorCode: MCQ_PUBLISH_ERROR_CODE,
+      });
+    }
     throwPublishEligibilityFailure(report, { testId: tid, userId: options.userId });
   }
 

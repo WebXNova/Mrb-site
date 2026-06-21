@@ -1,4 +1,9 @@
 import { sanitizeRichHtml } from '../../utils/htmlSanitizer.js';
+import {
+  calculateMarksBasedResult,
+  calculateQuestionMarksAwarded,
+  resolveQuestionEffectiveMarks,
+} from '../../grading/gradingCalculation.js';
 
 /**
  * @param {Array<{
@@ -12,36 +17,45 @@ import { sanitizeRichHtml } from '../../utils/htmlSanitizer.js';
  * @param {Map<number, number>} answersByQuestionId question_bank.id → question_options.id
  * @param {number} negativeMarking
  */
-export function gradeComposedAttempt(composedQuestions, answersByQuestionId, negativeMarking = 0) {
-  let score = 0;
-  let maxScore = 0;
-  let correctCount = 0;
-  let totalPenalty = 0;
+export function gradeComposedAttempt(composedQuestions, answersByQuestionId, negativeMarking = 0, passingMarks = 0) {
+  const gradingQuestions = composedQuestions.map((question) => {
+    const correctOption = (question.options || []).find((o) => o.isCorrect);
+    return {
+      questionId: Number(question.questionId),
+      effectiveMarks: resolveQuestionEffectiveMarks(question),
+      selectedOptionId: answersByQuestionId.get(Number(question.questionId)) ?? null,
+      correctOptionId: correctOption ? Number(correctOption.optionId) : null,
+    };
+  });
 
-  const details = composedQuestions.map((question) => {
-    const marks = Number(question.effectiveMarks ?? question.marks ?? 1);
-    maxScore += marks;
+  const aggregate = calculateMarksBasedResult({
+    questions: gradingQuestions,
+    testConfig: {
+      passingMarks: Number(passingMarks ?? 0),
+      negativeMarkingEnabled: negativeMarking > 0,
+      negativeMarkingValue: negativeMarking,
+    },
+  });
+
+  const details = composedQuestions.map((question, index) => {
+    const marks = resolveQuestionEffectiveMarks(question);
+    const gradingRow = gradingQuestions[index];
 
     const correctOption = (question.options || []).find((o) => o.isCorrect);
-    const correctOptionId = correctOption ? Number(correctOption.optionId) : null;
-    const selectedOptionId = answersByQuestionId.get(Number(question.questionId)) ?? null;
+    const correctOptionId = gradingRow.correctOptionId;
+    const selectedOptionId = gradingRow.selectedOptionId;
     const isCorrect =
       selectedOptionId != null &&
       correctOptionId != null &&
       Number(selectedOptionId) === Number(correctOptionId);
 
-    if (isCorrect) {
-      score += marks;
-      correctCount += 1;
-    } else if (selectedOptionId != null && negativeMarking > 0) {
-      totalPenalty += negativeMarking;
-    }
-
-    const marksAwarded = isCorrect
-      ? marks
-      : selectedOptionId != null && negativeMarking > 0
-        ? -negativeMarking
-        : 0;
+    const marksAwarded = calculateQuestionMarksAwarded({
+      effectiveMarks: marks,
+      selectedOptionId,
+      correctOptionId,
+      negativeMarkingEnabled: negativeMarking > 0,
+      negativeMarkingValue: negativeMarking,
+    });
 
     const selectedOptionRow = (question.options || []).find(
       (o) => Number(o.optionId) === Number(selectedOptionId)
@@ -69,18 +83,17 @@ export function gradeComposedAttempt(composedQuestions, answersByQuestionId, neg
     };
   });
 
-  score = Math.max(0, score - totalPenalty);
-  const wrongCount = details.filter((item) => item.selectedOption && !item.isCorrect).length;
-  const skippedCount = details.filter((item) => !item.selectedOption).length;
-  const percentage = maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(2)) : 0;
+  const wrongCount = aggregate.wrongAnswers;
+  const skippedCount = aggregate.unansweredAnswers;
 
   return {
-    score,
-    maxScore,
-    correctCount,
+    score: aggregate.score,
+    maxScore: aggregate.maxScore,
+    correctCount: aggregate.correctAnswers,
     wrongCount,
     skippedCount,
-    percentage,
+    percentage: aggregate.percentage,
+    passStatus: aggregate.passStatus,
     details,
   };
 }

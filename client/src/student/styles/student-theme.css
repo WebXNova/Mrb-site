@@ -1,0 +1,576 @@
+/**
+ * MRB Student Portal — 2-Color Design System
+ * Primary: Slate Navy #1E293B · Accent: Cobalt Blue #3B82F6
+ * 90% neutral + slate · 10% cobalt accent
+ */
+
+.student-shell {
+  /* ── Brand colors ── */
+  --sp-slate: #1e293b;
+  --sp-accent: #3b82f6;
+  --sp-accent-hover: #2563eb;
+  --sp-accent-soft: rgba(59, 130, 246, 0.1);
+  --sp-accent-ring: rgba(59, 130, 246, 0.24);
+
+  /* ── Light surfaces ── */
+  --sp-white: #ffffff;
+  --sp-bg-secondary: #f8fafc;
+  --sp-border: #e2e8f0;
+  --sp-border-subtle: #e2e8f0;
+
+  /* ── Typography colors ── */
+  --sp-text-primary: #0f172a;
+  --sp-text-secondary: #475569;
+  --sp-text-tertiary: #64748b;
+  --sp-text-placeholder: #64748b;
+
+  /* ── Typography sizes (fluid — inherits public site tokens) ── */
+  --sp-text-xs: var(--text-footer-meta);
+  --sp-text-sm: var(--text-body-sm);
+  --sp-text-base: var(--text-body);
+  --sp-text-lg: var(--fs-18);
+
+  /* ── Legacy aliases (map old tokens → 2-color system) ── */
+  --sp-charcoal: var(--sp-text-primary);
+  --sp-graphite: var(--sp-text-secondary);
+  --sp-silver: var(--sp-text-tertiary);
+  --sp-grey-cool: var(--sp-text-tertiary);
+  --sp-grey-warm: var(--sp-text-tertiary);
+  --sp-pearl: var(--sp-bg-secondary);
+  --sp-stone: var(--sp-bg-secondary);
+  --sp-ash: var(--sp-border);
+  --sp-off-white: var(--sp-bg-secondary);
+  --sp-cream: var(--sp-bg-secondary);
+  --sp-navy: var(--sp-slate);
+
+  --sp-burgundy: var(--sp-accent);
+  --sp-burgundy-light: var(--sp-accent-soft);
+  --sp-burgundy-dark: var(--sp-accent-hover);
+  --sp-gold: var(--sp-accent);
+  --sp-gold-light: var(--sp-accent-soft);
+  --sp-gold-dark: var(--sp-accent-hover);
+  --sp-gold-highlight: var(--sp-accent);
+  --sp-sage: var(--sp-slate);
+  --sp-sage-light: var(--sp-bg-secondary);
+  --sp-sage-dark: var(--sp-text-primary);
+  --sp-blue: var(--sp-accent);
+  --sp-blue-light: var(--sp-accent-soft);
+  --sp-blue-dark: var(--sp-accent-hover);
+  --sp-amber: var(--sp-accent);
+
+  /* ── No decorative gradients ── */
+  --sp-gradient-hero: var(--sp-white);
+  --sp-gradient-progress: var(--sp-accent);
+  --sp-gradient-card-accent: var(--sp-bg-secondary);
+  --sp-gradient-button: var(--sp-accent);
+  --sp-gradient-section: var(--sp-bg-secondary);
+  --sp-gradient-primary: var(--sp-accent);
+  --sp-gradient-gold: var(--sp-accent);
+  --sp-gradient-burgundy: var(--sp-slate);
+
+  /* ── Surfaces ── */
+  --sp-surface-header: rgba(255, 255, 255, 0.96);
+  --sp-surface-hero: var(--sp-white);
+  --sp-surface-card: var(--sp-white);
+  --sp-surface-card-muted: var(--sp-bg-secondary);
+  --sp-surface-raised: var(--sp-white);
+
+  /* ── Minimal shadows ── */
+  --sp-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --sp-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --sp-shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --sp-shadow-hover: 0 4px 16px rgba(15, 23, 42, 0.08);
+
+  /* ── Tints ── */
+  --sp-tint-burgundy: var(--sp-accent-soft);
+  --sp-tint-gold: var(--sp-accent-soft);
+  --sp-tint-sage: rgba(30, 41, 59, 0.06);
+  --sp-tint-blue: var(--sp-accent-soft);
+
+  /* ── Focus ── */
+  --sp-focus-ring: 0 0 0 3px var(--sp-accent-ring);
+  --sp-shimmer: none;
+
+  /* ── Typography ── */
+  --sp-font-serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --sp-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --sp-font-display: var(--sp-font-sans);
+
+  /* Legacy bridge */
+  --student-burgundy: var(--sp-accent);
+  --student-navy: var(--sp-slate);
+  --student-gold: var(--sp-accent);
+  --student-amber: var(--sp-accent);
+  --student-sage: var(--sp-slate);
+  --student-cream: var(--sp-bg-secondary);
+  --student-glass-strong: var(--sp-white);
+  --student-glass-border: var(--sp-border);
+  --student-gold-glow: none;
+  --student-gold-glow-hover: none;
+
+  --color-bg: var(--sp-white);
+  --color-bg-alt: var(--sp-bg-secondary);
+  --color-bg-soft: var(--sp-bg-secondary);
+  --color-surface: var(--sp-white);
+  --color-primary: var(--sp-accent);
+  --color-ink-900: var(--sp-text-primary);
+  --color-ink-800: var(--sp-text-primary);
+  --color-ink-700: var(--sp-text-secondary);
+  --color-ink-600: var(--sp-text-secondary);
+  --color-ink-500: var(--sp-text-secondary);
+  --color-ink-400: var(--sp-text-tertiary);
+  --color-ink-300: var(--sp-border);
+  --color-ink-200: var(--sp-border);
+  --color-ink-100: var(--sp-bg-secondary);
+  --color-ink-50: var(--sp-bg-secondary);
+
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  color: var(--sp-text-primary);
+  background: var(--sp-white);
+  font-family: var(--sp-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.student-shell::before {
+  display: none;
+}
+
+.sp-monogram {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: var(--sp-slate);
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.sp-monogram:hover {
+  transform: none;
+  background: var(--sp-text-secondary);
+}
+
+.sp-monogram:active {
+  transform: scale(0.98);
+}
+
+.sp-monogram__mark {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--sp-font-sans);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.sp-monogram--sidebar {
+  box-shadow: none;
+}
+
+.student-shell .student-sidebar.sp-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 100;
+  width: min(var(--sp-sidebar-width, 280px), 88vw);
+  height: 100vh;
+  padding: 1.75rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--sp-white);
+  border-right: 1px solid var(--sp-border);
+  box-shadow: none;
+  transform: translateX(-105%);
+  transition: transform 0.25s ease;
+}
+
+.student-shell--nav-open .student-sidebar.sp-sidebar {
+  transform: translateX(0);
+}
+
+.sp-sidebar__brand {
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--sp-border);
+}
+
+.sp-sidebar__brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.sp-sidebar__brand-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.sp-sidebar__brand-wordmark {
+  height: 36px;
+  width: auto;
+  max-width: calc(100% - 52px);
+  object-fit: contain;
+  display: block;
+}
+
+.sp-sidebar__nav {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.student-shell .student-nav__item {
+  color: var(--sp-text-secondary);
+  border-radius: 10px;
+  font-weight: 500;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.student-shell .student-nav__item:hover {
+  background: var(--sp-bg-secondary);
+  color: var(--sp-text-primary);
+}
+
+.student-shell .student-nav__item--active {
+  background: transparent;
+  color: var(--sp-accent);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--sp-accent);
+}
+
+.sp-sidebar__footer {
+  padding-top: 1rem;
+  border-top: 1px solid var(--sp-border);
+}
+
+.student-shell .student-sidebar-overlay {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: none;
+}
+
+.student-shell .student-content.sp-portal-content {
+  color: var(--sp-text-primary);
+  max-width: var(--sp-content-max);
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--sp-space-4) var(--sp-container-px) var(--sp-space-6);
+  flex: 1;
+  background: var(--sp-bg-secondary);
+}
+
+.student-shell .student-bottom-nav.sp-bottom-nav {
+  background: var(--sp-white);
+  backdrop-filter: none;
+  border-top: 1px solid var(--sp-border);
+  box-shadow: none;
+}
+
+.student-shell .student-bottom-nav__item,
+.student-shell .sp-bottom-nav__item {
+  color: var(--sp-text-tertiary);
+  font-weight: 500;
+}
+
+.student-shell .sp-bottom-nav__item {
+  min-height: var(--sp-touch-min);
+  padding: var(--sp-space-2) var(--sp-space-1);
+}
+
+.student-shell .student-bottom-nav__item--active,
+.student-shell .sp-bottom-nav__item--active {
+  color: var(--sp-accent);
+  background: transparent;
+  border-radius: 10px;
+}
+
+.student-shell .admin-card,
+.student-shell .admin-empty-state,
+.student-shell .admin-stat-card,
+.student-shell .student-progress-card,
+.student-shell .student-feature-card,
+.student-shell .student-my-course__stat-card,
+.student-shell .student-mobile-card,
+.student-shell .student-lecture-playlist__subject,
+.student-shell .student-lecture-card,
+.student-shell .student-lecture-filters,
+.student-shell .student-notifications-list__item,
+.student-shell .sp-panel,
+.student-shell .student-tests-page,
+.student-shell .student-test-card,
+.student-shell .student-test-sections__empty,
+.student-shell .student-lecture-tab {
+  background: var(--sp-surface-card, var(--sp-white));
+  border: 1px solid var(--sp-border);
+  box-shadow: none;
+  color: var(--sp-text-primary);
+}
+
+.student-shell .btn--primary,
+.student-shell .btn--accent,
+.student-shell .sp-btn--primary {
+  background: var(--sp-accent);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: none;
+  --btn-bg: var(--sp-accent);
+  --btn-bg-hover: var(--sp-accent-hover);
+  --btn-color: #ffffff;
+  --btn-border: transparent;
+}
+
+.student-shell .btn--primary:hover,
+.student-shell .btn--accent:hover,
+.student-shell .sp-btn--primary:hover {
+  background: var(--sp-accent-hover);
+  --btn-bg: var(--sp-accent-hover);
+}
+
+.student-shell .btn--secondary,
+.student-shell .sp-btn--secondary {
+  background: transparent;
+  border: 1px solid var(--sp-border);
+  color: var(--sp-text-primary);
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--sp-accent-soft);
+  --btn-color: var(--sp-text-primary);
+  --btn-border: var(--sp-border);
+}
+
+.student-shell .btn--ghost,
+.student-shell .sp-btn--ghost {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--sp-accent-soft);
+  --btn-color: var(--sp-accent);
+}
+
+.student-shell .admin-stat-card__label,
+.student-shell .student-feature-card__label,
+.student-shell .student-my-course__stat-label {
+  color: var(--sp-text-tertiary);
+}
+
+.student-shell .admin-stat-card__value,
+.student-shell .student-feature-card__title,
+.student-shell .student-my-course__stat-value {
+  color: var(--sp-text-primary);
+}
+
+.student-shell .student-profile-menu__avatar {
+  background: var(--sp-slate);
+  box-shadow: none;
+}
+
+.student-shell .student-profile-menu__panel {
+  background: var(--sp-white);
+  border: 1px solid var(--sp-border);
+  box-shadow: var(--sp-shadow-md);
+}
+
+.student-shell .student-profile-menu__name {
+  color: var(--sp-text-primary);
+}
+
+.student-shell .student-profile-menu__item:hover,
+.student-shell .student-profile-menu__item:focus-visible {
+  background: var(--sp-bg-secondary);
+}
+
+.student-shell .student-profile-menu__trigger:focus-visible {
+  outline-color: var(--sp-accent);
+}
+
+.student-shell .heading-1,
+.student-shell .heading-2,
+.student-shell .heading-3,
+.student-shell .heading-4 {
+  color: var(--sp-text-primary);
+  font-family: var(--sp-font-sans);
+  font-weight: 650;
+}
+
+.student-shell a:not(.btn):not(.sp-btn):not(.student-nav__item):not(.student-bottom-nav__item):not(.sp-link):not(.sp-quick-link):not(.sp-settings-card) {
+  color: var(--sp-accent);
+}
+
+.student-shell a.sp-btn--primary,
+.student-shell a.sp-btn--primary:hover,
+.student-shell button.sp-btn--primary,
+.student-shell button.sp-btn--primary:hover {
+  color: #fff;
+}
+
+.student-shell a.sp-btn--primary .sd-ripple-btn__label,
+.student-shell .sp-btn--primary .sd-ripple-btn__label {
+  color: #fff;
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: #fff;
+}
+
+.student-shell a.sp-btn--secondary,
+.student-shell button.sp-btn--secondary {
+  color: var(--sp-text-primary);
+}
+
+.student-shell a.sp-btn--ghost {
+  color: var(--sp-accent);
+}
+
+.student-shell .student-progress-card__track,
+.student-shell .sp-progress__track {
+  background: var(--sp-border);
+  border: none;
+}
+
+.student-shell .student-progress-card__fill,
+.student-shell .sp-progress__fill {
+  background: var(--sp-accent);
+  box-shadow: none;
+}
+
+@media (max-width: 767px) {
+  .student-shell {
+    --sp-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --sp-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);
+    --sp-shadow-lg: 0 8px 20px rgba(15, 23, 42, 0.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-shell .student-sidebar.sp-sidebar,
+  .sp-monogram {
+    transition: none;
+  }
+}
+
+/* ── Dark mode ── */
+[data-student-theme='dark'] .student-shell {
+  --sp-white: #0f172a;
+  --sp-bg-secondary: #0f172a;
+  --sp-surface-raised: #1e293b;
+  --sp-border: #334155;
+  --sp-border-subtle: #334155;
+
+  --sp-text-primary: #f8fafc;
+  --sp-text-secondary: #cbd5e1;
+  --sp-text-tertiary: #94a3b8;
+
+  --sp-navy: var(--sp-text-primary);
+  --sp-charcoal: var(--sp-text-primary);
+
+  --sp-accent: #3b82f6;
+  --sp-accent-hover: #60a5fa;
+  --sp-accent-soft: rgba(59, 130, 246, 0.18);
+  --sp-accent-ring: rgba(59, 130, 246, 0.38);
+
+  --sp-surface-header: rgba(15, 23, 42, 0.96);
+  --sp-surface-card: #1e293b;
+  --sp-surface-card-muted: #1e293b;
+  --sp-gradient-section: #0f172a;
+  --sp-gradient-hero: #1e293b;
+
+  --sp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --sp-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.28);
+  --sp-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.32);
+
+  --color-bg: var(--sp-white);
+  --color-bg-alt: #0f172a;
+  --color-surface: #1e293b;
+
+  background: var(--sp-white);
+  color: var(--sp-text-primary);
+}
+
+[data-student-theme='dark'] .student-shell .sp-btn--primary,
+[data-student-theme='dark'] .student-shell .btn--primary,
+[data-student-theme='dark'] .student-shell .btn--accent,
+[data-student-theme='dark'] .student-shell a.sp-btn--primary,
+[data-student-theme='dark'] .student-shell button.sp-btn--primary {
+  background-color: var(--sp-accent);
+  color: #fff;
+  --btn-bg: var(--sp-accent);
+  --btn-bg-hover: var(--sp-accent-hover);
+  --btn-color: #fff;
+}
+
+[data-student-theme='dark'] .student-shell .sp-btn--primary:hover,
+[data-student-theme='dark'] .student-shell .btn--primary:hover,
+[data-student-theme='dark'] .student-shell .btn--accent:hover,
+[data-student-theme='dark'] .student-shell a.sp-btn--primary:hover {
+  background-color: var(--sp-accent-hover);
+  color: #fff;
+}
+
+[data-student-theme='dark'] .student-shell .sp-btn--secondary,
+[data-student-theme='dark'] .student-shell .btn--secondary,
+[data-student-theme='dark'] .student-shell a.sp-btn--secondary,
+[data-student-theme='dark'] .student-shell button.sp-btn--secondary {
+  background-color: transparent;
+  color: var(--sp-text-primary);
+  border-color: var(--sp-border);
+  --btn-bg: transparent;
+  --btn-color: var(--sp-text-primary);
+  --btn-border: var(--sp-border);
+}
+
+[data-student-theme='dark'] .student-shell .sp-btn--ghost,
+[data-student-theme='dark'] .student-shell .btn--ghost {
+  color: var(--sp-accent);
+  --btn-color: var(--sp-accent);
+}
+
+[data-student-theme='dark'] .student-shell .sp-btn--primary .sd-ripple-btn__label,
+[data-student-theme='dark'] .student-shell a.sp-btn--primary .sd-ripple-btn__label {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+
+[data-student-theme='dark'] .student-shell .sp-app-header__menu,
+[data-student-theme='dark'] .student-shell .sp-app-header__theme,
+[data-student-theme='dark'] .student-shell .sp-header-search-toggle {
+  color: var(--sp-text-primary);
+}
+
+[data-student-theme='dark'] .student-shell .sp-app-header__menu:hover,
+[data-student-theme='dark'] .student-shell .sp-app-header__theme:hover,
+[data-student-theme='dark'] .student-shell .sp-header-search-toggle:hover {
+  background: var(--sp-surface-raised);
+}
+
+[data-student-theme='dark'] .student-shell .sp-app-header__brand-name {
+  color: var(--sp-text-primary);
+}
+
+[data-student-theme='dark'] .student-shell .student-content.sp-portal-content {
+  background: #0f172a;
+}
+
+[data-student-theme='dark'] .student-shell .student-sidebar.sp-sidebar {
+  background: #0f172a;
+  border-color: var(--sp-border);
+}
+
+[data-student-theme='dark'] .student-shell .student-bottom-nav.sp-bottom-nav {
+  background: #0f172a;
+}
+
+[data-student-theme='dark'] .student-shell .admin-card,
+[data-student-theme='dark'] .student-shell .sp-card,
+[data-student-theme='dark'] .student-shell .th-detail-card {
+  background: #1e293b;
+  border-color: var(--sp-border);
+  color: var(--sp-text-primary);
+}

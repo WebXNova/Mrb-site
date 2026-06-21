@@ -89,13 +89,81 @@ export async function countLecturesForCourse(courseId) {
   return Number(row?.n || 0);
 }
 
-export async function listLectures() {
-  const [rows] = await mysqlPool.query(
-    `SELECT ${LECTURE_HIERARCHY_SELECT}
-     ${LECTURE_HIERARCHY_FROM}
-     ORDER BY l.created_at DESC`
-  );
-  return rows.map(toLectureDto);
+export async function listLectures(filters = {}) {
+  const conditions = ['1 = 1'];
+  const params = [];
+
+  if (filters.lectureId) {
+    conditions.push('l.id = ?');
+    params.push(filters.lectureId);
+  }
+
+  if (filters.courseId) {
+    conditions.push('l.course_id = ?');
+    params.push(filters.courseId);
+  }
+
+  if (filters.subjectId) {
+    conditions.push('ch.subject_id = ?');
+    params.push(filters.subjectId);
+  }
+
+  if (filters.chapterId) {
+    conditions.push('l.chapter_id = ?');
+    params.push(filters.chapterId);
+  }
+
+  if (filters.status === 'active') {
+    conditions.push('l.is_active = 1');
+  } else if (filters.status === 'inactive') {
+    conditions.push('l.is_active = 0');
+  }
+
+  if (filters.dateFrom) {
+    conditions.push('DATE(l.created_at) >= ?');
+    params.push(filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    conditions.push('DATE(l.created_at) <= ?');
+    params.push(filters.dateTo);
+  }
+
+  const search = String(filters.search ?? '').trim();
+  if (search) {
+    const like = `%${search.replace(/[%_\\]/g, ' ').replace(/\s+/g, ' ').trim()}%`;
+    conditions.push(
+      '(l.title LIKE ? OR l.topic LIKE ? OR c.title LIKE ? OR s.title LIKE ? OR ch.title LIKE ?)'
+    );
+    params.push(like, like, like, like, like);
+  }
+
+  const whereSql = conditions.join(' AND ');
+  const limit = filters.limit != null ? Number(filters.limit) : null;
+  const offset = filters.offset != null ? Number(filters.offset) : 0;
+
+  let total = null;
+  if (limit != null) {
+    const [[countRow]] = await mysqlPool.query(
+      `SELECT COUNT(*) AS total ${LECTURE_HIERARCHY_FROM} WHERE ${whereSql}`,
+      params
+    );
+    total = Number(countRow?.total ?? 0);
+  }
+
+  let sql = `SELECT ${LECTURE_HIERARCHY_SELECT} ${LECTURE_HIERARCHY_FROM} WHERE ${whereSql} ORDER BY l.sort_order ASC, l.id ASC`;
+  const queryParams = [...params];
+  if (limit != null) {
+    sql += ' LIMIT ? OFFSET ?';
+    queryParams.push(limit, offset);
+  }
+
+  const [rows] = await mysqlPool.query(sql, queryParams);
+  const items = rows.map(toLectureDto);
+
+  if (limit != null) {
+    return { items, total, limit, offset };
+  }
+  return items;
 }
 
 export async function createLecture(payload) {

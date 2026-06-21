@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import DOMPurify from 'dompurify';
+import { sanitizeStudentRichHtml } from '../../../security/sanitizeStudentRichHtml.js';
 
 function statusLabel(status) {
   switch (String(status || '').toLowerCase()) {
@@ -33,7 +33,7 @@ const ResultReviewItem = memo(function ResultReviewItem({ item, index }) {
         id={`tr-review-q-${index}`}
         className="tr-review-item__question"
         dangerouslySetInnerHTML={{
-          __html: DOMPurify.sanitize(item.questionHtml || ''),
+          __html: sanitizeStudentRichHtml(item.questionHtml || ''),
         }}
       />
 
@@ -53,7 +53,7 @@ const ResultReviewItem = memo(function ResultReviewItem({ item, index }) {
           <h4 className="tr-review-item__explanation-title">Explanation</h4>
           <div
             dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(item.explanationHtml),
+              __html: sanitizeStudentRichHtml(item.explanationHtml),
             }}
           />
         </div>

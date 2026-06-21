@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, rejectStudentBearerInProduction } from '../middleware/auth.js';
+import {
+  paymentCheckoutRateLimit,
+  requireRedisForPaymentCheckout,
+} from '../middleware/paymentCheckoutRateLimit.js';
 import { postCreatePaymentSession, postPaymentWebhook } from '../controllers/payments.controller.js';
 import {
   attachSafepayWebhookRawBody,
@@ -8,6 +12,7 @@ import {
 } from '../middleware/safepayWebhook.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { safepayPaymentWebhookRateLimit } from '../middleware/rateLimit.js';
+import { requireCsrf } from '../middleware/csrf.js';
 
 /**
  * Safepay payment webhook ingress — MUST be mounted in `app.js` **before** `express.json()` on the same
@@ -31,6 +36,14 @@ paymentsWebhookRouter.post(
 
 /** JSON API routes requiring `express.json()` upstream */
 export const paymentsApiRouter = Router();
-paymentsApiRouter.post('/create-session', authMiddleware, postCreatePaymentSession);
+paymentsApiRouter.post(
+  '/create-session',
+  rejectStudentBearerInProduction,
+  authMiddleware,
+  requireCsrf,
+  requireRedisForPaymentCheckout,
+  paymentCheckoutRateLimit,
+  postCreatePaymentSession
+);
 
 export default paymentsApiRouter;

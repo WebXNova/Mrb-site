@@ -6,6 +6,7 @@ import { scopedQuery } from '../security/cee/db/scopedQuery.js';
 import { resolveActiveEntitlement, assertEntitlementGrantable } from './entitlement.service.js';
 import { EnrollmentNotFoundError } from '../errors/entitlement/EntitlementErrors.js';
 import { DERIVED_PASS_STATUS_SQL } from '../result/passStatus.js';
+import { loadTestSubjectPresentationBatch } from './testSubjectPresentation.service.js';
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
@@ -35,14 +36,68 @@ async function requireEntitlement(studentId) {
   return entitlement;
 }
 
-function buildFilterClauses({ search, statusFilter }) {
+function normalizeDateRangeFilter(value) {
+  const raw = String(value || 'all').trim().toLowerCase();
+  if (['today', 'week', 'month'].includes(raw)) return raw;
+  return 'all';
+}
+
+function normalizeSubmittedDateFilter(value) {
+  const raw = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [year, month, day] = raw.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return raw;
+}
+
+function normalizeSubjectFilter(value) {
+  if (value == null || value === '' || String(value).toLowerCase() === 'all') return null;
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function buildFilterClauses({ search, statusFilter, subjectId, dateRange, submittedDate }) {
   const clauses = [];
   const params = [];
 
   const term = String(search || '').trim();
   if (term) {
-    clauses.push(`t.title LIKE ?`);
-    params.push(`%${term}%`);
+    clauses.push(`(
+      t.title LIKE ?
+      OR EXISTS (
+        SELECT 1
+        FROM test_subjects ts
+        INNER JOIN subjects s ON s.id = ts.subject_id
+        WHERE ts.test_id = t.id AND s.title LIKE ?
+      )
+    )`);
+    params.push(`%${term}%`, `%${term}%`);
+  }
+
+  if (subjectId != null) {
+    clauses.push(`EXISTS (
+      SELECT 1 FROM test_subjects ts_filter
+      WHERE ts_filter.test_id = t.id AND ts_filter.subject_id = ?
+    )`);
+    params.push(subjectId);
+  }
+
+  if (submittedDate) {
+    clauses.push(`DATE(a.submitted_at) = ?`);
+    params.push(submittedDate);
+  } else if (dateRange === 'today') {
+    clauses.push(`DATE(a.submitted_at) = CURDATE()`);
+  } else if (dateRange === 'week') {
+    clauses.push(`a.submitted_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)`);
+  } else if (dateRange === 'month') {
+    clauses.push(`a.submitted_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`);
   }
 
   if (statusFilter === 'PASS' || statusFilter === 'FAIL') {
@@ -64,7 +119,7 @@ const HISTORY_FROM_SQL = `
 
 /**
  * @param {number} studentId
- * @param {{ page?: number, pageSize?: number, search?: string, status?: string }} query
+ * @param {{ page?: number, pageSize?: number, search?: string, status?: string, subjectId?: string|number, dateRange?: string, submittedDate?: string }} query
  */
 export async function getStudentTestHistory(studentId, query = {}) {
   const entitlement = await requireEntitlement(studentId);
@@ -73,9 +128,15 @@ export async function getStudentTestHistory(studentId, query = {}) {
   const pageSize = clampPageSize(query.pageSize);
   const offset = (page - 1) * pageSize;
   const statusFilter = normalizeStatusFilter(query.status);
+  const subjectId = normalizeSubjectFilter(query.subjectId);
+  const dateRange = normalizeDateRangeFilter(query.dateRange);
+  const submittedDate = normalizeSubmittedDateFilter(query.submittedDate);
   const { extraWhere, params: filterParams } = buildFilterClauses({
     search: query.search,
     statusFilter,
+    subjectId,
+    dateRange,
+    submittedDate,
   });
 
   const db = scopedQuery({ courseId, context: 'studentTestHistory.list', userId: studentId });
@@ -106,6 +167,23 @@ export async function getStudentTestHistory(studentId, query = {}) {
     [...listParams, pageSize, offset]
   );
 
+  const presentationByTestId = await loadTestSubjectPresentationBatch(
+    itemRows.map((row) => Number(row.test_id))
+  );
+
+  const subjectOptionRows = await db.rows(
+    `SELECT DISTINCT s.id, s.title
+     FROM test_attempts a
+     INNER JOIN test_results r ON r.attempt_id = a.id
+     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+     INNER JOIN test_subjects ts_opt ON ts_opt.test_id = t.id
+     INNER JOIN subjects s ON s.id = ts_opt.subject_id
+     WHERE a.user_id = ?
+       AND a.status = 'submitted'
+     ORDER BY s.title ASC, s.id ASC`,
+    [courseId, studentId]
+  );
+
   const statsRow = await db.first(
     `SELECT
        COUNT(*) AS total_tests,
@@ -120,10 +198,13 @@ export async function getStudentTestHistory(studentId, query = {}) {
   return {
     items: itemRows.map((row) => {
       const resultVisible = Boolean(Number(row.show_result_immediately));
+      const presentation = presentationByTestId.get(Number(row.test_id));
       return {
         attemptId: Number(row.attempt_id),
         testId: Number(row.test_id),
         testTitle: String(row.test_title ?? ''),
+        subjectLabel: presentation?.displayLabel ?? null,
+        subjectIds: presentation?.subjectIds ?? [],
         slug: row.public_slug ?? null,
         submittedAt: row.submitted_at == null ? null : String(row.submitted_at),
         resultAvailable: resultVisible,
@@ -138,6 +219,12 @@ export async function getStudentTestHistory(studentId, query = {}) {
       pageSize,
       totalItems,
       totalPages,
+    },
+    filterOptions: {
+      subjects: subjectOptionRows.map((row) => ({
+        id: Number(row.id),
+        title: String(row.title ?? ''),
+      })),
     },
     statistics: {
       totalTests: Number(statsRow?.total_tests ?? 0),

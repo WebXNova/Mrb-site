@@ -56,6 +56,13 @@ export const questionBankWriteRateLimit = createQuestionBankRateLimit({
   message: 'Too many question bank write requests. Please try again shortly.',
 });
 
+/** Bulk question bank actions — separate bucket from single-question CRUD. */
+export const questionBankBulkRateLimit = createQuestionBankRateLimit({
+  max: 15,
+  limitType: 'bulk',
+  message: 'Too many bulk question bank requests. Please try again shortly.',
+});
+
 /**
  * Future bulk import (`POST /questions/import`) — separate bucket so imports do not
  * share the CRUD write budget (and vice versa).

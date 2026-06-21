@@ -69,6 +69,12 @@ export const questionListQuerySchema = z.preprocess(
         .min(1, 'search must not be empty when provided')
         .max(MAX_SEARCH_LENGTH, `search must not exceed ${MAX_SEARCH_LENGTH} characters`)
         .optional(),
+      topic: z
+        .string()
+        .trim()
+        .min(1, 'topic must not be empty when provided')
+        .max(MAX_SEARCH_LENGTH, `topic must not exceed ${MAX_SEARCH_LENGTH} characters`)
+        .optional(),
       course_id: optionalPositiveInt,
       subject_id: optionalPositiveInt,
     })

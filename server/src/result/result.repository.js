@@ -12,6 +12,7 @@ export const LOAD_RESULT_CONTEXT_SQL = `
     a.student_id,
     a.user_id,
     a.status AS attempt_status,
+    a.started_at,
     a.submitted_at,
     r.id AS result_id,
     r.score,

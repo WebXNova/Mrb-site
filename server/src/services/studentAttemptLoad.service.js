@@ -13,7 +13,10 @@ import { mysqlPool } from '../config/mysql.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { STUDENT_ELIGIBLE_TEST_STATUS } from '../constants/studentEligibleTest.constants.js';
 import { studentOwnsAttempt } from './attemptOwnership.service.js';
-import { loadComposedTestQuestions } from './testQuestionComposition.service.js';
+import {
+  isShuffleEnabled,
+  loadComposedQuestionsWithAttemptLayout,
+} from './attemptDeliveryLayout.service.js';
 import {
   AttemptNotFoundError,
   AttemptNotOwnedError,
@@ -26,6 +29,11 @@ import {
 } from './studentAttemptLoad.queries.js';
 
 import { assertAttemptActive } from './attemptTimerGuard.service.js';
+import {
+  assertTestAvailabilityWindow,
+  AVAILABILITY_PHASE,
+  getAvailabilityNowMs,
+} from './testAvailabilityWindow.service.js';
 
 const logger = new StructuredLogger({ service: 'studentAttemptLoad' });
 
@@ -33,10 +41,15 @@ const logger = new StructuredLogger({ service: 'studentAttemptLoad' });
  * @param {Record<string, unknown>|null|undefined} row
  * @param {number} [nowMs]
  */
-export async function assertAttemptLoadable(row, nowMs = Date.now(), options = {}) {
+export async function assertAttemptLoadable(row, nowMs, options = {}) {
   if (!row) {
     throw new AttemptNotFoundError({ reason: 'attempt_not_found' });
   }
+
+  const resolvedNowMs =
+    nowMs != null && Number.isFinite(nowMs)
+      ? nowMs
+      : await getAvailabilityNowMs(options.executor ?? mysqlPool);
 
   if (row.test_deleted_at != null) {
     throw new TestNotAccessibleError({
@@ -57,10 +70,24 @@ export async function assertAttemptLoadable(row, nowMs = Date.now(), options = {
   await assertAttemptActive({
     attemptId: row.id,
     attemptRow: { status: row.status, expires_at: row.expires_at },
-    nowMs,
+    nowMs: resolvedNowMs,
     executor: options.executor,
     markExpired: options.markExpired,
   });
+
+  assertTestAvailabilityWindow(
+    {
+      id: row.test_id,
+      start_date: row.start_date,
+      end_date: row.end_date,
+    },
+    {
+      phase: AVAILABILITY_PHASE.IN_PROGRESS,
+      nowMs: resolvedNowMs,
+      attemptStartedAt: row.started_at,
+      context: 'studentAttemptLoad.assertAttemptLoadable',
+    }
+  );
 }
 
 /**
@@ -111,10 +138,17 @@ export async function loadStudentAttemptPage(studentId, attemptId) {
 
   await assertAttemptLoadable(attemptRow);
 
+  const loadNowMs = await getAvailabilityNowMs(mysqlPool);
+
   const testId = Number(attemptRow.test_id);
-  const composedQuestions = await loadComposedTestQuestions(testId, {
+  const composedQuestions = await loadComposedQuestionsWithAttemptLayout({
+    attemptId,
+    testId,
+    shuffleQuestions: isShuffleEnabled(attemptRow.shuffle_questions),
+    shuffleOptions: isShuffleEnabled(attemptRow.shuffle_options),
+    deliveryLayoutJson: attemptRow.delivery_layout_json,
+    attemptNonce: attemptRow.attempt_nonce,
     audience: 'student',
-    logOrphans: true,
   });
 
   const [savedAnswerRows] = await mysqlPool.query(LOAD_SAVED_ANSWERS_SQL, [attemptId]);
@@ -123,7 +157,7 @@ export async function loadStudentAttemptPage(studentId, attemptId) {
     attemptRow,
     composedQuestions,
     savedAnswerRows,
-    Date.now()
+    loadNowMs
   );
 
   logger.info('student attempt load resolved', {

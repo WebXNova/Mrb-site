@@ -4,8 +4,10 @@ import XLSX from 'xlsx';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { loadPublishedTestMetaBySlug } from './testQuestionComposition.service.js';
 import { sanitizePlainText } from '../utils/plainTextSanitizer.js';
+import { formatMySqlDateTime } from '../utils/dateTime.js';
 import { AppError } from '../errors/base/AppError.js';
-import { NOT_FOUND, PUBLISH_REQUIREMENTS_NOT_MET, UNAUTHORIZED } from '../errors/codes/ErrorCodes.js';
+import { toAvailabilityIso } from './testAvailabilityWindow.service.js';
+import { NOT_FOUND, PUBLISH_REQUIREMENTS_NOT_MET, TEST_IS_LOCKED, UNAUTHORIZED, VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
 
 import {
   getTestCompletenessReport,
@@ -16,10 +18,26 @@ import {
 import { executePublishTestStatus } from './testLifecycle.service.js';
 import { validatePublishEligibility } from './testPublishEligibility.service.js';
 import {
+  formatPublishResponse,
+  isPublishIdempotentReplay,
+  lockTestRowForPublish,
+  PUBLISH_IDEMPOTENT_REPLAY_REASON,
+} from './testPublishIdempotency.service.js';
+import {
   enforceWizardWrite,
   getFullTestValidationReport,
   validateTestStateForCreate,
 } from './testValidation.service.js';
+import {
+  auditPublishedTestEdit,
+  buildPublishedEditMetadata,
+  resolvePublishedEditContext,
+} from './publishedTestEdit.service.js';
+import { enforceUnpublishedTest, isTestReadOnlyStatus } from './publishedTestLock.service.js';
+import {
+  assertTestCompletenessAccess,
+  assertTestMutationAccess,
+} from './testMutationAccess.service.js';
 import {
   DEFAULT_TEST_CATEGORY,
   loadTestSubjectIds,
@@ -35,9 +53,34 @@ import {
   TEST_SECURITY_ACTIONS,
 } from './testSecurityAudit.service.js';
 import {
+  auditQuizDraftMaterialization,
+  auditQuizDraftMaterializationFailure,
+  materializeQuizDraftToRuntimeTables,
+} from './testQuizDraftMaterialization.service.js';
+import {
+  recordPublishFailure,
+  recordPublishSuccess,
+} from '../observability/testPublishMetrics.service.js';
+import {
+  logPublishCompleted,
+  logPublishFailed,
+  logPublishMaterialized,
+  logPublishReplay,
+  logPublishStarted,
+  logPublishStudentReadiness,
+} from '../observability/testPublishObservability.service.js';
+import { lmsActionLogger } from '../observability/lmsActionLogger.service.js';
+import { evaluatePublishedTestStudentReadiness } from './publishedTestStudentReadiness.service.js';
+import {
   loadTestSubjectPresentation,
   loadTestSubjectPresentationBatch,
 } from './testSubjectPresentation.service.js';
+import {
+  computeTestTotalMarks,
+  invalidateTestTotalMarksCache,
+  validatePassingMarksAgainstTotal,
+} from './testTotalMarks.service.js';
+import { validatePassingMarks } from '../validators/questionMarks.validation.js';
 
 const REQUIRED_COMPLETENESS_BINDINGS = [
   ['getTestCompletenessReport', getTestCompletenessReport],
@@ -134,8 +177,7 @@ function toTest(row, subjectIds = []) {
     subjectIds: Array.isArray(subjectIds) ? subjectIds : [],
     subjectLabel: row.subject_label ?? null,
     durationMinutes: row.duration_minutes,
-    passingPercentage: row.passing_percentage != null ? Number(row.passing_percentage) : null,
-    passingMarks: row.passing_marks,
+    passingMarks: row.passing_marks != null ? Number(row.passing_marks) : 0,
     maxAttempts: row.max_attempts,
     negativeMarking: Number(row.negative_marking || 0),
     shuffleQuestions: !!row.shuffle_questions,
@@ -144,6 +186,7 @@ function toTest(row, subjectIds = []) {
     accessMode: row.access_mode || 'private',
     tags,
     status: row.status,
+    isReadOnly: isTestReadOnlyStatus(row.status),
     publicSlug: row.public_slug || null,
     publicLink: buildPublicLink(row.public_slug),
     createdAt: row.created_at,
@@ -151,17 +194,80 @@ function toTest(row, subjectIds = []) {
   };
 }
 
-export async function listTests() {
-  const [rows] = await mysqlPool.query(
-    `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_percentage,
-            passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options,
+export async function listTests(filters = {}) {
+  const conditions = ['deleted_at IS NULL'];
+  const params = [];
+
+  if (filters.testId) {
+    conditions.push('id = ?');
+    params.push(filters.testId);
+  }
+
+  if (filters.courseId) {
+    conditions.push('course_id = ?');
+    params.push(filters.courseId);
+  }
+
+  if (filters.subjectId) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM test_subjects ts WHERE ts.test_id = tests.id AND ts.subject_id = ?)`
+    );
+    params.push(filters.subjectId);
+  }
+
+  if (filters.status === 'published') {
+    conditions.push("LOWER(status) = 'published'");
+  } else if (filters.status === 'incomplete') {
+    conditions.push("UPPER(status) = 'INCOMPLETE'");
+  } else if (filters.status === 'draft') {
+    conditions.push("LOWER(status) <> 'published' AND UPPER(status) <> 'INCOMPLETE'");
+  }
+
+  if (filters.dateFrom) {
+    conditions.push('DATE(created_at) >= ?');
+    params.push(filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    conditions.push('DATE(created_at) <= ?');
+    params.push(filters.dateTo);
+  }
+
+  const search = String(filters.search ?? '').trim();
+  if (search) {
+    const like = `%${search.replace(/[%_\\]/g, ' ').replace(/\s+/g, ' ').trim()}%`;
+    conditions.push('(title LIKE ? OR description LIKE ? OR category LIKE ?)');
+    params.push(like, like, like);
+  }
+
+  const whereSql = conditions.join(' AND ');
+  const limit = filters.limit != null ? Number(filters.limit) : null;
+  const offset = filters.offset != null ? Number(filters.offset) : 0;
+
+  let total = null;
+  if (limit != null) {
+    const [[countRow]] = await mysqlPool.query(
+      `SELECT COUNT(*) AS total FROM tests WHERE ${whereSql}`,
+      params
+    );
+    total = Number(countRow?.total ?? 0);
+  }
+
+  let sql = `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_marks,
+            max_attempts, negative_marking, shuffle_questions, shuffle_options,
             show_explanations, access_mode, tags_json, status, public_slug, created_at, updated_at
      FROM tests
-     WHERE deleted_at IS NULL
-     ORDER BY created_at DESC`
-  );
+     WHERE ${whereSql}
+     ORDER BY created_at DESC`;
+
+  const queryParams = [...params];
+  if (limit != null) {
+    sql += ' LIMIT ? OFFSET ?';
+    queryParams.push(limit, offset);
+  }
+
+  const [rows] = await mysqlPool.query(sql, queryParams);
   const presentationByTestId = await loadTestSubjectPresentationBatch(rows.map((row) => Number(row.id)));
-  return rows.map((row) => {
+  const items = rows.map((row) => {
     const tid = Number(row.id);
     const presentation = presentationByTestId.get(tid);
     return toTest(
@@ -172,12 +278,17 @@ export async function listTests() {
       presentation?.subjectIds ?? []
     );
   });
+
+  if (limit != null) {
+    return { items, total, limit, offset };
+  }
+  return items;
 }
 
 export async function getTestById(testId) {
   const [rows] = await mysqlPool.query(
-    `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_percentage,
-            passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options,
+    `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_marks,
+            max_attempts, negative_marking, shuffle_questions, shuffle_options,
             show_explanations, access_mode, tags_json, status, public_slug, created_at, updated_at
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
@@ -196,7 +307,7 @@ async function getActiveTestRowById(testId) {
   const tid = Number(testId);
   if (!Number.isInteger(tid) || tid <= 0) return null;
   const [rows] = await mysqlPool.query(
-    `SELECT id, duration_minutes, max_attempts, passing_percentage, passing_marks, negative_marking
+    `SELECT id, duration_minutes, max_attempts, passing_marks, negative_marking
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
      LIMIT 1`,
@@ -225,8 +336,7 @@ export async function getTestRulesById(testId) {
     testId: Number(row.id),
     duration_minutes: Number(row.duration_minutes),
     max_attempts: Number(row.max_attempts),
-    passing_percentage: row.passing_percentage == null ? null : Number(row.passing_percentage),
-    passing_marks: row.passing_marks == null ? null : Number(row.passing_marks),
+    passing_marks: row.passing_marks == null ? 0 : Number(row.passing_marks),
     negative_marking: Number(row.negative_marking ?? 0),
   };
 }
@@ -237,14 +347,24 @@ export async function getTestRulesById(testId) {
  * @param {{
  *   duration_minutes: number,
  *   max_attempts: number,
- *   passing_percentage?: number,
- *   passing_marks?: number|null,
+ *   passing_marks: number,
  *   negative_marking?: number,
  * }} payload
  */
-export async function updateTestRules(testId, payload) {
+export async function updateTestRules(testId, payload, access = {}) {
   const tid = Number(testId);
-  await enforceWizardWrite(tid, 'rules', mysqlPool, { allowPublishedMaintenance: true });
+  if (access.userId != null) {
+    await assertTestMutationAccess(tid, access.userId, access.role ?? 'admin', {
+      action: 'update_rules',
+    });
+  }
+
+  const publishContext = await resolvePublishedEditContext(tid, {
+    confirmPublishedEdit: access.confirmPublishedEdit,
+    expectedUpdatedAt: access.expectedUpdatedAt,
+  });
+
+  await enforceWizardWrite(tid, 'rules', mysqlPool, { allowPublishedEdit: publishContext.isPublished });
 
   const existing = await getActiveTestRowById(tid);
   if (!existing) {
@@ -259,18 +379,33 @@ export async function updateTestRules(testId, payload) {
 
   const durationMinutes = Number(payload.duration_minutes);
   const maxAttempts = Number(payload.max_attempts);
-  const passingPercentage =
-    payload.passing_percentage === undefined
-      ? Number(existing.passing_percentage ?? 40)
-      : Number(payload.passing_percentage);
-  const passingMarks =
-    payload.passing_marks === undefined
-      ? existing.passing_marks == null
-        ? null
-        : Number(existing.passing_marks)
-      : payload.passing_marks == null
-        ? null
-        : Number(payload.passing_marks);
+
+  const passingMarksResult = validatePassingMarks(payload.passing_marks);
+  if (!passingMarksResult.ok) {
+    throw new AppError({
+      message: passingMarksResult.message,
+      errorCode: VALIDATION_ERROR,
+      httpStatus: 422,
+      isOperational: true,
+      metadata: { testId: tid, field: 'passing_marks' },
+    });
+  }
+  const passingMarks = passingMarksResult.marks;
+
+  const totalMarks = await computeTestTotalMarks(tid);
+  if (totalMarks > 0) {
+    const totalValidation = validatePassingMarksAgainstTotal(passingMarks, totalMarks);
+    if (!totalValidation.ok) {
+      throw new AppError({
+        message: totalValidation.message,
+        errorCode: VALIDATION_ERROR,
+        httpStatus: 422,
+        isOperational: true,
+        metadata: { testId: tid, passing_marks: passingMarks, total_marks: totalMarks },
+      });
+    }
+  }
+
   const negativeMarking =
     payload.negative_marking === undefined
       ? Number(existing.negative_marking ?? 0)
@@ -280,20 +415,37 @@ export async function updateTestRules(testId, payload) {
     `UPDATE tests
      SET duration_minutes = ?,
          max_attempts = ?,
-         passing_percentage = ?,
          passing_marks = ?,
          negative_marking = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND deleted_at IS NULL`,
-    [durationMinutes, maxAttempts, passingPercentage, passingMarks, negativeMarking, tid]
+    [durationMinutes, maxAttempts, passingMarks, negativeMarking, tid]
   );
 
+  invalidateTestTotalMarksCache(tid);
+
   const report = await syncTestLifecycleStatus(tid);
+
+  if (publishContext.isPublished) {
+    await auditPublishedTestEdit({
+      testId: tid,
+      userId: access.userId ?? null,
+      role: access.role ?? 'admin',
+      section: 'rules',
+      metadata: {
+        durationMinutes,
+        maxAttempts,
+        passingMarks,
+        attemptStats: publishContext.attemptStats,
+      },
+    });
+  }
 
   return {
     testId: tid,
     updated: true,
     lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+    ...buildPublishedEditMetadata(publishContext.attemptStats),
   };
 }
 
@@ -343,8 +495,8 @@ export async function getTestSettingsById(testId) {
     allow_retake: Boolean(Number(row.allow_retake)),
     access_mode: row.access_mode === 'public' ? 'public' : 'private',
     lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
-    start_date: toIsoOrNull(row.start_date),
-    end_date: toIsoOrNull(row.end_date),
+    start_date: toAvailabilityIso(row.start_date),
+    end_date: toAvailabilityIso(row.end_date),
   };
 }
 
@@ -353,9 +505,20 @@ export async function getTestSettingsById(testId) {
  * @param {number} testId
  * @param {Record<string, unknown>} payload
  */
-export async function updateTestSettings(testId, payload) {
+export async function updateTestSettings(testId, payload, access = {}) {
   const tid = Number(testId);
-  await enforceWizardWrite(tid, 'settings', mysqlPool, { allowPublishedMaintenance: true });
+  if (access.userId != null) {
+    await assertTestMutationAccess(tid, access.userId, access.role ?? 'admin', {
+      action: 'update_settings',
+    });
+  }
+
+  const publishContext = await resolvePublishedEditContext(tid, {
+    confirmPublishedEdit: access.confirmPublishedEdit,
+    expectedUpdatedAt: access.expectedUpdatedAt,
+  });
+
+  await enforceWizardWrite(tid, 'settings', mysqlPool, { allowPublishedEdit: publishContext.isPublished });
 
   const existing = await getActiveTestSettingsRow(tid);
   if (!existing) {
@@ -368,8 +531,10 @@ export async function updateTestSettings(testId, payload) {
     });
   }
 
-  const startDate = payload.start_date == null ? null : new Date(payload.start_date);
-  const endDate = payload.end_date == null ? null : new Date(payload.end_date);
+  const startDate =
+    payload.start_date == null ? null : formatMySqlDateTime(payload.start_date, { fieldName: 'start_date' });
+  const endDate =
+    payload.end_date == null ? null : formatMySqlDateTime(payload.end_date, { fieldName: 'end_date' });
 
   await mysqlPool.query(
     `UPDATE tests
@@ -400,9 +565,23 @@ export async function updateTestSettings(testId, payload) {
 
   const report = await syncTestLifecycleStatus(tid);
 
+  if (publishContext.isPublished) {
+    await auditPublishedTestEdit({
+      testId: tid,
+      userId: access.userId ?? null,
+      role: access.role ?? 'admin',
+      section: 'settings',
+      metadata: {
+        accessMode: payload.access_mode,
+        attemptStats: publishContext.attemptStats,
+      },
+    });
+  }
+
   return {
     testId: tid,
     lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+    ...buildPublishedEditMetadata(publishContext.attemptStats),
   };
 }
 
@@ -509,9 +688,21 @@ export async function createTestBasicInfo(payload, createdBy) {
  * @param {number} testId
  * @param {Parameters<typeof createTestBasicInfo>[0]} payload
  */
-export async function updateTestBasicInfo(testId, payload) {
+export async function updateTestBasicInfo(testId, payload, access = {}) {
   const tid = Number(testId);
-  await enforceWizardWrite(tid, 'basic', mysqlPool, { allowPublishedMaintenance: true });
+  if (access.userId != null) {
+    await assertTestMutationAccess(tid, access.userId, access.role ?? 'admin', {
+      action: 'update_basic_info',
+      targetCourseId: payload.course_id,
+    });
+  }
+
+  const publishContext = await resolvePublishedEditContext(tid, {
+    confirmPublishedEdit: access.confirmPublishedEdit,
+    expectedUpdatedAt: access.expectedUpdatedAt,
+  });
+
+  await enforceWizardWrite(tid, 'basic', mysqlPool, { allowPublishedEdit: publishContext.isPublished });
 
   const courseId = Number(payload.course_id);
   const course = await getCourseRowById(courseId);
@@ -560,6 +751,21 @@ export async function updateTestBasicInfo(testId, payload) {
     await connection.commit();
 
     const report = await syncTestLifecycleStatus(tid);
+
+    if (publishContext.isPublished) {
+      await auditPublishedTestEdit({
+        testId: tid,
+        userId: access.userId ?? null,
+        role: access.role ?? 'admin',
+        section: 'basic_info',
+        metadata: {
+          courseId,
+          testType,
+          attemptStats: publishContext.attemptStats,
+        },
+      });
+    }
+
     return {
       testId: tid,
       updated: true,
@@ -567,6 +773,7 @@ export async function updateTestBasicInfo(testId, payload) {
       category,
       subject_ids: normalizedSubjectIds,
       lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+      ...buildPublishedEditMetadata(publishContext.attemptStats),
     };
   } catch (error) {
     await connection.rollback();
@@ -595,6 +802,17 @@ export async function createTest(payload, createdBy = null) {
 
 export async function deleteTest(testId, options = {}) {
   const tid = Number(testId);
+  await enforceUnpublishedTest(tid, mysqlPool, {
+    reason: 'DELETE_PUBLISHED_TEST_BLOCKED',
+    action: TEST_SECURITY_ACTIONS.INVALID_TEST_MUTATION,
+  });
+
+  if (options.userId != null) {
+    await assertTestMutationAccess(tid, options.userId, options.role ?? 'admin', {
+      action: 'delete',
+    });
+  }
+
   logSecurityEvent({
     action: TEST_SECURITY_ACTIONS.TEST_DELETE,
     testId: tid,
@@ -602,7 +820,7 @@ export async function deleteTest(testId, options = {}) {
     reason: 'test_hard_delete',
     outcome: 'allowed',
   });
-  const [result] = await mysqlPool.query(`DELETE FROM tests WHERE id = ?`, [tid]);
+  const [result] = await mysqlPool.query(`DELETE FROM tests WHERE id = ? AND deleted_at IS NULL`, [tid]);
   return result.affectedRows > 0;
 }
 
@@ -612,37 +830,205 @@ export async function deleteTest(testId, options = {}) {
  */
 export async function publishTest(testId, options = {}) {
   const tid = Number(testId);
+  const userId = options.userId ?? null;
+  const requestId = options.requestId ?? null;
+  const startedAtMs = Date.now();
 
-  await validatePublishEligibility(tid, mysqlPool, {
-    throwOnFailure: true,
-    userId: options.userId,
-  });
+  logPublishStarted({ testId: tid, userId, entityId: tid, requestId });
 
-  const syncReport = await syncTestLifecycleStatus(tid);
-  if (!syncReport || syncReport.lifecycle_status !== TEST_LIFECYCLE_STATES.READY_FOR_PUBLISH) {
-    logTestValidationFailure({
-      testId: tid,
-      userId: options.userId ?? null,
-      errorCode: PUBLISH_REQUIREMENTS_NOT_MET,
-      reason: 'LIFECYCLE_NOT_READY_FOR_PUBLISH',
-      action: TEST_SECURITY_ACTIONS.PUBLISH_FAILED,
-      metadata: { lifecycle_status: syncReport?.lifecycle_status ?? null },
-    });
-    throw new AppError({
-      message: 'Test lifecycle is not ready for publish.',
-      errorCode: PUBLISH_REQUIREMENTS_NOT_MET,
-      httpStatus: 400,
-      isOperational: true,
-      metadata: { testId: tid, lifecycle_status: syncReport?.lifecycle_status ?? null },
+  if (userId != null) {
+    await assertTestMutationAccess(tid, userId, options.role ?? 'admin', {
+      action: 'publish',
     });
   }
 
-  const publicSlug = await resolvePublicSlugForTest(tid);
-  await executePublishTestStatus(tid, publicSlug);
-  return getTestById(tid);
+  const connection = await mysqlPool.getConnection();
+  let materializationSummary = null;
+  let idempotentReplay = false;
+  let replayPublicSlug = null;
+  /** @type {Record<string, unknown>|null} */
+  let studentReadiness = null;
+
+  try {
+    await connection.beginTransaction();
+
+    const lockedRow = await lockTestRowForPublish(connection, tid);
+    if (isPublishIdempotentReplay(lockedRow)) {
+      idempotentReplay = true;
+      replayPublicSlug = lockedRow.public_slug ?? null;
+      await connection.commit();
+    } else {
+      materializationSummary = await materializeQuizDraftToRuntimeTables(tid, userId, connection);
+
+      logPublishMaterialized({
+        testId: tid,
+        userId,
+        requestId,
+        draftId: materializationSummary.draftId,
+        draftVersion: materializationSummary.draftVersion,
+        questionCount: materializationSummary.questionCount,
+        replacedLinks: materializationSummary.replacedLinks,
+        supersededCleanup: materializationSummary.supersededCleanup ?? null,
+        materializationIdempotent: materializationSummary.idempotent,
+      });
+
+      await validatePublishEligibility(tid, connection, {
+        throwOnFailure: true,
+        userId,
+      });
+
+      const syncReport = await syncTestLifecycleStatus(tid, connection);
+      if (!syncReport || syncReport.lifecycle_status !== TEST_LIFECYCLE_STATES.READY_FOR_PUBLISH) {
+        logTestValidationFailure({
+          testId: tid,
+          userId,
+          errorCode: PUBLISH_REQUIREMENTS_NOT_MET,
+          reason: 'LIFECYCLE_NOT_READY_FOR_PUBLISH',
+          action: TEST_SECURITY_ACTIONS.PUBLISH_FAILED,
+          metadata: { lifecycle_status: syncReport?.lifecycle_status ?? null },
+        });
+        throw new AppError({
+          message: 'Test lifecycle is not ready for publish.',
+          errorCode: PUBLISH_REQUIREMENTS_NOT_MET,
+          httpStatus: 400,
+          isOperational: true,
+          metadata: { testId: tid, lifecycle_status: syncReport?.lifecycle_status ?? null },
+        });
+      }
+
+      const publicSlug = await resolvePublicSlugForTest(tid, connection);
+      replayPublicSlug = publicSlug;
+      await executePublishTestStatus(tid, publicSlug, connection);
+
+      await connection.commit();
+
+      await auditQuizDraftMaterialization(tid, userId, materializationSummary);
+
+      studentReadiness = await evaluatePublishedTestStudentReadiness(tid);
+      logPublishStudentReadiness({
+        testId: tid,
+        requestId,
+        ready: studentReadiness.ready,
+        questionCount: studentReadiness.questionCount,
+        failedChecks: studentReadiness.checks.filter((check) => !check.pass).map((check) => check.id),
+      });
+
+      logSecurityEvent({
+        action: TEST_SECURITY_ACTIONS.PUBLISH_SUCCESS,
+        testId: tid,
+        userId,
+        outcome: 'allowed',
+        metadata: {
+          publicSlug,
+          materializedQuestions: materializationSummary.questionCount,
+          draftVersion: materializationSummary.draftVersion,
+          idempotent: materializationSummary.idempotent,
+          publishReplay: false,
+          studentReady: studentReadiness.ready,
+        },
+      });
+    }
+  } catch (error) {
+    const durationMs = Date.now() - startedAtMs;
+    recordPublishFailure({ durationMs, errorCode: error.errorCode || error.code });
+    logPublishFailed({
+      testId: tid,
+      userId,
+      requestId,
+      durationMs,
+      errorCode: error.errorCode || error.code || 'PUBLISH_FAILED',
+      message: error.message,
+    });
+
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      lmsActionLogger.error({
+        event: 'PUBLISH_ROLLBACK_FAILED',
+        testId: tid,
+        userId,
+        entityId: tid,
+        message: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+      });
+    }
+    await auditQuizDraftMaterializationFailure(tid, userId, error);
+    logSecurityEvent({
+      action: TEST_SECURITY_ACTIONS.PUBLISH_FAILED,
+      testId: tid,
+      userId,
+      outcome: 'failure',
+      errorCode: error.errorCode || error.code,
+      reason: error.message,
+    });
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  const durationMs = Date.now() - startedAtMs;
+
+  if (idempotentReplay) {
+    studentReadiness = await evaluatePublishedTestStudentReadiness(tid);
+    logPublishStudentReadiness({
+      testId: tid,
+      requestId,
+      ready: studentReadiness.ready,
+      questionCount: studentReadiness.questionCount,
+      replay: true,
+      failedChecks: studentReadiness.checks.filter((check) => !check.pass).map((check) => check.id),
+    });
+
+    recordPublishSuccess({ durationMs, replay: true });
+    logPublishReplay({
+      testId: tid,
+      userId,
+      requestId,
+      durationMs,
+      publicSlug: replayPublicSlug,
+      studentReady: studentReadiness.ready,
+    });
+
+    logSecurityEvent({
+      action: TEST_SECURITY_ACTIONS.PUBLISH_SUCCESS,
+      testId: tid,
+      userId,
+      outcome: 'allowed',
+      reason: PUBLISH_IDEMPOTENT_REPLAY_REASON,
+      metadata: {
+        publicSlug: replayPublicSlug,
+        publishReplay: true,
+        studentReady: studentReadiness.ready,
+      },
+    });
+  } else {
+    recordPublishSuccess({
+      durationMs,
+      replay: false,
+      questionCount: materializationSummary?.questionCount ?? null,
+    });
+    logPublishCompleted({
+      testId: tid,
+      userId,
+      requestId,
+      durationMs,
+      publicSlug: replayPublicSlug,
+      questionCount: materializationSummary?.questionCount ?? null,
+      draftVersion: materializationSummary?.draftVersion ?? null,
+      studentReady: studentReadiness?.ready ?? null,
+    });
+  }
+
+  const test = await getTestById(tid);
+  return formatPublishResponse(test, { idempotentReplay });
 }
 
-export async function getTestCompleteness(testId) {
+export async function getTestCompleteness(testId, access = {}) {
+  if (access.userId != null) {
+    await assertTestCompletenessAccess(testId, access.userId, access.role ?? 'admin', {
+      action: 'completeness_read',
+    });
+  }
+
   const report = await getFullTestValidationReport(testId);
   if (!report) {
     throw new AppError({
@@ -659,7 +1045,13 @@ export async function getTestCompleteness(testId) {
   };
 }
 
-export async function duplicateTest(testId, createdBy = null) {
+export async function duplicateTest(testId, createdBy = null, access = {}) {
+  if (access.userId != null) {
+    await assertTestMutationAccess(testId, access.userId, access.role ?? 'admin', {
+      action: 'duplicate',
+    });
+  }
+
   const connection = await mysqlPool.getConnection();
   try {
     await connection.beginTransaction();
@@ -724,7 +1116,13 @@ export async function duplicateTest(testId, createdBy = null) {
   }
 }
 
-export async function exportTestResultsWorkbook(testId) {
+export async function exportTestResultsWorkbook(testId, access = {}) {
+  if (access.userId != null) {
+    await assertTestMutationAccess(testId, access.userId, access.role ?? 'admin', {
+      action: 'export_results',
+    });
+  }
+
   const [testRows] = await mysqlPool.query(`SELECT id, title FROM tests WHERE id = ? LIMIT 1`, [testId]);
   if (!testRows[0]) return null;
 

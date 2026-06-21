@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 import {
   Alignment,
@@ -16,6 +16,8 @@ import {
   Undo,
 } from 'ckeditor5';
 import 'ckeditor5/ckeditor5.css';
+import { sanitizeEditorOutput } from '../../features/create-question/utils/sanitizeEditorOutput.js';
+import { sanitizeEditorOutput } from '../../features/create-question/utils/sanitizeEditorOutput.js';
 
 const QUESTION_CK_PLUGINS = [
   Essentials,
@@ -78,12 +80,6 @@ export default function QuestionCkEditor({
     [placeholder]
   );
 
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !editor.ui?.view?.editable?.element) return;
-    editor.isReadOnly = disabled;
-  }, [disabled]);
-
   return (
     <div
       className={`admin-ckeditor${invalid ? ' admin-ckeditor--invalid' : ''}${disabled ? ' admin-ckeditor--disabled' : ''}`}
@@ -95,13 +91,12 @@ export default function QuestionCkEditor({
         disabled={disabled}
         onReady={(editor) => {
           editorRef.current = editor;
-          editor.isReadOnly = disabled;
         }}
         onChange={(_event, editor) => {
-          onChange(editor.getData());
+          onChange(sanitizeEditorOutput(editor.getData()));
         }}
         onBlur={(_event, editor) => {
-          onBlur?.(editor.getData());
+          onBlur?.(sanitizeEditorOutput(editor.getData()));
         }}
       />
     </div>

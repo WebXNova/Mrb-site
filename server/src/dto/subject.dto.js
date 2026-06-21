@@ -20,3 +20,14 @@ export function toSubjectAdminDto(row) {
     updatedAt: toIsoTimestamp(row.updated_at),
   };
 }
+
+/** Public catalog subject (snake_case, no admin flags). */
+export function toSubjectPublicDto(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    title: String(row.title ?? ''),
+    description: row.description == null ? null : String(row.description),
+    order_index: Number(row.order_index ?? 0),
+  };
+}

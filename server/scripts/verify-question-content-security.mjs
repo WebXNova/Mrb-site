@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { sanitizeQuestionHtml } from '../src/utils/questionHtmlSanitizer.js';
 import { validateQuestionImageUrl } from '../src/utils/questionImageUrlValidation.js';
 import { applyQuestionWriteSecurity } from '../src/security/questionContentSecurity.js';
+import { isSemanticallyEmptyHtml } from '../src/utils/semanticHtmlContent.js';
 import {
   createQuestionBodySchema,
   updateQuestionBodySchema,
@@ -45,6 +46,9 @@ function testXssBlocked() {
     '<p style="background-image:url(javascript:alert(1))">x</p>',
     '<embed src="evil.swf">',
     '<object data="evil"></object>',
+    '<xmp><img src=x onerror=alert(1)></xmp>',
+    '<xmp><script>alert("CVE-2026-44990")</script></xmp>',
+    '<math><mi onclick="alert(1)">x</mi></math>',
   ];
 
   for (const payload of payloads) {
@@ -57,6 +61,8 @@ function testXssBlocked() {
     assert(!/<svg/i.test(sanitized), `svg must be removed from: ${payload}`);
     assert(!/<embed/i.test(sanitized), `embed must be removed from: ${payload}`);
     assert(!/<object/i.test(sanitized), `object must be removed from: ${payload}`);
+    assert(!/<xmp/i.test(sanitized), `xmp must be removed from: ${payload}`);
+    assert(!/<math/i.test(sanitized), `math must be removed from: ${payload}`);
   }
 }
 
@@ -112,6 +118,32 @@ function testMaliciousUrlsBlocked() {
   const tooLong = `https://example.com/${'a'.repeat(1100)}.png`;
   const longResult = validateQuestionImageUrl(tooLong);
   assert(!longResult.ok, 'overlong URL must be rejected');
+}
+
+function testSemanticEmptyRejection() {
+  const emptyPayloads = ['<p></p>', '<p>&nbsp;</p>', '<p><br></p>', '<div></div>', '<span> </span>'];
+
+  for (const payload of emptyPayloads) {
+    assert(isSemanticallyEmptyHtml(payload), `semantic empty detected: ${payload}`);
+    let rejected = false;
+    try {
+      applyQuestionWriteSecurity({
+        question_text: payload,
+        explanation: null,
+        options: standardMcqOptions,
+      });
+    } catch (error) {
+      rejected = error instanceof ApiError && error.code === 'INVALID_QUESTION_TEXT';
+    }
+    assert(rejected, `write security rejects semantically empty question_text: ${payload}`);
+  }
+
+  const rich = applyQuestionWriteSecurity({
+    question_text: '<p><em>Valid</em> stem</p>',
+    explanation: null,
+    options: standardMcqOptions,
+  });
+  assert(rich.question_text.includes('<em>'), 'legitimate rich-text question_text survives write security');
 }
 
 function testWriteSecurityIntegration() {
@@ -173,6 +205,11 @@ function testWiring() {
     'admin route rate limits'
   );
   mustContain('package.json', ['"sharp"'], 'sharp dependency');
+  mustContain(
+    'src/utils/sanitizeHtmlPolicy.js',
+    ['NON_TEXT_TAGS', "'xmp'", 'createStripHtmlOptions', 'createQuestionHtmlOptions'],
+    'centralized sanitize-html policy'
+  );
 }
 
 function testDimensionPolicy() {
@@ -201,6 +238,7 @@ function main() {
   testXssBlocked();
   testEducationalContentSurvives();
   testMaliciousUrlsBlocked();
+  testSemanticEmptyRejection();
   testWriteSecurityIntegration();
   testWiring();
   testDimensionPolicy();

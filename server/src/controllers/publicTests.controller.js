@@ -7,10 +7,16 @@ import {
   getAttemptTestForStart,
   saveAttemptAnswer,
   submitAttempt,
-  verifyAttemptToken,
   createEntitledTestAttempt,
   resolveStudentIdFromRequest,
 } from '../services/testAttempt.service.js';
+import {
+  readAttemptTokenString,
+  sanitizeAttemptTokenResponse,
+  setAttemptTokenCookie,
+  clearAttemptTokenCookie,
+} from '../services/attemptTokenCookie.service.js';
+import { readAndVerifyAttemptToken } from '../services/attemptTokenAuth.service.js';
 import { loadPublishedTestMetaBySlug } from '../services/testQuestionComposition.service.js';
 import { loadTestInstructionsPrep } from '../services/testInstructionsPrep.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
@@ -55,10 +61,8 @@ function getCeeContext(req) {
 }
 
 function getAttemptPayload(req) {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   try {
-    return verifyAttemptToken(token);
+    return readAndVerifyAttemptToken(req);
   } catch (error) {
     if (error instanceof AttemptTokenInvalidError) {
       logger.warn('ATTEMPT_TOKEN_VALIDATION_FAILURE', {
@@ -72,9 +76,10 @@ function getAttemptPayload(req) {
   }
 }
 
-function readBearerToken(req) {
-  const authHeader = req.headers.authorization;
-  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+function sendAttemptSuccess(res, data, { token = null, status = 200, requestId = null } = {}) {
+  if (token) setAttemptTokenCookie(res, token);
+  const body = sanitizeAttemptTokenResponse(data);
+  return sendSuccess(res, body, status, requestId ? { requestId } : null);
 }
 
 export const getPublicTestMeta = asyncHandler(async (req, res) => {
@@ -138,7 +143,7 @@ export const postVerifyTestCode = asyncHandler(async (req, res) => {
     resumed: !!result.resumed,
   });
 
-  sendSuccess(res, result);
+  sendAttemptSuccess(res, result, { token: result.attemptToken });
 });
 
 export const getStartTest = asyncHandler(async (req, res) => {
@@ -159,8 +164,10 @@ export const getStartTest = asyncHandler(async (req, res) => {
     tokenNonce: attemptPayload.nonce,
   });
 
-  const currentAttemptToken = readBearerToken(req);
-  sendSuccess(res, { ...data, nextAttemptToken: currentAttemptToken });
+  const currentAttemptToken = readAttemptTokenString(req);
+  sendAttemptSuccess(res, { ...data, nextAttemptToken: currentAttemptToken }, {
+    token: currentAttemptToken,
+  });
 });
 
 export const patchSaveAnswer = asyncHandler(async (req, res) => {
@@ -191,7 +198,7 @@ export const patchSaveAnswer = asyncHandler(async (req, res) => {
     slug,
     entitlement,
   });
-  sendSuccess(res, { ...data, nextAttemptToken });
+  sendAttemptSuccess(res, { ...data, nextAttemptToken }, { token: nextAttemptToken });
 });
 
 export const postSubmitAttempt = asyncHandler(async (req, res) => {
@@ -217,7 +224,8 @@ export const postSubmitAttempt = asyncHandler(async (req, res) => {
     slug,
     entitlement,
   });
-  sendSuccess(res, { ...data, nextAttemptToken });
+  clearAttemptTokenCookie(res);
+  sendAttemptSuccess(res, { ...data, nextAttemptToken }, { token: null });
 });
 
 export const getTestResult = asyncHandler(async (req, res) => {
@@ -243,5 +251,5 @@ export const getTestResult = asyncHandler(async (req, res) => {
     courseId,
     entitlement,
   });
-  sendSuccess(res, { ...data, nextAttemptToken });
+  sendAttemptSuccess(res, { ...data, nextAttemptToken }, { token: nextAttemptToken });
 });

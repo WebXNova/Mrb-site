@@ -1,4 +1,11 @@
-import { batchLabel } from '../../constants/enrollmentBatches';
+/**
+ * Single-record Excel export for an enrollment.
+ *
+ * Drives content from `enrollmentFieldRegistry.js` so the workbook stays in sync with
+ * the detail panel and batch exporter — every field rendered in the UI ends up in the
+ * workbook and vice versa.
+ */
+import { ENROLLMENT_FIELD_SECTIONS, formatEnrollmentField } from './enrollmentFieldRegistry.js';
 
 const BRAND = {
   navy: 'FF143E6B',
@@ -23,19 +30,6 @@ function safeExportFilename(id, applicantName) {
     .slice(0, 42);
   const stamp = new Date().toISOString().slice(0, 10);
   return `MRB-enrollment-${id}-${slug || 'record'}-${stamp}.xlsx`;
-}
-
-function formatGender(value) {
-  if (!value) return '-';
-  const normalized = String(value).toLowerCase();
-  if (normalized === 'male') return 'Male';
-  if (normalized === 'female') return 'Female';
-  return String(value);
-}
-
-function formatDt(value, formatDate) {
-  if (value === null || value === undefined || value === '') return '-';
-  return formatDate?.(value) ?? String(value);
 }
 
 function styledSectionRow(worksheet, rowIndex, title) {
@@ -67,7 +61,8 @@ function styledPairRow(worksheet, rowIndex, label, value) {
 /**
  * Styled single-record Excel workbook (MRB Classes admin).
  * @param {Record<string, unknown>} enrollment From admin API
- * @param {{ formatDate: (v: unknown) => string }} opts
+ * @param {{ formatDate?: (v: unknown) => string }} [opts] Optional formatter (used for the
+ *   exported-at sub-header only; per-field values now come from the registry).
  */
 export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
   const { formatDate } = opts;
@@ -87,8 +82,8 @@ export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
   });
 
   ws.columns = [
-    { key: 'label', width: 30 },
-    { key: 'value', width: 52 },
+    { key: 'label', width: 32 },
+    { key: 'value', width: 56 },
   ];
 
   ws.mergeCells('A1:B1');
@@ -102,7 +97,10 @@ export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
 
   ws.mergeCells('A2:B2');
   const sub = ws.getCell('A2');
-  sub.value = `Enrollment ID: ${enrollment.id ?? '-'}  ·  Exported: ${formatDate?.(Date.now()) ?? new Date().toLocaleString()}  ·  Status: ${String(enrollment.status || 'pending').toUpperCase()}`;
+  const exportedAt = formatDate ? formatDate(Date.now()) : new Date().toLocaleString();
+  sub.value = `Enrollment ID: ${enrollment.id ?? '-'}  ·  Exported: ${exportedAt}  ·  Status: ${String(
+    enrollment.status || 'pending'
+  ).toUpperCase()}`;
   sub.font = { size: 10, italic: true, color: { argb: BRAND.muted } };
   sub.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
   sub.border = thinBorder;
@@ -111,70 +109,14 @@ export async function downloadEnrollmentDetailExcel(enrollment, opts = {}) {
   ws.getRow(3).height = 6;
 
   let r = 4;
-  styledSectionRow(ws, r, 'Applicant & contact');
-  r += 1;
-  styledPairRow(ws, r, 'Applicant full name', enrollment.applicantFullName);
-  r += 1;
-  styledPairRow(ws, r, 'Email address', enrollment.email);
-  r += 1;
-  styledPairRow(ws, r, "Father's name", enrollment.fatherName);
-  r += 1;
-  styledPairRow(ws, r, 'Date of birth', formatDt(enrollment.dateOfBirth, formatDate));
-  r += 1;
-  styledPairRow(ws, r, 'Gender', formatGender(enrollment.gender));
-  r += 1;
-  styledPairRow(ws, r, 'Batch number', enrollment.batchNumber ? batchLabel(enrollment.batchNumber) : 'Unassigned');
-  r += 1;
-  styledPairRow(ws, r, 'WhatsApp number', enrollment.whatsappNumber);
-  r += 1;
-
-  styledSectionRow(ws, r, 'Location & academics');
-  r += 1;
-  styledPairRow(ws, r, 'Province', enrollment.province);
-  r += 1;
-  styledPairRow(ws, r, 'Division', enrollment.division);
-  r += 1;
-  styledPairRow(ws, r, 'District', enrollment.district);
-  r += 1;
-  styledPairRow(ws, r, 'City', enrollment.city);
-  r += 1;
-  styledPairRow(ws, r, 'HSSC status', enrollment.hsscStatus);
-  r += 1;
-  styledPairRow(ws, r, 'Board', enrollment.board);
-  r += 1;
-  styledPairRow(ws, r, 'MDCAT attempt history', enrollment.mdcatAttemptType);
-  r += 1;
-
-  styledSectionRow(ws, r, 'Payment & review');
-  r += 1;
-  styledPairRow(ws, r, 'Course title', enrollment.courseTitle);
-  r += 1;
-  styledPairRow(ws, r, 'Order ID', enrollment.orderId != null ? String(enrollment.orderId) : '-');
-  r += 1;
-  styledPairRow(ws, r, 'Order status', enrollment.orderStatus ?? '-');
-  r += 1;
-  styledPairRow(
-    ws,
-    r,
-    'Order amount',
-    enrollment.orderAmount != null ? `${String(enrollment.orderAmount)} ${enrollment.orderCurrency || 'PKR'}` : '-'
-  );
-  r += 1;
-  styledPairRow(ws, r, 'Paid at', formatDt(enrollment.orderPaidAt, formatDate));
-  r += 1;
-  styledPairRow(ws, r, 'Enrollment status', enrollment.status ?? '-');
-  r += 1;
-  styledPairRow(ws, r, 'Admin note', enrollment.adminNote ?? '-');
-  r += 1;
-  styledPairRow(ws, r, 'Reviewed by (user ID)', enrollment.reviewedBy != null ? String(enrollment.reviewedBy) : '-');
-  r += 1;
-  styledPairRow(ws, r, 'Reviewed at', formatDt(enrollment.reviewedAt, formatDate));
-  r += 1;
-  styledPairRow(ws, r, 'Submitted at', formatDt(enrollment.submittedAt, formatDate));
-  r += 1;
-  styledPairRow(ws, r, 'Record created', formatDt(enrollment.createdAt, formatDate));
-  r += 1;
-  styledPairRow(ws, r, 'Last updated', formatDt(enrollment.updatedAt, formatDate));
+  ENROLLMENT_FIELD_SECTIONS.forEach((section) => {
+    styledSectionRow(ws, r, section.title);
+    r += 1;
+    section.fields.forEach((field) => {
+      styledPairRow(ws, r, field.label, formatEnrollmentField(field.key, enrollment));
+      r += 1;
+    });
+  });
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {

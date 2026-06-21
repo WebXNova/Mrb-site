@@ -7,9 +7,35 @@ import {
   createSafepayHostedCheckoutSession,
   extractSafepayTokenFromWebhook,
   extractSafepayTransactionIdFromWebhook,
-  isSafepayPaymentSuccessEvent,
   verifySafepayWebhookSignature,
 } from './safepay.service.js';
+import {
+  classifySafepayWebhookEvent,
+  logSafepayWebhookEventDecision,
+} from './safepayWebhookEventValidation.js';
+import {
+  logSettlementVerification,
+  verifyWebhookSettlementAgainstOrder,
+} from './safepayWebhookSettlement.js';
+import { evaluatePaymentFulfillmentEligibility } from './paymentFulfillmentGate.service.js';
+import {
+  attachSafepaySessionToOrder,
+  bindEnrollmentToCheckoutOrder,
+  cancelSupersededPendingOrdersForEnrollment,
+  insertPendingCheckoutOrder,
+  lockEnrollmentByIdForFulfillment,
+  lockEnrollmentForCheckout,
+  markOrderFailedFromPending,
+  markOrderPaidFromPending,
+} from './orderCheckoutIntegrity.service.js';
+import { assertPaymentSessionEligible } from './paymentEligibility.service.js';
+import { isTerminalNonPayableOrderStatus } from './orderStateMachine.service.js';
+import { assertPaidCheckoutAllowedForCourse } from './coursePricingGate.service.js';
+import { ENROLLMENT_SOURCE } from '../constants/enrollmentSource.js';
+import {
+  logPaymentSecurityEvent,
+  PAYMENT_SECURITY_EVENTS,
+} from './paymentSecurityEvents.js';
 
 const WEBHOOK_PAYLOAD_JSON_MAX_CHARS = 500_000;
 
@@ -56,25 +82,14 @@ function summarizeResult(meta) {
   };
 }
 
+void summarizeResult;
+
 function normalizePositiveInt(value, label) {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) {
     throw new ApiError(400, `${label} must be a valid positive integer`);
   }
   return n;
-}
-
-async function getEnrollmentForUser(enrollmentId, userId) {
-  const eid = normalizePositiveInt(enrollmentId, 'enrollment_id');
-  const uid = normalizePositiveInt(userId, 'user_id');
-  const [rows] = await mysqlPool.query(
-    `SELECT id, user_id, course_id, order_id, status
-     FROM enrollments
-     WHERE id = ? AND user_id = ?
-     LIMIT 1`,
-    [eid, uid]
-  );
-  return rows[0] || null;
 }
 
 async function getActiveCourseWithPricing(courseId) {
@@ -145,18 +160,17 @@ async function findOrderForSafepayWebhook(payload, trackerToken) {
 }
 
 /**
+ * Create Safepay checkout for an existing enrollment row.
+ * Admission gating runs at enrollment creation — not repeated here so in-flight checkouts succeed.
+ *
  * @param {{ userId: number, enrollmentId: number, courseId: number }}
  */
 export async function createPaymentSession({ userId, enrollmentId, courseId }) {
-  const enrollment = await getEnrollmentForUser(enrollmentId, userId);
-  if (!enrollment) {
-    throw new ApiError(404, 'Enrollment not found');
-  }
-
+  const eid = normalizePositiveInt(enrollmentId, 'enrollment_id');
+  const uid = normalizePositiveInt(userId, 'user_id');
   const cid = normalizePositiveInt(courseId, 'course_id');
-  if (Number(enrollment.course_id) !== cid) {
-    throw new ApiError(400, 'Course does not match enrollment');
-  }
+
+  await assertPaidCheckoutAllowedForCourse(cid);
 
   const course = await getActiveCourseWithPricing(cid);
   if (!course) {
@@ -165,54 +179,44 @@ export async function createPaymentSession({ userId, enrollmentId, courseId }) {
 
   const amount = Number(course.price);
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new ApiError(400, 'Course price is not configured for payment');
+    throw new ApiError(400, 'Course price is not configured for payment', {
+      code: 'PAYMENT_PRICE_NOT_CONFIGURED',
+    });
   }
 
   const connection = await mysqlPool.getConnection();
+  let orderId;
+  let enrollmentRow;
+
   try {
     await connection.beginTransaction();
 
-    const [orderResult] = await connection.query(
-      `INSERT INTO orders (user_id, course_id, enrollment_id, amount, currency, status)
-       VALUES (?, ?, ?, ?, 'PKR', 'pending')`,
-      [userId, cid, enrollment.id, amount]
-    );
-    const orderId = orderResult.insertId;
-
-    let session;
-    try {
-      session = await createSafepayHostedCheckoutSession({
-        amount,
-        currency: 'PKR',
-        orderId,
-        enrollmentId: enrollment.id,
-        courseId: cid,
-      });
-    } catch (error) {
-      await connection.rollback();
-      if (error instanceof ApiError) throw error;
-      throw new ApiError(500, 'Safepay session creation failed');
+    enrollmentRow = await lockEnrollmentForCheckout(connection, eid, uid);
+    if (Number(enrollmentRow.course_id) !== cid) {
+      throw new ApiError(400, 'Course does not match enrollment');
     }
 
-    await connection.query(
-      `UPDATE orders
-       SET safepay_token = ?, safepay_tracker = COALESCE(?, safepay_tracker)
-       WHERE id = ?`,
-      [session.token, session.tracker, orderId]
-    );
+    await assertPaymentSessionEligible(connection, enrollmentRow);
 
-    await connection.query(`UPDATE enrollments SET order_id = ? WHERE id = ?`, [orderId, enrollment.id]);
+    const supersededCount = await cancelSupersededPendingOrdersForEnrollment(connection, eid);
+    if (supersededCount > 0) {
+      logWebhookVerbose('superseded pending orders cancelled', {
+        enrollmentId: eid,
+        supersededCount,
+      });
+    }
 
-    await connection.commit();
-
-    return {
-      orderId,
-      enrollmentId: enrollment.id,
+    orderId = await insertPendingCheckoutOrder(connection, {
+      userId: uid,
       courseId: cid,
+      enrollmentId: eid,
       amount,
       currency: 'PKR',
-      checkoutUrl: session.checkoutUrl,
-    };
+    });
+
+    await bindEnrollmentToCheckoutOrder(connection, eid, orderId);
+
+    await connection.commit();
   } catch (error) {
     try {
       await connection.rollback();
@@ -223,16 +227,88 @@ export async function createPaymentSession({ userId, enrollmentId, courseId }) {
   } finally {
     connection.release();
   }
+
+  let session;
+  try {
+    session = await createSafepayHostedCheckoutSession({
+      amount,
+      currency: 'PKR',
+      orderId,
+      enrollmentId: eid,
+      courseId: cid,
+    });
+  } catch (error) {
+    const cleanup = await mysqlPool.getConnection();
+    try {
+      await cleanup.beginTransaction();
+      await cancelSupersededPendingOrdersForEnrollment(cleanup, eid);
+      await cleanup.query(
+        `UPDATE orders
+         SET status = 'cancelled',
+             cancellation_reason = 'session_setup_failed',
+             cancelled_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = 'pending'`,
+        [orderId]
+      );
+      await cleanup.commit();
+    } catch {
+      try {
+        await cleanup.rollback();
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      cleanup.release();
+    }
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(500, 'Safepay session creation failed');
+  }
+
+  const tokenConnection = await mysqlPool.getConnection();
+  try {
+    await tokenConnection.beginTransaction();
+    await attachSafepaySessionToOrder(tokenConnection, orderId, session.token, session.tracker);
+    await tokenConnection.commit();
+  } catch (error) {
+    try {
+      await tokenConnection.rollback();
+    } catch {
+      /* ignore */
+    }
+    throw error;
+  } finally {
+    tokenConnection.release();
+  }
+
+  return {
+    orderId,
+    enrollmentId: eid,
+    courseId: cid,
+    amount,
+    currency: 'PKR',
+    checkoutUrl: session.checkoutUrl,
+  };
 }
 
 /**
  * Fulfillment pipeline after HMAC verification succeeded (caller must verify first unless using
  * {@link processSafepayWebhook}).
  *
- * @param {{ payload: object }}
+ * @param {{ payload: object, requestId?: string|null }}
  */
-export async function fulfillSafepayWebhookVerified({ payload }) {
+export async function fulfillSafepayWebhookVerified({ payload, requestId = null }) {
   try {
+  const eventClassification = classifySafepayWebhookEvent(payload);
+
+  if (eventClassification.outcome === 'rejected') {
+    logSafepayWebhookEventDecision(eventClassification, { requestId });
+    throw new ApiError(400, 'Invalid webhook payload', {
+      code: 'WEBHOOK_PAYLOAD_REJECTED',
+      reason: eventClassification.reason,
+    });
+  }
+
   const extractedToken = extractSafepayTokenFromWebhook(payload);
   const metadataOrderId = parseWebhookMetadataOrderId(payload);
 
@@ -247,24 +323,62 @@ export async function fulfillSafepayWebhookVerified({ payload }) {
     throw new ApiError(404, 'Order not found');
   }
 
+  logSafepayWebhookEventDecision(eventClassification, {
+    orderId: order.id,
+    enrollmentId: order.enrollment_id ?? null,
+    requestId,
+  });
+
   if (order.status === 'paid') {
     logWebhookTx('idempotent short-circuit (pool read: already paid)', { orderId: order.id });
     return { ok: true, duplicate: true, orderId: order.id };
   }
 
-  if (!isSafepayPaymentSuccessEvent(payload)) {
+  if (
+    eventClassification.outcome === 'success' &&
+    isTerminalNonPayableOrderStatus(order.status)
+  ) {
+    logPaymentSecurityEvent(PAYMENT_SECURITY_EVENTS.STALE_ORDER_PAYMENT_ATTEMPT, {
+      orderId: order.id,
+      orderStatus: order.status,
+      enrollmentId: order.enrollment_id ?? null,
+      requestId,
+      stage: 'pool_read',
+    });
+    logWebhookTx('stale order payment blocked (pool read)', {
+      orderId: order.id,
+      status: order.status,
+    });
+    return {
+      ok: true,
+      ignored: true,
+      staleOrder: true,
+      orderId: order.id,
+      reason: `order_status_${order.status}`,
+    };
+  }
+
+  if (eventClassification.outcome === 'ignored') {
+    logWebhookTx('ignored event — no state change', {
+      orderId: order.id,
+      reason: eventClassification.reason,
+    });
+    return {
+      ok: true,
+      ignored: true,
+      orderId: order.id,
+      reason: eventClassification.reason,
+    };
+  }
+
+  if (eventClassification.outcome === 'failure') {
     const connection = await mysqlPool.getConnection();
     logWebhookTx('FAIL path: before beginTransaction');
     try {
       await connection.beginTransaction();
       logWebhookTx('FAIL path: after beginTransaction');
-      const [failRes] = await connection.query(
-        `UPDATE orders
-         SET status = 'failed', updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND status = 'pending'`,
-        [order.id]
-      );
-      logWebhookTx('FAIL path: UPDATE orders', summarizeResult(failRes));
+      const affected = await markOrderFailedFromPending(connection, order.id);
+      logWebhookTx('FAIL path: UPDATE orders', { affectedRows: affected });
       await connection.commit();
       logWebhookTx('FAIL path: after COMMIT');
     } catch (error) {
@@ -281,13 +395,28 @@ export async function fulfillSafepayWebhookVerified({ payload }) {
     return { ok: true, orderId: order.id, status: 'failed' };
   }
 
+  if (eventClassification.outcome !== 'success') {
+    logWebhookTx('fail-closed gate — fulfillment blocked', {
+      orderId: order.id,
+      outcome: eventClassification.outcome,
+      reason: eventClassification.reason,
+    });
+    return {
+      ok: true,
+      ignored: true,
+      orderId: order.id,
+      reason: eventClassification.reason,
+    };
+  }
+
   const connection = await mysqlPool.getConnection();
 
   try {
     await connection.beginTransaction();
 
     const [lockedRows] = await connection.query(
-      `SELECT id, user_id, course_id, enrollment_id, status, safepay_token, safepay_tracker
+      `SELECT id, user_id, course_id, enrollment_id, status, amount, currency,
+              safepay_token, safepay_tracker
        FROM orders WHERE id = ? FOR UPDATE`,
       [order.id]
     );
@@ -307,11 +436,7 @@ export async function fulfillSafepayWebhookVerified({ payload }) {
       throw new ApiError(409, 'Order has no enrollment linked');
     }
 
-    const [enrRows] = await connection.query(
-      `SELECT id, user_id, course_id FROM enrollments WHERE id = ? FOR UPDATE`,
-      [enrollmentId]
-    );
-    const enrollmentRow = enrRows[0];
+    const enrollmentRow = await lockEnrollmentByIdForFulfillment(connection, enrollmentId);
     if (!enrollmentRow) {
       throw new ApiError(404, 'Enrollment not found');
     }
@@ -320,6 +445,48 @@ export async function fulfillSafepayWebhookVerified({ payload }) {
     }
     if (Number(enrollmentRow.course_id) !== Number(locked.course_id)) {
       throw new ApiError(409, 'Enrollment course does not match order');
+    }
+
+    const settlement = verifyWebhookSettlementAgainstOrder(locked, payload);
+    logSettlementVerification(settlement, { orderId: locked.id, requestId });
+
+    const eligibility = evaluatePaymentFulfillmentEligibility({
+      order: locked,
+      enrollment: enrollmentRow,
+      settlementOk: settlement.ok,
+    });
+
+    if (!eligibility.eligible) {
+      if (eligibility.securityEvent) {
+        logPaymentSecurityEvent(eligibility.securityEvent, {
+          orderId: locked.id,
+          enrollmentId,
+          enrollmentOrderId: enrollmentRow.order_id ?? null,
+          orderStatus: locked.status,
+          requestId,
+          reason: eligibility.reason,
+          stage: 'fulfillment_gate',
+        });
+      }
+      await connection.commit();
+      logWebhookTx('fulfillment gate rejected', {
+        orderId: order.id,
+        reason: eligibility.reason,
+        action: eligibility.action,
+      });
+      return {
+        ok: true,
+        ignored: true,
+        orderId: order.id,
+        reason: eligibility.reason,
+        action: eligibility.action,
+        ...(eligibility.action === 'stale_order' || eligibility.action === 'not_current_order'
+          ? { staleOrder: true }
+          : {}),
+        ...(eligibility.action === 'settlement_rejected'
+          ? { settlementRejected: true, code: settlement.code }
+          : {}),
+      };
     }
 
     const transactionIdExtracted = extractSafepayTransactionIdFromWebhook(payload);
@@ -337,28 +504,32 @@ export async function fulfillSafepayWebhookVerified({ payload }) {
     const safepayTxnForDb = txnIdRaw.length > 0 ? txnIdRaw.slice(0, 255) : gatewayRefForDb;
     const payloadJsonStr = safeWebhookPayloadJson(payload);
 
-    const [updateResult] = await connection.query(
-      `UPDATE orders
-       SET status = 'paid',
-           gateway_order_ref = ?,
-           safepay_transaction_id = ?,
-           safepay_tracker = COALESCE(safepay_tracker, NULLIF(?, '')),
-           gateway_payload_json = CAST(? AS JSON),
-           paid_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status <> 'paid'`,
-      [
-        gatewayRefForDb,
-        safepayTxnForDb ?? null,
-        rawTracker.length > 0 ? rawTracker.slice(0, 255) : '',
-        payloadJsonStr,
-        order.id,
-      ]
-    );
+    const affected = await markOrderPaidFromPending(connection, {
+      orderId: order.id,
+      gatewayRefForDb,
+      safepayTxnForDb,
+      rawTrackerSlice: rawTracker.length > 0 ? rawTracker.slice(0, 255) : '',
+      payloadJsonStr,
+    });
 
-    const affected = Number(updateResult?.affectedRows ?? 0);
     if (affected === 0) {
       await connection.commit();
+      if (isTerminalNonPayableOrderStatus(locked.status)) {
+        logPaymentSecurityEvent(PAYMENT_SECURITY_EVENTS.STALE_ORDER_PAYMENT_ATTEMPT, {
+          orderId: order.id,
+          orderStatus: locked.status,
+          enrollmentId,
+          requestId,
+          stage: 'paid_update_zero_rows',
+        });
+        return {
+          ok: true,
+          ignored: true,
+          staleOrder: true,
+          orderId: order.id,
+          reason: `order_status_${locked.status}`,
+        };
+      }
       logWebhookTx('idempotent: paid UPDATE affected 0', { orderId: order.id });
       return { ok: true, duplicate: true, orderId: order.id };
     }
@@ -369,6 +540,7 @@ export async function fulfillSafepayWebhookVerified({ payload }) {
       actor: 'payment.webhook',
       reason: 'safepay_paid',
       requirePaidOrder: true,
+      enrollmentSource: ENROLLMENT_SOURCE.PAID,
     });
 
     await connection.commit();

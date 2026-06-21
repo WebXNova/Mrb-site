@@ -1,6 +1,7 @@
 /** Mirrors server `COURSE_BATCH_STATUSES` — keep aligned with `courseBatchStatus.js`. */
 export const BATCH_STATUSES = [
   'draft',
+  'published',
   'upcoming',
   'enrollment_open',
   'running',
@@ -30,6 +31,7 @@ export const BATCH_TIMEZONES = [
 
 const STATUS_LABEL = {
   draft: 'Draft',
+  published: 'Published',
   upcoming: 'Upcoming',
   enrollment_open: 'Enrollment open',
   running: 'Running',
@@ -48,10 +50,32 @@ export function batchStatusLabel(status) {
 export function batchStatusBadgeClass(status) {
   const s = String(status || '').toLowerCase();
   if (s === 'running' || s === 'enrollment_open') return 'batch-badge batch-badge--live';
-  if (s === 'upcoming' || s === 'draft') return 'batch-badge batch-badge--pending';
+  if (s === 'upcoming' || s === 'draft' || s === 'published') return 'batch-badge batch-badge--pending';
   if (s === 'completed') return 'batch-badge batch-badge--done';
   if (s === 'cancelled' || s === 'archived') return 'batch-badge batch-badge--muted';
   return 'batch-badge';
+}
+
+/**
+ * Convert ISO UTC timestamp to value for `<input type="datetime-local">` (browser local time).
+ * @param {string|null|undefined} iso
+ */
+export function toLocalDatetimeValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Convert datetime-local input value (browser local) to ISO UTC string.
+ * @param {string} local
+ */
+export function fromLocalDatetimeValue(local) {
+  if (!local) return '';
+  const d = new Date(local);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }
 
 /**

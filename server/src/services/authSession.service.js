@@ -4,6 +4,18 @@ import { mysqlPool } from '../config/mysql.js';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
 import { logActivity } from '../services/activityLog.service.js';
+import {
+  logRefreshFingerprintMismatch,
+  logRefreshFingerprintSuspicious,
+  logRefreshRejected,
+} from './authSecurity.service.js';
+import {
+  ReplayRiskLevel,
+  buildLowRiskReplayResponse,
+  classifyRefreshReplayRisk,
+  getReplayGraceMs,
+  revokeSessionForHighRiskReplay,
+} from './refreshReplayRisk.service.js';
 import { getRedisClient } from '../config/redis.js';
 import { startAuthTrace } from '../utils/authProfiling.js';
 
@@ -117,6 +129,8 @@ async function classifyFingerprintRisk({ sessionId, lastIpHash, lastUaHash, clie
   return { level: 'high', incomingIpHash, incomingUaHash };
 }
 
+export { classifyFingerprintRisk };
+
 async function markAccountAtRisk(connection, userId) {
   try {
     await connection.query(`UPDATE users SET risk_level = 'critical' WHERE id = ?`, [userId]);
@@ -194,7 +208,7 @@ export async function createAuthSessionTokens(
   const refreshTokenHash = hashRefreshToken(refreshToken);
 
   const run = connection ? connection.query.bind(connection) : mysqlPool.query.bind(mysqlPool);
-  const clientIpHash = clientIp ? hashValue(clientIp) : null;
+  const clientIpHash = clientIp ? hashValue(networkFingerprint(clientIp)) : null;
   const userAgentFingerprint = userAgent ? hashValue(userAgent) : null;
   await run(
     `INSERT INTO auth_sessions (
@@ -264,6 +278,42 @@ export async function revokeAllAuthSessionsForUser(userId) {
   }
 }
 
+/**
+ * List auth sessions belonging to a single user (for profile / security UI).
+ * @param {number} userId
+ */
+export async function listAuthSessionsForUser(userId) {
+  const uid = Number(userId);
+  if (!Number.isInteger(uid) || uid <= 0) return [];
+
+  const [rows] = await mysqlPool.query(
+    `SELECT id, role_snapshot, created_at, last_used_at, expires_at, revoked_at
+     FROM auth_sessions
+     WHERE user_id = ?
+     ORDER BY COALESCE(last_used_at, created_at) DESC`,
+    [uid]
+  );
+
+  const now = Date.now();
+  return rows.map((row) => {
+    const revoked = row.revoked_at != null;
+    const expired = new Date(row.expires_at).getTime() <= now;
+    let status = 'active';
+    if (revoked) status = 'revoked';
+    else if (expired) status = 'expired';
+
+    return {
+      id: row.id,
+      role: row.role_snapshot,
+      createdAt: row.created_at,
+      lastUsedAt: row.last_used_at,
+      expiresAt: row.expires_at,
+      revokedAt: row.revoked_at,
+      status,
+    };
+  });
+}
+
 /** Resolve cookie + DB state for refresh routing (revoked sessions → null). */
 export async function refreshContextFromToken(token, cookieName, req = null) {
   const trace = startAuthTrace(`refreshContextFromToken:${cookieName}`, req);
@@ -280,7 +330,8 @@ export async function refreshContextFromToken(token, cookieName, req = null) {
       trace.end('inactive');
       return null;
     }
-    const role = row.role_snapshot === 'student' ? 'student' : 'admin';
+    const snapshot = String(row.role_snapshot || '').toLowerCase();
+    const role = snapshot === 'student' ? 'student' : snapshot === 'teacher' ? 'teacher' : 'admin';
     trace.end('ok', { role });
     return { token, cookieName, role };
   } catch {
@@ -375,16 +426,19 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
          s.jti,
          s.refresh_token_hash,
          s.previous_refresh_hash,
-       s.token_version_snapshot,
+         s.token_version_snapshot,
          s.expires_at,
          s.revoked_at,
+         s.last_ip_hash,
+         s.ua_fingerprint,
+         s.last_used_at,
          u.id AS user_id_ref,
          u.email,
          u.username,
          u.full_name,
          u.role AS user_role,
-       u.status,
-       u.token_version
+         u.status,
+         u.token_version
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = ?
@@ -422,35 +476,114 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
     if (tokenMismatch) {
       const confirmedReplay = session.previous_refresh_hash && session.previous_refresh_hash === providedHash;
       if (confirmedReplay) {
-        await connection.query(`UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE id = ?`, [
-          session.id,
-        ]);
+        const replayRisk = classifyRefreshReplayRisk({ session, clientIp, userAgent });
+        if (replayRisk.level === ReplayRiskLevel.LOW) {
+          const lowRiskResponse = await buildLowRiskReplayResponse(session, signAccessToken);
+          await logActivity({
+            userId: session.user_id,
+            role: session.user_role === 'student' ? 'student' : session.user_role === 'teacher' ? 'teacher' : 'admin',
+            action: 'auth.refresh_replay_grace',
+            entityType: 'auth',
+            metadata: {
+              replayRisk: replayRisk.level,
+              reason: replayRisk.reason,
+              graceMs: getReplayGraceMs(),
+            },
+          });
+          await connection.commit();
+          transactionCommitted = true;
+          trace.end('ok', { userId: session.user_id, role: lowRiskResponse.role, graceReplay: true });
+          return lowRiskResponse;
+        }
+
+        await revokeSessionForHighRiskReplay(connection, session, replayRisk);
         await logActivity({
           userId: session.user_id,
-          role: session.user_role === 'student' ? 'student' : 'admin',
+          role: session.user_role === 'student' ? 'student' : session.user_role === 'teacher' ? 'teacher' : 'admin',
           action: 'auth.refresh_replay_confirmed',
           entityType: 'auth',
+          metadata: {
+            replayRisk: replayRisk.level,
+            reason: replayRisk.reason,
+            graceMs: getReplayGraceMs(),
+            ipMatch: replayRisk.ipMatch,
+            uaMatch: replayRisk.uaMatch,
+          },
+        });
+        await logRefreshRejected({
+          userId: session.user_id,
+          sessionId: session.id,
+          role: session.user_role,
+          reason: 'refresh_replay_high_risk',
+        });
+        await connection.commit();
+        transactionCommitted = true;
+        throw new ApiError(401, 'Session requires re-authentication', {
+          code: 'REFRESH_REPLAY_REJECTED',
+          error_code: 'REFRESH_REPLAY_REJECTED',
         });
       } else {
         await logActivity({
           userId: session.user_id,
-          role: session.user_role === 'student' ? 'student' : 'admin',
+          role: session.user_role === 'student' ? 'student' : session.user_role === 'teacher' ? 'teacher' : 'admin',
           action: 'auth.refresh_mismatch',
           entityType: 'auth',
         });
+        await logRefreshRejected({
+          userId: session.user_id,
+          sessionId: session.id,
+          role: session.user_role,
+          reason: 'refresh_token_mismatch',
+        });
       }
-      throw new ApiError(401, 'Invalid refresh token');
-    }
-    if (clientIp || userAgent) {
-      await logActivity({
-        userId: session.user_id,
-        role: session.user_role === 'student' ? 'student' : 'admin',
-        action: 'auth.refresh_fingerprint_observed',
-        entityType: 'auth',
+      throw new ApiError(401, 'Invalid refresh token', {
+        code: 'REFRESH_SUPERSEDED',
+        error_code: 'REFRESH_SUPERSEDED',
       });
     }
 
-    if (session.status !== 'active') {
+    const fingerprintRisk = await classifyFingerprintRisk({
+      sessionId: session.id,
+      lastIpHash: session.last_ip_hash,
+      lastUaHash: session.ua_fingerprint,
+      clientIp,
+      userAgent,
+      lastUsedAt: session.last_used_at,
+    });
+
+    if (fingerprintRisk.level === 'high') {
+      await connection.query(
+        `UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE id = ?`,
+        [session.id]
+      );
+      await connection.query(`UPDATE users SET token_version = token_version + 1 WHERE id = ?`, [session.user_id]);
+      await logRefreshFingerprintMismatch({
+        userId: session.user_id,
+        sessionId: session.id,
+        role: session.user_role,
+        reason: 'fingerprint_mismatch',
+        clientIp,
+        userAgent,
+        riskLevel: fingerprintRisk.level,
+      });
+      await connection.commit();
+      transactionCommitted = true;
+      throw new ApiError(401, 'Session requires re-authentication', {
+        code: 'REFRESH_FINGERPRINT_MISMATCH',
+        error_code: 'REFRESH_FINGERPRINT_MISMATCH',
+      });
+    }
+
+    if (fingerprintRisk.level === 'medium') {
+      await logRefreshFingerprintSuspicious({
+        userId: session.user_id,
+        sessionId: session.id,
+        role: session.user_role,
+        riskLevel: fingerprintRisk.level,
+      });
+    }
+
+    if (String(session.status || '').toLowerCase() !== 'active') {
       await connection.query(
         `UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE id = ?`,
         [session.id]
@@ -469,6 +602,8 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
     });
     const rotatedExp = decodeRequiredExp(rotatedRefreshToken, 'Refresh');
     const rotatedHash = hashRefreshToken(rotatedRefreshToken);
+    const nextIpHash = fingerprintRisk.incomingIpHash ?? session.last_ip_hash;
+    const nextUaHash = fingerprintRisk.incomingUaHash ?? session.ua_fingerprint;
     await connection.query(
       `UPDATE auth_sessions
        SET jti = ?,
@@ -476,9 +611,11 @@ export async function rotateAuthSessionByRefreshToken(refreshToken, { clientIp =
            refresh_token_hash = ?,
            token_version_snapshot = ?,
            expires_at = FROM_UNIXTIME(?),
-           last_used_at = CURRENT_TIMESTAMP
+           last_used_at = CURRENT_TIMESTAMP,
+           last_ip_hash = ?,
+           ua_fingerprint = ?
        WHERE id = ?`,
-      [rotatedJti, rotatedHash, Number(session.token_version || 0), rotatedExp, stableSessionId]
+      [rotatedJti, rotatedHash, Number(session.token_version || 0), rotatedExp, nextIpHash, nextUaHash, stableSessionId]
     );
 
     const role = session.user_role;

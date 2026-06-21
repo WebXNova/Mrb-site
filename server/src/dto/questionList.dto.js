@@ -12,9 +12,12 @@ export function toQuestionListItemDto(row) {
   return {
     question_id: Number(row.id),
     question_text: String(row.question_text ?? ''),
+    topic: row.topic == null ? null : String(row.topic),
     difficulty: row.difficulty == null ? null : String(row.difficulty),
     course_id: Number(row.course_id),
     subject_id: row.subject_id == null ? null : Number(row.subject_id),
+    course_title: row.course_title == null ? null : String(row.course_title),
+    subject_title: row.subject_title == null ? null : String(row.subject_title),
     marks: Number(row.marks),
     created_at: toIsoTimestamp(row.created_at),
   };

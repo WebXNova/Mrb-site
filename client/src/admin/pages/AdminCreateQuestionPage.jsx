@@ -1,3 +1,4 @@
+import { adminRoute } from '../../config/adminPaths';
 import { Link } from 'react-router-dom';
 import { getAdminToken } from '../../auth/session';
 import QuestionContentSection from '../components/QuestionContentSection';
@@ -60,7 +61,7 @@ export default function AdminCreateQuestionPage() {
               Question Bank · Phase 1 single-choice MCQ ({PHASE_1_QUESTION_TYPE})
             </p>
           </div>
-          <Link className="btn btn--secondary btn--sm" to="/admin">
+          <Link className="btn btn--secondary btn--sm" to={adminRoute()}>
             Back to dashboard
           </Link>
         </div>

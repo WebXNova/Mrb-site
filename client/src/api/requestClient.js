@@ -1,11 +1,17 @@
-import { clearAdminAuth, clearStudentAuth, getAdminToken, getStudentToken, setAdminAuth, setStudentAuth } from '../auth/session';
-import { setAuthAuthenticated, setAuthDegraded, setAuthGuest } from '../auth/authStateMachine';
+import { clearAdminAuth, clearStudentAuth, clearTeacherAuth, getAdminToken, getStudentToken, getTeacherToken, setAdminAuth, setStudentAuth, setTeacherAuth, syncGlobalAuthState } from '../auth/session';
+import { setAuthAuthenticated, setAuthDegraded } from '../auth/authStateMachine';
 import {
   RefreshFailureKind,
   classifyRefreshHttpFailure,
   isConfirmedAuthTerminationKind,
   isTransientRefreshKind,
 } from '../auth/refreshFailureKind';
+import {
+  acquireCrossTabRefreshLease,
+  broadcastRefreshComplete,
+  broadcastRefreshFailed,
+  releaseCrossTabRefreshLease,
+} from '../auth/crossTabRefreshCoordinator';
 import { getRefreshInFlightPromise, runSingleFlightRefresh } from '../auth/refreshManager';
 import { logAuthEvent } from '../observability/authTelemetry';
 import { createHttpError, inferApiFailureMessage } from './apiErrors';
@@ -14,6 +20,8 @@ import { getApiBaseUrl, getRequestTimeoutMs } from './runtimeConfig';
 import { isAuthDebugEnabled } from './runtimeConfig';
 
 const MAX_TRANSIENT_REFRESH_RETRIES = 2;
+const MAX_SUPERSEDED_REFRESH_RETRIES = 3;
+const SUPERSEDED_RETRY_DELAY_MS = 120;
 const CSRF_RETRY_DELAY_MS = 80;
 const CSRF_COOKIE_NAME = 'csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
@@ -56,17 +64,20 @@ export function isRefreshAuthRevokedError(err) {
 function getTokenByScope(scope) {
   if (scope === 'admin') return getAdminToken();
   if (scope === 'student') return getStudentToken();
+  if (scope === 'teacher') return getTeacherToken();
   return null;
 }
 
 function setAuthByScope(scope, token, user) {
   if (scope === 'admin') setAdminAuth(token, user);
   if (scope === 'student') setStudentAuth(token, user);
+  if (scope === 'teacher') setTeacherAuth(token, user);
 }
 
 function clearAuthByScope(scope) {
   if (scope === 'admin') clearAdminAuth();
   if (scope === 'student') clearStudentAuth();
+  if (scope === 'teacher') clearTeacherAuth();
 }
 
 function degradedReasonForRefreshKind(kind) {
@@ -96,6 +107,7 @@ async function fetchWithTimeout(url, options, timeoutMs, externalSignal) {
 function classifyRefreshFailure(error) {
   if (!(error instanceof AuthRefreshError)) return 'unknown';
   if (isConfirmedAuthTerminationKind(error.kind)) return 'revoked';
+  if (error.kind === RefreshFailureKind.REFRESH_SUPERSEDED) return 'recoverable';
   if (isTransientRefreshKind(error.kind)) return 'transient';
   return 'recoverable';
 }
@@ -163,7 +175,7 @@ async function postRefresh(scope, timeoutMs) {
     }
 
     if (response.ok) {
-      const user = data?.data?.user || data?.data?.admin || data?.data?.student || null;
+      const user = data?.data?.user || data?.data?.admin || data?.data?.student || data?.data?.teacher || null;
       if (!user || typeof user !== 'object' || user.id == null) {
         profile.end('malformed');
         throw new AuthRefreshError('Malformed refresh response', {
@@ -180,7 +192,8 @@ async function postRefresh(scope, timeoutMs) {
       statusText: response.statusText,
       rawText: rawBody,
     });
-    const kind = classifyRefreshHttpFailure(response.status, message);
+    const errorCode = data?.error?.code ?? data?.errorCode ?? null;
+    const kind = classifyRefreshHttpFailure(response.status, message, errorCode);
 
     if (kind === RefreshFailureKind.CSRF_MISMATCH && csrfAttempt === 0) {
       logAuthEvent('refresh.csrf_retry', { scope });
@@ -195,68 +208,122 @@ async function postRefresh(scope, timeoutMs) {
   throw new AuthRefreshError('Session refresh failed', { status: 403, kind: RefreshFailureKind.CSRF_MISMATCH });
 }
 
-export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs(), _allowFollowup = true } = {}) {
-  if (!scope || (scope !== 'admin' && scope !== 'student')) {
+function shouldRetrySupersededRefresh(error, retryCount) {
+  if (retryCount >= MAX_SUPERSEDED_REFRESH_RETRIES) return false;
+  return error instanceof AuthRefreshError && error.kind === RefreshFailureKind.REFRESH_SUPERSEDED;
+}
+
+async function applyFollowerRefreshResult(scope, result) {
+  if (result?.ok) {
+    if (result.user && typeof result.user === 'object' && result.user.id != null) {
+      setAuthByScope(scope, '__cookie_session__', result.user);
+    }
+    setAuthAuthenticated();
+    const token = getTokenByScope(scope);
+    if (token) return token;
+    return '__cookie_session__';
+  }
+  if (result?.revoked) {
+    clearAuthByScope(scope);
+    syncGlobalAuthState('refresh-revoked');
+    throw new AuthRefreshError('Session refresh failed', { status: 401, kind: RefreshFailureKind.REVOKED_SESSION });
+  }
+  throw new AuthRefreshError('Session refresh failed', { status: 401, kind: RefreshFailureKind.REFRESH_SUPERSEDED });
+}
+
+async function executeRefreshAttempt(scope, timeoutMs) {
+  let retryCount = 0;
+  let supersededRetryCount = 0;
+  for (;;) {
+    try {
+      const out = await postRefresh(scope, timeoutMs);
+      setAuthByScope(scope, '__cookie_session__', out.user);
+      setAuthAuthenticated();
+      logAuthEvent('refresh.success', { scope, retries: retryCount, supersededRetries: supersededRetryCount });
+      return { token: '__cookie_session__', user: out.user };
+    } catch (error) {
+      const cls = classifyRefreshFailure(error);
+      const kind = error instanceof AuthRefreshError ? error.kind : RefreshFailureKind.UNKNOWN;
+      logAuthEvent('refresh.failure', {
+        scope,
+        classification: cls,
+        kind,
+        status: error?.status ?? null,
+        retryCount,
+        supersededRetryCount,
+      });
+      if (shouldRetryTransientRefresh(error, retryCount)) {
+        retryCount += 1;
+        logAuthEvent('refresh.retry', { scope, retryCount, kind });
+        continue;
+      }
+      if (shouldRetrySupersededRefresh(error, supersededRetryCount)) {
+        supersededRetryCount += 1;
+        logAuthEvent('refresh.superseded_retry', { scope, supersededRetryCount });
+        await new Promise((r) => setTimeout(r, SUPERSEDED_RETRY_DELAY_MS));
+        continue;
+      }
+      if (isConfirmedAuthTerminationKind(kind)) {
+        clearAuthByScope(scope);
+        syncGlobalAuthState('refresh-revoked');
+      } else if (cls === 'transient') {
+        setAuthDegraded('refresh-transient-failure');
+      } else if (cls === 'recoverable') {
+        setAuthDegraded(degradedReasonForRefreshKind(kind));
+      }
+      throw error;
+    }
+  }
+}
+
+export function refreshAccessToken(scope, { timeoutMs = getRequestTimeoutMs() } = {}) {
+  if (!scope || (scope !== 'admin' && scope !== 'student' && scope !== 'teacher')) {
     return Promise.reject(new Error('Invalid auth scope for refresh'));
   }
 
-  const inFlight = getRefreshInFlightPromise();
+  const inFlight = getRefreshInFlightPromise(scope);
   if (inFlight) {
-    return inFlight.catch(() => null).then(() => {
-      const existingToken = getTokenByScope(scope);
-      if (existingToken) return existingToken;
-      if (_allowFollowup) {
-        return refreshAccessToken(scope, { timeoutMs, _allowFollowup: false });
-      }
-      throw new AuthRefreshError('Session refresh failed', { status: 401, kind: RefreshFailureKind.REVOKED_SESSION });
-    });
+    return inFlight;
   }
 
-  return runSingleFlightRefresh(async () => {
+  return runSingleFlightRefresh(scope, async () => {
     logAuthEvent('refresh.start', { scope });
-    let retryCount = 0;
-    for (;;) {
+    const lease = await acquireCrossTabRefreshLease(scope);
+    if (lease.role === 'follower') {
+      logAuthEvent('refresh.follower_wait', { scope });
       try {
-        const out = await postRefresh(scope, timeoutMs);
-        setAuthByScope(scope, '__cookie_session__', out.user);
-        setAuthAuthenticated();
-        logAuthEvent('refresh.success', { scope, retries: retryCount });
-        return '__cookie_session__';
+        const result = await lease.wait;
+        logAuthEvent('refresh.follower_done', { scope, ok: Boolean(result?.ok), via: result?.via || 'unknown' });
+        return applyFollowerRefreshResult(scope, result);
       } catch (error) {
-        const cls = classifyRefreshFailure(error);
-        const kind = error instanceof AuthRefreshError ? error.kind : RefreshFailureKind.UNKNOWN;
-        logAuthEvent('refresh.failure', {
-          scope,
-          classification: cls,
-          kind,
-          status: error?.status ?? null,
-          retryCount,
-        });
-        if (shouldRetryTransientRefresh(error, retryCount)) {
-          retryCount += 1;
-          logAuthEvent('refresh.retry', { scope, retryCount, kind });
-          continue;
-        }
-        if (isConfirmedAuthTerminationKind(kind)) {
-          clearAuthByScope(scope);
-          setAuthGuest('refresh-revoked');
-        } else if (cls === 'transient') {
-          setAuthDegraded('refresh-transient-failure');
-        } else if (cls === 'recoverable') {
-          setAuthDegraded(degradedReasonForRefreshKind(kind));
-        }
+        const existingToken = getTokenByScope(scope);
+        if (existingToken) return existingToken;
         throw error;
       }
     }
-  }).then(() => {
-    const token = getTokenByScope(scope);
+
+    try {
+      const { token, user } = await executeRefreshAttempt(scope, timeoutMs);
+      broadcastRefreshComplete(scope, { user });
+      return token;
+    } catch (error) {
+      const kind = error instanceof AuthRefreshError ? error.kind : RefreshFailureKind.UNKNOWN;
+      broadcastRefreshFailed(scope, { revoked: isConfirmedAuthTerminationKind(kind) });
+      throw error;
+    } finally {
+      releaseCrossTabRefreshLease(scope);
+    }
+  }).then((token) => {
     if (token) return token;
+    const existingToken = getTokenByScope(scope);
+    if (existingToken) return existingToken;
     throw new AuthRefreshError('Session refresh failed', { status: 401, kind: RefreshFailureKind.REVOKED_SESSION });
   });
 }
 
-async function waitForRefresh() {
-  const inFlight = getRefreshInFlightPromise();
+async function waitForRefresh(authScope) {
+  if (!authScope) return;
+  const inFlight = getRefreshInFlightPromise(authScope);
   if (!inFlight) return;
   await inFlight.catch(() => {});
 }
@@ -302,7 +369,7 @@ export async function request(path, options = {}) {
   } = options;
 
   if (!skipRefreshQueue && authScope) {
-    await waitForRefresh();
+    await waitForRefresh(authScope);
   }
 
   void token;
@@ -402,5 +469,12 @@ export async function request(path, options = {}) {
     throw createHttpError(failMsg() || 'Unauthorized', { status: 401, refreshAlreadyTried: true });
   }
   profile.end('error', { status: response.status });
-  throw createHttpError(failMsg(), { status: response.status });
+  const errorCode = data?.error?.code ?? data?.errorCode ?? null;
+  const details = data?.details ?? data?.error?.metadata ?? null;
+  throw createHttpError(failMsg(), {
+    status: response.status,
+    errorCode,
+    details,
+    responseData: data,
+  });
 }

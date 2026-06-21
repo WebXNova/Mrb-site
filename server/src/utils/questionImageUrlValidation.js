@@ -5,14 +5,22 @@ export const MAX_QUESTION_IMAGE_URL_LENGTH = 1000;
 
 const BLOCKED_PROTOCOL_PATTERN = /^(javascript|data|file|ftp|blob|mailto|vbscript):/i;
 const UPLOAD_PATH_PATTERN = /^\/api\/uploads\/question-bank\/[a-f0-9]{48}\.(jpg|png|webp)$/i;
+const ARCHIVE_IMPORT_PATH_PATTERN = /^images\/[a-f0-9]{48}\.(jpg|png|webp)$/i;
 const HTTP_URL_PATTERN = /^https?:\/\/.+/i;
 
 /**
  * @param {string} raw
- * @param {{ allowEmpty?: boolean }} [options]
+ */
+export function isArchiveImportImagePath(raw) {
+  return ARCHIVE_IMPORT_PATH_PATTERN.test(String(raw ?? '').trim());
+}
+
+/**
+ * @param {string} raw
+ * @param {{ allowEmpty?: boolean, allowArchivePaths?: boolean }} [options]
  * @returns {{ ok: true, url: string } | { ok: false, message: string, code: string }}
  */
-export function validateQuestionImageUrl(raw, { allowEmpty = false } = {}) {
+export function validateQuestionImageUrl(raw, { allowEmpty = false, allowArchivePaths = false } = {}) {
   const trimmed = String(raw ?? '').trim();
 
   if (!trimmed) {
@@ -20,6 +28,10 @@ export function validateQuestionImageUrl(raw, { allowEmpty = false } = {}) {
       return { ok: true, url: '' };
     }
     return { ok: false, message: 'Image URL is required.', code: 'IMAGE_URL_REQUIRED' };
+  }
+
+  if (allowArchivePaths && isArchiveImportImagePath(trimmed)) {
+    return { ok: true, url: trimmed };
   }
 
   if (trimmed.length > MAX_QUESTION_IMAGE_URL_LENGTH) {
@@ -90,13 +102,14 @@ export function validateQuestionImageUrl(raw, { allowEmpty = false } = {}) {
 /**
  * @param {string} raw
  * @param {string} fieldName
+ * @param {{ allowArchivePaths?: boolean }} [options]
  * @returns {string|null}
  */
-export function normalizeOptionalQuestionImageUrl(raw, fieldName) {
+export function normalizeOptionalQuestionImageUrl(raw, fieldName, options = {}) {
   if (raw == null || String(raw).trim() === '') {
     return null;
   }
-  const result = validateQuestionImageUrl(raw);
+  const result = validateQuestionImageUrl(raw, { allowArchivePaths: options.allowArchivePaths });
   if (!result.ok) {
     const error = new Error(result.message);
     error.code = result.code;

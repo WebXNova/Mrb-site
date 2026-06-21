@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 import {
   Alignment,
@@ -106,12 +106,6 @@ export default function CKEditorWrapper({
     [onChange, sanitize]
   );
 
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !editor.ui?.view?.editable?.element) return;
-    editor.isReadOnly = disabled;
-  }, [disabled]);
-
   return (
     <div
       className={`admin-ckeditor cq-ckeditor${invalid ? ' admin-ckeditor--invalid' : ''}${disabled ? ' admin-ckeditor--disabled' : ''}`}
@@ -126,7 +120,6 @@ export default function CKEditorWrapper({
         disabled={disabled}
         onReady={(editor) => {
           editorRef.current = editor;
-          editor.isReadOnly = disabled;
         }}
         onChange={(_event, editor) => {
           emitCleanChange(editor.getData());

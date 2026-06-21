@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { courseWizardBodySchema } from '@course-wizard-schema';
 import { generateIdempotencyKey } from '../../utils/idempotency.js';
+import { useAdminToast } from '../context/AdminToastContext';
+import CourseWizardProgress from '../components/courses/CourseWizardProgress';
+import CourseLivePreviewPanel from '../components/courses/CourseLivePreviewPanel';
+import AdminConfirmDialog from '../components/AdminConfirmDialog';
 import CourseWizardLayout from './CourseWizardLayout.jsx';
 import CourseStepDetails from './CourseStepDetails.jsx';
 import CourseStepPricing from './CourseStepPricing.jsx';
@@ -13,16 +17,47 @@ import {
   buildDefaultWizardCourse,
   buildDefaultWizardPricing,
   buildDefaultWizardSubject,
+  sanitizeWizardBatch,
 } from './courseWizardDefaults.js';
 import {
   validateDetailsStep,
   validatePricingStep,
   validateBatchesStep,
+  validateAdmissionStep,
   validateSubjectsStep,
   flattenZodError,
 } from './courseWizardStepsValidation.js';
+import { toDateInputValue } from './courseScheduleValidation.js';
 
-const DRAFT_KEY = 'mrb_admin_course_create_wizard_v1';
+const LEGACY_DRAFT_KEY = 'mrb_admin_course_create_wizard_v1';
+const WIZARD_LAST_STEP = 4;
+
+/** Map legacy 6-step drafts (schedule at index 1) onto 5-step flow. */
+function normalizeWizardDraftStep(step) {
+  if (typeof step !== 'number' || step < 0) return 0;
+  if (step === 1) return 2;
+  if (step >= 2 && step <= 5) return step - 1;
+  return Math.min(WIZARD_LAST_STEP, step);
+}
+
+function applyDraftState(d, setters) {
+  if (!d || typeof d !== 'object') return;
+  const { setCourse, setPricing, setBatches, setSubjects, setStep } = setters;
+  if (d.course) setCourse(d.course);
+  if (d.pricing) setPricing(d.pricing);
+  if (Array.isArray(d.batches) && d.batches.length) {
+    setBatches([sanitizeWizardBatch(d.batches[0])]);
+  }
+  if (Array.isArray(d.subjects) && d.subjects.length) setSubjects(d.subjects);
+  if (typeof d.step === 'number') setStep(normalizeWizardDraftStep(d.step));
+}
+
+function normalizeBatchStatusForPublish(rawStatus) {
+  const status = String(rawStatus || 'draft').toLowerCase();
+  if (status === 'draft') return 'upcoming';
+  if (['published', 'upcoming', 'enrollment_open'].includes(status)) return status;
+  return 'upcoming';
+}
 
 function buildWizardPayload(publish, course, pricing, batches, subjects) {
   // CRITICAL: Auto-sync publish state
@@ -40,6 +75,37 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
     is_active: publishIntent ? true : Boolean(pricing.is_active),
   };
   
+  const batchesOut = batches
+    .filter((b) => String(b.title || '').trim())
+    .map((b, index) => {
+      const rawStatus = String(b.status || 'draft').toLowerCase();
+      let effectiveStatus = rawStatus;
+      let effectiveActive = b.is_active !== false;
+
+      if (publishIntent) {
+        effectiveStatus = normalizeBatchStatusForPublish(rawStatus);
+        if (index === 0 || b.is_active !== false) {
+          effectiveActive = true;
+        }
+      } else {
+        effectiveActive = b.is_active !== false;
+      }
+
+      return {
+        title: String(b.title).trim(),
+        start_date: b.start_date,
+        end_date: b.end_date,
+        total_seats: Math.trunc(Number(b.total_seats)),
+        instructor_name: (b.instructor_name && String(b.instructor_name).trim()) || null,
+        schedule_label: (b.schedule_label && String(b.schedule_label).trim()) || null,
+        timezone: b.timezone || 'UTC',
+        status: effectiveStatus,
+        is_active: effectiveActive,
+        show_publicly: b.show_publicly !== false,
+        recordings_enabled: b.recordings_enabled !== false,
+      };
+    });
+  const primaryBatch = batchesOut[0];
   const courseOut = {
     ...course,
     short_description:
@@ -47,50 +113,16 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
         ? null
         : String(course.short_description).trim(),
     thumbnail_url: course.thumbnail_url === undefined ? null : course.thumbnail_url ?? null,
+    start_date: primaryBatch
+      ? toDateInputValue(primaryBatch.start_date) || null
+      : toDateInputValue(course.start_date) || null,
+    end_date: primaryBatch
+      ? toDateInputValue(primaryBatch.end_date) || null
+      : toDateInputValue(course.end_date) || null,
+    admission_status: course.admission_status || 'CLOSED',
     // Auto-activate course when publishing
     is_active: publishIntent ? true : Boolean(course.is_active),
   };
-  const batchesOut = batches
-    .filter((b) => String(b.title || '').trim())
-    .map((b, index) => {
-      const rawStatus = String(b.status || 'draft').toLowerCase();
-      
-      // Auto-sync batch state when publishing
-      let effectiveStatus = rawStatus;
-      let effectiveActive = b.is_active !== false;
-      
-      if (publishIntent) {
-        // If publishing and batch is draft, upgrade to upcoming
-        if (rawStatus === 'draft') {
-          effectiveStatus = 'upcoming';
-        }
-        // Ensure at least first batch is active when publishing
-        if (index === 0 || b.is_active !== false) {
-          effectiveActive = true;
-        }
-      } else {
-        // When saving draft, respect original states
-        effectiveActive = b.is_active !== false;
-      }
-      
-      return {
-        title: String(b.title).trim(),
-        start_date: b.start_date,
-        end_date: b.end_date,
-        enrollment_open_at: b.enrollment_open_at,
-        enrollment_close_at: b.enrollment_close_at,
-        total_seats: Math.trunc(Number(b.total_seats)),
-        instructor_name: (b.instructor_name && String(b.instructor_name).trim()) || null,
-        schedule_label: (b.schedule_label && String(b.schedule_label).trim()) || null,
-        timezone: b.timezone || 'UTC',
-        status: effectiveStatus,
-        is_active: effectiveActive,
-        allow_enrollment: b.allow_enrollment !== false,
-        show_publicly: b.show_publicly !== false,
-        certificate_enabled: b.certificate_enabled === true,
-        recordings_enabled: b.recordings_enabled !== false,
-      };
-    });
   const subjectsOut = subjects
     .filter((s) => String(s.title || '').trim())
     .map((s, i) => ({
@@ -102,7 +134,10 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
 }
 
 export default function CourseCreateWizard({ token, onCreated, onCancel }) {
+  const toast = useAdminToast();
   const [step, setStep] = useState(0);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
   const [course, setCourse] = useState(() => buildDefaultWizardCourse());
   const [pricing, setPricing] = useState(() => buildDefaultWizardPricing());
   const [batches, setBatches] = useState(() => [buildDefaultWizardBatch()]);
@@ -113,45 +148,113 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const imageInputRef = useRef(null);
   const draftTimerRef = useRef(null);
   const abortControllerRef = useRef(null);
   const idempotencyKeyRef = useRef(null);
 
-  const persistDraft = useCallback(() => {
+  const clearServerDraft = useCallback(async () => {
+    if (!token) return;
     try {
-      const payload = { course, pricing, batches, subjects, step };
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+      await adminApi.saveCourseDraft(token, { clear: true });
     } catch {
       /* ignore */
     }
-  }, [course, pricing, batches, subjects, step]);
+  }, [token]);
+
+  const persistDraft = useCallback(async () => {
+    if (!token || !draftHydrated) return;
+    try {
+      const payload = {
+        course,
+        pricing,
+        batches: batches.map((batch) => sanitizeWizardBatch(batch)),
+        subjects,
+        step,
+      };
+      const response = await adminApi.saveCourseDraft(token, payload);
+      const updatedAt = response?.data?.updatedAt;
+      setDraftSavedAt(updatedAt ? new Date(updatedAt).getTime() : Date.now());
+    } catch {
+      /* ignore */
+    }
+  }, [token, draftHydrated, course, pricing, batches, subjects, step]);
+
+  const hasDraftContent =
+    Boolean(course.title?.trim()) ||
+    Boolean(course.description?.trim()) ||
+    Boolean(course.thumbnail_url);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const d = JSON.parse(raw);
-      if (d.course) setCourse(d.course);
-      if (d.pricing) setPricing(d.pricing);
-      if (Array.isArray(d.batches) && d.batches.length) {
-        // Enforce single-batch invariant when restoring drafts
-        setBatches([d.batches[0]]);
+    function onBeforeUnload(event) {
+      if (!hasDraftContent) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasDraftContent]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateDraft() {
+      setDraftHydrated(false);
+
+      if (!token) {
+        setDraftHydrated(true);
+        return;
       }
-      if (Array.isArray(d.subjects) && d.subjects.length) setSubjects(d.subjects);
-      if (typeof d.step === 'number' && d.step >= 0 && d.step <= 4) setStep(d.step);
-    } catch {
-      /* ignore */
+
+      try {
+        const response = await adminApi.loadCourseDraft(token);
+        if (cancelled) return;
+
+        const draft = response?.data?.draft;
+        if (draft) {
+          applyDraftState(draft, { setCourse, setPricing, setBatches, setSubjects, setStep });
+          if (response?.data?.updatedAt) {
+            setDraftSavedAt(new Date(response.data.updatedAt).getTime());
+          }
+        } else {
+          try {
+            const raw = localStorage.getItem(LEGACY_DRAFT_KEY);
+            if (raw) {
+              const legacyDraft = JSON.parse(raw);
+              applyDraftState(legacyDraft, { setCourse, setPricing, setBatches, setSubjects, setStep });
+              localStorage.removeItem(LEGACY_DRAFT_KEY);
+              await adminApi.saveCourseDraft(token, legacyDraft);
+              setDraftSavedAt(Date.now());
+            }
+          } catch {
+            /* ignore legacy migration failures */
+          }
+        }
+      } catch {
+        /* ignore load failures — wizard starts fresh */
+      } finally {
+        if (!cancelled) setDraftHydrated(true);
+      }
     }
-  }, []);
+
+    hydrateDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
+    if (!draftHydrated) return;
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-    draftTimerRef.current = setTimeout(() => persistDraft(), 500);
+    draftTimerRef.current = setTimeout(() => {
+      persistDraft();
+    }, 500);
     return () => {
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     };
-  }, [persistDraft]);
+  }, [persistDraft, draftHydrated]);
 
   const titleLen = String(course.title || '').length;
   const shortDescriptionLen = String(course.short_description ?? '').length;
@@ -194,10 +297,18 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   function onBatchChange(idx, patch) {
     // Enforce a single-batch invariant: always update index 0 only
     setBatches((prev) => {
-      const base = prev[0] || buildDefaultWizardBatch();
-      const next = { ...base, ...(idx === 0 ? patch : {}) };
+      const base = sanitizeWizardBatch(prev[0] || buildDefaultWizardBatch());
+      const next = sanitizeWizardBatch({ ...base, ...(idx === 0 ? patch : {}) });
       return [next];
     });
+    if (patch.start_date !== undefined || patch.end_date !== undefined) {
+      setCourse((c) => ({
+        ...c,
+        start_date:
+          patch.start_date !== undefined ? toDateInputValue(patch.start_date) || null : c.start_date,
+        end_date: patch.end_date !== undefined ? toDateInputValue(patch.end_date) || null : c.end_date,
+      }));
+    }
   }
 
   function onSubjectChange(idx, patch) {
@@ -245,21 +356,17 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
     if (imageInputRef.current) imageInputRef.current.value = '';
   }
 
-  function handleCancel() {
-    // Cancel any in-flight request
+  function resetWizardState() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-
-    // Clear draft from local storage
     try {
-      localStorage.removeItem(DRAFT_KEY);
+      localStorage.removeItem(LEGACY_DRAFT_KEY);
     } catch {
       /* ignore */
     }
-
-    // Reset wizard state back to initial defaults
+    void clearServerDraft();
     setCourse(buildDefaultWizardCourse());
     setPricing(buildDefaultWizardPricing());
     setBatches([buildDefaultWizardBatch()]);
@@ -269,12 +376,22 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
     setFieldErrors({});
     setBatchFieldErrors({});
     setPublishModalOpen(false);
+    setExitConfirmOpen(false);
     setSaving(false);
+    setDraftSavedAt(null);
+  }
 
-    // Let parent page react (e.g. clear messages)
-    if (typeof onCancel === 'function') {
-      onCancel();
+  function handleCancel() {
+    resetWizardState();
+    if (typeof onCancel === 'function') onCancel();
+  }
+
+  function requestExit() {
+    if (hasDraftContent) {
+      setExitConfirmOpen(true);
+      return;
     }
+    handleCancel();
   }
 
   function goNext() {
@@ -302,6 +419,12 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
       }
     }
     if (step === 2) {
+      const admission = validateAdmissionStep(course);
+      if (!admission.success) {
+        setFieldErrors(admission.errors || {});
+        setStepError(admission.message || 'Invalid admission status');
+        return;
+      }
       const r = validateBatchesStep(batches);
       if (!r.success) {
         const be = {};
@@ -324,7 +447,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
         return;
       }
     }
-    setStep((s) => Math.min(4, s + 1));
+    setStep((s) => Math.min(WIZARD_LAST_STEP, s + 1));
   }
 
   function goBack() {
@@ -376,7 +499,12 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
       
       // Clear idempotency key on success
       idempotencyKeyRef.current = null;
-      localStorage.removeItem(DRAFT_KEY);
+      try {
+        localStorage.removeItem(LEGACY_DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
+      await clearServerDraft();
       onCreated(res?.data);
     } catch (err) {
       // Don't show error if request was cancelled
@@ -424,6 +552,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
       }
       
       setStepError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
       setPublishModalOpen(false);
@@ -445,123 +574,119 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
     };
   }, []);
 
-  const previewCard =
-    step === 0 ? (
-      <div className="admin-card" style={{ padding: '1rem' }}>
-        <h4 className="heading-4" style={{ marginTop: 0 }}>
-          Live preview
-        </h4>
-        {course.thumbnail_url ? (
-          <img
-            src={course.thumbnail_url}
-            alt=""
-            style={{ width: '100%', borderRadius: '8px', marginBottom: '0.75rem' }}
-          />
-        ) : null}
-        <div style={{ fontWeight: 600 }}>{course.title || 'Course title'}</div>
-        <div className="admin-courses__muted" style={{ fontSize: 'var(--fs-13)', marginTop: '0.35rem' }}>
-          {course.level}
-        </div>
-        {course.short_description ? (
-          <p className="admin-courses__muted" style={{ marginTop: '0.5rem' }}>
-            {course.short_description}
-          </p>
-        ) : null}
-        <p className="admin-courses__muted" style={{ marginTop: '0.5rem', fontSize: 'var(--fs-13)' }}>
-          {(course.description || '').slice(0, 220)}
-          {(course.description || '').length > 220 ? '…' : ''}
-        </p>
-      </div>
+  const wizardFooter =
+    step < WIZARD_LAST_STEP ? (
+      <>
+        <button type="button" className="btn--course-secondary" disabled={step === 0} onClick={goBack}>
+          Back
+        </button>
+        <button type="button" className="btn--course-primary" onClick={goNext}>
+          Continue
+        </button>
+        <button type="button" className="btn--course-secondary" onClick={requestExit}>
+          Cancel
+        </button>
+      </>
     ) : null;
 
   return (
-    <div className="admin-card admin-courses__card">
-      <h2 className="heading-3">Create course</h2>
-      <p className="admin-courses__muted">Guided workflow — draft is saved in this browser.</p>
-      {stepError ? (
-        <div className="admin-field__error" role="alert" style={{ marginTop: '0.75rem' }}>
-          {stepError}
+    <div className="admin-courses-workspace admin-courses-workspace--wizard">
+      <div className="admin-courses-wizard-shell">
+        <div className="admin-courses-wizard-shell__header">
+          <h2 className="admin-courses-wizard-shell__title">Create course</h2>
+          <p className="admin-courses-wizard-shell__subtitle">
+            Guided workflow with autosave — your draft is stored securely in this browser.
+          </p>
+          {draftSavedAt ? (
+            <p className="admin-courses-wizard-shell__autosave" aria-live="polite">
+              <span className="admin-courses-wizard-shell__autosave-dot" aria-hidden />
+              Draft saved {new Date(draftSavedAt).toLocaleTimeString()}
+            </p>
+          ) : null}
         </div>
-      ) : null}
-      <CourseWizardLayout stepIndex={step} preview={previewCard}>
-        {step === 0 ? (
-          <CourseStepDetails
-            course={course}
-            onChange={onCourseChange}
-            titleLen={titleLen}
-            shortDescriptionLen={shortDescriptionLen}
-            descriptionLen={descriptionLen}
-            fieldErrors={fieldErrors}
-            imageUploading={imageUploading}
-            imageInputRef={imageInputRef}
-            onImageChange={onImageFileChange}
-            onClearImage={clearCoverImage}
-          />
-        ) : null}
-        {step === 1 ? (
-          <CourseStepPricing pricing={pricing} onChange={onPricingChange} fieldErrors={{}} />
-        ) : null}
-        {step === 2 ? (
-          <CourseStepBatches
-            batches={batches}
-            onBatchChange={onBatchChange}
-            fieldErrors={batchFieldErrors}
-          />
-        ) : null}
-        {step === 3 ? (
-          <CourseStepSubjects
-            subjects={subjects}
-            onSubjectChange={onSubjectChange}
-            onAdd={onAddSubject}
-            onRemove={onRemoveSubject}
-            onMove={onMoveSubject}
-          />
-        ) : null}
-        {step === 4 ? (
-          <CourseStepReview
-            course={course}
-            pricing={pricing}
-            batches={batches}
-            subjects={subjects}
-            warnings={reviewWarnings}
-            saving={saving}
-            onSaveDraft={() => submitWizard(false)}
-            onOpenPublishModal={() => setPublishModalOpen(true)}
-            onCancel={handleCancel}
-          />
-        ) : null}
-        {step < 4 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1.25rem' }}>
-            <button type="button" className="btn btn--ghost btn--sm" disabled={step === 0} onClick={goBack}>
-              Back
-            </button>
-            <button type="button" className="btn btn--primary btn--sm" onClick={goNext}>
-              Next
-            </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={handleCancel}>
-              Exit wizard
-            </button>
+
+        <CourseWizardProgress stepIndex={step} />
+
+        {stepError ? (
+          <div className="premium-field__error" role="alert" style={{ margin: '0 var(--space-6)', paddingTop: 'var(--space-4)' }}>
+            {stepError}
           </div>
         ) : null}
-      </CourseWizardLayout>
-      {publishModalOpen ? (
-        <div className="admin-course-wizard-modal" role="dialog" aria-modal="true" aria-labelledby="wiz_pub_title">
-          <div className="admin-course-wizard-modal__panel admin-card">
-            <h3 id="wiz_pub_title" className="heading-3">
-              Publish course?
-            </h3>
-            <p className="admin-courses__muted">This creates the course, pricing, batches, and subjects in one transaction.</p>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-              <button type="button" className="btn btn--primary" disabled={saving} onClick={() => submitWizard(true)}>
-                Confirm publish
-              </button>
-              <button type="button" className="btn btn--ghost" disabled={saving} onClick={() => setPublishModalOpen(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+
+        <CourseWizardLayout footer={wizardFooter}>
+          {step === 0 ? (
+            <CourseStepDetails
+              course={course}
+              onChange={onCourseChange}
+              titleLen={titleLen}
+              shortDescriptionLen={shortDescriptionLen}
+              descriptionLen={descriptionLen}
+              fieldErrors={fieldErrors}
+              imageUploading={imageUploading}
+              imageInputRef={imageInputRef}
+              onImageChange={onImageFileChange}
+              onClearImage={clearCoverImage}
+            />
+          ) : null}
+          {step === 1 ? (
+            <CourseStepPricing pricing={pricing} onChange={onPricingChange} fieldErrors={{}} />
+          ) : null}
+          {step === 2 ? (
+            <CourseStepBatches
+              course={course}
+              onCourseChange={onCourseChange}
+              batches={batches}
+              onBatchChange={onBatchChange}
+              fieldErrors={fieldErrors}
+              batchFieldErrors={batchFieldErrors}
+            />
+          ) : null}
+          {step === 3 ? (
+            <CourseStepSubjects
+              subjects={subjects}
+              onSubjectChange={onSubjectChange}
+              onAdd={onAddSubject}
+              onRemove={onRemoveSubject}
+              onMove={onMoveSubject}
+            />
+          ) : null}
+          {step === 4 ? (
+            <CourseStepReview
+              course={course}
+              pricing={pricing}
+              batches={batches}
+              subjects={subjects}
+              warnings={reviewWarnings}
+              saving={saving}
+              onSaveDraft={() => submitWizard(false)}
+              onOpenPublishModal={() => setPublishModalOpen(true)}
+              onCancel={requestExit}
+            />
+          ) : null}
+        </CourseWizardLayout>
+      </div>
+
+      <CourseLivePreviewPanel course={course} pricing={pricing} stepIndex={step} />
+
+      <AdminConfirmDialog
+        open={publishModalOpen}
+        title="Publish course?"
+        message="This creates the course, pricing, batch, and subjects in one transaction and makes them available based on your visibility settings."
+        confirmLabel="Confirm publish"
+        busy={saving}
+        onConfirm={() => submitWizard(true)}
+        onCancel={() => setPublishModalOpen(false)}
+      />
+
+      <AdminConfirmDialog
+        open={exitConfirmOpen}
+        title="Discard unsaved draft?"
+        message="Your course draft will be cleared from your account. This cannot be undone."
+        confirmLabel="Discard draft"
+        danger
+        onConfirm={handleCancel}
+        onCancel={() => setExitConfirmOpen(false)}
+      />
     </div>
   );
 }

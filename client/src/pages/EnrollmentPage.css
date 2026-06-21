@@ -64,6 +64,42 @@
   line-height: 1.5;
 }
 
+.enrollment-course-name {
+  margin: 0;
+  font-size: var(--fs-15);
+  color: var(--color-ink-700);
+}
+
+.enrollment-status-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.enrollment-status-panel--active {
+  background: rgb(16 185 129 / 8%);
+  border: 1px solid rgb(16 185 129 / 25%);
+}
+
+.enrollment-status-panel--closed {
+  background: rgb(245 158 11 / 10%);
+  border: 1px solid rgb(245 158 11 / 30%);
+}
+
+.enrollment-status-message {
+  margin: 0;
+  color: var(--color-ink-600);
+  line-height: 1.5;
+}
+
+.enrollment-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
 .enrollment-form,
 .enrollment-payment {
   display: grid;
@@ -538,4 +574,93 @@
   .enrollment-card {
     animation: none;
   }
+}
+
+.enrollment-prefill-banner {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, #3b82f6 10%, white);
+  border: 1px solid color-mix(in srgb, #3b82f6 35%, white);
+  color: var(--color-ink-700);
+}
+
+.enrollment-prefill-banner p {
+  margin: 0;
+  line-height: 1.5;
+  font-size: var(--fs-14);
+}
+
+.enrollment-prefill-clear {
+  justify-self: start;
+  border: 1px solid color-mix(in srgb, #3b82f6 40%, white);
+  background: #fff;
+  color: #1d4ed8;
+  border-radius: var(--radius-md);
+  padding: 0.45rem 0.85rem;
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .enrollment-prefill-clear:hover {
+    background: color-mix(in srgb, #3b82f6 8%, white);
+  }
+}
+
+.enrollment-prefill-source {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.enrollment-prefill-source__label {
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-700);
+}
+
+.enrollment-prefill-source__select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.8rem;
+  font-size: var(--fs-15);
+  background: #fff;
+}
+
+.enrollment-field--prefilled input,
+.enrollment-field--prefilled select {
+  border-color: color-mix(in srgb, #3b82f6 55%, white);
+  background: color-mix(in srgb, #3b82f6 6%, white);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #3b82f6 20%, transparent);
+}
+
+.enrollment-radio-chip--prefilled,
+.enrollment-attempt-card--prefilled {
+  border-color: color-mix(in srgb, #3b82f6 55%, white);
+  background: color-mix(in srgb, #3b82f6 6%, white);
+}
+
+.enrollment-field--prefill-warning label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.enrollment-prefill-warning-icon {
+  color: #d97706;
+  font-size: var(--fs-14);
+  line-height: 1;
+}
+
+.enrollment-field__prefill-warning {
+  margin: 0;
+  font-size: var(--fs-12);
+  color: #b45309;
+  line-height: 1.35;
 }

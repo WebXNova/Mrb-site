@@ -1,11 +1,13 @@
 import { z } from 'zod';
+import { ApiError } from '../utils/apiError.js';
 import { optionalQuestionDifficultySchema } from './questionList.schema.js';
 import {
   MAX_QUESTION_IMAGE_URL_LENGTH,
+  isArchiveImportImagePath,
   validateQuestionImageUrl,
 } from '../utils/questionImageUrlValidation.js';
 import { MCQ_OPTION_KEYS, validateOptions } from './questionOptions.validation.js';
-import { ApiError } from '../utils/apiError.js';
+import { validateQuestionMarks } from '../validators/questionMarks.validation.js';
 
 /** Phase 1 fixed A–D MCQ model. */
 export const MAX_MCQ_OPTIONS = MCQ_OPTION_KEYS.length;
@@ -134,6 +136,7 @@ const optionalQuestionImageUrlSchema = z.preprocess(
 
 function assertValidOptionalImageUrl(value, ctx, path) {
   if (value == null || String(value).trim() === '') return;
+  if (isArchiveImportImagePath(value)) return;
   const result = validateQuestionImageUrl(value);
   if (!result.ok) {
     ctx.addIssue({
@@ -210,7 +213,13 @@ const questionWriteFields = {
   difficulty: optionalQuestionDifficultySchema,
   question_text: questionTextSchema,
   question_image_url: optionalQuestionImageUrlSchema,
-  marks: z.number({ invalid_type_error: 'marks must be a number' }).positive('marks must be greater than 0'),
+  marks: z.preprocess(
+    (value) => {
+      const result = validateQuestionMarks(value, { defaultWhenMissing: true });
+      return result.ok ? result.marks : value;
+    },
+    z.number({ invalid_type_error: 'marks must be a number' }).positive('marks must be greater than 0')
+  ),
   explanation: explanationSchema,
   options: z
     .array(questionOptionSchema)

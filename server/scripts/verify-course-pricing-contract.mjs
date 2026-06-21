@@ -256,7 +256,7 @@ try {
   );
   mustContain(
     'src/services/studentPortal.service.js',
-    ['listActiveCourseRows'],
+    ['getCourseRowById', 'toCoursePublicDto'],
     'student portal'
   );
 

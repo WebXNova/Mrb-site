@@ -1,36 +1,41 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
-import { detectImageKindFromFile } from '../utils/imageMagicBytes.js';
+import { UploadRejectedError } from '../errors/media/MediaErrors.js';
+import { normalizeUploadExtension } from '../utils/secureRasterImageValidation.js';
+import {
+  COURSE_UPLOAD_DIR,
+  COURSE_UPLOAD_MAX_BYTES,
+  ensureCourseUploadDir,
+  finalizeCourseImageUpload,
+  generateCourseTempUploadFilename,
+} from '../services/courseImageUpload.service.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = path.resolve(__dirname, '../../uploads/course-covers');
-
-const allowedExt = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const ALLOWED_MIME = /^image\/(jpe?g|png|webp)$/i;
 
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
+    fs.mkdirSync(COURSE_UPLOAD_DIR, { recursive: true });
+    cb(null, COURSE_UPLOAD_DIR);
   },
-  filename(req, file, cb) {
-    const extRaw = path.extname(file.originalname || '').toLowerCase();
-    const ext = allowedExt.has(extRaw) ? extRaw : '.jpg';
-    const adminId = req.user?.id || 'admin';
-    const name = `course-${adminId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`;
-    cb(null, name);
+  filename(_req, _file, cb) {
+    cb(null, generateCourseTempUploadFilename());
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: COURSE_UPLOAD_MAX_BYTES, files: 1 },
   fileFilter(_req, file, cb) {
-    if (!/^(image\/(jpeg|png|webp))$/i.test(file.mimetype)) {
+    const extResult = normalizeUploadExtension(file.originalname || '');
+    if (!extResult.ok || !extResult.ext) {
+      cb(new Error('File type is not allowed'));
+      return;
+    }
+    if (!ALLOWED_MIME.test(String(file.mimetype || ''))) {
       cb(new Error('Only JPEG, PNG, or WebP images are allowed'));
       return;
     }
@@ -41,11 +46,17 @@ const upload = multer({
 function handleUpload(req, res, next) {
   upload.single('image')(req, res, (err) => {
     if (err && err.name === 'MulterError') {
-      next(new ApiError(400, err.code === 'LIMIT_FILE_SIZE' ? 'Image must be 5 MB or smaller.' : err.message));
+      const message =
+        err.code === 'LIMIT_FILE_SIZE'
+          ? 'Image must be 2 MB or smaller.'
+          : err.code === 'LIMIT_FILE_COUNT'
+            ? 'Only one image may be uploaded at a time.'
+            : err.message;
+      next(new ApiError(400, message, { code: 'UPLOAD_REJECTED' }));
       return;
     }
     if (err) {
-      next(err instanceof ApiError ? err : new ApiError(400, err.message || 'Upload failed'));
+      next(err instanceof ApiError ? err : new UploadRejectedError(err.message || 'Upload failed'));
       return;
     }
     next();
@@ -55,19 +66,30 @@ function handleUpload(req, res, next) {
 export const postCourseImage = [
   handleUpload,
   asyncHandler(async (req, res) => {
+    await ensureCourseUploadDir();
+
     if (!req.file) {
-      throw new ApiError(400, 'No image file uploaded');
+      throw new UploadRejectedError('No image file uploaded');
     }
-    const kind = detectImageKindFromFile(req.file.path);
-    if (!kind) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch {
-        /* ignore */
-      }
-      throw new ApiError(400, 'File content is not a supported image format');
+
+    const originalName = path.basename(String(req.file.originalname || 'upload.bin'));
+    if (originalName.includes('..') || /[\\/]/.test(originalName)) {
+      throw new UploadRejectedError('Invalid file name');
     }
-    const url = `/api/uploads/course-covers/${req.file.filename}`;
-    sendSuccess(res, { url, kind });
+
+    try {
+      const result = await finalizeCourseImageUpload(req, {
+        filePath: req.file.path,
+        originalName,
+        claimedMime: String(req.file.mimetype || ''),
+        size: req.file.size,
+      });
+
+      sendSuccess(res, { url: result.url, kind: result.kind });
+    } catch (error) {
+      if (error instanceof UploadRejectedError) throw error;
+      console.error('[course-image-upload] unexpected failure', error?.message || error);
+      throw new UploadRejectedError('Upload failed');
+    }
   }),
 ];

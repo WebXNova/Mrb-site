@@ -3,6 +3,7 @@
   max-width: var(--container-max);
   margin-inline: auto;
   padding-inline: var(--space-6);
+  min-width: 0;
 }
 
 .container-narrow {
@@ -14,6 +15,9 @@
 
 .section {
   padding-block: clamp(var(--space-16), 8vw, var(--space-24));
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .section-tight {
@@ -42,8 +46,9 @@
 
 .grid-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17.5rem), 1fr));
   gap: var(--space-6);
+  min-width: 0;
 }
 
 @media (min-width: 768px) {
@@ -57,5 +62,12 @@
   .container,
   .container-narrow {
     padding-inline: var(--space-10);
+  }
+}
+
+@media (max-width: 399px) {
+  .container,
+  .container-narrow {
+    padding-inline: var(--space-4);
   }
 }

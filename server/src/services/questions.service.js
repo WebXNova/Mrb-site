@@ -22,12 +22,15 @@ import {
 } from '../errors/questionBank/QuestionBankErrors.js';
 import { AppError } from '../errors/base/AppError.js';
 import { applyQuestionWriteSecurity } from '../security/questionContentSecurity.js';
+import { enforceQuestionBankMutationAllowed } from './publishedTestLock.service.js';
+import { assertQuestionMutationAccess } from './questionMutationAccess.service.js';
 import { normalizeMcqOptionsForInsert } from '../validators/questionOptions.validation.js';
 import { createQuestionService } from './createQuestion.service.js';
 import {
   assertPersistedQuestionIntegrity,
   validateQuestionIntegrity,
 } from './questionBankIntegrity.service.js';
+import { invalidateTestTotalMarksCacheForQuestion } from './testTotalMarks.service.js';
 import { logTransactionRollback } from './questionBankIntegrityLog.js';
 
 const LOG_PREFIX = '[question-bank]';
@@ -92,7 +95,7 @@ async function fetchQuestionWithOptions(questionId, connection = mysqlPool) {
   }
 
   const [optionRows] = await connection.query(
-    `SELECT id, question_id, option_key, option_text, image_url, is_correct, sort_order, created_at, updated_at
+    `SELECT id, question_id, option_key, option_text, option_html, image_url, is_correct, sort_order, created_at, updated_at
      FROM question_options
      WHERE question_id = ?
      ORDER BY sort_order ASC, id ASC`,
@@ -107,12 +110,13 @@ async function insertQuestionOptions(connection, questionId, options) {
 
   for (const option of normalizedOptions) {
     await connection.query(
-      `INSERT INTO question_options (question_id, option_key, option_text, image_url, is_correct, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO question_options (question_id, option_key, option_text, option_html, image_url, is_correct, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         questionId,
         option.option_key,
         option.option_text.trim(),
+        (option.option_html ?? option.option_text).trim(),
         option.image_url ?? null,
         option.is_correct ? 1 : 0,
         option.sort_order,
@@ -207,6 +211,11 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
     throw new ApiError(401, 'Authenticated admin required', { code: 'UNAUTHORIZED' });
   }
 
+  await enforceQuestionBankMutationAllowed(id);
+  await assertQuestionMutationAccess(id, adminId, adminRole, {
+    targetCourseId: payload?.course_id,
+  });
+
   payload = applyQuestionWriteSecurity(payload);
   assertQuestionWriteBusinessRules(payload);
   const { options: normalizedOptions } = validateQuestionIntegrity(payload, payload.options, {
@@ -240,8 +249,10 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
            difficulty = ?,
            question_type = ?,
            question_text = ?,
+           question_html = ?,
            question_image_url = ?,
            explanation = ?,
+           explanation_html = ?,
            marks = ?
        WHERE id = ? AND deleted_at IS NULL`,
       [
@@ -251,8 +262,10 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
         payload.difficulty ?? null,
         PHASE_1_QUESTION_TYPE,
         payload.question_text.trim(),
+        (payload.question_html ?? payload.question_text).trim(),
         payload.question_image_url ?? null,
         payload.explanation ?? null,
+        payload.explanation_html ?? payload.explanation ?? null,
         payload.marks,
         id,
       ]
@@ -269,6 +282,7 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
     const updated = await fetchQuestionWithOptions(id, connection);
 
     await connection.commit();
+    await invalidateTestTotalMarksCacheForQuestion(id);
     console.info(`${LOG_PREFIX} update commit completed`, { question_id: id });
 
     try {
@@ -326,9 +340,12 @@ export async function updateQuestion(questionId, payload, adminId, adminRole = '
  * @param {number|string} adminId
  * @returns {Promise<{ question_id: number, deleted_at: string|null, deleted_by: number|null }>}
  */
-export async function deleteQuestion(questionId, adminId) {
+export async function deleteQuestion(questionId, adminId, adminRole = 'admin') {
   const id = parsePositiveQuestionId(questionId);
   const admin = parsePositiveAdminId(adminId);
+
+  await enforceQuestionBankMutationAllowed(id);
+  await assertQuestionMutationAccess(id, admin, adminRole);
 
   const connection = await mysqlPool.getConnection();
   try {

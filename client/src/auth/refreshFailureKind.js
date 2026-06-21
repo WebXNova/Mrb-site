@@ -5,6 +5,8 @@
 
 export const RefreshFailureKind = /** @type {const} */ ({
   REVOKED_SESSION: 'REVOKED_SESSION',
+  /** Stale refresh token after another tab rotated; session still valid — retry/wait. */
+  REFRESH_SUPERSEDED: 'REFRESH_SUPERSEDED',
   AUTH_REFRESH_DENIED: 'AUTH_REFRESH_DENIED',
   FORBIDDEN_ACCOUNT: 'FORBIDDEN_ACCOUNT',
   CSRF_MISMATCH: 'CSRF_MISMATCH',
@@ -43,12 +45,18 @@ function normMsg(value) {
 /**
  * @param {number} status
  * @param {string} message - API `message` or fallback
+ * @param {string | null} [errorCode] - API `error.code`
  */
-export function classifyRefreshHttpFailure(status, message) {
+export function classifyRefreshHttpFailure(status, message, errorCode = null) {
   const m = normMsg(message);
+  const code = String(errorCode || '').toUpperCase();
   if (!Number.isFinite(status)) return RefreshFailureKind.UNKNOWN;
 
   if (status === 401) {
+    if (code === 'REFRESH_SUPERSEDED' || code === 'REFRESH_REJECTED') {
+      return RefreshFailureKind.REFRESH_SUPERSEDED;
+    }
+    if (code === 'REFRESH_REPLAY_REJECTED') return RefreshFailureKind.REVOKED_SESSION;
     return RefreshFailureKind.REVOKED_SESSION;
   }
 

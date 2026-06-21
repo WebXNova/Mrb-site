@@ -5,6 +5,8 @@ dist/
 .env
 **/.env
 server/.env
+logs/
+backups/
 .cursor/
 .DS_Store
 Thumbs.db
@@ -20,7 +22,8 @@ server/uploads/enrollments/*
 # Question Bank image uploads (keep empty dir in git)
 server/uploads/question-bank/*
 !server/uploads/question-bank/.gitkeep
-.mongodb_data/
+# Q&A audit dead-letter queue (runtime data)
+server/data/qa-audit-dlq/
 node_modules/
 .env.local
 .env

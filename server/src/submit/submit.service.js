@@ -21,6 +21,10 @@ import {
 } from '../errors/testAttempt/TestAttemptErrors.js';
 import { ATTEMPT_DB_STATUS } from '../attempt/attempt.constants.js';
 import { gradeAttempt } from '../grading/gradeAttempt.js';
+import {
+  recoverLegacySubmittedAttempt,
+  resolveLegacySubmitAttemptOutcome,
+} from '../services/testSubmitRecovery.service.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { AttemptAlreadySubmittedError } from './submit.errors.js';
 import {
@@ -157,20 +161,66 @@ export async function lockAttempt(connection, attemptId, studentId) {
  */
 export async function submitAttempt(attemptSession) {
   const connection = await mysqlPool.getConnection();
+  const attemptId = Number(attemptSession.id);
+  const studentId = Number(attemptSession.studentId);
 
   try {
     await connection.beginTransaction();
+
+    const preflight = await resolveLegacySubmitAttemptOutcome(
+      connection,
+      { attemptId, studentId },
+      gradeAttempt
+    );
+    if (preflight.action === 'complete') {
+      await connection.commit();
+      logger.info('test submitted successfully', {
+        event: 'TEST_SUBMITTED',
+        attemptId: preflight.attemptId,
+        studentId,
+        resultId: preflight.resultId,
+        recovered: preflight.recovered,
+        outcome: preflight.outcome,
+      });
+      return { attemptId: preflight.attemptId, resultId: preflight.resultId };
+    }
 
     const validated = await validateSubmission(connection, attemptSession);
     await lockAttempt(connection, validated.attemptId, validated.studentId);
 
     const { resultId } = await gradeAttempt(validated.attemptId, connection);
 
-    await connection.query(LINK_ATTEMPT_RESULT_SQL, [
+    const [linkResult] = await connection.query(LINK_ATTEMPT_RESULT_SQL, [
       resultId,
       validated.attemptId,
       validated.studentId,
     ]);
+    if (Number(linkResult?.affectedRows ?? 0) !== 1) {
+      const recovery = await resolveLegacySubmitAttemptOutcome(
+        connection,
+        { attemptId: validated.attemptId, studentId: validated.studentId },
+        gradeAttempt,
+        { forUpdate: false }
+      );
+      if (recovery.action === 'complete') {
+        await connection.commit();
+        logger.info('test submitted successfully (recovered)', {
+          event: 'TEST_SUBMITTED',
+          attemptId: recovery.attemptId,
+          studentId: validated.studentId,
+          resultId: recovery.resultId,
+          recovered: true,
+          outcome: recovery.outcome,
+        });
+        return { attemptId: recovery.attemptId, resultId: recovery.resultId };
+      }
+
+      throw new AttemptInvalidStateError({
+        attemptId: validated.attemptId,
+        status: ATTEMPT_DB_STATUS.SUBMITTED,
+        reason: 'result_link_failed',
+      });
+    }
 
     await connection.commit();
 
@@ -183,6 +233,28 @@ export async function submitAttempt(attemptSession) {
 
     return { attemptId: validated.attemptId, resultId };
   } catch (error) {
+    if (error instanceof AttemptAlreadySubmittedError) {
+      const recovery = await recoverLegacySubmittedAttempt(
+        connection,
+        {
+          attemptId: Number(attemptSession.id),
+          studentId: Number(attemptSession.studentId),
+        },
+        gradeAttempt
+      );
+      if (recovery) {
+        await connection.commit();
+        logger.info('test submitted successfully (recovered)', {
+          event: 'TEST_SUBMITTED',
+          attemptId: recovery.attemptId,
+          studentId: Number(attemptSession.studentId),
+          resultId: recovery.resultId,
+          recovered: true,
+        });
+        return recovery;
+      }
+    }
+
     try {
       await connection.rollback();
     } catch (rollbackError) {

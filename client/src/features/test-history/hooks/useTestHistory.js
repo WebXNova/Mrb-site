@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { testHistoryApi } from '../api/testHistoryApi';
 import { getHistoryErrorMessage, normalizeHistoryPayload } from '../utils/normalizeHistory';
 
-export function useTestHistory({ page, pageSize, search, status }) {
+export function useTestHistory({ page, pageSize, search, status, subjectId, dateRange, submittedDate }) {
   const [data, setData] = useState(null);
   const [statusState, setStatusState] = useState('loading');
   const [error, setError] = useState('');
@@ -12,7 +12,15 @@ export function useTestHistory({ page, pageSize, search, status }) {
     setError('');
 
     try {
-      const response = await testHistoryApi.fetchHistory({ page, pageSize, search, status });
+      const response = await testHistoryApi.fetchHistory({
+        page,
+        pageSize,
+        search,
+        status,
+        subjectId,
+        dateRange,
+        submittedDate,
+      });
       const normalized = normalizeHistoryPayload(response);
 
       if (!normalized) {
@@ -29,7 +37,7 @@ export function useTestHistory({ page, pageSize, search, status }) {
       setError(getHistoryErrorMessage(err));
       setStatusState('error');
     }
-  }, [page, pageSize, search, status]);
+  }, [page, pageSize, search, status, subjectId, dateRange, submittedDate]);
 
   useEffect(() => {
     let cancelled = false;

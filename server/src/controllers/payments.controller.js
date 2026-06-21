@@ -6,10 +6,21 @@ import { env } from '../config/env.js';
 import { createPaymentSession, fulfillSafepayWebhookVerified } from '../services/payments.service.js';
 import { verifySafepayWebhookSignature } from '../services/safepay.service.js';
 import {
+  assertSafepayWebhookReplayClaim,
   buildSafepayWebhookDedupeDigest,
-  isSafepayWebhookReplaySeen,
   markSafepayWebhookReplayAck,
+  releaseSafepayWebhookReplayClaim,
 } from '../services/safepayWebhookReplay.service.js';
+import {
+  isWebhookHashProcessed,
+  removeProcessedWebhook,
+  tryClaimProcessedWebhook,
+} from '../services/processedWebhooks.service.js';
+import {
+  logSafepayWebhookRedisUnavailable,
+  logSafepayWebhookReplayBlocked,
+  recordSafepayWebhookReplayDuplicate,
+} from '../services/safepayWebhookReplayMetrics.service.js';
 
 const createSessionSchema = z.object({
   enrollment_id: z.coerce.number().int().positive().optional(),
@@ -82,8 +93,8 @@ function logWebhookIngress(summary) {
 /**
  * Production Safepay ingress:
  * 1. `express.raw({ verify })` sets `req.rawBody` via body-parser **`verify`** (canonical Buffer for HMAC strings).
- * 2. Verify before JSON-driven side effects / Redis replay bookkeeping.
- * 3. Replay cache (Redis) short-circuit only after cryptographic verification.
+ * 2. Verify before JSON-driven side effects / replay bookkeeping.
+ * 3. Layer 1 Redis SET NX + Layer 2 processed_webhooks UNIQUE — only after verification.
  * 4. Fulfillment stays transactional inside `fulfillSafepayWebhookVerified` (MySQL + idempotent updates).
  *
  * WHY no `SAFEPAY_WEBHOOK_VERIFY_BYPASS`:
@@ -166,15 +177,66 @@ export const postPaymentWebhook = asyncHandler(async (req, res) => {
     rawBodyBuffer,
   });
 
-  if (await isSafepayWebhookReplaySeen(dedupeDigest)) {
-    logWebhookIngress({ requestId, stage: 'replay_cache_hit', dedupeDigestPrefix: dedupeDigest.slice(0, 12) });
+  if (await isWebhookHashProcessed(dedupeDigest)) {
+    logSafepayWebhookReplayBlocked({
+      reason: 'db_already_processed',
+      webhookHash: dedupeDigest,
+      requestId,
+    });
+    recordSafepayWebhookReplayDuplicate({ webhookHash: dedupeDigest, requestId, layer: 'database' });
+    logWebhookIngress({ requestId, stage: 'replay_db_hit', dedupeDigestPrefix: dedupeDigest.slice(0, 12) });
+    return res.status(200).json({ received: true, replay: true });
+  }
+
+  let replayClaim;
+  try {
+    replayClaim = await assertSafepayWebhookReplayClaim(dedupeDigest);
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 503) {
+      logSafepayWebhookRedisUnavailable({
+        reason: error.details?.code || error.code || 'redis_unavailable',
+        requestId,
+      });
+      return res.status(503).json({
+        received: false,
+        code: error.details?.code || error.code || 'SAFEPAY_WEBHOOK_REDIS_REQUIRED',
+      });
+    }
+    throw error;
+  }
+
+  if (replayClaim === 'replay') {
+    logSafepayWebhookReplayBlocked({
+      reason: 'redis_replay',
+      webhookHash: dedupeDigest,
+      requestId,
+    });
+    recordSafepayWebhookReplayDuplicate({ webhookHash: dedupeDigest, requestId, layer: 'redis' });
+    logWebhookIngress({ requestId, stage: 'replay_redis_hit', dedupeDigestPrefix: dedupeDigest.slice(0, 12) });
+    return res.status(200).json({ received: true, replay: true });
+  }
+
+  const dbClaim = await tryClaimProcessedWebhook(dedupeDigest);
+  if (dbClaim === 'duplicate') {
+    if (replayClaim === 'new') {
+      await releaseSafepayWebhookReplayClaim(dedupeDigest);
+    }
+    logSafepayWebhookReplayBlocked({
+      reason: 'db_duplicate_insert',
+      webhookHash: dedupeDigest,
+      requestId,
+    });
+    recordSafepayWebhookReplayDuplicate({ webhookHash: dedupeDigest, requestId, layer: 'database' });
+    logWebhookIngress({ requestId, stage: 'replay_db_claim', dedupeDigestPrefix: dedupeDigest.slice(0, 12) });
     return res.status(200).json({ received: true, replay: true });
   }
 
   let result;
   try {
-    result = await fulfillSafepayWebhookVerified({ payload });
+    result = await fulfillSafepayWebhookVerified({ payload, requestId });
   } catch (error) {
+    await releaseSafepayWebhookReplayClaim(dedupeDigest);
+    await removeProcessedWebhook(dedupeDigest);
     if (!(error instanceof ApiError)) {
       console.error('[payments.webhook] fulfillment crash', {
         requestId,
@@ -215,7 +277,15 @@ export const postPaymentWebhook = asyncHandler(async (req, res) => {
     return res.status(500).json({ received: false });
   }
 
-  await markSafepayWebhookReplayAck(dedupeDigest);
+  const shouldAckReplay =
+    result?.status === 'paid' ||
+    result?.status === 'failed' ||
+    result?.duplicate === true ||
+    result?.ignored === true;
+
+  if (shouldAckReplay) {
+    await markSafepayWebhookReplayAck(dedupeDigest);
+  }
 
   logWebhookIngress({
     requestId,
@@ -226,7 +296,11 @@ export const postPaymentWebhook = asyncHandler(async (req, res) => {
 
   const body =
     env.nodeEnv === 'production'
-      ? { received: true, ...(result?.duplicate === true ? { duplicate: true } : {}) }
+      ? {
+          received: true,
+          ...(result?.duplicate === true ? { duplicate: true } : {}),
+          ...(result?.ignored === true ? { ignored: true } : {}),
+        }
       : { received: true, ...result };
 
   return res.status(200).json(body);

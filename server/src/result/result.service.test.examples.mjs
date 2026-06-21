@@ -31,9 +31,9 @@ ok('service is read-only (no INSERT/UPDATE/DELETE)', !/INSERT INTO|UPDATE |DELET
 ok('reads from test_results', repoSrc.includes('test_results'));
 ok('batch detailed query (no per-question loop query)', repoSrc.includes('LOAD_DETAILED_ANSWERS_SQL'));
 ok('no grading logic in service', !serviceSrc.includes('calculateResult'));
-ok('checks show_result_immediately', serviceSrc.includes('show_result_immediately'));
-ok('checks show_answers_after_submit', serviceSrc.includes('show_answers_after_submit'));
-ok('checks show_explanations', serviceSrc.includes('show_explanations'));
+ok('checks show_result_immediately', serviceSrc.includes('assertStudentResultVisible'));
+ok('checks show_answers_after_submit', serviceSrc.includes('loadSanitizedPortalAnswerReview'));
+ok('checks show_explanations', serviceSrc.includes('isShowExplanationsEnabled'));
 
 {
   const summary = getResultSummary({
@@ -48,6 +48,22 @@ ok('checks show_explanations', serviceSrc.includes('show_explanations'));
 
   ok('summary maps test_results fields', summary.score === 18 && summary.status === 'PASS');
   ok('summary exposes unanswered_answers', summary.unanswered_answers === 0);
+}
+
+{
+  const summary = getResultSummary({
+    started_at: '2026-06-19 10:38:00',
+    submitted_at: '2026-06-19 15:46:00',
+    time_taken_seconds: 119,
+    score: 6,
+    percentage: 60,
+    pass_status: 'PASS',
+    correct_answers: 6,
+    wrong_answers: 4,
+    unanswered_answers: 0,
+  });
+
+  ok('summary prefers persisted time_taken_seconds', summary.time_taken_seconds === 119);
 }
 
 const routesSrc = fs.readFileSync(path.join(root, 'result.routes.js'), 'utf8');

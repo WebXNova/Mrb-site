@@ -2,11 +2,11 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { testTakingApi } from '../api/testTakingApi';
 import { getSubmitErrorMessage, isAttemptTokenError } from '../utils/apiErrors';
-import { clearAttemptSession, setAttemptSession } from '../utils/attemptSession';
+import { clearAttemptSession } from '../utils/attemptSession';
 
 const SUBMIT_TIMEOUT_MS = 45_000;
 
-function submitWithTimeout(slug, attemptId, token) {
+function submitWithTimeout(slug, attemptId) {
   return new Promise((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
       const err = new Error('Submission timed out');
@@ -16,7 +16,7 @@ function submitWithTimeout(slug, attemptId, token) {
     }, SUBMIT_TIMEOUT_MS);
 
     testTakingApi
-      .submit(slug, attemptId, token)
+      .submit(slug, attemptId)
       .then((result) => {
         window.clearTimeout(timeoutId);
         resolve(result);
@@ -28,20 +28,11 @@ function submitWithTimeout(slug, attemptId, token) {
   });
 }
 
-export function useSubmitAttempt({
-  slug,
-  attemptId,
-  attemptToken,
-  updateToken,
-  refreshSession,
-}) {
+export function useSubmitAttempt({ slug, attemptId, refreshSession }) {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const inFlightRef = useRef(false);
-  const tokenRef = useRef(attemptToken);
-
-  tokenRef.current = attemptToken;
 
   const clearSubmitError = useCallback(() => setSubmitError(''), []);
 
@@ -52,27 +43,15 @@ export function useSubmitAttempt({
     setIsSubmitting(true);
     setSubmitError('');
 
-    let token = tokenRef.current;
-
     try {
-      const response = await submitWithTimeout(slug, attemptId, token);
-
-      if (response?.data?.nextAttemptToken) {
-        token = response.data.nextAttemptToken;
-        tokenRef.current = token;
-        updateToken(token);
-        setAttemptSession(slug, { attemptId, attemptToken: token });
-      }
-
+      await submitWithTimeout(slug, attemptId);
       navigate(`/tests/${slug}/result`, { replace: true });
       return { ok: true };
     } catch (err) {
       if (isAttemptTokenError(err)) {
         try {
           const fresh = await refreshSession();
-          if (fresh?.attemptToken) {
-            tokenRef.current = fresh.attemptToken;
-            updateToken(fresh.attemptToken);
+          if (fresh?.attemptId) {
             inFlightRef.current = false;
             setIsSubmitting(false);
             return executeSubmit();
@@ -88,7 +67,7 @@ export function useSubmitAttempt({
       inFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [attemptId, navigate, refreshSession, slug, updateToken]);
+  }, [attemptId, navigate, refreshSession, slug]);
 
   return {
     executeSubmit,

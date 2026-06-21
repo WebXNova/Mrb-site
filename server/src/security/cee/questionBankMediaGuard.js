@@ -9,21 +9,12 @@ import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/apiError.js';
 import { UnauthorizedError } from '../../errors/entitlement/EntitlementErrors.js';
 import { isQuestionBankStaffRole } from '../../utils/isQuestionBankStaffRole.js';
+import {
+  readMultiRealmAccessToken,
+  assertRealmBearerAllowedInProduction,
+} from '../../services/authDecisionEngine.js';
 
 const ALLOWED_ROLES = new Set(['student', 'teacher', 'admin', 'super_admin']);
-
-function parseBearer(authHeader) {
-  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-}
-
-function readAccessToken(req) {
-  return (
-    req.cookies?.admin_access_token ||
-    req.cookies?.student_access_token ||
-    parseBearer(req.headers.authorization) ||
-    null
-  );
-}
 
 function verifyAccessJwt(token) {
   const secrets = [env.jwt.accessSecret, ...env.jwt.previousAccessSecrets];
@@ -46,7 +37,7 @@ function verifyAccessJwt(token) {
  */
 export async function questionBankMediaGuard(req, res, next) {
   try {
-    const token = readAccessToken(req);
+    const { token, source } = readMultiRealmAccessToken(req);
     if (!token) {
       throw new UnauthorizedError('Authentication required.', { reason: 'missing_token' });
     }
@@ -81,10 +72,16 @@ export async function questionBankMediaGuard(req, res, next) {
     }
 
     if (session.status !== 'active') {
-      throw new ApiError(403, 'Account is suspended');
+      const isInactiveTeacher =
+        String(session.role || '') === 'teacher' && session.status === 'inactive';
+      throw new ApiError(
+        403,
+        isInactiveTeacher ? 'Teacher account is inactive' : 'Account is suspended'
+      );
     }
 
     const role = String(session.role || payload.role || '');
+    assertRealmBearerAllowedInProduction(req, source, role);
     if (!ALLOWED_ROLES.has(role)) {
       throw new ApiError(403, 'You do not have permission to access this file.');
     }

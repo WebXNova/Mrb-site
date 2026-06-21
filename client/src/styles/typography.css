@@ -10,7 +10,7 @@
 .heading-1 {
   font-family: var(--font-display);
   font-weight: var(--fw-bold);
-  font-size: clamp(1.875rem, 3vw + 1rem, 2.75rem);
+  font-size: var(--heading-h1);
   line-height: var(--lh-tight);
   letter-spacing: var(--ls-tight);
   color: var(--color-ink-900);
@@ -19,7 +19,7 @@
 .heading-2 {
   font-family: var(--font-display);
   font-weight: var(--fw-bold);
-  font-size: clamp(1.5rem, 2vw + 0.75rem, 2.25rem);
+  font-size: var(--heading-h2);
   line-height: var(--lh-tight);
   letter-spacing: var(--ls-tight);
   color: var(--color-ink-900);
@@ -28,7 +28,7 @@
 .heading-3 {
   font-family: var(--font-display);
   font-weight: var(--fw-semibold);
-  font-size: var(--fs-24);
+  font-size: var(--heading-h3);
   line-height: var(--lh-snug);
   letter-spacing: var(--ls-snugger);
   color: var(--color-ink-900);
@@ -37,7 +37,7 @@
 .heading-4 {
   font-family: var(--font-display);
   font-weight: var(--fw-semibold);
-  font-size: var(--fs-20);
+  font-size: var(--heading-h4);
   line-height: var(--lh-snug);
   letter-spacing: var(--ls-snugger);
   color: var(--color-ink-900);
@@ -54,24 +54,28 @@
 
 .body-lg {
   font-size: var(--fs-18);
+  font-weight: var(--fw-medium);
   line-height: var(--lh-relaxed);
-  color: var(--color-ink-600);
+  color: var(--color-ink-700);
 }
 
 .body-md {
   font-size: var(--fs-16);
+  font-weight: var(--fw-medium);
   line-height: var(--lh-relaxed);
-  color: var(--color-ink-600);
+  color: var(--color-ink-700);
 }
 
 .body-sm {
-  font-size: var(--fs-14);
+  font-size: var(--fs-15);
+  font-weight: var(--fw-medium);
   line-height: var(--lh-normal);
-  color: var(--color-ink-500);
+  color: var(--color-ink-700);
 }
 
 .text-muted {
-  color: var(--color-ink-500);
+  color: var(--color-ink-600);
+  font-weight: var(--fw-medium);
 }
 
 .text-emphasis {

@@ -41,26 +41,14 @@ export async function listProvinces() {
   return rows.map(toLocation);
 }
 
-export async function listDivisionsByProvinceId(provinceId) {
+export async function listDistrictsByProvinceId(provinceId) {
   const pid = normalizeId(provinceId, 'province_id');
   const [rows] = await mysqlPool.query(
     `SELECT id, name, slug
-     FROM divisions
+     FROM districts
      WHERE province_id = ? AND is_active = TRUE
      ORDER BY sort_order ASC, name ASC, id ASC`,
     [pid]
-  );
-  return rows.map(toLocation);
-}
-
-export async function listDistrictsByDivisionId(divisionId) {
-  const did = normalizeId(divisionId, 'division_id');
-  const [rows] = await mysqlPool.query(
-    `SELECT id, name, slug
-     FROM districts
-     WHERE division_id = ? AND is_active = TRUE
-     ORDER BY sort_order ASC, name ASC, id ASC`,
-    [did]
   );
   return rows.map(toLocation);
 }
@@ -87,34 +75,22 @@ export async function listIntermediateBoards() {
   return rows.map(toLocation);
 }
 
-export async function resolveEnrollmentLocationSelection({ provinceId, divisionId, districtId, cityId }) {
+export async function resolveEnrollmentLocationSelection({ provinceId, districtId, cityId }) {
   const province = await findActiveLocationById('provinces', normalizeId(provinceId, 'province_id'));
   if (!province) {
     throw new ApiError(400, 'Selected province is invalid or inactive');
   }
 
-  const division = await findActiveLocationById(
-    'divisions',
-    normalizeId(divisionId, 'division_id'),
-    'AND province_id = ?',
-    [province.id]
-  );
-  if (!division) {
-    throw new ApiError(400, 'Selected division is invalid or does not belong to the selected province');
-  }
-
   const district = await findActiveLocationById(
     'districts',
     normalizeId(districtId, 'district_id'),
-    'AND province_id = ? AND division_id = ?',
-    [province.id, division.id]
+    'AND province_id = ?',
+    [province.id]
   );
   if (!district) {
-    throw new ApiError(400, 'Selected district is invalid or does not belong to the selected division');
+    throw new ApiError(400, 'Selected district is invalid or does not belong to the selected province');
   }
 
-  // Match listCitiesByDistrictId: cities are keyed by district_id. Province/division on city rows are
-  // denormalized and can drift; district was already validated against province + division above.
   const city = await findActiveLocationById(
     'cities',
     normalizeId(cityId, 'city_id'),
@@ -125,5 +101,5 @@ export async function resolveEnrollmentLocationSelection({ provinceId, divisionI
     throw new ApiError(400, 'Selected city is invalid or does not belong to the selected district');
   }
 
-  return { province, division, district, city };
+  return { province, district, city };
 }

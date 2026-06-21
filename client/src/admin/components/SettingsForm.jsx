@@ -12,7 +12,8 @@ export default function SettingsForm({
   onChange,
   onCheckboxChange,
   onSubmit,
-  submitLabel = 'Save Settings',
+  submitLabel = 'Save',
+  embedded = false,
 }) {
   const disabled = isSubmitting || readOnly;
 
@@ -25,8 +26,8 @@ export default function SettingsForm({
     { name: 'allow_retake', label: 'Allow retake' },
   ];
 
-  return (
-    <form className="admin-test-form" onSubmit={readOnly ? (event) => event.preventDefault() : onSubmit} noValidate>
+  const fields = (
+    <>
       <h2 className="heading-4">Exam behavior</h2>
       <div className="admin-settings-checkboxes">
         {toggles.map(({ name, label }) => (
@@ -60,6 +61,10 @@ export default function SettingsForm({
             <option value="private">Private</option>
             <option value="public">Public</option>
           </select>
+          <p className="admin-field__hint">
+            Public controls who may take this test after you publish it. Use the <strong>Publish test</strong>{' '}
+            button (below when ready, or Tests list → More) to go live — saving Public here does not publish.
+          </p>
           {fieldErrors.access_mode ? <div className="admin-field__error">{fieldErrors.access_mode}</div> : null}
         </div>
 
@@ -92,16 +97,26 @@ export default function SettingsForm({
         </div>
       </div>
 
-      {error ? <p className="admin-error">{error}</p> : null}
-      {success ? <p className="admin-success">{success}</p> : null}
+      {!embedded && error ? <p className="admin-error">{error}</p> : null}
+      {!embedded && success ? <p className="admin-success">{success}</p> : null}
 
-      {!readOnly ? (
+      {!embedded && !readOnly ? (
         <div className="admin-test-form__footer">
           <button className="btn btn--primary" type="submit" disabled={isSubmitting || submitDisabled}>
             {isSubmitting ? 'Saving…' : submitLabel}
           </button>
         </div>
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return <section className="admin-test-form-section">{fields}</section>;
+  }
+
+  return (
+    <form className="admin-test-form" onSubmit={readOnly ? (event) => event.preventDefault() : onSubmit} noValidate>
+      {fields}
     </form>
   );
 }

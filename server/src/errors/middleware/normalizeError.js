@@ -3,6 +3,12 @@
  */
 
 import { AppError } from '../base/AppError.js';
+import { MySqlAcquireTimeoutError } from '../mysql/MySqlAcquireTimeoutError.js';
+import { MySqlPoolExhaustedError } from '../mysql/MySqlPoolExhaustedError.js';
+import { MySqlQueryTimeoutError } from '../mysql/MySqlQueryTimeoutError.js';
+import { MySqlTransactionTimeoutError } from '../mysql/MySqlTransactionTimeoutError.js';
+import { isMysqlPoolQueueExhaustedError } from '../../config/mysqlPoolExhaustion.js';
+import { isMysqlQueryTimeoutError } from '../../config/mysqlTimeout.util.js';
 import {
   BAD_REQUEST,
   CONFLICT,
@@ -10,7 +16,11 @@ import {
   GONE,
   INTERNAL_ERROR,
   MYSQL_ACCESS_DENIED,
+  MYSQL_POOL_ACQUIRE_TIMEOUT,
+  MYSQL_POOL_EXHAUSTED,
+  MYSQL_QUERY_TIMEOUT,
   MYSQL_SCHEMA_INCOMPLETE,
+  MYSQL_TRANSACTION_TIMEOUT,
   MYSQL_UNKNOWN_DATABASE,
   NOT_FOUND,
   PAYLOAD_TOO_LARGE,
@@ -69,6 +79,44 @@ export function fromLegacyApiError(err) {
 export function normalizeError(err) {
   if (isAppError(err)) {
     return err;
+  }
+
+  if (err instanceof MySqlPoolExhaustedError) {
+    return err;
+  }
+
+  if (err instanceof MySqlAcquireTimeoutError) {
+    return err;
+  }
+
+  if (err instanceof MySqlQueryTimeoutError) {
+    return err;
+  }
+
+  if (err instanceof MySqlTransactionTimeoutError) {
+    return err;
+  }
+
+  if (isMysqlPoolQueueExhaustedError(err)) {
+    return new AppError({
+      message: 'Database is temporarily busy. Please retry shortly.',
+      errorCode: MYSQL_POOL_EXHAUSTED,
+      httpStatus: 503,
+      isOperational: true,
+      metadata: { retryable: true },
+      cause: err instanceof Error ? err : null,
+    });
+  }
+
+  if (isMysqlQueryTimeoutError(err)) {
+    return new AppError({
+      message: 'Database query timed out. Please retry shortly.',
+      errorCode: MYSQL_QUERY_TIMEOUT,
+      httpStatus: 503,
+      isOperational: true,
+      metadata: { retryable: true },
+      cause: err instanceof Error ? err : null,
+    });
   }
 
   /** Legacy ApiError */

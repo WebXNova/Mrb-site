@@ -3,16 +3,40 @@ import { locationsApi } from '../../api/locationsApi.js';
 
 const EMPTY_SELECTION = {
   province_id: '',
-  division_id: '',
   district_id: '',
   city_id: '',
 };
 
-function SelectField({ label, value, onChange, disabled, loading, placeholder, options, error }) {
+function SelectField({
+  label,
+  value,
+  onChange,
+  disabled,
+  loading,
+  placeholder,
+  options,
+  error,
+  prefilled = false,
+  warning = '',
+  fieldName = '',
+}) {
+  const fieldClass = [
+    'enrollment-field',
+    prefilled ? 'enrollment-field--prefilled' : '',
+    warning ? 'enrollment-field--prefill-warning' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="enrollment-field">
+    <div className={fieldClass} data-field={fieldName || undefined}>
       <label>
         {label} <span>*</span>
+        {warning ? (
+          <span className="enrollment-prefill-warning-icon" title={warning} aria-label={warning}>
+            ⚠
+          </span>
+        ) : null}
       </label>
       <select value={value} onChange={onChange} disabled={disabled}>
         <option value="">{loading ? 'Loading...' : placeholder}</option>
@@ -29,18 +53,23 @@ function SelectField({ label, value, onChange, disabled, loading, placeholder, o
         </p>
       ) : null}
       {error ? <p className="enrollment-field__error">{error}</p> : null}
+      {warning && !error ? <p className="enrollment-field__prefill-warning">{warning}</p> : null}
     </div>
   );
 }
 
-export default function LocationSelector({ value = EMPTY_SELECTION, onChange, errors = {} }) {
+export default function LocationSelector({
+  value = EMPTY_SELECTION,
+  onChange,
+  errors = {},
+  prefilledFields = new Set(),
+  discardedFields = [],
+}) {
   const [provinces, setProvinces] = useState([]);
-  const [divisions, setDivisions] = useState([]);
   const [districts, setDistricts] = useState([]);
   const [cities, setCities] = useState([]);
   const [loading, setLoading] = useState({
     provinces: false,
-    divisions: false,
     districts: false,
     cities: false,
   });
@@ -48,12 +77,29 @@ export default function LocationSelector({ value = EMPTY_SELECTION, onChange, er
   const selection = useMemo(
     () => ({
       province_id: value?.province_id || '',
-      division_id: value?.division_id || '',
       district_id: value?.district_id || '',
       city_id: value?.city_id || '',
     }),
-    [value?.province_id, value?.division_id, value?.district_id, value?.city_id]
+    [value?.province_id, value?.district_id, value?.city_id]
   );
+
+  const discardedByField = useMemo(() => {
+    const map = new Map();
+    for (const item of discardedFields) {
+      if (item?.field) {
+        map.set(item.field, item.reason || 'Could not import this value from your previous enrollment.');
+      }
+    }
+    return map;
+  }, [discardedFields]);
+
+  function isPrefilled(field) {
+    return prefilledFields instanceof Set ? prefilledFields.has(field) : false;
+  }
+
+  function prefillWarning(field) {
+    return discardedByField.get(field) || '';
+  }
 
   const emitChange = (nextSelection) => {
     if (typeof onChange === 'function') {
@@ -84,30 +130,6 @@ export default function LocationSelector({ value = EMPTY_SELECTION, onChange, er
   useEffect(() => {
     let cancelled = false;
     if (!selection.province_id) {
-      setDivisions([]);
-      return undefined;
-    }
-    (async () => {
-      setLoading((prev) => ({ ...prev, divisions: true }));
-      setLoadError('');
-      try {
-        const response = await locationsApi.divisions(selection.province_id);
-        if (cancelled) return;
-        setDivisions(response?.data || []);
-      } catch (error) {
-        if (!cancelled) setLoadError(error.message || 'Failed to load divisions');
-      } finally {
-        if (!cancelled) setLoading((prev) => ({ ...prev, divisions: false }));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selection.province_id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!selection.division_id) {
       setDistricts([]);
       return undefined;
     }
@@ -115,7 +137,7 @@ export default function LocationSelector({ value = EMPTY_SELECTION, onChange, er
       setLoading((prev) => ({ ...prev, districts: true }));
       setLoadError('');
       try {
-        const response = await locationsApi.districts(selection.division_id);
+        const response = await locationsApi.districts(selection.province_id);
         if (cancelled) return;
         setDistricts(response?.data || []);
       } catch (error) {
@@ -127,7 +149,7 @@ export default function LocationSelector({ value = EMPTY_SELECTION, onChange, er
     return () => {
       cancelled = true;
     };
-  }, [selection.division_id]);
+  }, [selection.province_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,20 +181,6 @@ export default function LocationSelector({ value = EMPTY_SELECTION, onChange, er
     const province_id = event.target.value;
     emitChange({
       province_id,
-      division_id: '',
-      district_id: '',
-      city_id: '',
-    });
-    setDivisions([]);
-    setDistricts([]);
-    setCities([]);
-  }
-
-  function handleDivisionChange(event) {
-    const division_id = event.target.value;
-    emitChange({
-      ...selection,
-      division_id,
       district_id: '',
       city_id: '',
     });
@@ -208,28 +216,23 @@ export default function LocationSelector({ value = EMPTY_SELECTION, onChange, er
         placeholder={provincePlaceholder}
         options={provinces}
         error={errors.province_id}
-      />
-
-      <SelectField
-        label="Division"
-        value={selection.division_id}
-        onChange={handleDivisionChange}
-        disabled={!selection.province_id || loading.divisions}
-        loading={loading.divisions}
-        placeholder={!selection.province_id ? 'Select Province first' : 'Select division'}
-        options={divisions}
-        error={errors.division_id}
+        prefilled={isPrefilled('province_id')}
+        warning={prefillWarning('province_id')}
+        fieldName="province_id"
       />
 
       <SelectField
         label="District"
         value={selection.district_id}
         onChange={handleDistrictChange}
-        disabled={!selection.division_id || loading.districts}
+        disabled={!selection.province_id || loading.districts}
         loading={loading.districts}
-        placeholder={!selection.division_id ? 'Select Division first' : 'Select district'}
+        placeholder={!selection.province_id ? 'Select Province first' : 'Select district'}
         options={districts}
         error={errors.district_id}
+        prefilled={isPrefilled('district_id')}
+        warning={prefillWarning('district_id')}
+        fieldName="district_id"
       />
 
       <SelectField
@@ -241,6 +244,9 @@ export default function LocationSelector({ value = EMPTY_SELECTION, onChange, er
         placeholder={!selection.district_id ? 'Select District first' : 'Select city'}
         options={cities}
         error={errors.city_id}
+        prefilled={isPrefilled('city_id')}
+        warning={prefillWarning('city_id')}
+        fieldName="city_id"
       />
 
       {loadError ? <p className="enrollment-field__error enrollment-field__error--full">{loadError}</p> : null}

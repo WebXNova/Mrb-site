@@ -1,0 +1,99 @@
+.testimonials-section {
+  background: #fff;
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 600ms ease,
+    transform 600ms ease;
+}
+
+.testimonials-section--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.testimonials-section__head {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 2vw, 1rem);
+  max-width: 40rem;
+  margin-bottom: clamp(1.75rem, 4vw, 2.5rem);
+}
+
+.testimonials-section__subtitle {
+  margin: 0;
+  color: var(--color-ink-600, #4b5563);
+}
+
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(1rem, 2.5vw, 1.35rem);
+}
+
+@media (min-width: 640px) {
+  .testimonials-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .testimonials-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.testimonials-grid .review-card {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: testimonial-card-in 520ms ease forwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+.testimonials-section--visible .testimonials-grid .review-card {
+  animation-play-state: running;
+}
+
+@keyframes testimonial-card-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.testimonials-grid__skeleton {
+  min-height: 13rem;
+  border-radius: 1rem;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: testimonial-shimmer 1.4s ease infinite;
+}
+
+.testimonials-section__more {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(1.5rem, 3vw, 2rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .testimonials-section {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .testimonials-grid .review-card {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .testimonials-grid__skeleton {
+    animation: none;
+  }
+}
+
+@keyframes testimonial-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

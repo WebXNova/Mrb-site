@@ -1,23 +1,18 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import {
-  adminDeleteStudentQuestion,
-  adminUpdateStudentQuestionAnswer,
-  listAdminStudentQuestions,
-} from '../services/studentQuestions.service.js';
+  listMonitoringQuestions,
+} from '../services/qaMonitoring.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
+import { rejectAdminQaWrite } from './adminQaMonitoring.controller.js';
 
 export const getAdminStudentQuestions = asyncHandler(async (req, res) => {
   const subject = req.query.subject || 'all';
-  const data = await listAdminStudentQuestions(subject);
-  sendSuccess(res, data);
+  const filters = subject && subject !== 'all' ? { subject } : {};
+  const data = await listMonitoringQuestions(filters, { page: 1, limit: 100 });
+  res.setHeader('X-Deprecated-Endpoint', 'Use /qa-monitoring/questions for paginated monitoring');
+  sendSuccess(res, data.items);
 });
 
-export const putAdminStudentQuestionAnswer = asyncHandler(async (req, res) => {
-  const updated = await adminUpdateStudentQuestionAnswer(req.user.id, req.params.id, req.body || {});
-  sendSuccess(res, updated);
-});
+export const putAdminStudentQuestionAnswer = rejectAdminQaWrite;
 
-export const deleteAdminStudentQuestion = asyncHandler(async (req, res) => {
-  await adminDeleteStudentQuestion(req.params.id);
-  sendSuccess(res, { message: 'Question deleted' });
-});
+export const deleteAdminStudentQuestion = rejectAdminQaWrite;

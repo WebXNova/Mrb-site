@@ -1,7 +1,8 @@
 import { ApiError } from '../utils/apiError.js';
-import { getRedisClient, hasRedisErrored, isRedisReady } from '../config/redis.js';
+import { getRedisClient, isRedisReady } from '../config/redis.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { env } from '../config/env.js';
+import { isProductionNodeEnv } from '../config/validateProductionStartup.js';
 import { getClientAsn, getClientIp, getIpSubnet } from '../utils/network.js';
 import { startAuthTrace } from '../utils/authProfiling.js';
 
@@ -22,6 +23,14 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function productionRateLimitRedisUnavailable503() {
+  return new ApiError(503, 'Service temporarily unavailable. Please retry shortly.');
+}
+
+function isProductionRateLimitRedisUnavailable() {
+  return isProductionNodeEnv(env.nodeEnv) && !isRedisReady();
+}
+
 function normalizeIp(ipAddress) {
   return getClientIp({ ip: ipAddress, socket: {} });
 }
@@ -38,6 +47,10 @@ async function incrementCounter(key, windowMs) {
       count: total,
       ttlMs: ttlMs > 0 ? ttlMs : windowMs,
     };
+  }
+
+  if (isProductionNodeEnv(env.nodeEnv)) {
+    throw productionRateLimitRedisUnavailable503();
   }
 
   const now = Date.now();
@@ -191,14 +204,9 @@ setInterval(() => {
 
 export async function authRateLimit(req, res, next) {
   const trace = startAuthTrace(`authRateLimit:${req.path}`, req);
-  if (
-    env.abuse.requireRedisForCriticalAuthWrites &&
-    !isRedisReady() &&
-    hasRedisErrored() &&
-    (req.path === '/student/register' || req.path === '/resend-verification')
-  ) {
+  if (isProductionRateLimitRedisUnavailable()) {
     trace.end('redis-unavailable');
-    return next(new ApiError(503, 'Service temporarily unavailable. Please retry shortly.'));
+    return next(productionRateLimitRedisUnavailable503());
   }
 
   const ip = getClientIp(req);
@@ -239,6 +247,9 @@ export async function authRateLimit(req, res, next) {
 }
 
 export async function signupAbuseRateLimit(req, res, next) {
+  if (isProductionRateLimitRedisUnavailable()) {
+    return next(productionRateLimitRedisUnavailable503());
+  }
   const ip = getClientIp(req);
   const subnet = getIpSubnet(ip);
   const asn = getClientAsn(req);
@@ -280,6 +291,9 @@ async function enforceSlidingLimit({ key, windowMs, limit }) {
 }
 
 export async function verifyEmailRateLimit(req, res, next) {
+  if (isProductionRateLimitRedisUnavailable()) {
+    return next(productionRateLimitRedisUnavailable503());
+  }
   const ip = getClientIp(req);
   const subnet = getIpSubnet(ip);
   const asn = getClientAsn(req);
@@ -305,6 +319,9 @@ export async function verifyEmailRateLimit(req, res, next) {
 }
 
 export async function resendVerificationRateLimit(req, res, next) {
+  if (isProductionRateLimitRedisUnavailable()) {
+    return next(productionRateLimitRedisUnavailable503());
+  }
   const ip = getClientIp(req);
   const subnet = getIpSubnet(ip);
   const asn = getClientAsn(req);
@@ -329,7 +346,93 @@ export async function resendVerificationRateLimit(req, res, next) {
   return next();
 }
 
+export async function forgotPasswordRateLimit(req, res, next) {
+  if (isProductionRateLimitRedisUnavailable()) {
+    return next(productionRateLimitRedisUnavailable503());
+  }
+
+  const ip = getClientIp(req);
+  const subnet = getIpSubnet(ip);
+  const asn = getClientAsn(req);
+  const coarseIpAllowed = await enforceSlidingLimit({
+    key: `pwdreset:req:ip:${ip}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.resendCoarsePerIpPerMinute,
+  });
+  const subnetAllowed = await enforceSlidingLimit({
+    key: `pwdreset:req:subnet:${subnet}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.resendCoarsePerSubnetPerMinute,
+  });
+  const asnAllowed = await enforceSlidingLimit({
+    key: `pwdreset:req:asn:${asn}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.resendCoarsePerAsnPerMinute,
+  });
+  if (!coarseIpAllowed || !subnetAllowed || !asnAllowed) {
+    res.setHeader('Retry-After', '60');
+    await logActivity({
+      role: 'system',
+      action: 'password_reset.abuse.coarse_rate_limit',
+      entityType: 'auth',
+      metadata: { path: req.path, ip, subnet, asn },
+    });
+    return next(new ApiError(429, 'Too many password reset attempts. Please try again later.'));
+  }
+  return next();
+}
+
+export async function resetPasswordRateLimit(req, res, next) {
+  if (isProductionRateLimitRedisUnavailable()) {
+    return next(productionRateLimitRedisUnavailable503());
+  }
+
+  const ip = getClientIp(req);
+  const subnet = getIpSubnet(ip);
+  const asn = getClientAsn(req);
+  const ipAllowed = await enforceSlidingLimit({
+    key: `pwdreset:consume:ip:${ip}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.verifyPerIpPerMinute,
+  });
+  const subnetAllowed = await enforceSlidingLimit({
+    key: `pwdreset:consume:subnet:${subnet}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.verifyPerSubnetPerMinute,
+  });
+  const asnAllowed = await enforceSlidingLimit({
+    key: `pwdreset:consume:asn:${asn}`,
+    windowMs: 60 * 1000,
+    limit: env.verification.verifyPerAsnPerMinute,
+  });
+  if (!ipAllowed || !subnetAllowed || !asnAllowed) {
+    res.setHeader('Retry-After', '60');
+    await logActivity({
+      role: 'system',
+      action: 'password_reset.abuse.consume_rate_limit',
+      entityType: 'auth',
+      metadata: { path: req.path, ip, subnet, asn },
+    });
+    return next(new ApiError(429, 'Too many password reset attempts. Please try again shortly.'));
+  }
+  return next();
+}
+
+/** Per-recipient hourly cap (enumeration-safe — caller swallows denial). */
+export async function consumeForgotPasswordEmailRateLimit(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!normalized) return true;
+  return enforceSlidingLimit({
+    key: `pwdreset:email:${normalized}`,
+    windowMs: 60 * 60 * 1000,
+    limit: env.passwordReset.maxPerEmailPerHour,
+  });
+}
+
 export async function providerWebhookRateLimit(req, res, next) {
+  if (isProductionRateLimitRedisUnavailable()) {
+    return next(productionRateLimitRedisUnavailable503());
+  }
   const ip = getClientIp(req);
   const allowed = await enforceSlidingLimit({
     key: `email:webhook:ip:${ip}`,
@@ -344,6 +447,9 @@ export async function providerWebhookRateLimit(req, res, next) {
 
 /** Sliding window per IP for Safepay payment webhook (abuse / burst control). */
 export async function safepayPaymentWebhookRateLimit(req, res, next) {
+  if (isProductionRateLimitRedisUnavailable()) {
+    return next(productionRateLimitRedisUnavailable503());
+  }
   const ip = getClientIp(req);
   const limit = Math.max(30, Number(env.verification.safepayWebhookPerIpPerMinute || 240));
   const allowed = await enforceSlidingLimit({

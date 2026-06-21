@@ -1,7 +1,7 @@
 import {
   formatDuration,
   formatNegativeMarking,
-  formatPassingPercentage,
+  formatPassingMarks,
 } from '../utils/formatters';
 
 function MetaItem({ icon, label, value, id }) {
@@ -38,8 +38,8 @@ export default function TestMetaGrid({ meta }) {
       <MetaItem
         id="ti-meta-passing"
         icon="✓"
-        label="Passing score"
-        value={formatPassingPercentage(meta.passingPercentage)}
+        label="Passing marks"
+        value={formatPassingMarks(meta.passingMarks, meta.totalMarks)}
       />
       <MetaItem
         id="ti-meta-marking"

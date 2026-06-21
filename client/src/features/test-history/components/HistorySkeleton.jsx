@@ -7,6 +7,10 @@ export default function HistorySkeleton() {
           <div key={index} className="th-skeleton th-skeleton--stat" />
         ))}
       </div>
+      <div className="th-charts th-charts--skeleton">
+        <div className="th-skeleton th-skeleton--chart" />
+        <div className="th-skeleton th-skeleton--chart" />
+      </div>
       <div className="th-skeleton th-skeleton--filters" />
       {Array.from({ length: 4 }).map((_, index) => (
         <div key={index} className="th-skeleton th-skeleton--row" />

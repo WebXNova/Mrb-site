@@ -1,7 +1,9 @@
 import { mysqlPool } from '../config/mysql.js';
-import { ENROLLMENT_BATCH_IDS } from '../constants/enrollmentBatches.js';
+import { ENROLLMENT_SOURCE } from '../constants/enrollmentSource.js';
 import { ApiError } from '../utils/apiError.js';
-import { activateEnrollment } from './enrollmentLifecycle.service.js';
+import { getOrCreateEnrollment } from './enrollmentIntegrity.service.js';
+import { activateEnrollment, revokeEnrollment } from './enrollmentLifecycle.service.js';
+import { resolveHierarchyCourseScope } from '../utils/parseAdminListFilters.js';
 
 function normalizePositiveInt(value, label) {
   const n = Number(value);
@@ -9,6 +11,11 @@ function normalizePositiveInt(value, label) {
     throw new ApiError(400, `${label} must be a valid positive integer`);
   }
   return n;
+}
+
+function parseOptionalPositiveInt(value, label) {
+  if (value == null || String(value).trim() === '') return null;
+  return normalizePositiveInt(value, label);
 }
 
 function normalizeStatus(status) {
@@ -25,6 +32,7 @@ function toEnrollment(row) {
     userId: row.user_id,
     userFullName: row.user_full_name || null,
     userEmail: row.user_email || null,
+    userAccountStatus: row.user_account_status || null,
     courseId: row.course_id,
     courseTitle: row.course_title || null,
     courseSlug: row.course_slug || null,
@@ -44,9 +52,6 @@ function toEnrollment(row) {
     provinceId: row.province_id,
     province: row.province_name || null,
     provinceSlug: row.province_slug || null,
-    divisionId: row.division_id,
-    division: row.division_name || null,
-    divisionSlug: row.division_slug || null,
     districtId: row.district_id,
     district: row.district_name || null,
     districtSlug: row.district_slug || null,
@@ -58,9 +63,9 @@ function toEnrollment(row) {
     boardSlug: row.board_slug || null,
     hsscStatus: row.hssc_status,
     mdcatAttemptType: row.mdcat_attempt_type,
-    batchNumber: row.batch_number ?? null,
     status: row.status,
     accessStatus: row.access_status ?? 'inactive',
+    enrollmentSource: row.enrollment_source ?? null,
     adminNote: row.admin_note,
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
@@ -77,6 +82,7 @@ function selectEnrollmentSql(whereSql = '1 = 1') {
       e.user_id,
       u.full_name AS user_full_name,
       u.email AS user_email,
+      u.status AS user_account_status,
       e.course_id,
       c.title AS course_title,
       c.slug AS course_slug,
@@ -96,9 +102,6 @@ function selectEnrollmentSql(whereSql = '1 = 1') {
       e.province_id,
       p.name AS province_name,
       p.slug AS province_slug,
-      e.division_id,
-      d.name AS division_name,
-      d.slug AS division_slug,
       e.district_id,
       ds.name AS district_name,
       ds.slug AS district_slug,
@@ -110,9 +113,9 @@ function selectEnrollmentSql(whereSql = '1 = 1') {
       b.slug AS board_slug,
       e.hssc_status,
       e.mdcat_attempt_type,
-      e.batch_number,
       e.status,
       e.access_status,
+      e.enrollment_source,
       e.admin_note,
       e.reviewed_by,
       e.reviewed_at,
@@ -122,10 +125,9 @@ function selectEnrollmentSql(whereSql = '1 = 1') {
     INNER JOIN users u ON u.id = e.user_id
     INNER JOIN courses c ON c.id = e.course_id
     LEFT JOIN orders o ON o.id = e.order_id
-    INNER JOIN provinces p ON p.id = e.province_id
-    INNER JOIN divisions d ON d.id = e.division_id
-    INNER JOIN districts ds ON ds.id = e.district_id
-    INNER JOIN cities ct ON ct.id = e.city_id
+    LEFT JOIN provinces p ON p.id = e.province_id
+    LEFT JOIN districts ds ON ds.id = e.district_id
+    LEFT JOIN cities ct ON ct.id = e.city_id
     LEFT JOIN intermediate_boards b ON b.id = e.board_id
     WHERE ${whereSql}
   `;
@@ -182,49 +184,10 @@ export async function hasDuplicatePendingEnrollment({ userId, courseId }) {
   return Boolean(rows[0]?.id);
 }
 
+/** @deprecated Prefer getOrCreateEnrollment — retained for internal callers. */
 export async function createEnrollment(payload) {
-  const userId = normalizePositiveInt(payload.userId, 'user_id');
-  const courseId = normalizePositiveInt(payload.courseId, 'course_id');
-  const provinceId = normalizePositiveInt(payload.provinceId, 'province_id');
-  const divisionId = normalizePositiveInt(payload.divisionId, 'division_id');
-  const districtId = normalizePositiveInt(payload.districtId, 'district_id');
-  const cityId = normalizePositiveInt(payload.cityId, 'city_id');
-  const boardId = payload.boardId === undefined || payload.boardId === null || String(payload.boardId).trim() === ''
-    ? null
-    : normalizePositiveInt(payload.boardId, 'board_id');
-  const orderId = payload.orderId === undefined || payload.orderId === null || String(payload.orderId).trim() === ''
-    ? null
-    : normalizePositiveInt(payload.orderId, 'order_id');
-
-  const [result] = await mysqlPool.query(
-    `INSERT INTO enrollments (
-      user_id, course_id, order_id, applicant_full_name, father_name, date_of_birth, gender,
-      whatsapp_number, email, province_id, division_id, district_id, city_id, board_id,
-      hssc_status, mdcat_attempt_type, batch_number, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      userId,
-      courseId,
-      orderId,
-      payload.applicantFullName,
-      payload.fatherName,
-      payload.dateOfBirth || null,
-      payload.gender,
-      payload.whatsappNumber,
-      payload.email,
-      provinceId,
-      divisionId,
-      districtId,
-      cityId,
-      boardId,
-      payload.hsscStatus,
-      payload.mdcatAttemptType,
-      payload.batchNumber ?? null,
-      'pending',
-    ]
-  );
-
-  return fetchEnrollmentRowById(result.insertId);
+  const { enrollment } = await getOrCreateEnrollment(payload);
+  return enrollment;
 }
 
 function assertIsoDate(value, label) {
@@ -240,20 +203,12 @@ export async function listEnrollments(filters = {}) {
   const conditions = ['1 = 1'];
   const params = [];
 
-  const batch = filters.batch !== undefined ? String(filters.batch).trim() : 'all';
-  if (batch && batch !== 'all') {
-    if (batch === 'unassigned') {
-      conditions.push('(e.batch_number IS NULL OR e.batch_number = "")');
-    } else if (ENROLLMENT_BATCH_IDS.includes(batch)) {
-      conditions.push('e.batch_number = ?');
-      params.push(batch);
-    } else {
-      throw new ApiError(400, 'Invalid batch filter');
-    }
-  }
-
-  const status = filters.status !== undefined ? normalizeStatus(filters.status) : 'all';
-  if (status && status !== 'all') {
+  const statusRaw =
+    filters.status !== undefined && filters.status !== null
+      ? String(filters.status).trim().toLowerCase()
+      : 'all';
+  if (statusRaw && statusRaw !== 'all') {
+    const status = normalizeStatus(statusRaw);
     conditions.push('e.status = ?');
     params.push(status);
   }
@@ -266,12 +221,6 @@ export async function listEnrollments(filters = {}) {
   } else if (provinceNameRaw !== undefined && String(provinceNameRaw).trim() !== '' && String(provinceNameRaw).trim() !== 'all') {
     conditions.push('p.name = ?');
     params.push(String(provinceNameRaw).trim());
-  }
-
-  const divisionIdRaw = filters.division_id ?? filters.divisionId;
-  if (divisionIdRaw !== undefined && divisionIdRaw !== null && String(divisionIdRaw).trim() !== '') {
-    conditions.push('e.division_id = ?');
-    params.push(normalizePositiveInt(divisionIdRaw, 'division_id'));
   }
 
   const districtIdRaw = filters.district_id ?? filters.districtId;
@@ -296,10 +245,18 @@ export async function listEnrollments(filters = {}) {
     params.push(String(boardNameRaw).trim());
   }
 
-  const courseIdRaw = filters.course_id ?? filters.courseId;
-  if (courseIdRaw !== undefined && courseIdRaw !== null && String(courseIdRaw).trim() !== '') {
+  let courseId = parseOptionalPositiveInt(filters.course_id ?? filters.courseId, 'course_id');
+  const subjectId = parseOptionalPositiveInt(filters.subject_id ?? filters.subjectId, 'subject_id');
+  const chapterId = parseOptionalPositiveInt(filters.chapter_id ?? filters.chapterId, 'chapter_id');
+
+  if (subjectId || chapterId) {
+    const resolved = await resolveHierarchyCourseScope(mysqlPool, { courseId, subjectId, chapterId });
+    courseId = resolved.courseId;
+  }
+
+  if (courseId) {
     conditions.push('e.course_id = ?');
-    params.push(normalizePositiveInt(courseIdRaw, 'course_id'));
+    params.push(courseId);
   }
 
   const userIdRaw = filters.user_id ?? filters.userId;
@@ -313,6 +270,19 @@ export async function listEnrollments(filters = {}) {
     if (gender !== 'male' && gender !== 'female') throw new ApiError(400, 'Invalid gender filter');
     conditions.push('e.gender = ?');
     params.push(gender);
+  }
+
+  const paymentRaw = filters.payment !== undefined ? String(filters.payment).trim().toLowerCase() : 'all';
+  if (paymentRaw && paymentRaw !== 'all') {
+    if (paymentRaw === 'paid') {
+      conditions.push("o.id IS NOT NULL AND o.status = 'paid'");
+    } else if (paymentRaw === 'unpaid') {
+      conditions.push("o.id IS NOT NULL AND (o.status IS NULL OR o.status <> 'paid')");
+    } else if (paymentRaw === 'no_order') {
+      conditions.push('e.order_id IS NULL');
+    } else {
+      throw new ApiError(400, 'Invalid payment filter');
+    }
   }
 
   const dateFrom = assertIsoDate(filters.dateFrom, 'dateFrom');
@@ -364,19 +334,40 @@ export async function updateEnrollmentStatus({ enrollmentId, status, adminNote, 
       actor: 'admin.approval',
       reason: adminNote || 'admin_approved',
       requirePaidOrder: true,
+      enrollmentSource: ENROLLMENT_SOURCE.PAID,
     });
   } else if (normalizedStatus === 'rejected') {
-    await mysqlPool.query(
-      `UPDATE enrollments
-       SET status = 'rejected',
-           access_status = 'inactive',
-           admin_note = ?,
-           reviewed_by = ?,
-           reviewed_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [adminNote || null, reviewedBy || null, eid]
-    );
+    // If the enrollment currently grants active access, route through the lifecycle
+    // service so access_status flips to 'revoked' atomically (matches entitlement
+    // contract). For never-activated rows, plain UPDATE is sufficient.
+    if (String(existing.accessStatus || '').toLowerCase() === 'active') {
+      await revokeEnrollment({
+        enrollmentId: eid,
+        actor: 'admin.reject',
+        adminNote: adminNote || 'admin_rejected',
+      });
+      await mysqlPool.query(
+        `UPDATE enrollments
+         SET admin_note = ?,
+             reviewed_by = ?,
+             reviewed_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [adminNote || null, reviewedBy || null, eid]
+      );
+    } else {
+      await mysqlPool.query(
+        `UPDATE enrollments
+         SET status = 'rejected',
+             access_status = 'inactive',
+             admin_note = ?,
+             reviewed_by = ?,
+             reviewed_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [adminNote || null, reviewedBy || null, eid]
+      );
+    }
     return getEnrollmentById(eid);
   }
 
@@ -391,6 +382,64 @@ export async function updateEnrollmentStatus({ enrollmentId, status, adminNote, 
     [normalizedStatus, adminNote || null, reviewedBy || null, eid]
   );
   return getEnrollmentById(eid);
+}
+
+/**
+ * Aggregated counts for the Registrations admin dashboard. Returns no PII — only
+ * shape-safe integers — so it can be cached or rendered as quick stat tiles.
+ *
+ * @returns {Promise<{
+ *   total: number,
+ *   pending: number,
+ *   approved: number,
+ *   rejected: number,
+ *   paidPendingReview: number,
+ *   unpaid: number,
+ *   noOrder: number,
+ *   suspendedUsers: number,
+ *   activeAccess: number,
+ * }>}
+ */
+export async function summarizeEnrollments() {
+  const [[totals]] = await mysqlPool.query(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN e.status = 'pending'  THEN 1 ELSE 0 END) AS pending,
+       SUM(CASE WHEN e.status = 'approved' THEN 1 ELSE 0 END) AS approved,
+       SUM(CASE WHEN e.status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+       SUM(CASE WHEN e.access_status = 'active' THEN 1 ELSE 0 END) AS activeAccess
+     FROM enrollments e`
+  );
+
+  const [[orderStats]] = await mysqlPool.query(
+    `SELECT
+       SUM(CASE WHEN e.order_id IS NULL THEN 1 ELSE 0 END) AS noOrder,
+       SUM(CASE WHEN e.order_id IS NOT NULL AND o.status = 'paid' AND e.status = 'pending' THEN 1 ELSE 0 END) AS paidPendingReview,
+       SUM(CASE WHEN e.order_id IS NOT NULL AND (o.status IS NULL OR o.status <> 'paid') THEN 1 ELSE 0 END) AS unpaid
+     FROM enrollments e
+     LEFT JOIN orders o ON o.id = e.order_id`
+  );
+
+  const [[suspendedRow]] = await mysqlPool.query(
+    `SELECT COUNT(*) AS suspendedUsers
+     FROM enrollments e
+     INNER JOIN users u ON u.id = e.user_id
+     WHERE u.status = 'suspended'`
+  );
+
+  const num = (v) => Number(v ?? 0) || 0;
+
+  return {
+    total: num(totals?.total),
+    pending: num(totals?.pending),
+    approved: num(totals?.approved),
+    rejected: num(totals?.rejected),
+    activeAccess: num(totals?.activeAccess),
+    paidPendingReview: num(orderStats?.paidPendingReview),
+    unpaid: num(orderStats?.unpaid),
+    noOrder: num(orderStats?.noOrder),
+    suspendedUsers: num(suspendedRow?.suspendedUsers),
+  };
 }
 
 export { normalizeStatus as normalizeEnrollmentStatus };

@@ -2,6 +2,9 @@
  * Parameterized SQL for POST /student/tests/:testId/start (Phase 2A).
  */
 
+import { TEST_AVAILABILITY_CREATE_WHERE_SQL } from './testAvailabilityWindow.queries.js';
+import { TEST_RETAKE_CREATE_WHERE_SQL } from './testRetakePolicy.queries.js';
+
 export const LOAD_TEST_BY_ID_SQL = `
   SELECT
     id,
@@ -10,6 +13,9 @@ export const LOAD_TEST_BY_ID_SQL = `
     deleted_at,
     duration_minutes,
     max_attempts,
+    allow_retake,
+    shuffle_questions,
+    shuffle_options,
     start_date,
     end_date
   FROM tests
@@ -25,6 +31,9 @@ export const LOCK_TEST_BY_ID_SQL = `
     deleted_at,
     duration_minutes,
     max_attempts,
+    allow_retake,
+    shuffle_questions,
+    shuffle_options,
     start_date,
     end_date
   FROM tests
@@ -62,7 +71,7 @@ export const NEXT_ATTEMPT_NUMBER_SQL = `
   FOR UPDATE
 `;
 
-/** Params: testId, studentId, studentId, attemptNumber, durationMinutes, ip, ua */
+/** Params: testId, studentId, studentId, attemptNumber, durationMinutes, ip, ua, studentId, studentId, testId */
 export const INSERT_TEST_ATTEMPT_SQL = `
   INSERT INTO test_attempts (
     test_id,
@@ -76,11 +85,18 @@ export const INSERT_TEST_ATTEMPT_SQL = `
     ip_address,
     user_agent,
     access_code_label
-  ) VALUES (
-    ?, ?, ?, ?, 'in_progress',
-    CURRENT_TIMESTAMP,
-    DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? MINUTE),
-    CURRENT_TIMESTAMP,
-    ?, ?, 'DIRECT'
   )
+  SELECT
+    ?, ?, ?, ?, 'in_progress',
+    UTC_TIMESTAMP(),
+    DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MINUTE),
+    UTC_TIMESTAMP(),
+    ?, ?, 'DIRECT'
+  FROM tests t
+  WHERE t.id = ?
+    AND t.deleted_at IS NULL
+    AND t.status = 'published'
+    ${TEST_AVAILABILITY_CREATE_WHERE_SQL}
+    ${TEST_RETAKE_CREATE_WHERE_SQL}
+  LIMIT 1
 `;

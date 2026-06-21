@@ -32,6 +32,8 @@ ok('conditional lock UPDATE', queriesSrc.includes("status = 'in_progress'"));
 ok('calls gradeAttempt entry point', serviceSrc.includes('gradeAttempt('));
 ok('rollback on failure', serviceSrc.includes('rollback'));
 ok('does not accept client status fields', !serviceSrc.includes('req.body'));
+ok('preflight recovery before validate', serviceSrc.includes('resolveLegacySubmitAttemptOutcome'));
+ok('link failure recovery path', serviceSrc.includes('result_link_failed'));
 
 const routesSrc = fs.readFileSync(path.join(root, 'submit.routes.js'), 'utf8');
 ok('route uses attemptGuard', routesSrc.includes('attemptGuard'));

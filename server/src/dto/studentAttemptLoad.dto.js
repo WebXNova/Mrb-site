@@ -25,14 +25,14 @@ export function computeRemainingTimeSeconds(expiresAt, nowMs = Date.now()) {
   return Math.max(0, Math.floor((expiresMs - nowMs) / 1000));
 }
 
+import { toAvailabilityIso } from '../services/testAvailabilityWindow.service.js';
+
 /**
  * @param {unknown} value
  * @returns {string|null}
  */
 function toIsoDateTime(value) {
-  if (value == null) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  return toAvailabilityIso(value);
 }
 
 /**

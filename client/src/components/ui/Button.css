@@ -67,6 +67,14 @@
   --btn-shadow: var(--shadow-xs);
 }
 
+.btn--outline {
+  --btn-bg: #ffffff;
+  --btn-bg-hover: var(--color-bg-soft);
+  --btn-color: var(--color-ink-900);
+  --btn-border: rgba(79, 70, 229, 0.35);
+  --btn-shadow: var(--shadow-xs);
+}
+
 .btn--ghost {
   --btn-bg: transparent;
   --btn-bg-hover: var(--color-bg-soft);

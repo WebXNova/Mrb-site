@@ -1,11 +1,9 @@
 import { testsApi } from '../../../api/adminApi';
 
+/** Slug runtime — attempt JWT sent via HttpOnly cookie + student session cookie. */
 export const testTakingApi = {
-  loadStart: (slug, attemptId, attemptToken) =>
-    testsApi.getStartData(slug, attemptId, attemptToken),
-  saveAnswer: (slug, attemptId, attemptToken, payload) =>
-    testsApi.saveAnswer(slug, attemptId, attemptToken, payload),
-  submit: (slug, attemptId, attemptToken) =>
-    testsApi.submitAttempt(slug, attemptId, attemptToken),
-  resumeAttempt: (slug, studentToken) => testsApi.verifyCode(slug, {}, studentToken),
+  loadStart: (slug, attemptId) => testsApi.getStartData(slug, attemptId),
+  saveAnswer: (slug, attemptId, payload) => testsApi.saveAnswer(slug, attemptId, payload),
+  submit: (slug, attemptId) => testsApi.submitAttempt(slug, attemptId),
+  resumeAttempt: (slug) => testsApi.verifyCode(slug, {}),
 };

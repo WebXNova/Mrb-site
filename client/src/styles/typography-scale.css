@@ -1,0 +1,170 @@
+/**
+ * MRB Classes — unified typographic scale
+ * Cascades to public site, admin, student, and teacher shells via CSS variables.
+ */
+
+/* ── Dashboard & shell contexts ── */
+.admin-shell,
+.student-shell {
+  font-size: var(--text-body);
+  line-height: var(--lh-relaxed);
+}
+
+.admin-shell .admin-nav__item {
+  font-size: var(--text-nav);
+  letter-spacing: 0.01em;
+}
+
+.admin-shell .admin-topbar__title {
+  font-size: var(--heading-h2);
+}
+
+.admin-shell .admin-topbar__subtitle,
+.admin-shell .admin-card,
+.admin-shell .admin-empty-state,
+.admin-shell table,
+.admin-shell .admin-table {
+  font-size: var(--text-dashboard-card);
+}
+
+.admin-shell .admin-brand__title {
+  font-size: var(--heading-h4);
+}
+
+.admin-shell .admin-brand__subtitle {
+  font-size: var(--text-body-sm);
+}
+
+.student-shell .sp-app-header__brand-name {
+  font-size: var(--text-body-sm);
+}
+
+.student-shell .sp-app-header__brand-label {
+  font-size: var(--text-footer-meta);
+}
+
+.student-shell .student-bottom-nav__item,
+.student-shell .sp-sidebar-nav__label {
+  font-size: var(--text-nav);
+}
+
+.student-shell .sp-field-label,
+.student-shell .sp-label {
+  font-size: var(--text-nav);
+}
+
+.student-shell .sp-input,
+.student-shell input,
+.student-shell select,
+.student-shell textarea {
+  font-size: var(--text-dashboard-card);
+}
+
+.student-shell .sp-card,
+.student-shell .student-dashboard-card,
+.student-shell table {
+  font-size: var(--text-dashboard-card);
+}
+
+/* ── Unified dashboard headings ── */
+.heading-lg,
+.admin-shell h1,
+.student-shell h1 {
+  font-family: var(--font-display);
+  font-size: var(--heading-h1);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--color-ink-900);
+}
+
+.heading-md,
+.admin-shell h2,
+.student-shell h2 {
+  font-family: var(--font-display);
+  font-size: var(--heading-h2);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--ls-snugger);
+  color: var(--color-ink-900);
+}
+
+.heading-sm,
+.admin-shell h3,
+.student-shell h3 {
+  font-family: var(--font-display);
+  font-size: var(--heading-h3);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--ls-snugger);
+  color: var(--color-ink-900);
+}
+
+.text-dashboard-base {
+  font-size: var(--text-dashboard-card);
+  line-height: var(--lh-relaxed);
+}
+
+.text-footer-link {
+  font-size: var(--text-footer-link);
+}
+
+.text-footer-meta {
+  font-size: var(--text-footer-meta);
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-600);
+}
+
+/* ── Readability: secondary copy across public site + all portals ── */
+.feature-card__desc,
+.features__lead,
+.popular-courses__lead,
+.pc-card__summary,
+.course-card__summary,
+.search-page__lead,
+.search-page__status,
+.admin-empty-state,
+.admin-topbar__subtitle,
+.admin-brand__subtitle,
+.admin-card p,
+.admin-table td,
+.admin-table th,
+.student-shell .sp-card,
+.student-shell .sp-label,
+.student-shell .sp-field-label,
+.student-shell--teacher .tq-ws,
+[class$='__desc'],
+[class$='__summary'],
+[class$='__lead'],
+[class$='__hint'],
+[class$='__note'],
+[class$='__helper'],
+[class$='__caption'],
+[class$='__subtitle'],
+[class$='__status'] {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-700);
+  line-height: var(--lh-relaxed);
+}
+
+[class$='__meta'] dt,
+[class$='__meta'] dd,
+[class$='__meta-row'] {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-700);
+  line-height: var(--lh-relaxed);
+}
+
+.admin-shell table th {
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-800);
+}
+
+.admin-shell .admin-nav__item,
+.student-shell .student-bottom-nav__item,
+.student-shell .sp-sidebar-nav__label {
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-700);
+}

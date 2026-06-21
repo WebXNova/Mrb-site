@@ -1,4 +1,5 @@
 import { ApiError } from '../utils/apiError.js';
+import { validateBatchScheduleWindow } from '../utils/batchDateTime.js';
 
 /**
  * Course Wizard State Resolver
@@ -139,36 +140,16 @@ export function validateWizardStateConsistency(payload) {
   // Validate batch enrollment windows
   for (let i = 0; i < payload.batches.length; i++) {
     const batch = payload.batches[i];
-    
-    const enrollStart = Date.parse(batch.enrollment_open_at);
-    const enrollClose = Date.parse(batch.enrollment_close_at);
-    const batchStart = Date.parse(`${batch.start_date}T00:00:00.000Z`);
-    const batchEnd = Date.parse(`${batch.end_date}T23:59:59.999Z`);
-    
-    if (enrollStart >= enrollClose) {
+    const scheduleCheck = validateBatchScheduleWindow(batch);
+
+    if (!scheduleCheck.ok) {
       errors.push({
         code: 'INVALID_BATCH_LIFECYCLE',
-        field: `batches[${i}].enrollment_close_at`,
-        message: `Batch ${i + 1}: Enrollment close must be after enrollment open`,
+        field: `batches[${i}].${scheduleCheck.field ?? 'start_date'}`,
+        message: `Batch ${i + 1}: ${scheduleCheck.message}`,
       });
     }
-    
-    if (enrollClose >= batchStart) {
-      errors.push({
-        code: 'INVALID_BATCH_LIFECYCLE',
-        field: `batches[${i}].enrollment_close_at`,
-        message: `Batch ${i + 1}: Enrollment must close before batch starts`,
-      });
-    }
-    
-    if (batchStart >= batchEnd) {
-      errors.push({
-        code: 'INVALID_BATCH_LIFECYCLE',
-        field: `batches[${i}].end_date`,
-        message: `Batch ${i + 1}: Batch end date must be after start date`,
-      });
-    }
-    
+
     if (batch.total_seats <= 0) {
       errors.push({
         code: 'INVALID_BATCH_LIFECYCLE',

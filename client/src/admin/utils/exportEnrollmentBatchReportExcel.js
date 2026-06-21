@@ -1,4 +1,14 @@
-import { batchLabel } from '../../constants/enrollmentBatches';
+/**
+ * Tabular (one-row-per-student) Excel export for admin Registrations.
+ *
+ * Drives columns from `enrollmentFieldRegistry.js` so this report stays aligned with
+ * the per-record detail export and the admin detail panel — no field drift.
+ */
+import {
+  ENROLLMENT_BATCH_EXPORT_COLUMNS,
+  formatEnrollmentField,
+  getEnrollmentBatchExportHeaders,
+} from './enrollmentFieldRegistry.js';
 
 const BRAND = {
   navy: 'FF143E6B',
@@ -15,14 +25,6 @@ const thinBorder = {
   right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
 };
 
-function formatGender(value) {
-  if (!value) return '-';
-  const n = String(value).toLowerCase();
-  if (n === 'male') return 'Male';
-  if (n === 'female') return 'Female';
-  return String(value);
-}
-
 function safeFilenamePart(s) {
   return String(s || 'report')
     .replace(/[<>:"/\\|?*]+/g, '')
@@ -31,9 +33,10 @@ function safeFilenamePart(s) {
 }
 
 /**
- * Tabular export for admin (one row per student).
  * @param {Record<string, unknown>[]} rows Enrollment rows from API
- * @param {{ formatDate: (v: unknown) => string, subtitle?: string, fileSlug?: string }} opts
+ * @param {{ formatDate?: (v: unknown) => string, subtitle?: string, fileSlug?: string }} [opts]
+ *   `formatDate` is used only for the report header; cell values now flow from the
+ *   shared field registry to keep parity with the detail export.
  */
 export async function downloadBatchRegistrationReportExcel(rows, opts = {}) {
   const { formatDate, subtitle, fileSlug } = opts;
@@ -51,7 +54,9 @@ export async function downloadBatchRegistrationReportExcel(rows, opts = {}) {
     properties: { defaultRowHeight: 18 },
   });
 
-  const colCount = 9;
+  const headers = getEnrollmentBatchExportHeaders();
+  const colCount = headers.length;
+
   ws.mergeCells(1, 1, 1, colCount);
   const title = ws.getCell('A1');
   title.value = 'MRB Classes Batch Registration Report';
@@ -63,9 +68,8 @@ export async function downloadBatchRegistrationReportExcel(rows, opts = {}) {
 
   ws.mergeCells(2, 1, 2, colCount);
   const sub = ws.getCell('A2');
-  sub.value =
-    subtitle ||
-    `Total students: ${rows.length}  ·  Exported: ${formatDate?.(Date.now()) ?? new Date().toLocaleString()}`;
+  const exportedAt = formatDate ? formatDate(Date.now()) : new Date().toLocaleString();
+  sub.value = subtitle || `Total students: ${rows.length}  ·  Exported: ${exportedAt}`;
   sub.font = { size: 11, italic: true, color: { argb: BRAND.muted } };
   sub.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
   sub.border = thinBorder;
@@ -73,22 +77,10 @@ export async function downloadBatchRegistrationReportExcel(rows, opts = {}) {
 
   ws.getRow(3).height = 6;
 
-  const headers = [
-    'Student name',
-    'Father name',
-    'Email',
-    'WhatsApp number',
-    'Province',
-    'Gender',
-    'Date of birth',
-    'Registration date',
-    'Batch number',
-  ];
-
   const hr = ws.getRow(4);
-  headers.forEach((h, i) => {
+  headers.forEach((label, i) => {
     const cell = hr.getCell(i + 1);
-    cell.value = h;
+    cell.value = label;
     cell.font = { bold: true, size: 11, color: { argb: BRAND.text } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.slate } };
     cell.border = thinBorder;
@@ -98,19 +90,9 @@ export async function downloadBatchRegistrationReportExcel(rows, opts = {}) {
 
   rows.forEach((row, idx) => {
     const r = ws.getRow(5 + idx);
-    const values = [
-      row.applicantFullName ?? '-',
-      row.fatherName ?? '-',
-      row.email ?? '-',
-      row.whatsappNumber ?? '-',
-      row.province ?? '-',
-      formatGender(row.gender),
-      row.dateOfBirth ? formatDate?.(row.dateOfBirth) ?? String(row.dateOfBirth) : '-',
-      row.submittedAt ? formatDate?.(row.submittedAt) ?? String(row.submittedAt) : '-',
-      row.batchNumber ? batchLabel(row.batchNumber) : 'Unassigned',
-    ];
-    values.forEach((v, i) => {
+    ENROLLMENT_BATCH_EXPORT_COLUMNS.forEach((key, i) => {
       const cell = r.getCell(i + 1);
+      const v = formatEnrollmentField(key, row);
       cell.value = v === null || v === undefined || v === '' ? '-' : String(v);
       cell.font = { size: 11, color: { argb: BRAND.text } };
       cell.border = thinBorder;

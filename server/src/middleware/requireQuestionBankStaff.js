@@ -6,21 +6,12 @@ import { logActivity } from '../services/activityLog.service.js';
 import { isQuestionBankStaffRole } from '../utils/isQuestionBankStaffRole.js';
 import { getClientIp } from '../utils/network.js';
 import { sanitizePath } from '../utils/logSanitizer.js';
+import {
+  readMultiRealmAccessToken,
+  assertRealmBearerAllowedInProduction,
+} from '../services/authDecisionEngine.js';
 
 const LOG_PREFIX = '[question-bank-upload-auth]';
-
-function parseBearer(authHeader) {
-  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-}
-
-function readAccessToken(req) {
-  return (
-    req.cookies?.admin_access_token ||
-    req.cookies?.student_access_token ||
-    parseBearer(req.headers.authorization) ||
-    null
-  );
-}
 
 function verifyAccessJwt(token) {
   const secrets = [env.jwt.accessSecret, ...env.jwt.previousAccessSecrets];
@@ -71,7 +62,7 @@ async function logAuthorizationFailure(req, reason, metadata = {}) {
  */
 export async function requireQuestionBankStaff(req, res, next) {
   try {
-    const token = readAccessToken(req);
+    const { token, source } = readMultiRealmAccessToken(req);
     if (!token) {
       await logAuthorizationFailure(req, 'missing_token');
       throw new ApiError(401, 'Authentication required');
@@ -115,14 +106,21 @@ export async function requireQuestionBankStaff(req, res, next) {
     }
 
     if (session.status !== 'active') {
-      await logAuthorizationFailure(req, 'account_suspended', {
+      const isInactiveTeacher =
+        String(session.role || '') === 'teacher' && session.status === 'inactive';
+      await logAuthorizationFailure(req, isInactiveTeacher ? 'teacher_inactive' : 'account_suspended', {
         userId: payload.id,
         role: session.role,
+        status: session.status,
       });
-      throw new ApiError(403, 'Account is suspended');
+      throw new ApiError(
+        403,
+        isInactiveTeacher ? 'Teacher account is inactive' : 'Account is suspended'
+      );
     }
 
     const role = String(session.role || payload.role || '');
+    assertRealmBearerAllowedInProduction(req, source, role);
     if (!isQuestionBankStaffRole(role)) {
       await logAuthorizationFailure(req, 'role_denied', { userId: payload.id, role });
       throw new ApiError(403, 'Question bank image upload requires admin or teacher access');

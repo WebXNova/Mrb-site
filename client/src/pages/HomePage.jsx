@@ -3,7 +3,7 @@ import Hero from '../components/home/Hero';
 import StatsBar from '../components/home/StatsBar';
 import Features from '../components/home/Features';
 import PopularCourses from '../components/home/PopularCourses';
-import Testimonials from '../components/home/Testimonials';
+import TopScorersShowcase from '../components/home/TopScorersShowcase';
 import CTASection from '../components/home/CTASection';
 
 export default function HomePage() {
@@ -13,7 +13,7 @@ export default function HomePage() {
       <StatsBar />
       <Features />
       <PopularCourses />
-      <Testimonials />
+      <TopScorersShowcase />
       <CTASection />
     </PageLayout>
   );

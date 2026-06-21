@@ -50,7 +50,7 @@ export default function Footer() {
           {footerSections.map((section) => (
             <div key={section.title} className="footer__section">
               <h4 className="footer__section-title">{section.title}</h4>
-              <ul className="footer__list">
+              <ul className={`footer__list${section.title === 'Legal' ? ' footer__list--legal' : ''}`}>
                 {section.links.map((link) => (
                   <li key={link.to}>
                     <Link to={link.to} className="footer__link">
@@ -59,6 +59,19 @@ export default function Footer() {
                   </li>
                 ))}
               </ul>
+              {section.title === 'Legal' && (
+                <p className="footer__credit">
+                  Built by{' '}
+                  <a
+                    href="https://www.webxnova.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="footer__credit-link"
+                  >
+                    WebX Nova
+                  </a>
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -69,7 +82,14 @@ export default function Footer() {
           <span className="footer__copy">
             &copy; {new Date().getFullYear()} MRB Classes. All rights reserved.
           </span>
-          <span className="footer__made">Made for the MRB classroom.</span>
+          <a
+            href="https://webxnova.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer__made footer__made-link"
+          >
+            Build By WebX Nova
+          </a>
         </div>
       </div>
     </footer>

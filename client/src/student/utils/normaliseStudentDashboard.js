@@ -3,6 +3,7 @@ export function normaliseStudentDashboard(raw) {
   const base = {
     progressPercent: 0,
     testsCompleted: 0,
+    lecturesCompleted: 0,
     questionsAsked: 0,
     lectures: [],
     tests: [],
@@ -12,6 +13,7 @@ export function normaliseStudentDashboard(raw) {
     courses: [],
     notifications: [],
     sessions: [],
+    progress: null,
   };
   if (!raw || typeof raw !== 'object') {
     return { ...base };
@@ -24,29 +26,12 @@ export function normaliseStudentDashboard(raw) {
   const courses = Array.isArray(raw.courses) ? raw.courses : [];
   const notifications = Array.isArray(raw.notifications) ? raw.notifications : [];
   const sessions = Array.isArray(raw.sessions) ? raw.sessions : [];
+  const progress = raw.progress && typeof raw.progress === 'object' ? raw.progress : null;
 
-  let progressPercent = Number(raw.progressPercent);
-  if (Number.isNaN(progressPercent)) {
-    progressPercent = Math.min(
-      100,
-      Math.max(0, results.length * 8 + (lectures.length ? 12 : 0))
-    );
-  }
-
-  let testsCompleted = Number(raw.testsCompleted);
-  if (Number.isNaN(testsCompleted)) {
-    testsCompleted = results.length || 0;
-  }
-
-  let questionsAsked = Number(raw.questionsAsked);
-  if (Number.isNaN(questionsAsked)) {
-    questionsAsked = questions.length;
-  }
-
-  const mergedRecent =
-    recentActivity.length > 0
-      ? recentActivity
-      : lectures.slice(0, 5).map((l) => `New lecture: ${l.title || 'Untitled'}`);
+  const progressPercent = Number.isFinite(Number(raw.progressPercent)) ? Number(raw.progressPercent) : 0;
+  const testsCompleted = Number.isFinite(Number(raw.testsCompleted)) ? Number(raw.testsCompleted) : 0;
+  const lecturesCompleted = Number.isFinite(Number(raw.lecturesCompleted)) ? Number(raw.lecturesCompleted) : 0;
+  const questionsAsked = Number.isFinite(Number(raw.questionsAsked)) ? Number(raw.questionsAsked) : 0;
 
   return {
     ...base,
@@ -58,9 +43,11 @@ export function normaliseStudentDashboard(raw) {
     courses,
     notifications,
     sessions,
-    recentActivity: mergedRecent,
+    recentActivity,
+    progress,
     progressPercent,
     testsCompleted,
+    lecturesCompleted,
     questionsAsked,
   };
 }

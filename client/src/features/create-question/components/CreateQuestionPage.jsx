@@ -1,104 +1,100 @@
-import { useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { adminRoute } from '../../../config/adminPaths';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import '../create-question.css';
+import '../workspace/workspace.css';
+import '../preview/student-preview.css';
+import CreateQuestionErrorBoundary from './CreateQuestionErrorBoundary.jsx';
 import TopActionBar from './TopActionBar.jsx';
-import LeftEditorPanel from './LeftEditorPanel.jsx';
-import RightPreviewPanel from './RightPreviewPanel.jsx';
+import QuestionAuthoringWorkspace from '../workspace/QuestionAuthoringWorkspace.jsx';
+import StudentPreviewModal from '../preview/StudentPreviewModal.jsx';
+import { EditorRibbonProvider } from '../ribbon/EditorRibbonProvider.jsx';
+import EditorRibbon from '../ribbon/EditorRibbon.jsx';
 import { useCreateQuestionState } from '../hooks/useCreateQuestionState.js';
-import { useSanitizationPipeline } from '../hooks/useSanitizationPipeline.js';
-import { optionsToPreviewList } from '../utils/options/optionsPreview.js';
-import { useSaveFlow } from '../hooks/useSaveFlow.js';
+import { useStudentPreviewModel } from '../hooks/useStudentPreviewModel.js';
 
-/**
- * Create Question page — Phase 1 foundational architecture.
- *
- * Architecture decisions:
- * - useReducer centralizes all form state (no uncontrolled mutations)
- * - Components are presentational; state lives in hooks/reducer
- * - Preview uses plain text only (no dangerouslySetInnerHTML)
- * - CKEditor output sanitized via sanitizeEditorOutput before state
- *
- * Data flow:
- *   CKEditor → sanitizeEditorOutput → state → prepareForPreview → Preview → sanitizeBeforeSubmit → API
- */
+function extractTestIdFromReturnTo(returnTo) {
+  const match = String(returnTo).match(/\/tests\/([^/]+)\/(?:questions|quiz-builder)/);
+  return match?.[1] || null;
+}
+
 export default function CreateQuestionPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const rawReturnTo = searchParams.get('returnTo') || '';
   const returnTo =
-    rawReturnTo.startsWith('/admin') && !rawReturnTo.startsWith('//') ? rawReturnTo : '/admin';
+    rawReturnTo.startsWith(adminRoute()) && !rawReturnTo.startsWith('//') ? rawReturnTo : adminRoute();
   const courseIdFromQuery = searchParams.get('courseId') || '';
+  const testIdFromReturn = extractTestIdFromReturnTo(returnTo);
 
   const { state, actions } = useCreateQuestionState();
-  const { sanitizeForPreview, sanitizeExplanationForPreview, sanitizeForSubmit } =
-    useSanitizationPipeline();
-  const { canSave, save, saveDraft } = useSaveFlow({
-    state,
-    sanitizeForSubmit,
-    setFieldErrors: actions.setFieldErrors,
-  });
+  const previewModel = useStudentPreviewModel(state);
+  const [studentViewOpen, setStudentViewOpen] = useState(false);
+
+  useEffect(() => {
+    if (testIdFromReturn) {
+      const target = adminRoute(`tests/${testIdFromReturn}/questions`);
+      const query = courseIdFromQuery ? `?courseId=${encodeURIComponent(courseIdFromQuery)}` : '';
+      navigate(`${target}${query}`, { replace: true });
+    }
+  }, [courseIdFromQuery, navigate, testIdFromReturn]);
 
   useEffect(() => {
     if (!courseIdFromQuery || state.metadata.courseId) return;
     actions.setMetadataField('courseId', courseIdFromQuery);
   }, [courseIdFromQuery, state.metadata.courseId, actions]);
 
-  const questionPreviewText = useMemo(
-    () => sanitizeForPreview(state.question.textHtmlDraft || state.question.textPlain),
-    [sanitizeForPreview, state.question.textHtmlDraft, state.question.textPlain]
-  );
+  if (testIdFromReturn) {
+    return null;
+  }
 
-  const explanationPreviewText = useMemo(
-    () =>
-      sanitizeExplanationForPreview(
-        state.explanation.textHtmlDraft || state.explanation.textPlain
-      ),
-    [
-      sanitizeExplanationForPreview,
-      state.explanation.textHtmlDraft,
-      state.explanation.textPlain,
-    ]
-  );
-
-  const previewOptions = useMemo(
-    () => optionsToPreviewList(state.options),
-    [state.options]
-  );
+  const backLabel = 'Back';
 
   return (
-    <div className="admin-page cq-page">
-      <TopActionBar
-        isDirty={state.ui.isDirty}
-        canSave={canSave}
-        onSave={save}
-        onSaveDraft={saveDraft}
-        onReset={actions.resetForm}
+    <CreateQuestionErrorBoundary>
+      <EditorRibbonProvider
         disabled={state.ui.loading}
-        backTo={returnTo}
-        backLabel={returnTo.includes('/tests/') && returnTo.includes('/questions') ? 'Back to test questions' : 'Back'}
-      />
+        onOptionImageCommit={actions.updateOptionImage}
+      >
+        <div className="admin-page cq-page qaw-page">
+          <div className="qaw-chrome">
+            <div className="qaw-header-slot">
+              <TopActionBar
+                isDirty={state.ui.isDirty}
+                canSave={false}
+                onSave={() => {}}
+                onSaveDraft={() => {}}
+                onReset={actions.resetForm}
+                onOpenStudentView={() => setStudentViewOpen(true)}
+                disabled={state.ui.loading}
+                backTo={returnTo}
+                backLabel={backLabel}
+                saveImplemented={false}
+              />
+            </div>
+            <div className="qaw-ribbon-slot">
+              <EditorRibbon />
+            </div>
+          </div>
 
-      <div className="cq-layout">
-        <LeftEditorPanel
-          metadata={state.metadata}
-          question={state.question}
-          questionImage={state.questionImage}
-          options={state.options}
-          explanation={state.explanation}
-          errors={state.ui.errors}
-          actions={actions}
-          disabled={state.ui.loading}
-        />
+          <div className="qaw-shell">
+            <QuestionAuthoringWorkspace
+              question={state.question}
+              options={state.options}
+              explanation={state.explanation}
+              errors={state.ui.errors}
+              actions={actions}
+              disabled={state.ui.loading}
+            />
+          </div>
 
-        <RightPreviewPanel
-          visible={state.ui.previewVisible}
-          metadata={state.metadata}
-          questionPreviewText={questionPreviewText}
-          questionImage={state.questionImage}
-          options={previewOptions}
-          explanationPreviewText={explanationPreviewText}
-          onToggleVisible={actions.setPreviewVisible}
-        />
-      </div>
-    </div>
+          <StudentPreviewModal
+            open={studentViewOpen}
+            onClose={() => setStudentViewOpen(false)}
+            previewModel={previewModel}
+          />
+        </div>
+      </EditorRibbonProvider>
+    </CreateQuestionErrorBoundary>
   );
 }

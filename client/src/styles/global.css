@@ -1,10 +1,15 @@
 @import './tokens.css';
 @import './reset.css';
 @import './typography.css';
+@import './typography-scale.css';
 @import './layout.css';
 
 main {
   flex: 1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 @keyframes fadeUp {

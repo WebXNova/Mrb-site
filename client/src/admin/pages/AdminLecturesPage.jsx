@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import AddIcon from '@mui/icons-material/Add';
 import { adminApi } from '../../api/adminApi';
-import { filterLecturesClient, safeAdminErrorMessage } from '../../components/admin/adminSafeMessages';
+import { safeAdminErrorMessage } from '../../components/admin/adminSafeMessages';
 import AdminHierarchySelectors from '../../components/admin/AdminHierarchySelectors';
+import {
+  readAdminFiltersFromUrl,
+  writeAdminFiltersToUrl,
+} from '../utils/adminListFilterQuery.js';
 import {
   isLikelyYoutubeWatchUrl,
   normalizeLectureTitle,
@@ -11,6 +17,7 @@ import {
 import { useDebouncedValue } from '../../components/admin/useDebouncedValue';
 import { useAdminHierarchyCascade } from '../../components/admin/useAdminHierarchyCascade';
 import { getAdminToken } from '../../auth/session';
+import '../styles/admin-courses-dashboard.css';
 
 const LECTURE_FIELD_DEFAULTS = {
   title: '',
@@ -42,6 +49,9 @@ function sortByTitle(items) {
 
 export default function AdminLecturesPage() {
   const token = getAdminToken();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlHydratedRef = useRef(false);
+  const [filtersReady, setFiltersReady] = useState(false);
 
   const mountedRef = useRef(true);
   const submitLockRef = useRef(false);
@@ -79,11 +89,12 @@ export default function AdminLecturesPage() {
     hierarchyErrors: browseHierarchyErrors,
   } = browseCascade;
 
-  const [allLectures, setAllLectures] = useState([]);
+  const [lectures, setLectures] = useState([]);
   const [listVersion, setListVersion] = useState(0);
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
 
   const [formMode, setFormMode] = useState('create');
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingLectureId, setEditingLectureId] = useState(null);
   /** @type {[{ chapterId: number, label: string } | null, function]} */
   const [chapterFallbackOption, setChapterFallbackOption] = useState(null);
@@ -100,23 +111,13 @@ export default function AdminLecturesPage() {
   const sortedFormSubjects = useMemo(() => sortByTitle(formSubjects), [formSubjects]);
   const sortedFormChapters = useMemo(() => sortByTitle(formChapters), [formChapters]);
 
-  const hierarchyFilteredLectures = useMemo(() => {
-    let list = allLectures;
-    if (!selectedCourseId) return [];
-    list = list.filter((l) => Number(l.courseId) === Number(selectedCourseId));
-    if (selectedSubjectId) list = list.filter((l) => Number(l.subjectId) === Number(selectedSubjectId));
-    if (selectedChapterId) list = list.filter((l) => Number(l.chapterId) === Number(selectedChapterId));
-    return list;
-  }, [allLectures, selectedCourseId, selectedSubjectId, selectedChapterId]);
-
   const filteredTableLectures = useMemo(() => {
-    const base = hierarchyFilteredLectures;
-    return filterLecturesClient(base, { search: debouncedSearch, status: filters.status }).sort((a, b) => {
+    return [...lectures].sort((a, b) => {
       const o = Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0);
       if (o !== 0) return o;
       return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
     });
-  }, [hierarchyFilteredLectures, debouncedSearch, filters.status]);
+  }, [lectures]);
 
   const mutationBusy = isSubmitting || deletingLectureId != null;
 
@@ -124,6 +125,7 @@ export default function AdminLecturesPage() {
 
   const resetCreateFormPreserveHierarchy = useCallback((courseId = '', subjectId = '', chapterId = '') => {
     setFormMode('create');
+    setShowCreateForm(false);
     setEditingLectureId(null);
     setChapterFallbackOption(null);
     setFormState(emptyHierarchyForm(courseId, subjectId, chapterId));
@@ -133,19 +135,76 @@ export default function AdminLecturesPage() {
   }, []);
 
   useEffect(() => {
+    if (urlHydratedRef.current) return;
+    const urlFilters = readAdminFiltersFromUrl(searchParams);
+    if (urlFilters.courseId) {
+      browseCascade.applyHierarchySelection({
+        courseId: urlFilters.courseId,
+        subjectId: urlFilters.subjectId,
+        chapterId: urlFilters.chapterId,
+      });
+    }
+    if (urlFilters.search || (urlFilters.status && urlFilters.status !== 'all')) {
+      setFilters((prev) => ({
+        ...prev,
+        search: urlFilters.search || prev.search,
+        status: urlFilters.status || prev.status,
+      }));
+    }
+    urlHydratedRef.current = true;
+    setFiltersReady(true);
+  }, [searchParams, browseCascade]);
+
+  useEffect(() => {
+    if (!filtersReady) return;
+    setSearchParams(
+      writeAdminFiltersToUrl(new URLSearchParams(), {
+        courseId: selectedCourseId,
+        subjectId: selectedSubjectId,
+        chapterId: selectedChapterId,
+        search: filters.search,
+        status: filters.status,
+      }),
+      { replace: true }
+    );
+  }, [selectedCourseId, selectedSubjectId, selectedChapterId, filters.search, filters.status, setSearchParams]);
+
+  useEffect(() => {
+    if (!filtersReady) {
+      return undefined;
+    }
+    if (!selectedCourseId) {
+      setLectures([]);
+      setIsLoadingLectures(false);
+      return undefined;
+    }
+
     const ac = new AbortController();
     setIsLoadingLectures(true);
     setErrorState((prev) => ({ ...prev, list: '' }));
 
     adminApi
-      .listLectures(token, {}, { signal: ac.signal })
+      .listLectures(
+        token,
+        {
+          courseId: selectedCourseId,
+          subjectId: selectedSubjectId || undefined,
+          chapterId: selectedChapterId || undefined,
+          search: debouncedSearch || undefined,
+          status: filters.status !== 'all' ? filters.status : undefined,
+          limit: 500,
+        },
+        { signal: ac.signal }
+      )
       .then((res) => {
         if (!mountedRef.current || ac.signal.aborted) return;
-        setAllLectures(res?.data || []);
+        const payload = res?.data;
+        const items = Array.isArray(payload) ? payload : payload?.items ?? [];
+        setLectures(items);
       })
       .catch((err) => {
         if (!mountedRef.current || ac.signal.aborted || isAbortError(err)) return;
-        setAllLectures([]);
+        setLectures([]);
         setErrorState((prev) => ({
           ...prev,
           list: safeAdminErrorMessage(err, 'Unable to load lectures.'),
@@ -156,7 +215,16 @@ export default function AdminLecturesPage() {
       });
 
     return () => ac.abort();
-  }, [token, listVersion]);
+  }, [
+    token,
+    selectedCourseId,
+    selectedSubjectId,
+    selectedChapterId,
+    debouncedSearch,
+    filters.status,
+    listVersion,
+    filtersReady,
+  ]);
 
   useEffect(() => {
     if (!formState.courseId) {
@@ -316,7 +384,26 @@ export default function AdminLecturesPage() {
     setErrorState((prev) => ({ ...prev, form: '' }));
   }
 
+  function openCreateForm() {
+    setShowCreateForm(true);
+    setFormMode('create');
+    setEditingLectureId(null);
+    setChapterFallbackOption(null);
+    setErrorState((prev) => ({ ...prev, form: '' }));
+    setFormState(emptyHierarchyForm(selectedCourseId, selectedSubjectId, selectedChapterId));
+    window.requestAnimationFrame(() => {
+      document.getElementById('lecture-form-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function backToListView() {
+    resetCreateFormPreserveHierarchy(selectedCourseId, selectedSubjectId, selectedChapterId);
+  }
+
+  const showFormPanel = showCreateForm || formMode === 'edit';
+
   async function handleEdit(row) {
+    setShowCreateForm(false);
     if (mutationBusy || deletingLectureId === row?.id || !row?.id) return;
     setErrorState((prev) => ({ ...prev, form: '', delete: '' }));
     setSuccessMessage('');
@@ -493,7 +580,7 @@ export default function AdminLecturesPage() {
   }
 
   function handleCancelEdit() {
-    resetCreateFormPreserveHierarchy(selectedCourseId, selectedSubjectId, selectedChapterId);
+    backToListView();
   }
 
   /** Show inactive chapter option when editing a lecture tied to something not in the active-only list */
@@ -507,16 +594,32 @@ export default function AdminLecturesPage() {
     Boolean(formState.subjectId && isLoadingFormChapters);
 
   return (
-    <section className="admin-page">
-      <section className="admin-card">
-        <h2 className="heading-3">Lecture management</h2>
-        <p className="admin-muted" style={{ marginTop: '0.5rem' }}>
-          Lectures attach to chapters only (Course → Subject → Chapter → Lecture). Hierarchy is enforced server-side —
-          selections here are UX aid only.
-        </p>
-      </section>
+    <section className="admin-page admin-page--courses">
+      <header className="admin-courses-page-header">
+        <div>
+          <h1 className="admin-courses-page-header__title">Lecture management</h1>
+          <p className="admin-courses-page-header__subtitle">
+            Lectures attach to chapters only (Course → Subject → Chapter → Lecture). Browse your catalog or add a new
+            lecture when you are ready.
+          </p>
+        </div>
+        <div className="admin-courses-page-header__actions">
+          {!showFormPanel ? (
+            <button type="button" className="btn--course-primary" onClick={openCreateForm}>
+              <AddIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
+              New lecture
+            </button>
+          ) : (
+            <button type="button" className="btn--course-secondary" onClick={backToListView}>
+              Back to list
+            </button>
+          )}
+        </div>
+      </header>
 
-      <section className="admin-card" style={{ marginTop: '1rem' }}>
+      {!showFormPanel ? (
+        <>
+      <section className="admin-card">
         <h3 className="heading-4">Hierarchy filters</h3>
         <div className="admin-form-grid" style={{ marginTop: '1rem' }}>
           <AdminHierarchySelectors
@@ -656,8 +759,11 @@ export default function AdminLecturesPage() {
           </div>
         )}
       </section>
+        </>
+      ) : null}
 
-      <section className="admin-card admin-lectures-form" style={{ marginTop: '1rem' }}>
+      {showFormPanel ? (
+      <section id="lecture-form-panel" className="admin-card admin-lectures-form" style={{ marginTop: '1rem' }}>
         <h3 className="heading-4">{formMode === 'edit' ? 'Edit lecture' : 'Create lecture'}</h3>
 
         <form className="admin-form-grid admin-lectures-form__grid" style={{ marginTop: '1rem' }} onSubmit={handleSubmit}>
@@ -820,7 +926,11 @@ export default function AdminLecturesPage() {
               <button type="button" className="btn btn--secondary" onClick={handleCancelEdit} disabled={mutationBusy}>
                 Cancel edit
               </button>
-            ) : null}
+            ) : (
+              <button type="button" className="btn btn--secondary" onClick={backToListView} disabled={mutationBusy}>
+                Cancel
+              </button>
+            )}
             <button
               type="button"
               className="btn btn--secondary"
@@ -832,6 +942,7 @@ export default function AdminLecturesPage() {
           </div>
         </form>
       </section>
+      ) : null}
     </section>
   );
 }

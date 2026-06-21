@@ -1,3 +1,4 @@
+import { adminRoute } from '../../config/adminPaths';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
@@ -12,7 +13,7 @@ export default function AdminLoginPage() {
 
   useEffect(() => {
     const token = getAdminToken();
-    if (token) navigate('/admin', { replace: true });
+    if (token) navigate(adminRoute(), { replace: true });
   }, [navigate]);
 
   function onChange(event) {
@@ -29,7 +30,7 @@ export default function AdminLoginPage() {
       const admin = response?.data?.admin;
       if (!admin?.id) throw new Error('Login failed');
       setAdminAuth('__cookie_session__', admin);
-      navigate('/admin', { replace: true });
+      navigate(adminRoute(), { replace: true });
     } catch (err) {
       setError(err.message || 'Unable to login');
     } finally {

@@ -1,3 +1,4 @@
+import { adminRoute } from '../../config/adminPaths';
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getAdminToken } from '../../auth/session';
@@ -18,7 +19,7 @@ export default function AdminCourseSubjectsPage() {
           <h2 className="heading-3">Invalid course</h2>
           <p className="admin-error">Course id in the URL is not valid.</p>
           <div className="admin-actions">
-            <Link to="/admin/courses" className="btn btn--secondary">
+            <Link to={adminRoute('courses')} className="btn btn--secondary">
               Back to courses
             </Link>
           </div>
@@ -32,7 +33,7 @@ export default function AdminCourseSubjectsPage() {
       <section className="admin-card">
         <div className="admin-row-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 className="heading-3">{title}</h2>
-          <Link to="/admin/courses" className="btn btn--secondary btn--sm">
+          <Link to={adminRoute('courses')} className="btn btn--secondary btn--sm">
             Back to courses
           </Link>
         </div>

@@ -4,26 +4,41 @@
 
 /** @param {Record<string, unknown>|null|undefined} payload */
 export function normalizeResultPayload(payload) {
-  if (!payload || payload.success !== true) return null;
+  if (!payload || typeof payload !== 'object') return null;
 
-  const answers = Array.isArray(payload.answers)
-    ? payload.answers.map(normalizeReviewItem).filter(Boolean)
+  /** Portal envelope { success, data } or legacy flat { success, test_title, ... } */
+  const inner =
+    payload.success === true && payload.data && typeof payload.data === 'object'
+      ? payload.data
+      : payload.success === true
+        ? payload
+        : null;
+
+  if (!inner) return null;
+
+  const answersRaw = inner.answers ?? inner.details;
+  const answers = Array.isArray(answersRaw)
+    ? answersRaw.map(normalizeReviewItem).filter(Boolean)
     : null;
 
   return {
-    testTitle: String(payload.test_title ?? payload.testTitle ?? 'Test result'),
-    testId: payload.test_id ?? payload.testId ?? null,
-    submittedAt: payload.submitted_at ?? payload.submittedAt ?? null,
-    score: payload.score,
-    maxScore: payload.max_score ?? payload.maxScore ?? null,
-    percentage: payload.percentage,
-    status: String(payload.status ?? ''),
-    correctAnswers: payload.correct_answers ?? payload.correctAnswers,
-    wrongAnswers: payload.wrong_answers ?? payload.wrongAnswers,
-    unansweredAnswers: payload.unanswered_answers ?? payload.unansweredAnswers,
-    timeTakenSeconds: payload.time_taken_seconds ?? payload.timeTakenSeconds,
+    testTitle: String(inner.test_title ?? inner.testTitle ?? 'Test result'),
+    testId: inner.test_id ?? inner.testId ?? null,
+    submittedAt: inner.submitted_at ?? inner.submittedAt ?? null,
+    score: inner.score,
+    maxScore: inner.max_score ?? inner.maxScore ?? null,
+    percentage: inner.percentage,
+    status: String(inner.status ?? inner.passStatus ?? ''),
+    correctAnswers: inner.correct_answers ?? inner.correctAnswers ?? inner.correctCount,
+    wrongAnswers: inner.wrong_answers ?? inner.wrongAnswers ?? inner.wrongCount,
+    unansweredAnswers:
+      inner.unanswered_answers ?? inner.unansweredAnswers ?? inner.skippedCount,
+    timeTakenSeconds: inner.time_taken_seconds ?? inner.timeTakenSeconds,
     reviewItems: answers,
-    hasReview: Array.isArray(answers) && answers.length > 0,
+    hasReview:
+      (inner.visibility?.showAnswersAfterSubmit !== false && Array.isArray(answers) && answers.length > 0) ||
+      (inner.visibility?.showAnswersAfterSubmit == null && Array.isArray(answers) && answers.length > 0),
+    answersWithheld: inner.visibility?.showAnswersAfterSubmit === false,
   };
 }
 
@@ -32,7 +47,12 @@ function normalizeReviewItem(item) {
   if (!item || typeof item !== 'object') return null;
 
   return {
-    questionHtml: item.question ?? item.questionText ?? item.question_text ?? '',
+    questionHtml:
+      item.question ??
+      item.questionText ??
+      item.question_text ??
+      item.questionHtml ??
+      '',
     yourAnswer: item.your_answer ?? item.yourAnswer ?? item.selectedOption ?? '',
     correctAnswer: item.correct_answer ?? item.correctAnswer ?? item.correctOption ?? '',
     status: String(item.status ?? ''),

@@ -6,7 +6,6 @@ import {
   deleteCourse,
   updateCourse,
 } from '../services/course.service.js';
-import { countLecturesForCourse } from '../services/lecture.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { courseCreateBodySchema, courseWriteBodySchema } from '../validators/courseWrite.schema.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
@@ -31,6 +30,9 @@ export const postCourse = asyncHandler(async (req, res) => {
       level: p.level,
       thumbnail_url: p.thumbnail_url ?? null,
       is_active: p.is_active ?? true,
+      start_date: p.start_date ?? null,
+      end_date: p.end_date ?? null,
+      admission_status: p.admission_status,
     },
     req.user?.id || null,
     { pricing: p.pricing ?? null, curriculumSeeds: p.subjects }
@@ -68,6 +70,9 @@ export const putCourse = asyncHandler(async (req, res) => {
     level: p.level,
     thumbnail_url: p.thumbnail_url,
     is_active: p.is_active,
+    start_date: p.start_date,
+    end_date: p.end_date,
+    admission_status: p.admission_status,
   });
 
   await logActivity({
@@ -83,29 +88,21 @@ export const putCourse = asyncHandler(async (req, res) => {
 
 /**
  * Default: archive (soft) — set `is_active = false`. Lectures remain attached.
- * `?purge=true`: permanent delete (LMS admin or super_admin; same privileges). Returns 409 if lectures exist unless `forceCascade=true`.
+ * `?purge=true`: permanent delete with explicit content cascade and enrollment safety checks.
  */
 export const removeCourse = asyncHandler(async (req, res) => {
   const courseId = Number(req.params.courseId);
   if (!courseId) throw invalidCourseId();
 
   const purge = String(req.query.purge || '') === 'true';
-  const forceCascade = String(req.query.forceCascade || '') === 'true';
 
   if (purge) {
     if (!isAdminRole(req.user?.role)) {
       throw new ApiError(403, 'Permanent course deletion requires an admin session');
     }
-    const lectureCount = await countLecturesForCourse(courseId);
-    if (lectureCount > 0 && !forceCascade) {
-      throw new ApiError(
-        409,
-        `This course has ${lectureCount} lecture(s). Archive it, reassign lectures, or request purge with forceCascade=true (privileged admin delete) to delete the course and its lectures.`,
-        { lectureCount }
-      );
-    }
-    const purged = await deleteCourse(courseId);
-    if (!purged) throw new ApiError(404, 'Course not found', { code: 'COURSE_NOT_FOUND' });
+
+    const result = await deleteCourse(courseId);
+    if (!result.deleted) throw new ApiError(404, 'Course not found', { code: 'COURSE_NOT_FOUND' });
 
     await logActivity({
       userId: req.user?.id,
@@ -113,12 +110,14 @@ export const removeCourse = asyncHandler(async (req, res) => {
       action: 'admin.course.purge',
       entityType: 'course',
       entityId: String(courseId),
+      metadata: result.cascaded ?? {},
     });
 
     sendSuccess(res, {
       message: 'Course permanently deleted',
       purged: true,
-      lectureCountCascaded: lectureCount > 0 ? lectureCount : 0,
+      courseId,
+      cascaded: result.cascaded ?? {},
     });
     return;
   }

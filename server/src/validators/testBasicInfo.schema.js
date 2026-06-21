@@ -10,22 +10,17 @@ export { TEST_TYPE_VALUES, TEST_CATEGORY_VALUES };
 
 
 
+import { PUBLISHED_EDIT_CONTROL_KEYS } from '../services/publishedTestEdit.service.js';
+
 export const TEST_BASIC_INFO_ALLOWED_KEYS = Object.freeze([
-
   'course_id',
-
   'title',
-
   'description',
-
   'category',
-
   'test_type',
-
   'subject_id',
-
   'subject_ids',
-
+  ...PUBLISHED_EDIT_CONTROL_KEYS,
 ]);
 
 

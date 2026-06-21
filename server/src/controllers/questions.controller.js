@@ -165,7 +165,7 @@ export const deleteQuestion = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Authenticated admin required', { code: 'UNAUTHORIZED' });
   }
 
-  const result = await deleteQuestionService(questionId, adminId);
+  const result = await deleteQuestionService(questionId, adminId, req.user?.role);
 
   try {
     await logActivity({

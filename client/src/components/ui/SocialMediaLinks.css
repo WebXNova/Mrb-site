@@ -56,11 +56,11 @@
 }
 
 .social-links__text strong {
-  font-size: var(--fs-14);
+  font-size: var(--text-footer-link);
 }
 
 .social-links__text small {
-  font-size: var(--fs-12);
+  font-size: var(--text-footer-meta);
   color: var(--color-ink-500);
 }
 

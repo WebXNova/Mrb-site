@@ -9,17 +9,24 @@ export default function RulesForm({
   isSubmitting,
   readOnly = false,
   submitDisabled = false,
+  totalMarks = null,
   onChange,
   onSubmit,
-  submitLabel = 'Save Rules',
+  submitLabel = 'Save',
+  embedded = false,
 }) {
   const disabled = isSubmitting || readOnly;
+  const totalMarksLabel =
+    totalMarks != null && Number.isFinite(Number(totalMarks))
+      ? `${Number(totalMarks)} marks (from questions)`
+      : 'Computed from question marks after questions are added';
 
-  return (
-    <form className="admin-test-form" onSubmit={readOnly ? (event) => event.preventDefault() : onSubmit} noValidate>
-      <h2 className="heading-4">Rules & Scoring</h2>
+  const fields = (
+    <>
+      <h2 className="heading-4">Rules & scoring</h2>
       <p className="admin-field__hint" style={{ marginTop: 'var(--space-2)' }}>
-        Configure timing, attempts, and how answers are graded.
+        Configure timing, attempts, and how answers are graded. Total marks are always calculated from
+        question marks — never entered manually.
       </p>
 
       <div className="admin-form-grid" style={{ marginTop: 'var(--space-4)' }}>
@@ -62,39 +69,20 @@ export default function RulesForm({
         </div>
 
         <div className="admin-field">
-          <label htmlFor="passing_percentage">Passing percentage</label>
-          <input
-            id="passing_percentage"
-            name="passing_percentage"
-            type="number"
-            min={0}
-            max={100}
-            step={0.01}
-            value={form.passing_percentage}
-            onChange={onChange}
-            placeholder="e.g. 50"
-            disabled={disabled}
-            aria-invalid={Boolean(fieldErrors.passing_percentage)}
-          />
-          {fieldErrors.passing_percentage ? (
-            <div className="admin-field__error">{fieldErrors.passing_percentage}</div>
-          ) : null}
-        </div>
-
-        <div className="admin-field">
           <label htmlFor="passing_marks">Passing marks</label>
           <input
             id="passing_marks"
             name="passing_marks"
             type="number"
             min={0}
-            step={1}
+            step={0.01}
             value={form.passing_marks}
             onChange={onChange}
-            placeholder="Optional"
+            required
             disabled={disabled}
             aria-invalid={Boolean(fieldErrors.passing_marks)}
           />
+          <div className="admin-field__hint">Total marks: {totalMarksLabel}</div>
           {fieldErrors.passing_marks ? <div className="admin-field__error">{fieldErrors.passing_marks}</div> : null}
         </div>
 
@@ -119,16 +107,26 @@ export default function RulesForm({
         </div>
       </div>
 
-      {error ? <p className="admin-error">{error}</p> : null}
-      {success ? <p className="admin-success">{success}</p> : null}
+      {!embedded && error ? <p className="admin-error">{error}</p> : null}
+      {!embedded && success ? <p className="admin-success">{success}</p> : null}
 
-      {!readOnly ? (
+      {!embedded && !readOnly ? (
         <div className="admin-test-form__footer">
           <button className="btn btn--primary" type="submit" disabled={isSubmitting || submitDisabled}>
             {isSubmitting ? 'Saving…' : submitLabel}
           </button>
         </div>
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return <section className="admin-test-form-section">{fields}</section>;
+  }
+
+  return (
+    <form className="admin-test-form" onSubmit={readOnly ? (event) => event.preventDefault() : onSubmit} noValidate>
+      {fields}
     </form>
   );
 }

@@ -30,11 +30,9 @@ function TestTakingContent() {
     answers,
     setAnswers,
     attemptId,
-    attemptToken,
     expiresAt,
     status,
     error,
-    updateToken,
     refreshSession,
   } = useTestAttemptLoad(slug);
 
@@ -60,8 +58,6 @@ function TestTakingContent() {
   const { executeSubmit, isSubmitting, submitError, clearSubmitError } = useSubmitAttempt({
     slug,
     attemptId,
-    attemptToken,
-    updateToken,
     refreshSession,
   });
 
@@ -81,9 +77,7 @@ function TestTakingContent() {
     useAnswerAutosave({
       slug,
       attemptId,
-      attemptToken,
       setAnswers,
-      updateToken,
       refreshSession,
       disabled: autosaveDisabled || !isOnline,
     });

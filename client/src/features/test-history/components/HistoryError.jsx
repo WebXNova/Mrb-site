@@ -4,7 +4,7 @@ export default function HistoryError({ message, onRetry }) {
       <h2 className="th-state__title">Unable to load results</h2>
       <p className="th-state__message">{message || 'Something went wrong.'}</p>
       {onRetry ? (
-        <button type="button" className="btn btn--secondary" onClick={onRetry}>
+        <button type="button" className="btn btn--primary btn--sm" onClick={onRetry}>
           Try again
         </button>
       ) : null}

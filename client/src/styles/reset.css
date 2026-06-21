@@ -9,22 +9,26 @@
 }
 
 html {
+  font-size: 100%;
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
   min-height: 100vh;
-  line-height: var(--lh-normal);
+  line-height: var(--lh-relaxed);
   font-family: var(--font-sans);
-  font-size: var(--fs-16);
+  font-size: clamp(0.9375rem, 0.15vw + 0.925rem, 1rem);
   font-weight: var(--fw-regular);
   color: var(--color-ink-800);
   background: var(--color-bg);
   font-feature-settings: 'cv11', 'ss01', 'ss03';
+  overflow-x: clip;
+  width: 100%;
 }
 
 img,
@@ -77,6 +81,9 @@ ol {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 ::selection {

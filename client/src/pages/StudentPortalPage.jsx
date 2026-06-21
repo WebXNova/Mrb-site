@@ -1,118 +1,146 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
-import { mockStudentDashboard } from '../student/data/mockStudentData';
+import StudentActiveCourseCard from '../student/components/dashboard/StudentActiveCourseCard';
+import StudentDashboardHero from '../student/components/dashboard/StudentDashboardHero';
+import StudentDashboardSkeleton from '../student/components/dashboard/StudentDashboardSkeleton';
+import StudentDashboardStats from '../student/components/dashboard/StudentDashboardStats';
+import StudentLatestResultSection from '../student/components/dashboard/StudentLatestResultSection';
+import StudentLearningActionGrid from '../student/components/dashboard/StudentLearningActionGrid';
+import StudentRecommendedTestCard from '../student/components/dashboard/StudentRecommendedTestCard';
 import { normaliseStudentDashboard } from '../student/utils/normaliseStudentDashboard';
+import { isAdmissionOpen } from '../course/courseAdmissionPresentation';
+import {
+  buildStudentLoginRedirect,
+  hasLocalStudentSession,
+  isStudentAuthFailure,
+  isStudentEntitlementFailure,
+  terminateStudentSession,
+} from '../student/utils/studentPortalAuth';
+import '../student/styles/student-dashboard.css';
 
 export default function StudentPortalPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const outlet = useOutletContext() || {};
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [loadState, setLoadState] = useState('loading');
+
   const latestResult = useMemo(() => data?.results?.[0] || null, [data]);
   const latestTest = useMemo(() => data?.tests?.[0] || null, [data]);
+  const notificationCount = useMemo(
+    () => (data?.notifications || []).filter((item) => item && item.isRead === false).length,
+    [data]
+  );
+  const activeCourse = useMemo(() => data?.courses?.[0] || data?.course || null, [data]);
+  const showClosedAdmissionWarning = activeCourse && !isAdmissionOpen(activeCourse);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
+      if (!hasLocalStudentSession()) {
+        navigate(buildStudentLoginRedirect(location.pathname, location.search), { replace: true });
+        return;
+      }
+
+      setLoadState('loading');
+      setError('');
+      setData(null);
+
       try {
         const response = await studentApi.dashboard();
-        setData(normaliseStudentDashboard(response?.data || mockStudentDashboard));
+        if (cancelled) return;
+        if (!response?.data) {
+          setError('Dashboard data is unavailable.');
+          setLoadState('error');
+          return;
+        }
+        setData(normaliseStudentDashboard(response.data));
+        setLoadState('ok');
       } catch (err) {
-        setError(err.message || '');
-        setData(normaliseStudentDashboard(mockStudentDashboard));
+        if (cancelled) return;
+
+        if (isStudentAuthFailure(err)) {
+          terminateStudentSession();
+          navigate(buildStudentLoginRedirect(location.pathname, location.search), { replace: true });
+          setLoadState('auth_required');
+          return;
+        }
+
+        if (isStudentEntitlementFailure(err)) {
+          setLoadState('no_entitlement');
+          setData(null);
+          return;
+        }
+
+        setError(err?.message || 'Failed to load your dashboard.');
+        setData(null);
+        setLoadState('error');
       }
     }
-    load();
-  }, []);
 
-  if (error) {
-    // Keep the frontend workflow usable before backend integration.
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, location.search, navigate]);
+
+  if (loadState === 'loading' || loadState === 'auth_required') {
+    return <StudentDashboardSkeleton />;
   }
-  if (!data) {
+
+  if (loadState === 'no_entitlement') {
     return (
-      <section className="section"><div className="container"><p>Loading portal...</p></div></section>
+      <section className="sp-dashboard">
+        <article className="sp-panel sp-panel--empty">
+          <h2 className="sp-panel__title">Start your learning path</h2>
+          <p className="sp-body">No active enrollment yet. Browse courses to unlock your dashboard.</p>
+          <Link className="sp-btn sp-btn--primary" to="/courses">
+            Browse courses
+          </Link>
+        </article>
+      </section>
+    );
+  }
+
+  if (loadState === 'error' || !data) {
+    return (
+      <section className="sp-dashboard">
+        <article className="sp-panel sp-panel--warning">
+          <h2 className="sp-panel__title">Dashboard unavailable</h2>
+          <p className="sp-body sp-body--error">{error || 'Unable to load your dashboard.'}</p>
+          <Link className="sp-btn sp-btn--secondary" to="/courses">
+            Browse courses
+          </Link>
+        </article>
+      </section>
     );
   }
 
   return (
-    <section className="student-dashboard-grid">
-      <article className="student-progress-card">
-        <h2 className="heading-3">Your Progress</h2>
-        <div className="student-progress-card__track">
-          <div
-            className="student-progress-card__fill"
-            style={{ width: `${Math.min(100, Math.max(0, data.progressPercent || 0))}%` }}
-          />
-        </div>
-        <p className="admin-stat-card__label" style={{ marginTop: '0.6rem' }}>
-          {data.progressPercent || 0}% Complete
-        </p>
-        <p className="admin-stat-card__label">
-          {data.testsCompleted || data.results?.length || 0} Tests Completed •{' '}
-          {data.questionsAsked || data.questions?.length || 0} Questions Asked
-        </p>
-        {error ? (
-          <p className="admin-stat-card__label" style={{ marginTop: '0.4rem' }}>
-            Showing frontend preview data until backend is connected.
+    <section className="sp-dashboard">
+      {showClosedAdmissionWarning ? (
+        <article className="sp-panel sp-panel--warning sp-admission-banner" role="status">
+          <h2 className="sp-panel__title">Admissions closed</h2>
+          <p className="sp-body">
+            {activeCourse.enrollment_message ||
+              'Admissions are currently closed for this course.'}{' '}
+            Your access is unchanged — continue learning from your dashboard.
           </p>
-        ) : null}
-      </article>
-
-      <section className="student-feature-grid">
-        <Link className="student-feature-card" to="/dashboard/lectures">
-          <p className="student-feature-card__label">Learning</p>
-          <p className="student-feature-card__title">Lectures ({data.lectures.length})</p>
-        </Link>
-        <Link className="student-feature-card" to="/dashboard/tests">
-          <p className="student-feature-card__label">Practice</p>
-          <p className="student-feature-card__title">Tests ({data.tests.length})</p>
-        </Link>
-        <Link className="student-feature-card" to="/dashboard/questions/ask">
-          <p className="student-feature-card__label">Support</p>
-          <p className="student-feature-card__title">Ask Doubt</p>
-        </Link>
-      </section>
-
-      <section className="admin-card">
-        <h3 className="heading-4">Recent Activity</h3>
-        <ul className="student-activity-list">
-          {(data.recentActivity || []).map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="admin-grid">
-        <article className="admin-card">
-          <h3 className="heading-4">Latest Result</h3>
-          {latestResult ? (
-            <>
-              <p style={{ marginTop: '0.5rem' }}>{latestResult.testTitle}</p>
-              <p className="admin-stat-card__label">
-                Score: {latestResult.score}/{latestResult.maxScore} ({latestResult.percentage}%)
-              </p>
-              <Link to={`/dashboard/tests/${latestResult.testId || 'test'}/results/${latestResult.attemptId}`}>
-                View detail
-              </Link>
-            </>
-          ) : (
-            <p className="admin-stat-card__label" style={{ marginTop: '0.5rem' }}>No attempts yet.</p>
-          )}
         </article>
+      ) : null}
+      <StudentDashboardHero data={data} />
+      <StudentDashboardStats data={data} />
+      <StudentActiveCourseCard data={data} />
+      <StudentLearningActionGrid data={data} notificationCount={notificationCount} />
 
-        <article className="admin-card">
-          <h3 className="heading-4">Recommended Next Test</h3>
-          {latestTest ? (
-            <>
-              <p style={{ marginTop: '0.5rem' }}>{latestTest.title}</p>
-              <p className="admin-stat-card__label">
-                {latestTest.subject} {latestTest.durationMinutes ? `- ${latestTest.durationMinutes} min` : ''}
-              </p>
-              <Link to="/dashboard/tests">Go to tests</Link>
-            </>
-          ) : (
-            <p className="admin-stat-card__label" style={{ marginTop: '0.5rem' }}>No published tests yet.</p>
-          )}
-        </article>
-      </section>
+      <div className="sp-dashboard__split">
+        <StudentLatestResultSection result={latestResult} />
+        <StudentRecommendedTestCard test={latestTest} />
+      </div>
     </section>
   );
 }

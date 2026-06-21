@@ -1,5 +1,12 @@
 import { ApiError } from '../utils/apiError.js';
-import { MCQ_OPTION_KEYS, validateOptions } from '../validators/questionOptions.validation.js';
+import { validateQuestionMarks } from '../validators/questionMarks.validation.js';
+import {
+  MCQ_MAX_OPTIONS,
+  MCQ_MIN_OPTIONS,
+  MCQ_OPTION_KEY_ALPHABET,
+} from '../validation/mcq/mcqValidation.constants.js';
+import { assertValidMcqQuestion } from '../validation/mcq/mcqValidation.engine.js';
+import { McqValidationError } from '../validation/mcq/McqValidationError.js';
 import {
   logPostWriteIntegrityFailure,
   logValidationFailure,
@@ -50,20 +57,16 @@ function integrityError(message, code, metadata = {}) {
  *   }>,
  * }}
  */
-export function validateQuestionIntegrity(question, options, { questionId = null, operation = 'create' } = {}) {
+export function validateQuestionIntegrity(question, options, { questionId = null, operation = 'create', allowArchivePaths = false } = {}) {
   if (typeof question !== 'object' || question === null) {
     throw integrityError('question payload must be an object', 'INVALID_QUESTION_SHAPE', { operation, questionId });
   }
 
-  const questionText = String(question.question_text ?? question.questionText ?? '').trim();
-  if (!questionText) {
-    throw integrityError('question_text is required', 'INVALID_QUESTION_TEXT', { operation, questionId });
+  const marksResult = validateQuestionMarks(question.marks, { defaultWhenMissing: false, field: 'marks' });
+  if (!marksResult.ok) {
+    throw integrityError(marksResult.message, 'INVALID_MARKS', { operation, questionId });
   }
-
-  const marks = Number(question.marks);
-  if (!Number.isFinite(marks) || marks <= 0) {
-    throw integrityError('marks must be greater than 0', 'INVALID_MARKS', { operation, questionId });
-  }
+  const marks = marksResult.marks;
 
   const courseIdRaw = question.course_id ?? question.courseId;
   if (courseIdRaw != null) {
@@ -73,13 +76,26 @@ export function validateQuestionIntegrity(question, options, { questionId = null
     }
   }
 
-  let normalizedOptions;
+  let normalizedMcq;
   try {
-    normalizedOptions = validateOptions(options);
+    normalizedMcq = assertValidMcqQuestion(
+      {
+        question_text: question.question_text ?? question.questionText,
+        question_image_url: question.question_image_url ?? question.questionImageUrl,
+        options,
+      },
+      {
+        format: 'question_bank',
+        context: 'manual_save',
+        stripHtml: true,
+        questionId,
+        allowArchivePaths,
+      }
+    );
   } catch (error) {
-    if (error instanceof ApiError) {
+    if (error instanceof McqValidationError || error instanceof ApiError) {
       logValidationFailure({
-        code: error.code,
+        code: error.errorCode || error.code,
         message: error.message,
         operation,
         questionId,
@@ -90,11 +106,12 @@ export function validateQuestionIntegrity(question, options, { questionId = null
 
   return {
     question: {
-      question_text: questionText,
+      question_text: normalizedMcq.question_text,
       marks,
       course_id: courseIdRaw != null ? Number(courseIdRaw) : undefined,
+      question_image_url: normalizedMcq.question_image_url ?? null,
     },
-    options: normalizedOptions,
+    options: normalizedMcq.options,
   };
 }
 
@@ -134,10 +151,10 @@ export async function assertPersistedQuestionIntegrity(connection, questionId) {
 
   const errors = [];
 
-  if (optionRows.length !== MCQ_OPTION_KEYS.length) {
+  if (optionRows.length < MCQ_MIN_OPTIONS || optionRows.length > MCQ_MAX_OPTIONS) {
     errors.push({
       code: 'INVALID_PERSISTED_OPTION_COUNT',
-      message: `Expected ${MCQ_OPTION_KEYS.length} options, found ${optionRows.length}`,
+      message: `Expected ${MCQ_MIN_OPTIONS}-${MCQ_MAX_OPTIONS} options, found ${optionRows.length}`,
     });
   }
 
@@ -147,7 +164,8 @@ export async function assertPersistedQuestionIntegrity(connection, questionId) {
     errors.push({ code: 'DUPLICATE_PERSISTED_OPTION_KEY', message: 'Duplicate option_key rows detected' });
   }
 
-  for (const requiredKey of MCQ_OPTION_KEYS) {
+  const expectedKeys = MCQ_OPTION_KEY_ALPHABET.slice(0, optionRows.length);
+  for (const requiredKey of expectedKeys) {
     if (!keys.includes(requiredKey)) {
       errors.push({
         code: 'MISSING_PERSISTED_OPTION_KEY',

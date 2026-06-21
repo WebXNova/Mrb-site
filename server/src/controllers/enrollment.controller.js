@@ -1,50 +1,35 @@
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
+import { mysqlPool } from '../config/mysql.js';
 import {
   assertBoardExists,
   assertCourseExists,
   assertOrderExists,
-  createEnrollment,
   getEnrollmentById,
-  hasDuplicatePendingEnrollment,
   listEnrollments,
   normalizeEnrollmentStatus,
+  summarizeEnrollments,
   updateEnrollmentStatus,
 } from '../services/safepayEnrollment.service.js';
+import {
+  processCourseEnrollment,
+  getEnrollmentState as resolveEnrollmentState,
+} from '../services/courseEnrollment.service.js';
+import { suspendStudentForEnrollment } from '../services/enrollmentAdminActions.service.js';
+import { getCourseRowById } from '../services/courseCatalogQueries.service.js';
+import { toEnrollmentStateResponse, parseCreateEnrollmentDto } from '../dtos/enrollment.dto.js';
+import { normalizeAdmissionStatus, normalizeDateOnly, ADMISSION_STATUS } from '../models/course.model.js';
 import { resolveEnrollmentLocationSelection } from '../services/location.service.js';
 import { logActivity } from '../services/activityLog.service.js';
-import { ENROLLMENT_BATCH_IDS } from '../constants/enrollmentBatches.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
-
-const BATCH_NUMBER_ENUM = /** @type {readonly [string, ...string[]]} */ (ENROLLMENT_BATCH_IDS);
+import { resolveEnrollmentPrefillData } from '../services/enrollmentPrefill.service.js';
 
 function emptyToUndefined(value) {
   if (value === undefined || value === null) return undefined;
   const s = String(value).trim();
   return s === '' ? undefined : value;
 }
-
-const createEnrollmentSchema = z.object({
-  courseId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
-  provinceId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
-  divisionId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
-  districtId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
-  cityId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive()),
-  boardId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional().nullable()),
-  orderId: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional().nullable()),
-  applicantFullName: z.string().min(2).max(160),
-  fatherName: z.string().min(2).max(160),
-  dateOfBirth: z.string().optional().nullable(),
-  gender: z.enum(['male', 'female']),
-  whatsappNumber: z
-    .string()
-    .regex(/^\+923[0-9]{9}$/, 'Enter a valid Pakistan WhatsApp number'),
-  email: z.string().email().optional().nullable(),
-  hsscStatus: z.enum(['Inter Class', 'First Year Class', 'Matric Class']),
-  mdcatAttemptType: z.enum(['Fresher', 'Improver']),
-  batchNumber: z.preprocess(emptyToUndefined, z.enum(BATCH_NUMBER_ENUM).optional().nullable()),
-});
 
 function parseBodyField(value) {
   if (value === undefined || value === null) return undefined;
@@ -60,103 +45,261 @@ function normalizePakistaniWhatsapp(value) {
   return `+${digits}`;
 }
 
-export const postEnrollment = asyncHandler(async (req, res) => {
+function mapEnrollmentBodyToDto(body, userEmail) {
+  return {
+    course_id: body.course_id ?? body.courseId,
+    province_id: body.province_id ?? body.provinceId,
+    district_id: body.district_id ?? body.districtId,
+    city_id: body.city_id ?? body.cityId,
+    board_id: body.board_id ?? body.boardId,
+    applicantFullName: parseBodyField(body.applicantFullName),
+    fatherName: parseBodyField(body.fatherName),
+    dateOfBirth: parseBodyField(body.dateOfBirth) || null,
+    gender: parseBodyField(body.gender),
+    whatsappNumber: normalizePakistaniWhatsapp(parseBodyField(body.whatsappNumber)),
+    email: userEmail,
+    hsscStatus: parseBodyField(body.hsscStatus),
+    mdcatAttemptType: parseBodyField(body.mdcatAttemptType),
+    confirmSwitch:
+      body.confirmSwitch === true ||
+      body.confirmSwitch === 'true' ||
+      body.confirm_switch === true ||
+      body.confirm_switch === 'true' ||
+      body.confirmSwitch === 1 ||
+      body.confirmSwitch === '1',
+  };
+}
+
+/**
+ * POST /api/enrollments — create or continue enrollment for an OPEN course.
+ * Returns 201 when a new row is created; 403 when admissions are CLOSED.
+ */
+export const createEnrollment = asyncHandler(async (req, res) => {
   const userId = Number(req.user?.id);
   if (!Number.isInteger(userId) || userId <= 0) {
     throw new ApiError(401, 'Authentication required');
   }
 
-  const parsed = createEnrollmentSchema.safeParse({
-    courseId: req.body.course_id ?? req.body.courseId,
-    provinceId: req.body.province_id ?? req.body.provinceId,
-    divisionId: req.body.division_id ?? req.body.divisionId,
-    districtId: req.body.district_id ?? req.body.districtId,
-    cityId: req.body.city_id ?? req.body.cityId,
-    boardId: req.body.board_id ?? req.body.boardId,
-    orderId: req.body.order_id ?? req.body.orderId,
-    applicantFullName: parseBodyField(req.body.applicantFullName),
-    fatherName: parseBodyField(req.body.fatherName),
-    dateOfBirth: parseBodyField(req.body.dateOfBirth) || null,
-    gender: parseBodyField(req.body.gender),
-    whatsappNumber: normalizePakistaniWhatsapp(parseBodyField(req.body.whatsappNumber)),
-    email: req.user?.email || parseBodyField(req.body.email),
-    hsscStatus: parseBodyField(req.body.hsscStatus),
-    mdcatAttemptType: parseBodyField(req.body.mdcatAttemptType),
-    batchNumber: parseBodyField(req.body.batchNumber),
-  });
-  if (!parsed.success) throw new ApiError(422, 'Invalid enrollment payload', parsed.error.flatten());
-
-  const userEmail = String(req.user?.email || parsed.data.email || '').trim();
+  const userEmail = String(req.user?.email || parseBodyField(req.body?.email) || '').trim();
   if (!userEmail) {
     throw new ApiError(401, 'Authenticated email is required');
   }
 
-  if (parsed.data.email && String(parsed.data.email).toLowerCase() !== userEmail.toLowerCase()) {
+  const bodyEmail = parseBodyField(req.body?.email);
+  if (bodyEmail && bodyEmail.toLowerCase() !== userEmail.toLowerCase()) {
     throw new ApiError(400, 'Email must match the signed-in student account');
   }
 
-  const course = await assertCourseExists(parsed.data.courseId);
-  const location = await resolveEnrollmentLocationSelection({
-    provinceId: parsed.data.provinceId,
-    divisionId: parsed.data.divisionId,
-    districtId: parsed.data.districtId,
-    cityId: parsed.data.cityId,
-  });
-  const board = await assertBoardExists(parsed.data.boardId);
-  await assertOrderExists(parsed.data.orderId);
-
-  const duplicatePending = await hasDuplicatePendingEnrollment({
-    userId,
-    courseId: parsed.data.courseId,
-  });
-  if (duplicatePending) {
-    throw new ApiError(409, 'You already have a pending enrollment for this course.');
+  let dto;
+  try {
+    dto = parseCreateEnrollmentDto(mapEnrollmentBodyToDto(req.body, userEmail));
+  } catch (error) {
+    if (error?.name === 'ZodError') {
+      throw new ApiError(422, 'Invalid enrollment payload', error.flatten());
+    }
+    throw error;
   }
 
-  const enrollment = await createEnrollment({
-    userId,
-    courseId: parsed.data.courseId,
-    orderId: null,
-    applicantFullName: parsed.data.applicantFullName,
-    fatherName: parsed.data.fatherName,
-    dateOfBirth: parsed.data.dateOfBirth || null,
-    gender: parsed.data.gender,
-    whatsappNumber: parsed.data.whatsappNumber,
-    email: userEmail,
-    provinceId: location.province.id,
-    divisionId: location.division.id,
-    districtId: location.district.id,
-    cityId: location.city.id,
-    boardId: board?.id ?? null,
-    hsscStatus: parsed.data.hsscStatus,
-    mdcatAttemptType: parsed.data.mdcatAttemptType,
-    batchNumber: parsed.data.batchNumber ?? null,
+  const orderId = emptyToUndefined(req.body?.order_id ?? req.body?.orderId);
+
+  const course = await assertCourseExists(dto.course_id);
+  const location = await resolveEnrollmentLocationSelection({
+    provinceId: dto.province_id,
+    districtId: dto.district_id,
+    cityId: dto.city_id,
   });
+  const board = await assertBoardExists(dto.board_id);
+  await assertOrderExists(orderId);
+
+  const result = await processCourseEnrollment(
+    {
+      userId,
+      courseId: dto.course_id,
+      applicantFullName: dto.applicantFullName,
+      fatherName: dto.fatherName,
+      dateOfBirth: dto.dateOfBirth || null,
+      gender: dto.gender,
+      whatsappNumber: dto.whatsappNumber,
+      email: userEmail,
+      provinceId: location.province.id,
+      districtId: location.district.id,
+      cityId: location.city.id,
+      boardId: board?.id ?? null,
+      hsscStatus: dto.hsscStatus,
+      mdcatAttemptType: dto.mdcatAttemptType,
+    },
+    { confirmSwitch: dto.confirmSwitch === true }
+  );
+
+  const { enrollment, created, accessGranted, paymentRequired, checkoutUrl, orderId: paymentOrderId, pricingCategory } =
+    result;
 
   await logActivity({
     userId,
     role: req.user?.role,
-    action: 'student.enrollment.create',
+    action: accessGranted ? 'student.enrollment.free.activate' : 'student.enrollment.create',
     entityType: 'enrollment',
     entityId: String(enrollment?.id || ''),
     metadata: {
       userId,
       courseId: course.id,
+      pricingCategory,
+      accessGranted,
+      paymentRequired,
       province: location.province.name,
-      division: location.division.name,
       district: location.district.name,
       city: location.city.name,
       board: board?.name || null,
     },
   });
 
+  const message = accessGranted
+    ? created
+      ? 'Enrollment complete. You now have access to this course.'
+      : 'You already have active access to this course.'
+    : created
+      ? 'Enrollment saved. Complete payment to unlock course access.'
+      : 'You already have an enrollment for this course. Continue to payment.';
+
   sendSuccess(
     res,
     {
-      message: 'Enrollment saved successfully. Payment confirmation will be linked later via Safepay.',
+      message,
       enrollment,
+      created,
+      access_granted: accessGranted,
+      payment_required: paymentRequired,
+      pricing_category: pricingCategory,
+      enrollment_source: enrollment?.enrollmentSource ?? null,
+      checkout_url: checkoutUrl ?? null,
+      order_id: paymentOrderId ?? enrollment?.orderId ?? null,
     },
-    201
+    created ? 201 : 200
+  );
+});
+
+/** @deprecated Use createEnrollment */
+export const postEnrollment = createEnrollment;
+
+async function enrichEnrollmentsWithAdmission(rows) {
+  if (!rows.length) return [];
+  const courseIds = [...new Set(rows.map((row) => Number(row.courseId)).filter((id) => id > 0))];
+  if (!courseIds.length) return rows;
+
+  const [courseRows] = await mysqlPool.query(
+    `SELECT id, title, admission_status, start_date, end_date
+     FROM courses
+     WHERE id IN (?)`,
+    [courseIds]
+  );
+  const courseById = new Map(courseRows.map((row) => [Number(row.id), row]));
+
+  return rows.map((row) => {
+    const course = courseById.get(Number(row.courseId));
+    const admissionStatus = normalizeAdmissionStatus(course?.admission_status);
+    return {
+      id: row.id,
+      courseId: row.courseId,
+      courseTitle: row.courseTitle ?? course?.title ?? null,
+      status: row.status,
+      accessStatus: row.accessStatus,
+      enrollmentSource: row.enrollmentSource ?? null,
+      orderId: row.orderId,
+      orderStatus: row.orderStatus,
+      admission_status: admissionStatus,
+      start_date: normalizeDateOnly(course?.start_date),
+      end_date: normalizeDateOnly(course?.end_date),
+      is_enrollment_open: admissionStatus === ADMISSION_STATUS.OPEN,
+    };
+  });
+}
+
+/** GET /api/enrollments/prefill-data — suggested registration field values from prior enrollment. */
+export const getEnrollmentPrefillData = asyncHandler(async (req, res) => {
+  const userId = Number(req.user?.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new ApiError(401, 'Login required');
+  }
+
+  const targetCourseId = Number(
+    req.query.targetCourseId ?? req.query.target_course_id ?? req.query.courseId ?? req.query.course_id
+  );
+  if (!Number.isInteger(targetCourseId) || targetCourseId <= 0) {
+    throw new ApiError(400, 'targetCourseId is required');
+  }
+
+  const sourceEnrollmentIdRaw =
+    req.query.sourceEnrollmentId ?? req.query.source_enrollment_id ?? null;
+  const sourceEnrollmentId =
+    sourceEnrollmentIdRaw != null && String(sourceEnrollmentIdRaw).trim() !== ''
+      ? Number(sourceEnrollmentIdRaw)
+      : null;
+  if (
+    sourceEnrollmentIdRaw != null &&
+    String(sourceEnrollmentIdRaw).trim() !== '' &&
+    (!Number.isInteger(sourceEnrollmentId) || sourceEnrollmentId <= 0)
+  ) {
+    throw new ApiError(400, 'Invalid sourceEnrollmentId');
+  }
+
+  const result = await resolveEnrollmentPrefillData({
+    userId,
+    targetCourseId,
+    sourceEnrollmentId,
+    actorRole: req.user?.role ?? 'student',
+  });
+
+  sendSuccess(res, {
+    fields: result.fields,
+    sourceCourseId: result.sourceCourseId,
+    sourceCourseName: result.sourceCourseName,
+    sourceEnrollmentId: result.sourceEnrollmentId,
+    prefilledFieldNames: result.prefilledFieldNames,
+    discardedFields: result.discardedFields,
+    availableSources: result.availableSources,
+    hasPrefill: result.hasPrefill,
+  });
+});
+
+/** GET /api/enrollments/me — student enrollments with course admission context. */
+export const getUserEnrollments = asyncHandler(async (req, res) => {
+  const userId = Number(req.user?.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new ApiError(401, 'Login required');
+  }
+
+  const rows = await listEnrollments({ userId });
+  sendSuccess(res, {
+    enrollments: await enrichEnrollmentsWithAdmission(rows),
+  });
+});
+
+/** @deprecated Use getUserEnrollments */
+export const getMyEnrollments = getUserEnrollments;
+
+/** GET /api/enrollments/state/:courseId — CTA state (existing students keep access when CLOSED). */
+export const getEnrollmentState = asyncHandler(async (req, res) => {
+  const userId = Number(req.user?.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new ApiError(401, 'Login required');
+  }
+
+  const courseId = Number(req.params.courseId);
+  if (!Number.isInteger(courseId) || courseId <= 0) {
+    throw new ApiError(400, 'Invalid course id');
+  }
+
+  const state = await resolveEnrollmentState(userId, courseId);
+  const courseRow = await getCourseRowById(courseId);
+  sendSuccess(
+    res,
+    toEnrollmentStateResponse(state, {
+      courseId,
+      courseName: courseRow?.title ?? null,
+      admission_status: courseRow?.admission_status ?? null,
+      start_date: courseRow?.start_date ?? null,
+      end_date: courseRow?.end_date ?? null,
+    })
   );
 });
 
@@ -167,17 +310,18 @@ function parseAdminEnrollmentQuery(req) {
     return s === '' ? undefined : s;
   };
   return {
-    batch: slice(req.query.batch) ?? 'all',
     status: slice(req.query.status) ?? 'all',
     province: slice(req.query.province) ?? 'all',
     province_id: slice(req.query.province_id) ?? slice(req.query.provinceId),
-    division_id: slice(req.query.division_id) ?? slice(req.query.divisionId),
     district_id: slice(req.query.district_id) ?? slice(req.query.districtId),
     city_id: slice(req.query.city_id) ?? slice(req.query.cityId),
     board_id: slice(req.query.board_id) ?? slice(req.query.boardId),
     course_id: slice(req.query.course_id) ?? slice(req.query.courseId),
+    subject_id: slice(req.query.subject_id) ?? slice(req.query.subjectId),
+    chapter_id: slice(req.query.chapter_id) ?? slice(req.query.chapterId),
     user_id: slice(req.query.user_id) ?? slice(req.query.userId),
     gender: (slice(req.query.gender)?.toLowerCase() ?? 'all') || 'all',
+    payment: (slice(req.query.payment)?.toLowerCase() ?? 'all') || 'all',
     dateFrom: slice(req.query.dateFrom),
     dateTo: slice(req.query.dateTo),
     search: slice(req.query.search),
@@ -187,6 +331,11 @@ function parseAdminEnrollmentQuery(req) {
 export const getAdminEnrollments = asyncHandler(async (req, res) => {
   const data = await listEnrollments(parseAdminEnrollmentQuery(req));
   sendSuccess(res, data);
+});
+
+export const getAdminEnrollmentsSummary = asyncHandler(async (_req, res) => {
+  const summary = await summarizeEnrollments();
+  sendSuccess(res, summary);
 });
 
 const updateEnrollmentStatusSchema = z.object({
@@ -223,5 +372,30 @@ export const putAdminEnrollmentStatus = asyncHandler(async (req, res) => {
     metadata: { status: normalizeEnrollmentStatus(parsed.data.status) },
   });
 
+  sendSuccess(res, updated);
+});
+
+const suspendStudentSchema = z.object({
+  adminNote: z.string().trim().min(3).max(500),
+});
+
+export const postAdminEnrollmentSuspendStudent = asyncHandler(async (req, res) => {
+  const enrollmentId = Number(req.params.enrollmentId);
+  if (!enrollmentId) throw new ApiError(400, 'Invalid enrollment id');
+
+  const parsed = suspendStudentSchema.safeParse({
+    adminNote: parseBodyField(req.body?.adminNote) || '',
+  });
+  if (!parsed.success) {
+    throw new ApiError(422, 'Invalid suspend payload', parsed.error.flatten());
+  }
+
+  await suspendStudentForEnrollment({
+    enrollmentId,
+    adminNote: parsed.data.adminNote,
+    actor: { id: req.user?.id, role: req.user?.role },
+  });
+
+  const updated = await getEnrollmentById(enrollmentId);
   sendSuccess(res, updated);
 });

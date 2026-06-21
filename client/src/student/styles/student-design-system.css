@@ -1,0 +1,392 @@
+/**
+ * Student Portal Design System — Parts 8–12
+ * Inputs, cards, badges, dividers, icons, motion
+ */
+
+.student-shell {
+  --sp-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --sp-transition: all 0.3s var(--sp-ease);
+}
+
+/* ── Labels ── */
+.sp-field-label,
+.student-shell .sp-label {
+  display: block;
+  margin: 0 0 0.35rem;
+  font-size: var(--sp-text-sm);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sp-text-tertiary);
+}
+
+/* ── Text inputs & selects ── */
+.sp-input,
+.sp-select,
+.student-shell .student-lecture-filters__input,
+.student-shell .student-lecture-filters__select,
+.student-shell input[type='text'],
+.student-shell input[type='email'],
+.student-shell input[type='password'],
+.student-shell input[type='search'],
+.student-shell textarea,
+.student-shell select {
+  width: 100%;
+  padding: 0.65rem 0.875rem;
+  border: 1px solid var(--sp-border);
+  border-radius: 12px;
+  background: var(--sp-white);
+  color: var(--sp-navy);
+  font-family: var(--sp-font-sans);
+  font-size: var(--sp-text-base);
+  line-height: 1.4;
+  transition: var(--sp-transition);
+}
+
+.sp-input::placeholder,
+.student-shell input::placeholder {
+  color: var(--sp-text-tertiary);
+}
+
+.sp-input:focus,
+.sp-select:focus,
+.student-shell .student-lecture-filters__input:focus,
+.student-shell .student-lecture-filters__select:focus,
+.student-shell input:focus,
+.student-shell textarea:focus,
+.student-shell select:focus {
+  outline: none;
+  border-color: var(--sp-accent);
+  box-shadow: var(--sp-focus-ring);
+}
+
+/* ── Search bar ── */
+.sp-search {
+  position: relative;
+}
+
+.sp-search__icon {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--sp-text-tertiary);
+  pointer-events: none;
+  transition: var(--sp-transition);
+}
+
+.sp-search:focus-within .sp-search__icon {
+  color: var(--sp-accent);
+}
+
+.sp-search__input {
+  padding-left: 2.5rem;
+  border-radius: 999px;
+  box-shadow: var(--sp-shadow-sm);
+}
+
+.sp-search__input:focus {
+  box-shadow: var(--sp-shadow-sm), var(--sp-focus-ring);
+}
+
+/* ── Cards ── */
+.sp-card {
+  background: var(--sp-surface-card, var(--sp-white));
+  border: 1px solid var(--sp-border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: var(--sp-shadow-sm);
+  transition: var(--sp-transition);
+}
+
+.sp-card--highlight {
+  background: var(--sp-bg-secondary);
+  border-left: 3px solid var(--sp-accent);
+  box-shadow: none;
+}
+
+.sp-card--interactive:hover,
+.sp-card--interactive:focus-within {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--sp-accent);
+}
+
+/* Bridge legacy panels */
+.sp-panel {
+  transition: var(--sp-transition);
+}
+
+.sp-panel:hover {
+  transform: none;
+}
+
+.sp-panel--accent {
+  border-left: 3px solid var(--sp-accent);
+}
+
+/* ── Badges (filled pills) ── */
+.sp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--sp-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sp-badge--burgundy,
+.sp-badge--gold,
+.sp-badge--blue,
+.sp-badge--accent {
+  background: var(--sp-accent);
+  color: #fff;
+}
+
+.sp-badge--sage,
+.sp-badge--navy {
+  background: var(--sp-slate);
+  color: #fff;
+}
+
+.sp-badge--soft-burgundy,
+.sp-badge--soft-gold,
+.sp-badge--soft-sage {
+  background: var(--sp-accent-soft);
+  color: var(--sp-accent);
+}
+
+.sp-badge--soft-navy {
+  background: var(--sp-bg-secondary);
+  color: var(--sp-text-primary);
+  border: 1px solid var(--sp-border);
+}
+
+/* ── Dividers ── */
+.sp-divider {
+  height: 1px;
+  margin: 1.25rem 0;
+  background: var(--sp-border);
+  border: none;
+}
+
+.sp-divider--gradient {
+  height: 1px;
+  margin: 1.25rem 0;
+  background: var(--sp-border);
+  border: none;
+}
+
+/* ── Icons ── */
+.sp-icon {
+  flex-shrink: 0;
+  color: var(--sp-navy);
+  transition: var(--sp-transition);
+}
+
+.sp-icon--burgundy,
+.sp-icon--gold,
+.sp-icon--blue,
+.sp-icon--accent {
+  color: var(--sp-accent);
+}
+
+.sp-icon--slate {
+  color: var(--sp-slate);
+}
+
+.sp-icon--interactive:hover {
+  color: var(--sp-accent-hover);
+}
+
+/* Sidebar nav icons */
+.student-shell .student-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: var(--sp-transition);
+}
+
+.student-shell .student-nav__icon {
+  color: var(--sp-text-tertiary);
+  transition: var(--sp-transition);
+}
+
+.student-shell .student-nav__item:hover .student-nav__icon,
+.student-shell .student-nav__item--active .student-nav__icon {
+  color: var(--sp-accent);
+  transform: none;
+}
+
+.student-shell .student-nav__item--active .student-nav__icon {
+  color: var(--sp-accent);
+}
+
+/* Bottom nav with icons */
+.student-shell .sp-bottom-nav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  transition: var(--sp-transition);
+}
+
+.student-shell .sp-bottom-nav__icon {
+  color: inherit;
+}
+
+/* ── Links with gold underline ── */
+.sp-link {
+  position: relative;
+  text-decoration: none;
+  transition: var(--sp-transition);
+}
+
+.sp-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 2px;
+  background: var(--sp-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
+}
+
+.sp-link:hover::after,
+.sp-link:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ── Buttons (Part 8) ── */
+.sp-btn {
+  transition: var(--sp-transition);
+}
+
+.sp-btn--primary:hover {
+  transform: none;
+}
+
+.sp-btn--secondary:hover,
+.sp-btn--ghost:hover {
+  transform: none;
+}
+
+/* Progress — no shimmer */
+.sp-progress__fill::after,
+.sd-progress__fill::after {
+  display: none;
+}
+
+/* Bell shake (notifications) */
+.sp-icon--bell-alert {
+  animation: spBellShake 0.5s ease-in-out;
+}
+
+@keyframes spBellShake {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+
+  20% {
+    transform: rotate(-12deg);
+  }
+
+  40% {
+    transform: rotate(10deg);
+  }
+
+  60% {
+    transform: rotate(-8deg);
+  }
+
+  80% {
+    transform: rotate(6deg);
+  }
+}
+
+/* Stat card & course card interactive */
+.sp-stat-card,
+.sp-course-card,
+.sp-quick-link {
+  transition: var(--sp-transition);
+}
+
+.sp-stat-card:hover,
+.sp-course-card:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--sp-accent);
+}
+
+/* Lecture filters premium styling */
+.student-shell .student-lecture-filters {
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.student-shell .student-lecture-filters__label {
+  font-size: var(--sp-text-sm);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sp-text-tertiary);
+}
+
+.student-shell .student-lecture-filters__field--search .student-lecture-filters__input {
+  padding-left: 2.5rem;
+  border-radius: 999px;
+  box-shadow: var(--sp-shadow-sm);
+}
+
+.student-shell .student-lecture-filters__field--search .sp-search {
+  position: relative;
+}
+
+.student-shell .student-lecture-filters__field--search .sp-search__icon {
+  top: 50%;
+}
+
+.student-shell .student-lecture-filters__search-wrap {
+  position: relative;
+}
+
+.student-shell .student-lecture-tab {
+  transition: var(--sp-transition);
+}
+
+.student-shell .student-lecture-tab--active {
+  color: var(--sp-accent);
+  border-color: var(--sp-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-shell *,
+  .student-shell *::before,
+  .student-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .sp-panel:hover,
+  .sp-stat-card:hover,
+  .sp-course-card:hover,
+  .sp-quick-link:hover,
+  .sp-btn--primary:hover {
+    transform: none;
+  }
+
+  .student-shell .student-nav__item:hover .student-nav__icon {
+    transform: none;
+  }
+}

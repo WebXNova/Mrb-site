@@ -77,7 +77,8 @@ await expectThrowAsync(
       status: 'submitted',
       test_status: 'published',
       test_deleted_at: null,
-    }),
+      expires_at: '2099-01-01T00:00:00.000Z',
+    }, Date.parse('2026-01-01T00:00:00.000Z')),
   AttemptInvalidStateError,
   'submitted attempt not loadable'
 );
@@ -92,7 +93,7 @@ await expectThrowAsync(
         test_deleted_at: null,
         expires_at: '2020-01-01T00:00:00.000Z',
       },
-      Date.now(),
+      Date.parse('2026-01-01T00:00:00.000Z'),
       { markExpired: false }
     ),
   AttemptExpiredStateError,

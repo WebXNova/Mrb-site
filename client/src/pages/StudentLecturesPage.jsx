@@ -1,40 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { studentApi } from '../api/studentApi';
-import { mockStudentDashboard } from '../student/data/mockStudentData';
-import { normaliseStudentDashboard } from '../student/utils/normaliseStudentDashboard';
-
-function getEmbedUrl(url) {
-  if (!url) return '';
-  const shortMatch = url.match(/youtu\.be\/([\w-]{11})/);
-  if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
-  const watchMatch = url.match(/[?&]v=([\w-]{11})/);
-  if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}`;
-  return url.includes('/embed/') ? url : url.replace('watch?v=', 'embed/');
-}
+import { useMemo, useState } from 'react';
+import StudentLectureFilters from '../student/components/lectures/StudentLectureFilters';
+import StudentLecturePlaylist from '../student/components/lectures/StudentLecturePlaylist';
+import { useStudentLectures } from '../student/hooks/useStudentLectures';
+import {
+  extractLectureFilterOptions,
+  filterStudentLectures,
+} from '../student/utils/groupStudentLectures';
 
 export default function StudentLecturesPage() {
-  const [lectures, setLectures] = useState(mockStudentDashboard.lectures);
-  const [activeCourseId, setActiveCourseId] = useState('all');
-
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      try {
-        const response = await studentApi.dashboard();
-        const norm = normaliseStudentDashboard(response?.data || mockStudentDashboard);
-        if (mounted && norm.lectures.length) {
-          setLectures(norm.lectures);
-        }
-      } catch {
-        // Preview mode with frontend data.
-      }
-    }
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { lectures, loading, error } = useStudentLectures();
+  const [courseId, setCourseId] = useState('all');
+  const [subjectId, setSubjectId] = useState('all');
+  const [chapterId, setChapterId] = useState('all');
+  const [search, setSearch] = useState('');
 
   const courseTabs = useMemo(() => {
     const rows = [];
@@ -52,84 +30,68 @@ export default function StudentLecturesPage() {
     return rows;
   }, [lectures]);
 
-  const filteredLectures =
-    activeCourseId === 'all'
-      ? lectures
-      : lectures.filter((lecture) => String(lecture.courseId) === activeCourseId);
+  const scopedLectures = useMemo(
+    () => filterStudentLectures(lectures, { courseId, subjectId: 'all', chapterId: 'all', search: '' }),
+    [lectures, courseId]
+  );
+
+  const filterOptions = useMemo(() => extractLectureFilterOptions(scopedLectures), [scopedLectures]);
+
+  const filteredLectures = useMemo(
+    () => filterStudentLectures(lectures, { courseId, subjectId, chapterId, search }),
+    [lectures, courseId, subjectId, chapterId, search]
+  );
+
+  function handleSubjectChange(value) {
+    setSubjectId(value);
+    setChapterId('all');
+  }
+
+  function clearFilters() {
+    setSubjectId('all');
+    setChapterId('all');
+    setSearch('');
+    setCourseId('all');
+  }
 
   return (
-    <section className="admin-card">
-      <h2 className="heading-3">Lectures</h2>
-      <div className="student-lecture-tabs">
-        <button
-          type="button"
-          className={`student-lecture-tab ${activeCourseId === 'all' ? 'student-lecture-tab--active' : ''}`}
-          onClick={() => setActiveCourseId('all')}
-        >
-          All
-        </button>
-        {courseTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className={`student-lecture-tab ${activeCourseId === tab.id ? 'student-lecture-tab--active' : ''}`}
-            onClick={() => setActiveCourseId(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
+    <section className="admin-card student-lectures-page">
+      <div className="student-page-header">
+        <div>
+          <h2 className="heading-3" style={{ margin: 0 }}>
+            Lectures
+          </h2>
+          <p className="student-lectures-page__intro">
+            Browse your course lectures by subject and chapter. Use filters to find what you need quickly.
+          </p>
+        </div>
       </div>
 
-      <div className="student-lecture-list">
-        {filteredLectures.length ? (
-          filteredLectures.map((lecture, index) => (
-            <article key={lecture.id} className="student-lecture-card">
-              <div className="student-lecture-card__video">
-                <iframe
-                  width="100%"
-                  height="100%"
-                  src={getEmbedUrl(lecture.youtubeUrl)}
-                  title={lecture.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allowFullScreen
-                />
-              </div>
-              <p className="student-lecture-card__course">
-                👉{' '}
-                {[
-                  lecture.subjectTitle,
-                  lecture.chapterTitle,
-                  lecture.courseTitle || 'Course',
-                  lecture.courseId ? `(#${lecture.courseId})` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-              <h3 className="student-lecture-card__title">
-                Lec-{index + 1} {lecture.title}
-              </h3>
-              <div className="student-lecture-card__actions">
-                <Link to={`/dashboard/lectures/${lecture.id}`} className="student-lecture-card__link">
-                  Open in player
-                </Link>
-                <a
-                  href={lecture.youtubeUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="student-lecture-card__youtube"
-                >
-                  Watch on YouTube
-                </a>
-              </div>
-            </article>
-          ))
-        ) : (
-          <p className="admin-stat-card__label" style={{ marginTop: '0.75rem' }}>
-            No lectures available for this selection.
-          </p>
-        )}
-      </div>
+      {loading ? <p className="student-lectures-page__status">Loading lectures…</p> : null}
+      {error ? <p className="admin-error">{error}</p> : null}
+
+      {!loading ? (
+        <>
+          <StudentLectureFilters
+            subjects={filterOptions.subjects}
+            chapters={filterOptions.chapters}
+            courseTabs={courseTabs}
+            subjectId={subjectId}
+            chapterId={chapterId}
+            courseId={courseId}
+            search={search}
+            resultCount={filteredLectures.length}
+            totalCount={scopedLectures.length}
+            onSubjectChange={handleSubjectChange}
+            onChapterChange={setChapterId}
+            onCourseChange={setCourseId}
+            onSearchChange={setSearch}
+            onClear={clearFilters}
+          />
+
+          <StudentLecturePlaylist lectures={filteredLectures} />
+        </>
+      ) : null}
     </section>
   );
 }

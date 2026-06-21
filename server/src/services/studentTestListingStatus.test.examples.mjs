@@ -73,5 +73,25 @@ assert(STUDENT_TEST_LISTING_STATUSES.length === 3, 'defines three statuses');
   assert(r.status === 'available' && r.attempts_remaining === null, 'unlimited max_attempts stays available');
 }
 
+{
+  const r = computeStudentTestListingStatus({
+    maxAttempts: 3,
+    attemptsUsed: 1,
+    activeAttemptId: null,
+    allowRetake: false,
+  });
+  assert(r.status === 'completed' && r.attempts_remaining === 0, 'retake disabled + prior attempt → completed');
+}
+
+{
+  const r = computeStudentTestListingStatus({
+    maxAttempts: 3,
+    attemptsUsed: 1,
+    activeAttemptId: null,
+    allowRetake: true,
+  });
+  assert(r.status === 'available' && r.attempts_remaining === 2, 'retake enabled + under max → available');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

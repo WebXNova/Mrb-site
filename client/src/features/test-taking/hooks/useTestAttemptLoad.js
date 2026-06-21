@@ -12,6 +12,7 @@ import { normalizeAttemptQuestions, normalizeSavedAnswers } from '../utils/norma
 
 /**
  * Loads attempt start payload from the backend.
+ * Attempt credential is HttpOnly cookie — not stored in JS.
  */
 export function useTestAttemptLoad(slug) {
   const navigate = useNavigate();
@@ -19,30 +20,24 @@ export function useTestAttemptLoad(slug) {
 
   const [payload, setPayload] = useState(null);
   const [answers, setAnswers] = useState({});
-  const [attemptToken, setAttemptToken] = useState(session.attemptToken || '');
   const [expiresAt, setExpiresAt] = useState(session.expiresAt ?? null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
 
   const attemptIdRef = useRef(session.attemptId);
-  const tokenRef = useRef(session.attemptToken || '');
 
   const applyPayload = useCallback(
     (response, activeSession) => {
       const data = response?.data;
-      const nextToken = data?.nextAttemptToken || activeSession.attemptToken;
       const attemptExpiresAt = data?.attempt?.expiresAt ?? null;
 
-      tokenRef.current = nextToken;
       attemptIdRef.current = activeSession.attemptId;
 
       setAttemptSession(slug, {
         attemptId: activeSession.attemptId,
-        attemptToken: nextToken,
         expiresAt: attemptExpiresAt,
       });
 
-      setAttemptToken(nextToken);
       setExpiresAt(attemptExpiresAt);
       setPayload(data);
       setAnswers(normalizeSavedAnswers(data?.savedAnswers));
@@ -56,13 +51,12 @@ export function useTestAttemptLoad(slug) {
     const studentToken = getStudentToken();
     if (!studentToken) return null;
 
-    const response = await testTakingApi.resumeAttempt(slug, studentToken);
+    const response = await testTakingApi.resumeAttempt(slug);
     const data = response?.data;
-    if (!data?.attemptId || !data?.attemptToken) return null;
+    if (!data?.attemptId) return null;
 
     const fresh = {
       attemptId: data.attemptId,
-      attemptToken: data.attemptToken,
       expiresAt: data.expiresAt ?? null,
     };
     setAttemptSession(slug, fresh);
@@ -70,7 +64,7 @@ export function useTestAttemptLoad(slug) {
   }, [slug]);
 
   useEffect(() => {
-    if (!session.attemptId || !session.attemptToken) {
+    if (!session.attemptId) {
       navigate(`/tests/${slug}`, { replace: true });
       return undefined;
     }
@@ -83,15 +77,10 @@ export function useTestAttemptLoad(slug) {
 
       let activeSession = {
         attemptId: session.attemptId,
-        attemptToken: session.attemptToken,
       };
 
       try {
-        const response = await testTakingApi.loadStart(
-          slug,
-          activeSession.attemptId,
-          activeSession.attemptToken
-        );
+        const response = await testTakingApi.loadStart(slug, activeSession.attemptId);
         if (cancelled) return;
         applyPayload(response, activeSession);
       } catch (err) {
@@ -102,11 +91,7 @@ export function useTestAttemptLoad(slug) {
             const fresh = await refreshSession();
             if (fresh && !cancelled) {
               activeSession = fresh;
-              const response = await testTakingApi.loadStart(
-                slug,
-                fresh.attemptId,
-                fresh.attemptToken
-              );
+              const response = await testTakingApi.loadStart(slug, fresh.attemptId);
               if (cancelled) return;
               applyPayload(response, fresh);
               return;
@@ -132,23 +117,20 @@ export function useTestAttemptLoad(slug) {
     return () => {
       cancelled = true;
     };
-  }, [applyPayload, navigate, refreshSession, session.attemptId, session.attemptToken, slug]);
+  }, [applyPayload, navigate, refreshSession, session.attemptId, slug]);
 
   const questions = normalizeAttemptQuestions(payload?.test?.questions);
 
-  const updateToken = useCallback(
-    (nextToken, nextExpiresAt) => {
-      if (!nextToken) return;
-      tokenRef.current = nextToken;
-      setAttemptToken(nextToken);
+  const updateSessionExpiry = useCallback(
+    (nextExpiresAt) => {
+      if (!nextExpiresAt) return;
+      setExpiresAt(nextExpiresAt);
       setAttemptSession(slug, {
         attemptId: attemptIdRef.current,
-        attemptToken: nextToken,
-        expiresAt: nextExpiresAt ?? expiresAt,
+        expiresAt: nextExpiresAt,
       });
-      if (nextExpiresAt) setExpiresAt(nextExpiresAt);
     },
-    [expiresAt, slug]
+    [slug]
   );
 
   return {
@@ -157,13 +139,10 @@ export function useTestAttemptLoad(slug) {
     answers,
     setAnswers,
     attemptId: attemptIdRef.current,
-    attemptToken,
-    tokenRef,
     expiresAt,
-    setExpiresAt,
+    setExpiresAt: updateSessionExpiry,
     status,
     error,
-    updateToken,
     refreshSession,
   };
 }

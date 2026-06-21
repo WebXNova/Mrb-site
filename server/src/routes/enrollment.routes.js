@@ -1,24 +1,54 @@
 import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth.js';
-import { enforcePolicy } from '../auth/securityPolicy.js';
-import { adminSecurityStack } from '../security/admin/adminSecurityStack.js';
+import { authMiddleware, rejectStudentBearerInProduction } from '../middleware/auth.js';
+import { requireCsrf } from '../middleware/csrf.js';
 import {
+  enrollmentCreateRateLimit,
+  requireRedisForEnrollmentCreate,
+} from '../middleware/enrollmentCreateRateLimit.js';
+import { adminSecurityStack } from '../security/admin/adminSecurityStack.js';
+import { enforcePolicy } from '../auth/securityPolicy.js';
+import {
+  createEnrollment,
   getAdminEnrollments,
-  postEnrollment,
+  getAdminEnrollmentsSummary,
+  getEnrollmentPrefillData,
+  getEnrollmentState,
+  getUserEnrollments,
+  postAdminEnrollmentSuspendStudent,
   putAdminEnrollmentStatus,
 } from '../controllers/enrollment.controller.js';
 
 const router = Router();
 
-router.post('/', authMiddleware, postEnrollment);
-router.post('/draft', authMiddleware, postEnrollment);
+router.get('/me', rejectStudentBearerInProduction, authMiddleware, getUserEnrollments);
+router.get(
+  '/prefill-data',
+  rejectStudentBearerInProduction,
+  authMiddleware,
+  getEnrollmentPrefillData
+);
+router.get(
+  '/state/:courseId',
+  rejectStudentBearerInProduction,
+  authMiddleware,
+  getEnrollmentState
+);
+router.post(
+  '/',
+  rejectStudentBearerInProduction,
+  authMiddleware,
+  requireRedisForEnrollmentCreate,
+  enrollmentCreateRateLimit,
+  requireCsrf,
+  createEnrollment
+);
 
-const adminEnrollmentRouter = Router();
+export const adminEnrollmentRouter = Router();
 adminEnrollmentRouter.use(adminSecurityStack);
 adminEnrollmentRouter.use(enforcePolicy({ auth: 'admin', maxRisk: 'elevated' }));
 adminEnrollmentRouter.get('/', getAdminEnrollments);
+adminEnrollmentRouter.get('/summary', getAdminEnrollmentsSummary);
 adminEnrollmentRouter.put('/:enrollmentId/status', putAdminEnrollmentStatus);
-
-router.use('/admin', adminEnrollmentRouter);
+adminEnrollmentRouter.post('/:enrollmentId/suspend-student', postAdminEnrollmentSuspendStudent);
 
 export default router;

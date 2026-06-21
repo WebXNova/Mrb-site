@@ -1,20 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Button from '../ui/Button';
-import { ENROLLMENT_BATCH_OPTIONS } from '../../constants/enrollmentBatches';
 import { locationsApi } from '../../api/locationsApi.js';
 import LocationSelector from './LocationSelector.jsx';
 
 const HSSC_OPTIONS = ['Inter Class', 'First Year Class', 'Matric Class'];
 const ATTEMPT_TYPES = ['Fresher', 'Improver'];
 
-function Field({ label, required = false, error = '', children }) {
+function Field({
+  label,
+  required = false,
+  error = '',
+  warning = '',
+  prefilled = false,
+  fieldName = '',
+  children,
+}) {
+  const fieldClass = [
+    'enrollment-field',
+    prefilled ? 'enrollment-field--prefilled' : '',
+    warning ? 'enrollment-field--prefill-warning' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="enrollment-field">
+    <div className={fieldClass} data-field={fieldName || undefined}>
       <label>
         {label} {required ? <span>*</span> : null}
+        {warning ? (
+          <span className="enrollment-prefill-warning-icon" title={warning} aria-label={warning}>
+            ⚠
+          </span>
+        ) : null}
       </label>
       {children}
       {error ? <p className="enrollment-field__error">{error}</p> : null}
+      {warning && !error ? <p className="enrollment-field__prefill-warning">{warning}</p> : null}
     </div>
   );
 }
@@ -22,6 +43,8 @@ function Field({ label, required = false, error = '', children }) {
 export default function EnrollmentForm({
   form,
   errors,
+  prefilledFields = new Set(),
+  discardedFields = [],
   onChangeField,
   onLocationChange,
   onSubmit,
@@ -32,6 +55,24 @@ export default function EnrollmentForm({
   const [boards, setBoards] = useState([]);
   const [boardsLoading, setBoardsLoading] = useState(false);
   const [boardsError, setBoardsError] = useState('');
+
+  const discardedByField = useMemo(() => {
+    const map = new Map();
+    for (const item of discardedFields) {
+      if (item?.field) {
+        map.set(item.field, item.reason || 'Could not import this value from your previous enrollment.');
+      }
+    }
+    return map;
+  }, [discardedFields]);
+
+  function isPrefilled(field) {
+    return prefilledFields instanceof Set ? prefilledFields.has(field) : false;
+  }
+
+  function prefillWarning(field) {
+    return discardedByField.get(field) || '';
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +100,6 @@ export default function EnrollmentForm({
       return;
     }
     onChangeField('province_id', nextSelection.province_id);
-    onChangeField('division_id', nextSelection.division_id);
     onChangeField('district_id', nextSelection.district_id);
     onChangeField('city_id', nextSelection.city_id);
   }
@@ -73,7 +113,14 @@ export default function EnrollmentForm({
       }}
     >
       <div className="enrollment-grid">
-        <Field label="Email Address" required error={errors.email}>
+        <Field
+          label="Email Address"
+          required
+          error={errors.email}
+          warning={prefillWarning('email')}
+          prefilled={isPrefilled('email')}
+          fieldName="email"
+        >
           <input
             type="email"
             value={form.email}
@@ -82,7 +129,14 @@ export default function EnrollmentForm({
           />
         </Field>
 
-        <Field label="Applicant’s Full Name" required error={errors.applicantFullName}>
+        <Field
+          label="Applicant’s Full Name"
+          required
+          error={errors.applicantFullName}
+          warning={prefillWarning('applicantFullName')}
+          prefilled={isPrefilled('applicantFullName')}
+          fieldName="applicantFullName"
+        >
           <input
             value={form.applicantFullName}
             onChange={(event) => onChangeField('applicantFullName', event.target.value)}
@@ -90,7 +144,14 @@ export default function EnrollmentForm({
           />
         </Field>
 
-        <Field label="Father’s Name" required error={errors.fatherName}>
+        <Field
+          label="Father’s Name"
+          required
+          error={errors.fatherName}
+          warning={prefillWarning('fatherName')}
+          prefilled={isPrefilled('fatherName')}
+          fieldName="fatherName"
+        >
           <input
             value={form.fatherName}
             onChange={(event) => onChangeField('fatherName', event.target.value)}
@@ -98,7 +159,12 @@ export default function EnrollmentForm({
           />
         </Field>
 
-        <Field label="Date of Birth">
+        <Field
+          label="Date of Birth"
+          warning={prefillWarning('dateOfBirth')}
+          prefilled={isPrefilled('dateOfBirth')}
+          fieldName="dateOfBirth"
+        >
           <input
             type="date"
             value={form.dateOfBirth}
@@ -106,10 +172,20 @@ export default function EnrollmentForm({
           />
         </Field>
 
-        <Field label="Gender" required error={errors.gender}>
+        <Field
+          label="Gender"
+          required
+          error={errors.gender}
+          warning={prefillWarning('gender')}
+          prefilled={isPrefilled('gender')}
+          fieldName="gender"
+        >
           <div className="enrollment-radio-row">
             {['male', 'female'].map((gender) => (
-              <label key={gender} className="enrollment-radio-chip">
+              <label
+                key={gender}
+                className={`enrollment-radio-chip ${isPrefilled('gender') ? 'enrollment-radio-chip--prefilled' : ''}`}
+              >
                 <input type="radio" checked={form.gender === gender} onChange={() => onChangeField('gender', gender)} />
                 <span>{gender === 'male' ? 'Male' : 'Female'}</span>
               </label>
@@ -117,7 +193,14 @@ export default function EnrollmentForm({
           </div>
         </Field>
 
-        <Field label="WhatsApp Number" required error={errors.whatsappNumber}>
+        <Field
+          label="WhatsApp Number"
+          required
+          error={errors.whatsappNumber}
+          warning={prefillWarning('whatsappNumber')}
+          prefilled={isPrefilled('whatsappNumber')}
+          fieldName="whatsappNumber"
+        >
           <input
             value={form.whatsappNumber}
             onChange={(event) => onChangeField('whatsappNumber', event.target.value)}
@@ -129,21 +212,28 @@ export default function EnrollmentForm({
       <LocationSelector
         value={{
           province_id: form.province_id,
-          division_id: form.division_id,
           district_id: form.district_id,
           city_id: form.city_id,
         }}
         errors={{
           province_id: errors.province_id,
-          division_id: errors.division_id,
           district_id: errors.district_id,
           city_id: errors.city_id,
         }}
+        prefilledFields={prefilledFields}
+        discardedFields={discardedFields}
         onChange={updateLocation}
       />
 
       <div className="enrollment-grid">
-        <Field label="Intermediate / HSSC Status" required error={errors.hsscStatus}>
+        <Field
+          label="Intermediate / HSSC Status"
+          required
+          error={errors.hsscStatus}
+          warning={prefillWarning('hsscStatus')}
+          prefilled={isPrefilled('hsscStatus')}
+          fieldName="hsscStatus"
+        >
           <select value={form.hsscStatus} onChange={(event) => onChangeField('hsscStatus', event.target.value)}>
             <option value="">Select status</option>
             {HSSC_OPTIONS.map((item) => (
@@ -154,18 +244,14 @@ export default function EnrollmentForm({
           </select>
         </Field>
 
-        <Field label="Batch Number" required error={errors.batchNumber}>
-          <select value={form.batchNumber} onChange={(event) => onChangeField('batchNumber', event.target.value)}>
-            <option value="">Select batch</option>
-            {ENROLLMENT_BATCH_OPTIONS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Pre-Medical Intermediate Board" required error={errors.board_id || boardsError}>
+        <Field
+          label="Pre-Medical Intermediate Board"
+          required
+          error={errors.board_id || boardsError}
+          warning={prefillWarning('board_id')}
+          prefilled={isPrefilled('board_id')}
+          fieldName="board_id"
+        >
           <select
             value={form.board_id}
             onChange={(event) => onChangeField('board_id', event.target.value)}
@@ -189,12 +275,19 @@ export default function EnrollmentForm({
         </Field>
       </div>
 
-      <Field label="MDCAT Attempt History" required error={errors.mdcatAttemptType}>
+      <Field
+        label="MDCAT Attempt History"
+        required
+        error={errors.mdcatAttemptType}
+        warning={prefillWarning('mdcatAttemptType')}
+        prefilled={isPrefilled('mdcatAttemptType')}
+        fieldName="mdcatAttemptType"
+      >
         <div className="enrollment-attempt-grid">
           {ATTEMPT_TYPES.map((item) => (
             <label
               key={item}
-              className={`enrollment-attempt-card ${form.mdcatAttemptType === item ? 'enrollment-attempt-card--active' : ''}`}
+              className={`enrollment-attempt-card ${form.mdcatAttemptType === item ? 'enrollment-attempt-card--active' : ''} ${isPrefilled('mdcatAttemptType') ? 'enrollment-attempt-card--prefilled' : ''}`}
             >
               <input type="radio" checked={form.mdcatAttemptType === item} onChange={() => onChangeField('mdcatAttemptType', item)} />
               <span>{item}</span>

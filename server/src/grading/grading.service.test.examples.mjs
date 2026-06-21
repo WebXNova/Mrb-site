@@ -1,5 +1,5 @@
 /**
- * Unit checks for grading calculations (no DB).
+ * Grading engine — calculation examples (no DB).
  * Run: node src/grading/grading.service.test.examples.mjs
  */
 import { calculateResult } from './grading.service.js';
@@ -22,12 +22,12 @@ console.log('gradingEngine — calculation examples\n');
 {
   const result = calculateResult({
     questions: [
-      { questionId: 1, selectedOptionId: 10, correctOptionId: 10 },
-      { questionId: 2, selectedOptionId: 21, correctOptionId: 20 },
-      { questionId: 3, selectedOptionId: null, correctOptionId: 30 },
+      { questionId: 1, effectiveMarks: 5, selectedOptionId: 10, correctOptionId: 10 },
+      { questionId: 2, effectiveMarks: 2, selectedOptionId: 21, correctOptionId: 20 },
+      { questionId: 3, effectiveMarks: 3, selectedOptionId: null, correctOptionId: 30 },
     ],
     testConfig: {
-      passingPercentage: 60,
+      passingMarks: 6,
       negativeMarkingEnabled: false,
       negativeMarkingValue: 0,
     },
@@ -36,33 +36,35 @@ console.log('gradingEngine — calculation examples\n');
   ok('counts correct answers', result.correctAnswers === 1);
   ok('counts wrong answers', result.wrongAnswers === 1);
   ok('counts unanswered separately', result.unansweredAnswers === 1);
-  ok('score equals correct when no negative marking', result.score === 1);
-  ok('percentage uses correct/total', result.percentage === 33.33);
-  ok('pass status FAIL below threshold', result.passStatus === 'FAIL');
+  ok('score equals marks earned (5)', result.score === 5);
+  ok('max score sums effective marks (10)', result.maxScore === 10);
+  ok('percentage uses score/maxScore (50%)', result.percentage === 50);
+  ok('pass status FAIL below passing marks', result.passStatus === 'FAIL');
 }
 
 {
   const result = calculateResult({
     questions: [
-      { questionId: 1, selectedOptionId: 10, correctOptionId: 10 },
-      { questionId: 2, selectedOptionId: 21, correctOptionId: 20 },
+      { questionId: 1, effectiveMarks: 1, selectedOptionId: 10, correctOptionId: 10 },
+      { questionId: 2, effectiveMarks: 1, selectedOptionId: 21, correctOptionId: 20 },
     ],
     testConfig: {
-      passingPercentage: 50,
+      passingMarks: 1,
       negativeMarkingEnabled: true,
       negativeMarkingValue: 0.25,
     },
   });
 
   ok('negative marking reduces score', result.score === 0.75);
-  ok('pass with 50% correct answers', result.passStatus === 'PASS');
+  ok('percentage reflects marks after penalty', result.percentage === 37.5);
+  ok('fail when score below passing marks', result.passStatus === 'FAIL');
 }
 
 {
   const result = calculateResult({
     questions: [],
     testConfig: {
-      passingPercentage: 40,
+      passingMarks: 0,
       negativeMarkingEnabled: false,
       negativeMarkingValue: 0,
     },

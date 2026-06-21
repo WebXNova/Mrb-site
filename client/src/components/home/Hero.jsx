@@ -28,7 +28,7 @@ export default function Hero() {
               Start learning
             </Button>
             <Button as={Link} to="/courses" variant="accent" size="lg">
-              Enroll now
+              Browse courses
             </Button>
           </div>
 

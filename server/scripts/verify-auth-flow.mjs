@@ -17,6 +17,8 @@ import {
 } from '../src/services/authSession.service.js';
 import { verifyEmailByToken } from '../src/services/emailVerification.service.js';
 import { ApiError } from '../src/utils/apiError.js';
+import { env } from '../src/config/env.js';
+import { parseJwtDurationMs } from '../src/utils/jwtDuration.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,12 +54,29 @@ async function revokeAllAndBumpTokenVersion(userId) {
 async function main() {
   const controllerPath = path.resolve(__dirname, '../src/controllers/auth.controller.js');
   const controllerSource = await fs.readFile(controllerPath, 'utf8');
-  assert(!/data\s*:\s*\{[\s\S]{0,300}accessToken/m.test(controllerSource), 'auth responses must not expose accessToken');
+  const sendSuccessCalls = controllerSource.match(/sendSuccess\s*\([\s\S]*?\);/g) ?? [];
+  assert(sendSuccessCalls.length > 0, 'auth.controller must use sendSuccess for auth responses');
+  for (const call of sendSuccessCalls) {
+    assert(!/\baccessToken\b/.test(call), 'auth sendSuccess responses must not expose accessToken');
+  }
+  assert(!/res\.json\s*\([\s\S]*?\baccessToken\b/.test(controllerSource), 'auth responses must not expose accessToken via res.json');
   const testsRoutesPath = path.resolve(__dirname, '../src/routes/tests.routes.js');
   const testsRoutesSource = await fs.readFile(testsRoutesPath, 'utf8');
   assert(
-    /verify-code',\s*enforcePolicy\(\{\s*auth:\s*'student',\s*verified:\s*true/.test(testsRoutesSource),
-    'tests verify-code route must enforce student verified policy'
+    /router\.post\('\/:slug\/verify-code',\s*postVerifyTestCode\)/.test(testsRoutesSource),
+    'tests verify-code route must be registered'
+  );
+  const { matchProtectionRule } = await import('../src/security/cee/protectionGrid.js');
+  const verifyCodeRule = matchProtectionRule('/api/tests/demo-slug/verify-code');
+  assert(
+    verifyCodeRule?.policy === 'entitlement' && verifyCodeRule?.label === 'tests',
+    'tests verify-code route must be protected by CEE entitlement grid rule'
+  );
+  const entitlementGuardPath = path.resolve(__dirname, '../src/security/cee/entitlementGuard.js');
+  const entitlementGuardSource = await fs.readFile(entitlementGuardPath, 'utf8');
+  assert(
+    /assertStudentIdentity\([\s\S]*requireVerified:\s*true/.test(entitlementGuardSource),
+    'entitlement guard must require verified student identity'
   );
   const authRoutesPath = path.resolve(__dirname, '../src/routes/auth.routes.js');
   const authRoutesSource = await fs.readFile(authRoutesPath, 'utf8');
@@ -70,7 +89,12 @@ async function main() {
   const rateLimitPath = path.resolve(__dirname, '../src/middleware/rateLimit.js');
   const rateLimitSource = await fs.readFile(rateLimitPath, 'utf8');
   assert(/verify:subnet:/.test(rateLimitSource), 'verify endpoint must include subnet limiter');
-  assert(/requireRedisForCriticalAuthWrites/.test(rateLimitSource), 'critical auth writes must include redis outage behavior');
+  assert(
+    /isProductionRateLimitRedisUnavailable\(\)/.test(rateLimitSource) &&
+      /forgotPasswordRateLimit[\s\S]*isProductionRateLimitRedisUnavailable/.test(rateLimitSource) &&
+      /resetPasswordRateLimit[\s\S]*isProductionRateLimitRedisUnavailable/.test(rateLimitSource),
+    'critical auth writes must fail closed when production redis is unavailable'
+  );
   const emailProviderRoutePath = path.resolve(__dirname, '../src/routes/emailProvider.routes.js');
   const emailProviderRouteSource = await fs.readFile(emailProviderRoutePath, 'utf8');
   assert(/provider-feedback/.test(emailProviderRouteSource), 'provider feedback route must exist');
@@ -83,6 +107,18 @@ async function main() {
   assert(
     !/verify-email\?token=/.test(studentApiSource),
     'frontend verifyEmail must not send token in query string'
+  );
+  const envSource = await fs.readFile(path.resolve(__dirname, '../src/config/env.js'), 'utf8');
+  assert(/refreshExpiresIn: process\.env\.JWT_REFRESH_EXPIRES_IN \|\| '90d'/.test(envSource), 'refresh JWT default must be 90d');
+  const authControllerSource = await fs.readFile(controllerPath, 'utf8');
+  assert(
+    /maxAge: env\.security\.refreshCookieMaxAgeMs/.test(authControllerSource),
+    'CSRF cookie maxAge must align with refresh lifetime'
+  );
+  assert(env.jwt.refreshExpiresIn === '90d' || env.jwt.refreshExpiresIn.endsWith('d'), 'refresh JWT env must be configured');
+  assert(
+    env.security.refreshCookieMaxAgeMs === parseJwtDurationMs(env.jwt.refreshExpiresIn),
+    'refresh cookie maxAge must match JWT_REFRESH_EXPIRES_IN'
   );
 
   const email = process.env.TEST_ADMIN_EMAIL || process.env.ADMIN_EMAIL;
@@ -99,6 +135,17 @@ async function main() {
   let rt = login1.refreshToken;
   const sid = jwt.decode(rt).sid;
   const jti0 = jwt.decode(rt).jti;
+  const refreshExp = jwt.decode(rt).exp;
+  const expectedRefreshMs = parseJwtDurationMs(env.jwt.refreshExpiresIn);
+  const refreshTtlMs = refreshExp * 1000 - Date.now();
+  assert(refreshTtlMs > expectedRefreshMs - 5 * 60 * 1000, 'refresh JWT TTL must match configured lifetime');
+  const [sessionRows] = await mysqlPool.query(
+    `SELECT expires_at FROM auth_sessions WHERE id = ? LIMIT 1`,
+    [sid]
+  );
+  const sessionExpMs = new Date(sessionRows[0].expires_at).getTime();
+  assert(Math.abs(sessionExpMs - refreshExp * 1000) < 5000, 'auth_sessions.expires_at must match refresh JWT exp');
+  results.push(['Refresh lifetime: JWT + auth_sessions aligned', 'pass']);
 
   const r1 = await rotateAuthSessionByRefreshToken(rt);
   assert(jwt.decode(r1.refreshToken).sid === sid, 'sid same after first rotate');
@@ -121,22 +168,54 @@ async function main() {
   ]);
   const fulfilled = [a, b].filter((x) => x.status === 'fulfilled');
   const rejected = [a, b].filter((x) => x.status === 'rejected');
-  assert(fulfilled.length === 1, 'parallel refresh: exactly one success');
-  assert(rejected.length === 1, 'parallel refresh: exactly one failure');
-  const parallelRt = fulfilled[0].value.refreshToken;
-  const failReason = rejected[0].reason;
-  assert(failReason instanceof ApiError && failReason.statusCode === 401, 'parallel loser is 401');
+  assert(fulfilled.length >= 1, 'parallel refresh: at least one success');
   assert((await getActiveSessionCount(userId)) === 1, 'parallel must not revoke all sessions');
-  results.push(['Parallel double refresh: one 401, session survives', 'pass']);
+  const parallelRt =
+    fulfilled.map((x) => x.value?.refreshToken).find((token) => typeof token === 'string' && token.length > 0) ??
+    rtCurrent;
+  if (rejected.length === 1) {
+    const failReason = rejected[0].reason;
+    assert(failReason instanceof ApiError && failReason.statusCode === 401, 'parallel loser is 401 when not grace-handled');
+  }
+  results.push(['Parallel double refresh: session survives, no mass revoke', 'pass']);
+
+  const graceReplay = await rotateAuthSessionByRefreshToken(rtCurrent);
+  assert(graceReplay.graceReplay === true, 'stale token within grace replays idempotently');
+  assert(graceReplay.skipRefreshCookie === true, 'grace replay keeps current refresh cookie');
+  assert((await getActiveSessionCount(userId)) === 1, 'grace replay must not revoke session');
+  results.push(['Grace replay with stale refresh: idempotent access re-issue', 'pass']);
 
   try {
     await rotateAuthSessionByRefreshToken(rtCurrent);
-    throw new Error('expected stale rotate to throw');
+    throw new Error('expected stale rotate outside grace to throw or grace again');
   } catch (e) {
-    assert(e instanceof ApiError && e.statusCode === 401, 'stale refresh is 401');
+    if (!(e instanceof ApiError && e.statusCode === 401)) {
+      const again = await rotateAuthSessionByRefreshToken(rtCurrent);
+      assert(again.graceReplay === true, 'repeated grace replay remains idempotent within window');
+    }
   }
   assert((await getActiveSessionCount(userId)) === 1, 'stale attempt must not nuke sessions');
-  results.push(['Stale refresh after winner: 401, one active session', 'pass']);
+  results.push(['Stale refresh after winner: session remains active', 'pass']);
+
+  const replayLogin = await loginAdmin(email, password);
+  const replayUserId = replayLogin.admin.id;
+  const stableCtx = { clientIp: '127.0.0.1', userAgent: 'Mozilla/5.0 TestBrowser' };
+  const replaySeed = replayLogin.refreshToken;
+  await rotateAuthSessionByRefreshToken(replaySeed, stableCtx);
+  const tvReplayBefore = await getTokenVersion(replayUserId);
+  try {
+    await rotateAuthSessionByRefreshToken(replaySeed, {
+      clientIp: '127.0.0.1',
+      userAgent: 'curl/8.0 stolen-token',
+    });
+    throw new Error('expected high-risk replay to throw');
+  } catch (e) {
+    assert(e instanceof ApiError && e.statusCode === 401, 'high-risk replay is 401');
+    assert(e.code === 'REFRESH_REPLAY_REJECTED', 'high-risk replay error code');
+  }
+  assert((await getActiveSessionCount(replayUserId)) === 0, 'high-risk replay revokes session');
+  assert((await getTokenVersion(replayUserId)) === tvReplayBefore + 1, 'high-risk replay bumps token_version');
+  results.push(['High-risk replay (UA mismatch): session revoked', 'pass']);
 
   const tvBefore = await getTokenVersion(userId);
   await revokeAuthSessionByRefreshToken(parallelRt);

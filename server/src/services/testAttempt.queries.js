@@ -3,6 +3,21 @@
  * Mirrors studentTestStart.queries.js required columns (student_id, attempt_number).
  */
 
+import { TEST_AVAILABILITY_CREATE_WHERE_SQL } from './testAvailabilityWindow.queries.js';
+import { TEST_RETAKE_CREATE_WHERE_SQL } from './testRetakePolicy.queries.js';
+
+/** Params: courseId, testId */
+export const LOCK_ENTITLED_TEST_FOR_START_SQL = `
+  SELECT id, start_date, end_date, duration_minutes, max_attempts, allow_retake,
+         shuffle_questions, shuffle_options, status
+  FROM tests t
+  WHERE t.id = ?
+    AND t.course_id = ?
+    AND t.status = 'published'
+  LIMIT 1
+  FOR UPDATE
+`;
+
 /** Params: testId, courseId, studentId, studentId */
 export const COUNT_ENTITLED_STUDENT_ATTEMPTS_SQL = `
   SELECT COUNT(*) AS total
@@ -35,13 +50,18 @@ export const NEXT_ENTITLED_ATTEMPT_NUMBER_SQL = `
 `;
 
 /**
- * Params:
- * testId, studentId, userId, studentName, attemptNumber, durationMinutes,
- * ipAddress, userAgent, deviceFingerprint, attemptNonce,
- * testId, courseId
+ * Placeholder order (14 total — must match SQL ? appearance left-to-right):
+ *  1-5:  SELECT test_id, student_id, user_id, student_name, attempt_number
+ *  6:    duration_minutes (INTERVAL)
+ *  7-10: ip_address, user_agent, device_fingerprint, attempt_nonce
+ *  11:   WHERE t.id
+ *  12:   WHERE t.course_id
+ *  13-14: retake guard (student_id, user_id)
+ *
+ * Use buildInsertEntitledTestAttemptParams() — do not hand-build this array.
  *
  * started_at and expires_at are derived from the same MySQL clock:
- *   expires_at = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL durationMinutes MINUTE)
+ *   expires_at = DATE_ADD(UTC_TIMESTAMP(), INTERVAL durationMinutes MINUTE)
  */
 export const INSERT_ENTITLED_TEST_ATTEMPT_SQL = `
   INSERT INTO test_attempts (
@@ -63,11 +83,47 @@ export const INSERT_ENTITLED_TEST_ATTEMPT_SQL = `
   )
   SELECT
     ?, ?, ?, ?, ?, 'in_progress',
-    CURRENT_TIMESTAMP,
-    DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? MINUTE),
-    CURRENT_TIMESTAMP,
+    UTC_TIMESTAMP(),
+    DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MINUTE),
+    UTC_TIMESTAMP(),
     ?, ?, ?, NULL, ?, 'DIRECT'
   FROM tests t
   WHERE t.id = ? AND t.course_id = ? AND t.status = 'published'
+    ${TEST_AVAILABILITY_CREATE_WHERE_SQL}
+    ${TEST_RETAKE_CREATE_WHERE_SQL}
   LIMIT 1
 `;
+
+/**
+ * @param {{
+ *   testId: number,
+ *   courseId: number,
+ *   studentId: number,
+ *   studentName?: string|null,
+ *   attemptNumber: number,
+ *   durationMinutes: number,
+ *   ipAddress?: string|null,
+ *   userAgent?: string|null,
+ *   deviceFingerprint: string,
+ *   attemptNonce: string,
+ * }} input
+ * @returns {unknown[]}
+ */
+export function buildInsertEntitledTestAttemptParams(input) {
+  return [
+    Number(input.testId),
+    Number(input.studentId),
+    Number(input.studentId),
+    input.studentName ?? null,
+    Number(input.attemptNumber),
+    Number(input.durationMinutes),
+    input.ipAddress ?? null,
+    input.userAgent ?? null,
+    input.deviceFingerprint,
+    input.attemptNonce,
+    Number(input.testId),
+    Number(input.courseId),
+    Number(input.studentId),
+    Number(input.studentId),
+  ];
+}

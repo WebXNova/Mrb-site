@@ -47,7 +47,8 @@ Each item:
 | `title` | string | |
 | `duration_minutes` | number | |
 | `max_attempts` | number | |
-| `passing_percentage` | number | |
+| `passing_marks` | number | Minimum marks required to pass |
+| `total_marks` | number | Sum of linked question marks (computed) |
 | `status` | enum | `available` \| `in_progress` \| `completed` |
 | `active_attempt_id` | number \| null | Set only when `status = in_progress` |
 | `attempts_used` | number | All attempts for this student on this test |
@@ -67,7 +68,8 @@ Each item:
         "title": "Biology Mock Test",
         "duration_minutes": 60,
         "max_attempts": 3,
-        "passing_percentage": 40,
+        "passing_marks": 24,
+        "total_marks": 60,
         "status": "in_progress",
         "active_attempt_id": 44,
         "attempts_used": 1,
@@ -78,7 +80,8 @@ Each item:
         "title": "Chemistry Quiz",
         "duration_minutes": 30,
         "max_attempts": 2,
-        "passing_percentage": 50,
+        "passing_marks": 15,
+        "total_marks": 30,
         "status": "completed",
         "active_attempt_id": null,
         "attempts_used": 2,
@@ -89,7 +92,8 @@ Each item:
         "title": "Physics Intro",
         "duration_minutes": 45,
         "max_attempts": 1,
-        "passing_percentage": 40,
+        "passing_marks": 24,
+        "total_marks": 60,
         "status": "available",
         "active_attempt_id": null,
         "attempts_used": 0,

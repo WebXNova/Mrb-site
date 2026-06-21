@@ -84,11 +84,17 @@ export function inferApiFailureMessage(body, { status, statusText, rawText } = {
 }
 
 /** Attach HTTP metadata for callers that must not treat all failures as logout. */
-export function createHttpError(message, { status, refreshAlreadyTried, refreshFailureKind } = {}) {
+export function createHttpError(
+  message,
+  { status, refreshAlreadyTried, refreshFailureKind, errorCode, details, responseData } = {}
+) {
   const err = new Error(message);
   err.name = 'HttpRequestError';
   if (status != null) err.status = status;
   if (refreshAlreadyTried != null) err.refreshAlreadyTried = refreshAlreadyTried;
   if (refreshFailureKind != null) err.refreshFailureKind = refreshFailureKind;
+  if (errorCode != null) err.errorCode = errorCode;
+  if (details != null) err.details = details;
+  if (responseData != null) err.responseData = responseData;
   return err;
 }

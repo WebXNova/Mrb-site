@@ -22,7 +22,9 @@ Boot → validateProtectionGridAtStartup() — namespaces, mounts, grid labels (
 
 | Pattern | Policy | Middleware |
 |---------|--------|------------|
-| `/api/health`, `/api/ready` | public | none |
+| `/api/health` | public | none — liveness only (`{ status: 'ok' }`) |
+| `/api/ready` | public | none — readiness probe; component details restricted in production |
+| `/api/metrics` | admin_delegated | `requireMetricsAccess` (admin / internal / scraper token) |
 | `/api/payments/webhook` | public | none |
 | `/api/auth/*` | public | none |
 | `/api/admin/*` | public | admin stack (separate) |

@@ -66,9 +66,7 @@ export function useExamTimer(expiresAtIso, { onExpire, enabled = true } = {}) {
 export function useAnswerAutosave({
   slug,
   attemptId,
-  attemptToken,
   setAnswers,
-  updateToken,
   refreshSession,
   disabled = false,
 }) {
@@ -77,11 +75,6 @@ export function useAnswerAutosave({
   const timersRef = useRef(new Map());
   const pendingRef = useRef(new Map());
   const inFlightRef = useRef(false);
-  const tokenRef = useRef(attemptToken);
-
-  useEffect(() => {
-    tokenRef.current = attemptToken;
-  }, [attemptToken]);
 
   const flushQueue = useCallback(async () => {
     if (inFlightRef.current || disabled || pendingRef.current.size === 0) return;
@@ -95,15 +88,10 @@ export function useAnswerAutosave({
 
     try {
       for (const [questionId, selectedOption] of entries) {
-        const response = await testTakingApi.saveAnswer(slug, attemptId, tokenRef.current, {
+        await testTakingApi.saveAnswer(slug, attemptId, {
           questionId: Number(questionId),
           selectedOption: String(selectedOption),
         });
-
-        if (response?.data?.nextAttemptToken) {
-          tokenRef.current = response.data.nextAttemptToken;
-          updateToken(response.data.nextAttemptToken);
-        }
       }
       setSaveStatus('saved');
     } catch (err) {
@@ -114,9 +102,7 @@ export function useAnswerAutosave({
       if (isAttemptTokenError(err)) {
         try {
           const fresh = await refreshSession();
-          if (fresh?.attemptToken) {
-            tokenRef.current = fresh.attemptToken;
-            updateToken(fresh.attemptToken);
+          if (fresh?.attemptId) {
             inFlightRef.current = false;
             await flushQueue();
             return;
@@ -135,7 +121,7 @@ export function useAnswerAutosave({
         window.setTimeout(() => flushQueue(), SAVE_DEBOUNCE_MS);
       }
     }
-  }, [attemptId, disabled, refreshSession, slug, updateToken]);
+  }, [attemptId, disabled, refreshSession, slug]);
 
   const scheduleSave = useCallback(
     (questionId, selectedOption) => {

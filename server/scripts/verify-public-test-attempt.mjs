@@ -76,10 +76,10 @@ if (
 }
 
 if (
-  queriesSrc.includes('DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? MINUTE)') &&
-  queriesSrc.includes('CURRENT_TIMESTAMP')
+  queriesSrc.includes('DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MINUTE)') &&
+  queriesSrc.includes('UTC_TIMESTAMP()')
 ) {
-  ok('entitled attempt insert derives expires_at from MySQL clock');
+  ok('entitled attempt insert derives expires_at from MySQL UTC clock');
 } else {
   fail('entitled attempt insert missing MySQL DATE_ADD expiry strategy');
 }
@@ -107,6 +107,24 @@ if (serviceSrc.includes('INSERT_ENTITLED_TEST_ATTEMPT_SQL') && serviceSrc.includ
   ok('service uses transactional entitled attempt insert');
 } else {
   fail('transactional insert missing');
+}
+
+if (
+  serviceSrc.includes('buildInsertEntitledTestAttemptParams') &&
+  queriesSrc.includes('export function buildInsertEntitledTestAttemptParams')
+) {
+  ok('entitled attempt insert uses centralized param builder');
+} else {
+  fail('buildInsertEntitledTestAttemptParams missing from service or queries');
+}
+
+if (
+  serviceSrc.includes('assertEntitledAttemptInsertContext') &&
+  serviceSrc.includes('ATTEMPT_INSERT_ZERO_ROWS')
+) {
+  ok('entitled attempt insert validates ids and logs zero-row inserts');
+} else {
+  fail('insert context validation or zero-row logging missing');
 }
 
 if (

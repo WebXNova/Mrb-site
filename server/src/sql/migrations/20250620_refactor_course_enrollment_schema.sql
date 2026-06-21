@@ -1,0 +1,2 @@
+-- Canonical copy: see src/db/migrations/20250620_refactor_course_enrollment_schema.sql
+-- Runner: node src/db/runEnrollmentRefactorMigration.js

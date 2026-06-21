@@ -10,20 +10,27 @@
 }
 
 .admin-sidebar {
-  background: var(--color-ink-900);
-  color: white;
+  background: #ffffff;
+  color: var(--color-ink-900);
   padding: var(--space-6);
   position: sticky;
   top: 0;
   height: 100vh;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  max-height: 100dvh;
+  border-right: 1px solid var(--color-ink-100);
+  box-shadow: 1px 0 0 rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .admin-brand {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-6);
+  flex-shrink: 0;
 }
 
 .admin-brand__logo {
@@ -36,35 +43,67 @@
 .admin-brand__title {
   font-size: var(--fs-16);
   font-weight: var(--fw-bold);
+  color: var(--color-ink-900);
 }
 
 .admin-brand__subtitle {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: var(--fs-13);
+  color: var(--color-ink-700);
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-medium);
 }
 
 .admin-nav {
   display: grid;
   gap: var(--space-2);
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: start;
+  padding-right: 2px;
+  margin-right: -2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-300) transparent;
+}
+
+.admin-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-nav::-webkit-scrollbar-thumb {
+  background: var(--color-ink-200);
+  border-radius: var(--radius-full);
+}
+
+.admin-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-300);
 }
 
 .admin-nav__item {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-ink-700);
   text-decoration: none;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   border: 1px solid transparent;
+  font-size: var(--text-nav);
+  letter-spacing: 0.01em;
   transition: var(--transition-base);
 }
 
 .admin-nav__item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-soft);
+  color: var(--color-ink-900);
 }
 
 .admin-nav__item--active {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: white;
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-100);
+  color: var(--color-ink-900);
+  font-weight: var(--fw-semibold);
 }
 
 .admin-content {
@@ -568,35 +607,94 @@
   flex-wrap: wrap;
 }
 
-.admin-batch-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.22rem 0.55rem;
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-12);
-  font-weight: var(--fw-semibold);
-  background: color-mix(in srgb, var(--color-primary) 14%, white);
-  color: var(--color-ink-900);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+.admin-registrations-course-board {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding-bottom: 0.25rem;
+}
+
+.admin-registrations-course-board .admin-tag-chip {
+  flex-shrink: 0;
+  max-width: min(240px, 70vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.admin-batch-badge--muted {
-  background: var(--color-ink-50);
-  color: var(--color-ink-600);
-  border-color: var(--color-ink-200);
+.admin-registrations-course-board-wrap {
+  margin-top: 1.25rem;
 }
 
-.admin-registrations-batch-board {
-  margin-top: 1rem;
+.admin-reg-section-label,
+.admin-reg-filters-section__label {
+  margin: 0 0 0.5rem;
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+}
+
+.admin-reg-filters-wrap {
+  margin-top: 1.25rem;
+}
+
+.admin-reg-filters-toggle {
+  display: none;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.admin-reg-filters-toggle__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-full);
+  background: var(--color-ink-900);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: var(--fw-bold);
+}
+
+.admin-reg-filters-panel {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 1rem;
+  transition: opacity 0.18s ease;
+}
+
+.admin-reg-filters-panel--busy {
+  opacity: 0.78;
+}
+
+.admin-reg-filters-section {
+  padding: 1rem;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft, #f8fafc);
 }
 
 .admin-registrations-filter-grid {
   display: grid;
-  gap: var(--space-4);
-  margin-top: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
-  transition: opacity 0.18s ease;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
+}
+
+.admin-registrations-filter-grid--primary {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.admin-registrations-filter-grid--location {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-filter-field--search {
+  grid-column: 1 / -1;
 }
 
 .admin-registrations-filter-grid--busy {
@@ -612,34 +710,197 @@
   grid-column: span 2;
 }
 
-.admin-registrations-filter-summary {
-  margin-top: 0.75rem;
-  font-size: var(--fs-13);
+.admin-registrations-course-board__hint {
+  padding-inline: 0.5rem;
+  align-self: center;
+  flex-shrink: 0;
 }
 
-.admin-registrations-export-row {
+.admin-reg-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
   flex-wrap: wrap;
-  margin-top: 1rem;
-  gap: 0.6rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-ink-100);
+}
+
+.admin-reg-toolbar__left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.admin-reg-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.admin-registrations-filter-summary {
+  margin: 0;
+  font-size: var(--fs-13);
+  line-height: 1.45;
+  word-break: break-word;
 }
 
 .admin-table-wrap--registrations {
   margin-top: 1rem;
-}
-
-.admin-table-wrap--muted {
-  opacity: 0.88;
-  transition: opacity 0.18s ease;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-lg);
+  overflow: auto;
+  max-height: min(70vh, 720px);
 }
 
 .admin-table--registrations {
-  min-width: 960px;
+  min-width: 1080px;
 }
 
-.admin-registrations-actions-stack {
-  flex-direction: column;
-  align-items: stretch;
-  max-width: 9.5rem;
+.admin-table--registrations thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+  box-shadow: inset 0 -1px 0 var(--color-ink-100);
+}
+
+.admin-table--registrations .admin-reg-col--student {
+  min-width: 9rem;
+}
+
+.admin-table--registrations .admin-reg-col--course {
+  min-width: 8rem;
+  max-width: 12rem;
+}
+
+.admin-table--registrations .admin-reg-col--email,
+.admin-table--registrations .admin-reg-col--whatsapp {
+  min-width: 7rem;
+  max-width: 11rem;
+  word-break: break-word;
+}
+
+.admin-table--registrations .admin-reg-col--location {
+  min-width: 9rem;
+  max-width: 14rem;
+}
+
+.admin-table--registrations .admin-reg-col--actions {
+  min-width: 13rem;
+}
+
+.admin-reg-actions {
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.admin-reg-actions .btn--sm {
+  padding-inline: 0.55rem;
+}
+
+.admin-reg-table-desktop {
+  display: block;
+}
+
+.admin-reg-mobile-list {
+  display: none;
+  gap: var(--space-3);
+  margin-top: 1rem;
+}
+
+.admin-reg-mobile-list--muted {
+  opacity: 0.88;
+}
+
+.admin-reg-mobile-card {
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-reg-mobile-card--paid-pending {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-ink-100));
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.admin-reg-mobile-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.admin-reg-mobile-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-900);
+}
+
+.admin-reg-mobile-card__subtitle {
+  margin: 0.15rem 0 0;
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+}
+
+.admin-reg-mobile-card__course {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-13);
+  color: var(--color-ink-700);
+  font-weight: var(--fw-medium);
+}
+
+.admin-reg-mobile-card__meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+.admin-reg-mobile-card__meta-span {
+  grid-column: 1 / -1;
+}
+
+.admin-reg-mobile-card__meta dt {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-400);
+}
+
+.admin-reg-mobile-card__meta dd {
+  margin: 0.15rem 0 0;
+  font-size: var(--fs-13);
+  color: var(--color-ink-800);
+}
+
+.admin-reg-mobile-card__contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.admin-reg-mobile-card .admin-reg-actions {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-ink-100);
+}
+
+.admin-reg-mobile-empty {
+  margin: 0;
+  padding: 2rem 1rem;
+  text-align: center;
+  border: 1px dashed var(--color-ink-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
 }
 
 .admin-registrations-empty {
@@ -660,6 +921,250 @@
 
 .admin-registrations-detail {
   margin-top: 1rem;
+}
+
+.admin-reg-page-head {
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.admin-reg-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.admin-reg-stat {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-100);
+  background: #fff;
+  font: inherit;
+  cursor: default;
+}
+
+.admin-reg-stat--clickable {
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.admin-reg-stat--clickable:hover {
+  border-color: var(--color-ink-200);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-reg-stat--active {
+  border-color: var(--color-ink-900);
+  box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.1);
+}
+
+.admin-reg-stat__value {
+  font-size: var(--fs-22);
+  font-weight: var(--fw-bold);
+  color: var(--color-ink-900);
+}
+
+.admin-reg-stat__label {
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+}
+
+.admin-reg-stat--warning .admin-reg-stat__value { color: #b45309; }
+.admin-reg-stat--primary .admin-reg-stat__value { color: var(--color-primary, #4338ca); }
+.admin-reg-stat--success .admin-reg-stat__value { color: #166534; }
+.admin-reg-stat--danger  .admin-reg-stat__value { color: #991b1b; }
+.admin-reg-stat--muted   .admin-reg-stat__value { color: var(--color-ink-600); }
+
+.admin-reg-filter-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  gap: 0.75rem;
+}
+
+.admin-reg-row--paid-pending {
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.admin-reg-cell-stack {
+  display: grid;
+  gap: 0.15rem;
+  line-height: 1.25;
+}
+
+.admin-reg-link {
+  color: var(--color-primary, #4338ca);
+  text-decoration: none;
+}
+
+.admin-reg-link:hover {
+  text-decoration: underline;
+}
+
+.admin-access-badge,
+.admin-account-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-ink-200);
+  background: #fff;
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  text-transform: capitalize;
+  color: var(--color-ink-700);
+}
+
+.admin-access-badge--active {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.admin-access-badge--inactive {
+  background: #f8fafc;
+  border-color: var(--color-ink-200);
+  color: var(--color-ink-600);
+}
+
+.admin-access-badge--revoked {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.admin-account-badge--active {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.admin-account-badge--suspended {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.admin-account-badge--unknown {
+  background: var(--color-bg-soft);
+  border-color: var(--color-ink-200);
+  color: var(--color-ink-500);
+}
+
+.admin-enrollment-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--color-ink-100);
+}
+
+.admin-enrollment-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.admin-enrollment-section__title {
+  font-size: var(--fs-15, 0.95rem);
+  font-weight: var(--fw-bold);
+  color: var(--color-ink-900);
+  margin: 0 0 0.6rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-enrollment-section__grid {
+  margin-top: 0.25rem;
+}
+
+.admin-enrollment-detail__field input[disabled] {
+  background: var(--color-bg-soft);
+}
+
+.admin-reg-detail-head {
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.admin-reg-detail-head__copy {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.admin-reg-detail-head__eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+}
+
+.admin-reg-detail-head__title {
+  margin: 0;
+}
+
+.admin-reg-detail-head__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.admin-reg-detail-actions {
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.admin-table-wrap--muted {
+  opacity: 0.88;
+  transition: opacity 0.18s ease;
+}
+
+.admin-confirm-dialog__note-label {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-700);
+}
+
+.admin-confirm-dialog__note {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-200);
+  font: inherit;
+  resize: vertical;
+}
+
+.admin-confirm-dialog__note:focus {
+  outline: none;
+  border-color: var(--color-ink-900);
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.admin-reg-auth-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: var(--fs-14);
 }
 
 .batch-badge {

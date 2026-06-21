@@ -54,5 +54,22 @@ export function useTestCompleteness(testId) {
 
 export function formatMissingFields(missingFields = []) {
   if (!missingFields.length) return '';
-  return missingFields.join(', ');
+  const labels = {
+    quiz_draft: 'open Questions and wait for “Saved” (questions must sync to the server)',
+    questions: 'at least one question',
+    title: 'test title (Setup → General)',
+    course_id: 'course (Setup → General)',
+    test_type: 'test type (Setup → General)',
+    category: 'category (Setup → General)',
+    subject_id: 'subject (Setup → General)',
+    subject_ids: 'subjects (Setup → General)',
+    duration_minutes: 'duration (Setup → Rules & scoring)',
+    max_attempts: 'max attempts (Setup → Rules & scoring)',
+    passing_marks: 'passing marks (Setup → Rules & scoring)',
+    access_mode: 'access mode (Setup → Access & timing)',
+    basic_info: 'test title and course (Setup → General)',
+    rules: 'rules and scoring (Setup)',
+    settings: 'access and timing (Setup)',
+  };
+  return missingFields.map((field) => labels[field] || String(field).replace(/_/g, ' ')).join(', ');
 }

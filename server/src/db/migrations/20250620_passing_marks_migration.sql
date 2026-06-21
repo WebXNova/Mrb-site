@@ -1,0 +1,12 @@
+-- Migration: passing_percentage → passing_marks (DECIMAL 8,2)
+-- Run via ensurePassingMarksMigration.js on server startup (idempotent).
+-- Manual apply (optional):
+--
+-- 1. Backfill passing_marks from percentage × total question marks
+-- 2. Set NOT NULL
+-- 3. Drop passing_percentage
+
+-- Rollback (if needed before drop):
+-- ALTER TABLE tests ADD COLUMN passing_percentage DECIMAL(5,2) NOT NULL DEFAULT 40.00;
+-- UPDATE tests t SET passing_percentage = ROUND(t.passing_marks / NULLIF(calc.total_marks, 0) * 100, 2)
+--   FROM (SELECT test_id, SUM(COALESCE(marks_override, marks, 1)) AS total_marks FROM test_questions ...) calc;

@@ -1,16 +1,9 @@
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
-import { applyQuestionWriteSecurity } from '../security/questionContentSecurity.js';
 import { PHASE_1_QUESTION_TYPE } from '../validators/questionWrite.schema.js';
-import {
-  assertPhase1QuestionTypeSupported,
-  assertQuestionWriteBusinessRules,
-} from './questionWriteRules.js';
-import {
-  assertPersistedQuestionIntegrity,
-  validateQuestionIntegrity,
-} from './questionBankIntegrity.service.js';
+import { assertQuestionWritePayloadValid } from './questionWritePrepare.service.js';
+import { assertPersistedQuestionIntegrity } from './questionBankIntegrity.service.js';
 import { logTransactionRollback } from './questionBankIntegrityLog.js';
 import { toQuestionBankDto } from '../dto/question.dto.js';
 import { activeQuestionByIdLookup } from './questionBankQueries.service.js';
@@ -57,7 +50,7 @@ async function fetchQuestionWithOptions(questionId, connection) {
   }
 
   const [optionRows] = await connection.query(
-    `SELECT id, question_id, option_key, option_text, image_url, is_correct, sort_order, created_at, updated_at
+    `SELECT id, question_id, option_key, option_text, option_html, image_url, is_correct, sort_order, created_at, updated_at
      FROM question_options
      WHERE question_id = ?
      ORDER BY sort_order ASC, id ASC`,
@@ -70,12 +63,13 @@ async function fetchQuestionWithOptions(questionId, connection) {
 async function insertQuestionOptions(connection, questionId, options) {
   for (const option of options) {
     await connection.query(
-      `INSERT INTO question_options (question_id, option_key, option_text, image_url, is_correct, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO question_options (question_id, option_key, option_text, option_html, image_url, is_correct, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         questionId,
         option.option_key,
         option.option_text.trim(),
+        (option.option_html ?? option.option_text).trim(),
         option.image_url ?? null,
         option.is_correct ? 1 : 0,
         option.sort_order,
@@ -106,6 +100,8 @@ async function assertExactlyOneCorrectInDatabase(connection, questionId) {
 }
 
 /**
+ * Persist a question that already passed validateQuestionWritePayload.
+ *
  * @param {{
  *   course_id: number,
  *   subject_id?: number|null,
@@ -117,17 +113,12 @@ async function assertExactlyOneCorrectInDatabase(connection, questionId) {
  *   marks: number,
  *   explanation?: string|null,
  *   options: unknown[],
- * }} payload
+ * }} preparedPayload
  * @param {number} createdBy
  */
-export async function createQuestionService(payload, createdBy) {
-  const secured = applyQuestionWriteSecurity(payload);
-  assertPhase1QuestionTypeSupported(secured.question_type);
-  assertQuestionWriteBusinessRules({ ...secured, question_type: PHASE_1_QUESTION_TYPE });
-
-  const { options: normalizedOptions } = validateQuestionIntegrity(secured, secured.options, {
-    operation: 'create',
-  });
+export async function createQuestionFromPreparedPayload(preparedPayload, createdBy) {
+  const secured = preparedPayload;
+  const normalizedOptions = Array.isArray(secured.options) ? secured.options : [];
 
   if (!Number.isFinite(createdBy) || createdBy <= 0) {
     throw new ApiError(401, 'Authenticated admin required', { code: 'UNAUTHORIZED' });
@@ -151,8 +142,8 @@ export async function createQuestionService(payload, createdBy) {
 
     const [insertResult] = await connection.query(
       `INSERT INTO question_bank
-         (course_id, subject_id, topic, difficulty, question_type, question_text, question_image_url, explanation, marks, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (course_id, subject_id, topic, difficulty, question_type, question_text, question_html, question_image_url, explanation, explanation_html, marks, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         secured.course_id,
         secured.subject_id ?? null,
@@ -160,8 +151,10 @@ export async function createQuestionService(payload, createdBy) {
         secured.difficulty ?? null,
         PHASE_1_QUESTION_TYPE,
         secured.question_text.trim(),
+        (secured.question_html ?? secured.question_text).trim(),
         secured.question_image_url ?? null,
         secured.explanation ?? null,
+        secured.explanation_html ?? secured.explanation ?? null,
         secured.marks,
         createdBy,
       ]
@@ -200,4 +193,24 @@ export async function createQuestionService(payload, createdBy) {
   } finally {
     connection.release();
   }
+}
+
+/**
+ * @param {{
+ *   course_id: number,
+ *   subject_id?: number|null,
+ *   topic?: string|null,
+ *   difficulty?: string|null,
+ *   question_type?: string,
+ *   question_text: string,
+ *   question_image_url?: string|null,
+ *   marks: number,
+ *   explanation?: string|null,
+ *   options: unknown[],
+ * }} payload
+ * @param {number} createdBy
+ */
+export async function createQuestionService(payload, createdBy) {
+  const { payload: prepared } = assertQuestionWritePayloadValid(payload);
+  return createQuestionFromPreparedPayload(prepared, createdBy);
 }

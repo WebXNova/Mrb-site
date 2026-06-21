@@ -3,6 +3,9 @@
  * Public contract: id, title, description, short_description, level, thumbnail_url, pricing, timestamps.
  */
 
+import { resolveCourseThumbnailUrl } from '../utils/mediaUrl';
+import { extractCourseAdmission } from './courseAdmissionPresentation';
+
 const SUPPORTED_PRICING_TYPES = new Set(['free', 'one_time']);
 
 function truncateSummary(text, maxLen = 220) {
@@ -43,10 +46,12 @@ export function mapCatalogCourseToCardProps(course) {
       ? course.short_description.trim()
       : '';
   const summarySource = shortDesc || description;
-  const thumbnailUrl = typeof course.thumbnail_url === 'string' ? course.thumbnail_url : '';
+  const thumbnailUrl = resolveCourseThumbnailUrl(course.thumbnail_url);
   const level = typeof course.level === 'string' ? course.level : 'beginner';
 
   if (!Number.isFinite(id) || id <= 0) return null;
+
+  const admission = extractCourseAdmission(course);
 
   return {
     id,
@@ -55,6 +60,7 @@ export function mapCatalogCourseToCardProps(course) {
     thumbnail_url: thumbnailUrl,
     level,
     pricing: extractCoursePricing(course),
+    ...admission,
   };
 }
 

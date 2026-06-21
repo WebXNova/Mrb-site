@@ -32,7 +32,7 @@ function assertNoMatch(label, content, pattern) {
 const validation = read('src/services/testValidation.service.js');
 const lifecycle = read('src/services/testLifecycle.service.js');
 const testService = read('src/services/test.service.js');
-const linkService = read('src/services/testQuestionLink.service.js');
+const composition = read('src/services/testQuestionComposition.service.js');
 const subjectIntegrity = read('src/services/testSubjectIntegrity.service.js');
 
 assertMatch('validation module', validation, /export function validateTestState/);
@@ -58,8 +58,8 @@ assertNoMatch('test.service — assertWizardStepUpdateAllowed', testService, /as
 assertMatch('test.service — validatePublishEligibility', testService, /validatePublishEligibility/);
 assertMatch('test.service — publish engine import', testService, /from '\.\/testPublishEligibility\.service\.js'/);
 
-assertMatch('link — enforceQuestionMutationPreconditions', linkService, /enforceQuestionMutationPreconditions/);
-assertNoMatch('link — direct validateTestSubjectIntegrity', linkService, /validateTestSubjectIntegrity/);
+assertMatch('composition — runtime composed loader', composition, /loadComposedTestQuestions/);
+assertNoMatch('legacy link service — removed', composition, /linkQuestionsToTestBulk/);
 
 assertMatch('subject integrity delegates', subjectIntegrity, /testValidation\.service/);
 

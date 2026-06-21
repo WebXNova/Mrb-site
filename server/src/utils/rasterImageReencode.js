@@ -2,6 +2,8 @@ import sharp from 'sharp';
 
 export const MAX_RASTER_IMAGE_WIDTH = 8000;
 export const MAX_RASTER_IMAGE_HEIGHT = 8000;
+/** Pixel-bomb guard: width × height must not exceed this (default 8000×8000). */
+export const MAX_RASTER_IMAGE_PIXELS = MAX_RASTER_IMAGE_WIDTH * MAX_RASTER_IMAGE_HEIGHT;
 
 const JPEG_QUALITY = 90;
 const WEBP_QUALITY = 90;
@@ -34,11 +36,12 @@ export async function reencodeValidatedRasterImage(filePath, kind) {
     width <= 0 ||
     height <= 0 ||
     width > MAX_RASTER_IMAGE_WIDTH ||
-    height > MAX_RASTER_IMAGE_HEIGHT
+    height > MAX_RASTER_IMAGE_HEIGHT ||
+    width * height > MAX_RASTER_IMAGE_PIXELS
   ) {
     throw Object.assign(
       new Error(
-        `Image dimensions must be between 1 and ${MAX_RASTER_IMAGE_WIDTH} pixels on each side.`
+        `Image dimensions exceed allowed limits (max ${MAX_RASTER_IMAGE_WIDTH}×${MAX_RASTER_IMAGE_HEIGHT}, ${MAX_RASTER_IMAGE_PIXELS} pixels).`
       ),
       {
         code: 'IMAGE_DIMENSIONS_EXCEEDED',

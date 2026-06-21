@@ -1,58 +1,78 @@
 import { inferApiFailureMessage } from './apiErrors';
+import { adminAuthenticatedDownload } from './adminDownload.js';
 import { http } from './http';
 import { getApiBaseUrl } from './runtimeConfig';
+import { adminApiPath } from '../config/adminPaths';
 import {
   buildChapterCreatePayload,
   buildChapterUpdatePayload,
 } from '../components/admin/chapterFormUtils';
 
+const ap = adminApiPath;
+
 export const adminApi = {
-  login: (payload) => http.post('/auth/login', payload, { retryOnUnauthorized: false }),
-  logout: () => http.post('/auth/logout', {}, { retryOnUnauthorized: false }),
+  login: (payload) => http.post(ap('auth/login'), payload, { retryOnUnauthorized: false }),
+  logout: () => http.post(ap('auth/logout'), {}, { retryOnUnauthorized: false }),
   logoutAll: () => http.post('/auth/logout-all', {}, { retryOnUnauthorized: false }),
-  me: (token) => http.get('/auth/me', { token }),
+  me: () => http.get(ap('auth/me'), { authScope: 'admin' }),
 
-  dashboard: (token) => http.get('/admin/dashboard', { token }),
-  logs: (token) => http.get('/admin/logs', { token }),
-  users: (token) => http.get('/admin/users', { token }),
+  dashboard: (token) => http.get(ap('dashboard'), { token }),
+  logs: (token) => http.get(ap('logs'), { token }),
+  users: (token) => http.get(ap('users'), { token }),
   updateUserStatus: (token, userId, status) =>
-    http.put(`/admin/users/${userId}/status`, { status }, { token }),
+    http.put(ap(`users/${userId}/status`), { status }, { token }),
 
-  courses: (token) => http.get('/courses/admin', { token }),
-  createCourse: (token, payload) => http.post('/admin/courses', payload, { token }),
-  createCourseWizard: (token, payload, options = {}) => 
-    http.post('/admin/courses/wizard', payload, { 
-      token, 
+  teachers: (token) => http.get(ap('teachers'), { token }),
+  teacher: (token, teacherId) =>
+    http.get(ap(`teachers/${encodeURIComponent(String(teacherId))}`), { token }),
+  uniqueActiveSubjects: (token) => http.get(ap('subjects/unique-active'), { token }),
+  createTeacher: (token, payload, options = {}) =>
+    http.post(ap('teachers/create'), payload, {
+      token,
+      idempotencyKey: options.idempotencyKey,
+    }),
+  updateTeacher: (token, teacherId, payload) =>
+    http.put(ap(`teachers/${encodeURIComponent(String(teacherId))}`), payload, { token }),
+  updateTeacherStatus: (token, teacherId, payload) =>
+    http.patch(ap(`teachers/${encodeURIComponent(String(teacherId))}/status`), payload, { token }),
+
+  courses: (token) => http.get(ap('courses'), { token }),
+  createCourse: (token, payload) => http.post(ap('courses'), payload, { token }),
+  createCourseWizard: (token, payload, options = {}) =>
+    http.post(ap('courses/wizard'), payload, {
+      token,
       idempotencyKey: options.idempotencyKey,
       signal: options.signal,
     }),
+  loadCourseDraft: (token) => http.get(ap('course-drafts/load'), { token }),
+  saveCourseDraft: (token, payload) => http.post(ap('course-drafts/save'), payload, { token }),
   updateCourse: (token, courseId, payload) =>
-    http.put(`/admin/courses/${courseId}`, payload, { token }),
+    http.put(ap(`courses/${courseId}`), payload, { token }),
   coursePricing: (token, courseId) =>
-    http.get(`/admin/courses/${courseId}/pricing`, { token }),
+    http.get(ap(`courses/${courseId}/pricing`), { token }),
   updateCoursePricing: (token, courseId, payload) =>
-    http.put(`/admin/courses/${courseId}/pricing`, payload, { token }),
+    http.put(ap(`courses/${courseId}/pricing`), payload, { token }),
   deleteCourse: (token, courseId, { purge = false, forceCascade = false } = {}) => {
     const sp = new URLSearchParams();
     if (purge) sp.set('purge', 'true');
     if (forceCascade) sp.set('forceCascade', 'true');
     const qs = sp.toString();
-    return http.delete(`/admin/courses/${courseId}${qs ? `?${qs}` : ''}`, { token });
+    return http.delete(ap(`courses/${courseId}${qs ? `?${qs}` : ''}`), { token });
   },
   subjects: (token, courseId, { includeInactive = false } = {}) => {
     const qs = includeInactive ? '?includeInactive=true' : '';
-    return http.get(`/admin/courses/${courseId}/subjects${qs}`, { token });
+    return http.get(ap(`courses/${courseId}/subjects${qs}`), { token });
   },
   subject: (token, courseId, subjectId) =>
-    http.get(`/admin/courses/${courseId}/subjects/${subjectId}`, { token }),
+    http.get(ap(`courses/${courseId}/subjects/${subjectId}`), { token }),
   createSubject: (token, courseId, payload) =>
-    http.post(`/admin/courses/${courseId}/subjects`, payload, { token }),
+    http.post(ap(`courses/${courseId}/subjects`), payload, { token }),
   updateSubject: (token, courseId, subjectId, payload) =>
-    http.put(`/admin/courses/${courseId}/subjects/${subjectId}`, payload, { token }),
+    http.put(ap(`courses/${courseId}/subjects/${subjectId}`), payload, { token }),
   deleteSubject: (token, courseId, subjectId) =>
-    http.delete(`/admin/courses/${courseId}/subjects/${subjectId}`, { token }),
+    http.delete(ap(`courses/${courseId}/subjects/${subjectId}`), { token }),
   reorderSubjects: (token, courseId, orderedSubjectIds) =>
-    http.put(`/admin/courses/${courseId}/subjects/reorder`, { orderedSubjectIds }, { token }),
+    http.put(ap(`courses/${courseId}/subjects/reorder`), { orderedSubjectIds }, { token }),
 
   listChapters: (token, filters = {}, options = {}) => {
     const sp = new URLSearchParams();
@@ -66,141 +86,68 @@ export const adminApi = {
         : 'active';
     sp.set('status', statusNorm);
     const qs = sp.toString();
-    return http.get(`/admin/chapters?${qs}`, { token, signal: options.signal });
+    return http.get(ap(`chapters?${qs}`), { token, signal: options.signal });
   },
   getChapter: (token, id, options = {}) =>
-    http.get(`/admin/chapters/${encodeURIComponent(String(id))}`, { token, signal: options.signal }),
+    http.get(ap(`chapters/${encodeURIComponent(String(id))}`), { token, signal: options.signal }),
   createChapter: (token, payload, options = {}) =>
-    http.post('/admin/chapters', buildChapterCreatePayload(payload), {
+    http.post(ap('chapters'), buildChapterCreatePayload(payload), {
       token,
       signal: options.signal,
     }),
   updateChapter: (token, id, payload, options = {}) =>
-    http.put(`/admin/chapters/${encodeURIComponent(String(id))}`, buildChapterUpdatePayload(payload), {
+    http.put(ap(`chapters/${encodeURIComponent(String(id))}`), buildChapterUpdatePayload(payload), {
       token,
       signal: options.signal,
     }),
   archiveChapter: (token, id, options = {}) =>
-    http.delete(`/admin/chapters/${encodeURIComponent(String(id))}`, { token, signal: options.signal }),
+    http.delete(ap(`chapters/${encodeURIComponent(String(id))}`), { token, signal: options.signal }),
   /** @deprecated Prefer listChapters */
   chapters: (token, subjectId, options = {}) => {
     const sp = new URLSearchParams();
     sp.set('subjectId', String(subjectId));
-    return http.get(`/admin/chapters?${sp}`, { token, signal: options?.signal });
+    return http.get(ap(`chapters?${sp}`), { token, signal: options?.signal });
   },
 
-  courseBatches: (token, courseId) => http.get(`/admin/courses/${courseId}/batches`, { token }),
+  courseBatches: (token, courseId) => http.get(ap(`courses/${courseId}/batches`), { token }),
   createCourseBatch: (token, courseId, payload) =>
-    http.post(`/admin/courses/${courseId}/batches`, payload, { token }),
+    http.post(ap(`courses/${courseId}/batches`), payload, { token }),
   updateCourseBatch: (token, batchId, payload) =>
-    http.put(`/admin/batches/${batchId}`, payload, { token }),
+    http.put(ap(`batches/${batchId}`), payload, { token }),
   archiveCourseBatch: (token, batchId) =>
-    http.post(`/admin/batches/${batchId}/archive`, {}, { token }),
+    http.post(ap(`batches/${batchId}/archive`), {}, { token }),
   reactivateCourseBatch: (token, batchId) =>
-    http.post(`/admin/batches/${batchId}/reactivate`, {}, { token }),
+    http.post(ap(`batches/${batchId}/reactivate`), {}, { token }),
   uploadCourseImage: async (_token, file) => {
-    const CSRF_COOKIE_NAME = 'csrf_token';
-    const CSRF_HEADER_NAME = 'x-csrf-token';
-    function readCookie(name) {
-      if (typeof document === 'undefined') return '';
-      const prefix = `${encodeURIComponent(name)}=`;
-      const parts = document.cookie ? document.cookie.split('; ') : [];
-      for (const part of parts) {
-        if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
-      }
-      return '';
-    }
-    const csrfToken = readCookie(CSRF_COOKIE_NAME);
     const formData = new FormData();
     formData.append('image', file);
-    const response = await fetch(`${getApiBaseUrl()}/admin/courses/upload-image`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
-      },
-      body: formData,
-    });
-    const rawText = await response.text();
-    let data = {};
-    try {
-      data = rawText ? JSON.parse(rawText) : {};
-    } catch {
-      data = {};
-    }
-    if (!response.ok) {
-      throw new Error(
-        inferApiFailureMessage(data, {
-          status: response.status,
-          statusText: response.statusText,
-          rawText,
-        }) || 'Image upload failed'
-      );
-    }
-    return data;
+    return http.post(ap('courses/upload-image'), formData, { authScope: 'admin' });
   },
 
   uploadQuestionBankImage: async (_token, file) => {
-    const CSRF_COOKIE_NAME = 'csrf_token';
-    const CSRF_HEADER_NAME = 'x-csrf-token';
-    function readCookie(name) {
-      if (typeof document === 'undefined') return '';
-      const prefix = `${encodeURIComponent(name)}=`;
-      const parts = document.cookie ? document.cookie.split('; ') : [];
-      for (const part of parts) {
-        if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
-      }
-      return '';
-    }
-    const csrfToken = readCookie(CSRF_COOKIE_NAME);
     const formData = new FormData();
     formData.append('image', file);
-    const response = await fetch(`${getApiBaseUrl()}/admin/questions/upload-image`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
-      },
-      body: formData,
-    });
-    const rawText = await response.text();
-    let data = {};
-    try {
-      data = rawText ? JSON.parse(rawText) : {};
-    } catch {
-      data = {};
-    }
-    if (!response.ok) {
-      throw new Error(
-        inferApiFailureMessage(data, {
-          status: response.status,
-          statusText: response.statusText,
-          rawText,
-        }) || 'Question image upload failed'
-      );
-    }
-    return data;
+    return http.post(ap('questions/upload-image'), formData, { authScope: 'admin' });
   },
 
   /**
-   * List admin lectures. Server currently ignores query filters; callers may filter locally.
+   * List admin lectures with optional server-side filters.
    * @param {Record<string, string | number>} [filters]
    */
   listLectures: (token, filters = {}, options = {}) => {
-    const sp = new URLSearchParams();
-    Object.entries(filters || {}).forEach(([k, v]) => {
-      if (v != null && String(v).trim() !== '') sp.set(k, String(v).trim());
-    });
-    const qs = sp.toString();
-    return http.get(`/admin/lectures${qs ? `?${qs}` : ''}`, { token, signal: options.signal });
+    const qs = adminListQueryString(filters);
+    return http.get(ap(`lectures${qs}`), { token, signal: options.signal });
   },
 
-  /** Authoritative lecture by id. Uses list endpoint until a dedicated GET route exists. */
+  /** Authoritative lecture by id (server filtered). */
   getLecture: async (token, id, options = {}) => {
-    const res = await http.get('/admin/lectures', { token, signal: options.signal });
-    const list = res?.data ?? [];
-    const nid = Number(id);
-    const found = list.find((l) => Number(l.id) === nid);
+    const res = await http.get(ap(`lectures?lecture_id=${encodeURIComponent(String(id))}&limit=1`), {
+      token,
+      signal: options.signal,
+    });
+    const payload = res?.data;
+    const list = Array.isArray(payload) ? payload : payload?.items ?? [];
+    const found = list[0];
     if (!found) {
       const err = new Error('Lecture not found');
       err.status = 404;
@@ -210,68 +157,208 @@ export const adminApi = {
   },
 
   createLecture: (token, payload, options = {}) =>
-    http.post('/admin/lectures', payload, { token, signal: options.signal }),
+    http.post(ap('lectures'), payload, { token, signal: options.signal }),
   updateLecture: (token, lectureId, payload, options = {}) =>
-    http.put(`/admin/lectures/${encodeURIComponent(String(lectureId))}`, payload, {
+    http.put(ap(`lectures/${encodeURIComponent(String(lectureId))}`), payload, {
       token,
       signal: options.signal,
     }),
   deleteLecture: (token, lectureId, options = {}) =>
-    http.delete(`/admin/lectures/${encodeURIComponent(String(lectureId))}`, {
+    http.delete(ap(`lectures/${encodeURIComponent(String(lectureId))}`), {
       token,
       signal: options.signal,
     }),
 
   /** @deprecated Prefer listLectures */
-  lectures: (token, options = {}) => http.get('/admin/lectures', { token, signal: options?.signal }),
+  lectures: (token, options = {}) => http.get(ap('lectures'), { token, signal: options?.signal }),
 
-  tests: (token) => http.get('/admin/tests', { token }),
-  getTest: (token, testId) => http.get(`/admin/tests/${testId}`, { token }),
-  getTestCreateOptions: (token) => http.get('/admin/tests/create-options', { token }),
-  createTest: (token, payload) =>
-    http.post('/admin/tests', payload, { token }),
-  patchTestBasicInfo: (token, testId, payload) =>
-    http.patch(`/admin/tests/${testId}/basic-info`, payload, { token }),
-  getTestRules: (token, testId) => http.get(`/admin/tests/${testId}/rules`, { token }),
-  patchTestRules: (token, testId, payload) =>
-    http.patch(`/admin/tests/${testId}/rules`, payload, { token }),
-  getTestSettings: (token, testId) => http.get(`/admin/tests/${testId}/settings`, { token }),
-  patchTestSettings: (token, testId, payload) =>
-    http.patch(`/admin/tests/${testId}/settings`, payload, { token }),
-  getTestCompleteness: (token, testId) => http.get(`/admin/tests/${testId}/completeness`, { token }),
-  deleteTest: (token, testId) => http.delete(`/admin/tests/${testId}`, { token }),
-  publishTest: (token, testId) => http.post(`/admin/tests/${testId}/publish`, {}, { token }),
-  duplicateTest: (token, testId) => http.post(`/admin/tests/${testId}/duplicate`, {}, { token }),
-
-  testQuestions: (token, testId) => http.get(`/admin/tests/${testId}/questions`, { token }),
-  availableTestQuestions: (token, testId, query = {}) => {
-    const sp = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value === undefined || value === null || String(value).trim() === '') return;
-      sp.set(key, String(value).trim());
-    });
-    const qs = sp.toString();
-    return http.get(`/admin/tests/${testId}/questions/available${qs ? `?${qs}` : ''}`, { token });
+  tests: (token, filters = {}) => {
+    const qs = adminListQueryString(filters);
+    return http.get(ap(`tests${qs}`), { token });
   },
-  linkTestQuestion: (token, testId, payload) =>
-    http.post(`/admin/tests/${testId}/questions`, payload, { token }),
-  linkTestQuestionsBulk: (token, testId, questionIds) =>
-    http.post(`/admin/tests/${testId}/questions`, { question_ids: questionIds }, { token }),
-  unlinkTestQuestion: (token, testId, questionId) =>
-    http.delete(`/admin/tests/${testId}/questions/${questionId}`, { token }),
-  unlinkTestQuestionsBulk: (token, testId, questionIds) =>
-    http.delete(`/admin/tests/${testId}/questions`, { token, body: { question_ids: questionIds } }),
-  reorderTestQuestions: (token, testId, items) =>
-    http.put(`/admin/tests/${testId}/questions/reorder`, items, { token }),
+  getTest: (token, testId) => http.get(ap(`tests/${testId}`), { token }),
+  getTestCreateOptions: (token) => http.get(ap('tests/create-options'), { token }),
+  createTest: (token, payload) =>
+    http.post(ap('tests'), payload, { token }),
+  patchTestBasicInfo: (token, testId, payload) =>
+    http.patch(ap(`tests/${testId}/basic-info`), payload, { token }),
+  getTestRules: (token, testId) => http.get(ap(`tests/${testId}/rules`), { token }),
+  patchTestRules: (token, testId, payload) =>
+    http.patch(ap(`tests/${testId}/rules`), payload, { token }),
+  getTestSettings: (token, testId) => http.get(ap(`tests/${testId}/settings`), { token }),
+  patchTestSettings: (token, testId, payload) =>
+    http.patch(ap(`tests/${testId}/settings`), payload, { token }),
+  getTestCompleteness: (token, testId) => http.get(ap(`tests/${testId}/completeness`), { token }),
+  getTestResultsAnalytics: (token, testId) =>
+    http.get(ap(`tests/${testId}/results/analytics`), { token }),
+  deleteTest: (token, testId) => http.delete(ap(`tests/${testId}`), { token }),
+  publishTest: (token, testId) => http.post(ap(`tests/${testId}/publish`), {}, { token }),
+  duplicateTest: (token, testId) => http.post(ap(`tests/${testId}/duplicate`), {}, { token }),
+
+  testQuestions: (token, testId) => http.get(ap(`tests/${testId}/questions`), { token }),
+
+  getQuizDraft: (token, testId, options = {}) =>
+    http.get(ap(`tests/${encodeURIComponent(String(testId))}/quiz-draft`), {
+      token,
+      signal: options.signal,
+    }),
+
+  putQuizDraft: (token, testId, body, options = {}) =>
+    http.put(ap(`tests/${encodeURIComponent(String(testId))}/quiz-draft`), body, {
+      token,
+      signal: options.signal,
+    }),
+
+  deleteQuizDraft: (token, testId, options = {}) =>
+    http.delete(ap(`tests/${encodeURIComponent(String(testId))}/quiz-draft`), {
+      token,
+      signal: options.signal,
+    }),
+
+  importAikenQuestions: (token, payload) =>
+    http.post(ap('questions/import/aiken'), payload, { token }),
+
+  listQuestions: (token, filters = {}, options = {}) => {
+    const sp = new URLSearchParams();
+    if (filters.page != null) sp.set('page', String(filters.page));
+    if (filters.limit != null) sp.set('limit', String(filters.limit));
+    if (filters.search) sp.set('search', String(filters.search).trim());
+    if (filters.topic) sp.set('topic', String(filters.topic).trim());
+    if (filters.course_id != null && filters.course_id !== '') sp.set('course_id', String(filters.course_id));
+    if (filters.subject_id != null && filters.subject_id !== '') sp.set('subject_id', String(filters.subject_id));
+    if (filters.difficulty) sp.set('difficulty', String(filters.difficulty));
+    const qs = sp.toString();
+    return http.get(ap(`questions${qs ? `?${qs}` : ''}`), { token, signal: options.signal });
+  },
+
+  bulkDeleteQuestions: (token, questionIds) =>
+    http.post(ap('questions/bulk/delete'), { question_ids: questionIds }, { token }),
+
+  bulkExportQuestions: (token, questionIds, format = 'aiken') =>
+    http.post(ap('questions/bulk/export'), { question_ids: questionIds, format }, { token }),
+
+  bulkAssignQuestionsToTest: (token, questionIds, testId) =>
+    http.post(ap('questions/bulk/assign-test'), { question_ids: questionIds, test_id: testId }, { token }),
+
+  previewAikenImport: (token, payload) =>
+    http.post(ap('questions/import/aiken/preview'), payload, { token }),
+
+  getAikenImportBatch: (token, batchId) =>
+    http.get(ap(`questions/import/aiken/batches/${encodeURIComponent(String(batchId))}`), { token }),
 
   studentQuestions: (token, subject = 'all') =>
-    http.get(`/admin/student-questions?subject=${encodeURIComponent(subject)}`, { token }),
+    http.get(ap(`student-questions?subject=${encodeURIComponent(subject)}`), { token }),
   answerStudentQuestion: (token, questionId, payload) =>
-    http.put(`/admin/student-questions/${questionId}`, payload, { token }),
+    http.put(ap(`student-questions/${questionId}`), payload, { token }),
   deleteStudentQuestion: (token, questionId) =>
-    http.delete(`/admin/student-questions/${questionId}`, { token }),
-  remarks: (token) => http.get('/admin/remarks', { token }),
-  markRemarkRead: (token, remarkId) => http.put(`/admin/remarks/${remarkId}/read`, {}, { token }),
+    http.delete(ap(`student-questions/${questionId}`), { token }),
+
+  qaMonitoringStats: (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    return http.get(ap(`qa-monitoring/statistics${qs ? `?${qs}` : ''}`), { token });
+  },
+  qaMonitoringQuestions: (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    return http.get(ap(`qa-monitoring/questions${qs ? `?${qs}` : ''}`), { token });
+  },
+  qaMonitoringQuestionDetail: (token, questionId) =>
+    http.get(ap(`qa-monitoring/questions/${encodeURIComponent(String(questionId))}`), { token }),
+  qaMonitoringAnswers: (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    return http.get(ap(`qa-monitoring/answers${qs ? `?${qs}` : ''}`), { token });
+  },
+  qaMonitoringActivity: (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    return http.get(ap(`qa-monitoring/teacher-activity${qs ? `?${qs}` : ''}`), { token });
+  },
+  exportQaMonitoring: async (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    const response = await fetch(`${getApiBaseUrl()}${ap(`qa-monitoring/export${qs ? `?${qs}` : ''}`)}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        Authorization: token ? `Bearer ${token}` : undefined,
+      },
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(inferApiFailureMessage(null, { status: response.status, rawText: text }));
+    }
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    return { blob, filename: match?.[1] || 'qa-monitoring-export.csv' };
+  },
+
+  teacherInsightsDashboard: (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    return http.get(ap(`teacher-insights/dashboard${qs ? `?${qs}` : ''}`), { token });
+  },
+  teacherInsightsActivityFeed: (token, query = {}) => {
+    const sp = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s === '') return;
+      sp.set(key, s);
+    });
+    const qs = sp.toString();
+    return http.get(ap(`teacher-insights/activity-feed${qs ? `?${qs}` : ''}`), { token });
+  },
+  teacherInsightsDetail: (token, teacherId) =>
+    http.get(ap(`teacher-insights/teachers/${encodeURIComponent(String(teacherId))}`), { token }),
+
+  remarks: (token) => http.get(ap('remarks'), { token }),
+  markRemarkRead: (token, remarkId) => http.put(ap(`remarks/${remarkId}/read`), {}, { token }),
+  postRemark: (token, remarkId) => http.post(ap(`remarks/${remarkId}/post`), {}, { token }),
+  unpostRemark: (token, remarkId) => http.post(ap(`remarks/${remarkId}/unpost`), {}, { token }),
+
   enrollments: (token, query = {}) => {
     const sp = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {
@@ -281,36 +368,79 @@ export const adminApi = {
       sp.set(key, s);
     });
     const qs = sp.toString();
-    return http.get(`/enrollments/admin${qs ? `?${qs}` : ''}`, { token, authScope: 'admin' });
+    return http.get(ap(`enrollments${qs ? `?${qs}` : ''}`), { token, authScope: 'admin' });
   },
+  enrollmentsSummary: (token) =>
+    http.get(ap('enrollments/summary'), { token, authScope: 'admin' }),
   updateEnrollmentStatus: (token, enrollmentId, payload) =>
-    http.put(`/enrollments/admin/${enrollmentId}/status`, payload, { token, authScope: 'admin' }),
-  exportTestResults: async (token, testId) => {
-    const response = await fetch(`${getApiBaseUrl()}/admin/tests/${testId}/results/export`, {
+    http.put(ap(`enrollments/${enrollmentId}/status`), payload, { token, authScope: 'admin' }),
+  suspendEnrollmentStudent: (token, enrollmentId, payload) =>
+    http.post(ap(`enrollments/${enrollmentId}/suspend-student`), payload, {
+      token,
+      authScope: 'admin',
+    }),
+  exportTestResults: async (_token, testId) => {
+    const { blob, filename } = await adminAuthenticatedDownload(`tests/${testId}/results/export`, {
       method: 'GET',
-      credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
-    if (!response.ok) {
-      const rawText = await response.text();
-      let data = {};
-      try {
-        data = rawText ? JSON.parse(rawText) : {};
-      } catch {
-        data = {};
-      }
-      throw new Error(
-        inferApiFailureMessage(data, {
-          status: response.status,
-          statusText: response.statusText,
-          rawText,
-        }) || 'Failed to export results'
-      );
-    }
-    const blob = await response.blob();
-    const header = response.headers.get('content-disposition') || '';
-    const match = header.match(/filename="([^"]+)"/i);
-    return { blob, filename: match?.[1] || 'test-results.xlsx' };
+    return { blob, filename: filename || 'test-results.xlsx' };
+  },
+  /** Export test as CSV with embedded HTML (cookie auth + CSRF). */
+  exportTest: async (_token, testId) => {
+    const { blob, filename } = await adminAuthenticatedDownload(`tests/${testId}/export`, {
+      method: 'POST',
+      body: { format: 'csv' },
+      accept: 'text/csv',
+    });
+    return { blob, filename: filename || 'test-export.csv', format: 'csv' };
+  },
+
+  validateTestImport: (token, payload) =>
+    http.post(ap('tests/import/validate'), payload, { token }),
+
+  previewTestImport: (token, payload) =>
+    http.post(ap('tests/import/preview'), payload, { token }),
+
+  confirmTestImport: (token, payload) =>
+    http.post(ap('tests/import/confirm'), payload, { token }),
+
+  /** Single-step import alias — POST /tests/import */
+  importTest: (token, payload) => http.post(ap('tests/import'), payload, { token }),
+
+  getTestTransferDashboard: (token) => http.get(ap('tests/transfer/dashboard'), { token }),
+
+  listTestExportHistory: (token, params = {}) => {
+    const sp = new URLSearchParams();
+    if (params.limit != null) sp.set('limit', String(params.limit));
+    if (params.offset != null) sp.set('offset', String(params.offset));
+    if (params.test_id != null) sp.set('test_id', String(params.test_id));
+    if (params.status) sp.set('status', String(params.status));
+    const qs = sp.toString();
+    return http.get(ap(`tests/transfer/export-history${qs ? `?${qs}` : ''}`), { token });
+  },
+
+  getTestExportHistoryBatch: (token, batchId) =>
+    http.get(ap(`tests/transfer/export-history/${encodeURIComponent(String(batchId))}`), { token }),
+
+  listTestImportHistory: (token, params = {}) => {
+    const sp = new URLSearchParams();
+    if (params.limit != null) sp.set('limit', String(params.limit));
+    if (params.offset != null) sp.set('offset', String(params.offset));
+    if (params.course_id != null) sp.set('course_id', String(params.course_id));
+    if (params.status) sp.set('status', String(params.status));
+    const qs = sp.toString();
+    return http.get(ap(`tests/transfer/import-history${qs ? `?${qs}` : ''}`), { token });
+  },
+
+  getTestImportHistoryBatch: (token, batchId) =>
+    http.get(ap(`tests/transfer/import-history/${encodeURIComponent(String(batchId))}`), { token }),
+
+  getTestTransferLogs: (token, params = {}) => {
+    const sp = new URLSearchParams();
+    if (params.limit != null) sp.set('limit', String(params.limit));
+    const qs = sp.toString();
+    return http.get(ap(`tests/transfer/logs${qs ? `?${qs}` : ''}`), { token });
   },
 };
 
@@ -321,46 +451,44 @@ export const testsApi = {
       retryOnUnauthorized: false,
       authScope: null,
     }),
-  getTestPrep: (slug, studentToken) =>
+  getTestPrep: (slug) =>
     http.get(`/tests/${slug}/prep`, {
-      authScope: null,
-      token: null,
-      headers: { Authorization: `Bearer ${studentToken}` },
+      authScope: 'student',
+      retryOnUnauthorized: true,
     }),
-  verifyCode: (slug, payload, studentToken) =>
+  verifyCode: (slug, payload) =>
     http.post(`/tests/${slug}/verify-code`, payload, {
-      authScope: null,
-      token: null,
-      headers: { Authorization: `Bearer ${studentToken}` },
+      authScope: 'student',
+      retryOnUnauthorized: true,
     }),
-  getStartData: (slug, attemptId, attemptToken) =>
+  getStartData: (slug, attemptId) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/start`, {
-      authScope: null,
-      token: null,
-      headers: { Authorization: `Bearer ${attemptToken}` },
+      authScope: 'student',
+      retryOnUnauthorized: true,
     }),
-  saveAnswer: (slug, attemptId, attemptToken, payload) =>
+  saveAnswer: (slug, attemptId, payload) =>
     http.patch(`/tests/${slug}/attempts/${attemptId}/answers`, payload, {
-      authScope: null,
-      token: null,
-      headers: { Authorization: `Bearer ${attemptToken}` },
+      authScope: 'student',
+      retryOnUnauthorized: true,
     }),
-  submitAttempt: (slug, attemptId, attemptToken) =>
+  submitAttempt: (slug, attemptId) =>
     http.post(`/tests/${slug}/attempts/${attemptId}/submit`, {}, {
-      authScope: null,
-      token: null,
-      headers: { Authorization: `Bearer ${attemptToken}` },
+      authScope: 'student',
+      retryOnUnauthorized: true,
     }),
-  getResult: (slug, attemptId, attemptToken) =>
+  getResult: (slug, attemptId) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/result`, {
-      authScope: null,
-      token: null,
-      headers: { Authorization: `Bearer ${attemptToken}` },
+      authScope: 'student',
+      retryOnUnauthorized: true,
     }),
 };
 
+/**
+ * @deprecated LEGACY runtime — disabled server-side (410). Use studentApi.resultDetail
+ * (GET /api/student/results/:attemptId) or testsApi.getResult for slug flow.
+ */
 export const resultApi = {
-  /** Official read-only result — JWT student auth; never grades on the client. */
+  /** @deprecated See studentApi.resultDetail */
   fetchByAttemptId: (attemptId) =>
     http.get(`/attempts/${attemptId}/result`, {
       authScope: 'student',

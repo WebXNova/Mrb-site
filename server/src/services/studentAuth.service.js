@@ -44,7 +44,7 @@ async function fetchStudentByUsername(username) {
 
 async function fetchStudentById(userId) {
   const [rows] = await mysqlPool.query(
-    `SELECT id, email, username, full_name, role, password_hash, status, token_version, is_verified
+    `SELECT id, email, username, full_name, role, password_hash, status, token_version, is_verified, avatar_url
        FROM users
        WHERE id = ? AND role = 'student'
        LIMIT 1`,
@@ -175,5 +175,6 @@ export async function getStudentMePayload(userId, req = null) {
     fullName: row.full_name,
     role: row.role,
     isVerified: Boolean(row.is_verified),
+    avatarUrl: row.avatar_url || null,
   };
 }

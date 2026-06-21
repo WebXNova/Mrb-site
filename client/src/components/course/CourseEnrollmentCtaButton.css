@@ -1,0 +1,36 @@
+.enrollment-switch-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 900);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.enrollment-switch-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(15 23 42 / 55%);
+}
+
+.enrollment-switch-modal__panel {
+  position: relative;
+  width: min(100%, 28rem);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 20px 45px rgb(15 23 42 / 18%);
+}
+
+.enrollment-switch-modal__warning {
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.9375rem;
+}
+
+.enrollment-switch-modal__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}

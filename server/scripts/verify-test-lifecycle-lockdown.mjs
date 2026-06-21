@@ -31,7 +31,7 @@ function assertMatch(label, content, pattern) {
 const controller = read('src/controllers/tests.controller.js');
 const testService = read('src/services/test.service.js');
 const lifecycle = read('src/services/testLifecycle.service.js');
-const linkService = read('src/services/testQuestionLink.service.js');
+const composition = read('src/services/testQuestionComposition.service.js');
 const adminApi = read('../client/src/api/adminApi.js');
 const adminTestsPage = read('../client/src/admin/pages/AdminTestsPage.jsx');
 
@@ -47,7 +47,10 @@ assertMatch('test.service — executePublishTestStatus', testService, /executePu
 assertNoMatch('test.service — direct publish SQL', testService, /SET status = 'published'/);
 
 assertMatch('lifecycle — only publish executor', lifecycle, /executePublishTestStatus/);
-assertMatch('link service — mutation guard', linkService, /enforceQuestionMutationPreconditions/);
+assertMatch('composition — runtime read model', composition, /loadComposedTestQuestions/);
+assertNoMatch('admin routes — legacy link mutations', read('src/routes/admin.routes.js'), /postLinkTestQuestion/);
+assertNoMatch('test.service — published maintenance bypass', testService, /allowPublishedMaintenance/);
+assertMatch('admin routes — requireUnpublishedTest', read('src/routes/admin.routes.js'), /requireUnpublishedTest/);
 
 assertNoMatch('adminApi — updateTest', adminApi, /updateTest:/);
 assertMatch('adminApi — patchTestBasicInfo', adminApi, /patchTestBasicInfo/);

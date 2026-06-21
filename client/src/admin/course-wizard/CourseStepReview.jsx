@@ -1,3 +1,5 @@
+import { toDateInputValue } from './courseScheduleValidation.js';
+
 export default function CourseStepReview({
   course,
   pricing,
@@ -23,6 +25,17 @@ export default function CourseStepReview({
           <strong>Thumbnail:</strong> {course.thumbnail_url ? 'Attached' : 'Missing'}
         </li>
       </ul>
+      <h4 className="heading-4">Admissions</h4>
+      <ul className="admin-courses__muted">
+        <li>
+          <strong>Status:</strong> {course.admission_status || 'CLOSED'}
+        </li>
+        <li>
+          <strong>Course dates:</strong>{' '}
+          {toDateInputValue(batches[0]?.start_date) || toDateInputValue(course.start_date) || 'Not set'} →{' '}
+          {toDateInputValue(batches[0]?.end_date) || toDateInputValue(course.end_date) || 'Not set'}
+        </li>
+      </ul>
       <h4 className="heading-4">Pricing</h4>
       <p className="admin-courses__muted">
         {pricing.pricing_type} · {pricing.currency_code}{' '}
@@ -45,13 +58,13 @@ export default function CourseStepReview({
         </div>
       ) : null}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1.25rem' }}>
-        <button type="button" className="btn btn--secondary" disabled={saving} onClick={onSaveDraft}>
-          Save as draft
+        <button type="button" className="btn--course-secondary" disabled={saving} onClick={onSaveDraft}>
+          {saving ? 'Saving…' : 'Save draft'}
         </button>
-        <button type="button" className="btn btn--primary" disabled={saving} onClick={onOpenPublishModal}>
+        <button type="button" className="btn--course-primary" disabled={saving} onClick={onOpenPublishModal}>
           Publish
         </button>
-        <button type="button" className="btn btn--ghost" disabled={saving} onClick={onCancel}>
+        <button type="button" className="btn--course-secondary" disabled={saving} onClick={onCancel}>
           Cancel
         </button>
       </div>

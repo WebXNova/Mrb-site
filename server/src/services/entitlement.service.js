@@ -4,6 +4,9 @@
  * All instructional read paths should call assertCourseAccess() or resolveActiveEntitlement()
  * before returning content. Failures throw structured AppError subclasses (fail-closed).
  *
+ * Admission status (courses.admission_status) does NOT affect existing entitlements —
+ * students with access_status = 'active' retain access when admissions close.
+ *
  * Wired into studentPortal.service.js (Phase 1D-B dashboard reads).
  */
 
@@ -84,6 +87,8 @@ export async function resolveActiveEntitlement(userId) {
 
 /**
  * Assert the user has a valid, non-expired entitlement for the requested course.
+ * Does not consult courses.admission_status — existing active students keep access when closed.
+ *
  * @param {number} userId
  * @param {number} courseId
  * @returns {Promise<EntitlementContext>}

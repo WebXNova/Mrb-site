@@ -15,6 +15,16 @@ export function normalizeHistoryPayload(payload) {
       totalItems: Number(data.pagination?.totalItems ?? 0),
       totalPages: Number(data.pagination?.totalPages ?? 0),
     },
+    filterOptions: {
+      subjects: Array.isArray(data.filterOptions?.subjects)
+        ? data.filterOptions.subjects
+            .map((subject) => ({
+              id: Number(subject.id),
+              title: String(subject.title ?? ''),
+            }))
+            .filter((subject) => Number.isFinite(subject.id) && subject.title)
+        : [],
+    },
     statistics: {
       totalTests: Number(data.statistics?.totalTests ?? 0),
       passedTests: Number(data.statistics?.passedTests ?? 0),
@@ -35,6 +45,7 @@ function normalizeHistoryItem(item) {
     attemptId: Number(item.attemptId),
     testId: Number(item.testId),
     testTitle: String(item.testTitle ?? ''),
+    subjectLabel: item.subjectLabel == null ? null : String(item.subjectLabel),
     slug: item.slug ?? null,
     submittedAt: item.submittedAt ?? null,
     resultAvailable: Boolean(item.resultAvailable),

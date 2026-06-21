@@ -19,7 +19,12 @@
  * without breaking layout.
  */
 
-export const platformStats = [];
+export const platformStats = [
+  { value: '12K+', label: 'students' },
+  { value: '500+', label: 'Tests' },
+  { value: '100+', label: 'recorded lectures' },
+  { value: '24/7', label: 'student support' },
+];
 
 export const features = [
   {
@@ -52,4 +57,29 @@ export const features = [
   },
 ];
 
-export const testimonials = [];
+export const testimonials = [
+  {
+    id: 'remark-1',
+    quote:
+      'MRB test explanations changed how I revise. Every wrong answer came back with a clear reason — my mock scores jumped from the 60s to 90+ before MDCAT.',
+    name: 'Ayesha Khan',
+    role: 'MDCAT Qualifier, Lahore',
+    verified: true,
+  },
+  {
+    id: 'remark-2',
+    quote:
+      'The lecture playlist and subject-wise tests kept me on track when self-study felt overwhelming. I always knew what to study next.',
+    name: 'Hassan Ali',
+    role: 'MDCAT Qualifier, Faisalabad',
+    verified: true,
+  },
+  {
+    id: 'remark-3',
+    quote:
+      'Doubts were answered properly — not copy-paste replies. That support made the difference in Biology and Chemistry during my final month.',
+    name: 'Fatima Raza',
+    role: 'MDCAT Qualifier, Multan',
+    verified: true,
+  },
+];

@@ -1,8 +1,14 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { getStoredUser, getStudentToken } from '../auth/session';
+import AppShellSkeleton from '../components/ui/AppShellSkeleton';
 
-export default function ProtectedRoute({ children }) {
+function AuthRouteFallback() {
+  return <AppShellSkeleton label="Verifying session" />;
+}
+
+export default function ProtectedRoute({ children, authStatus = 'authenticated' }) {
   const location = useLocation();
+  if (authStatus === 'resolving') return <AuthRouteFallback />;
   const token = getStudentToken();
   const student = getStoredUser('student_user');
 

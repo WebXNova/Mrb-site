@@ -1,16 +1,16 @@
 export const defaultTestRulesForm = {
   duration_minutes: '30',
   max_attempts: '1',
-  passing_percentage: '40',
   passing_marks: '',
   negative_marking: '0',
 };
 
 /**
  * @param {typeof defaultTestRulesForm} form
+ * @param {{ totalMarks?: number|null }} [context]
  * @returns {{ ok: true, payload: Record<string, unknown> } | { ok: false, errors: Record<string, string> }}
  */
-export function validateTestRulesForm(form) {
+export function validateTestRulesForm(form, context = {}) {
   const errors = {};
 
   const durationMinutes = Number(form.duration_minutes);
@@ -23,21 +23,23 @@ export function validateTestRulesForm(form) {
     errors.max_attempts = 'Max attempts must be between 1 and 50.';
   }
 
-  const passingPercentageRaw = String(form.passing_percentage ?? '').trim();
-  let passingPercentage;
-  if (passingPercentageRaw !== '') {
-    passingPercentage = Number(passingPercentageRaw);
-    if (Number.isNaN(passingPercentage) || passingPercentage < 0 || passingPercentage > 100) {
-      errors.passing_percentage = 'Passing percentage must be between 0 and 100.';
-    }
+  const passingMarksRaw = String(form.passing_marks ?? '').trim();
+  if (passingMarksRaw === '') {
+    errors.passing_marks = 'Passing marks is required.';
   }
 
-  const passingMarksRaw = String(form.passing_marks ?? '').trim();
   let passingMarks;
   if (passingMarksRaw !== '') {
     passingMarks = Number(passingMarksRaw);
     if (!Number.isFinite(passingMarks) || passingMarks < 0) {
       errors.passing_marks = 'Passing marks must be 0 or greater.';
+    } else if (Math.abs(passingMarks - Math.round(passingMarks * 100) / 100) > 1e-9) {
+      errors.passing_marks = 'Passing marks must have at most 2 decimal places.';
+    } else {
+      const totalMarks = Number(context.totalMarks);
+      if (Number.isFinite(totalMarks) && totalMarks > 0 && passingMarks > totalMarks) {
+        errors.passing_marks = `Passing marks cannot exceed total marks (${totalMarks}).`;
+      }
     }
   }
 
@@ -53,18 +55,9 @@ export function validateTestRulesForm(form) {
   const payload = {
     duration_minutes: durationMinutes,
     max_attempts: maxAttempts,
+    passing_marks: passingMarks,
     negative_marking: negativeMarking,
   };
-
-  if (passingPercentageRaw !== '') {
-    payload.passing_percentage = passingPercentage;
-  }
-
-  if (passingMarksRaw !== '') {
-    payload.passing_marks = passingMarks;
-  } else {
-    payload.passing_marks = null;
-  }
 
   return { ok: true, payload };
 }
@@ -77,8 +70,6 @@ export function mapTestRulesToForm(rules) {
   return {
     duration_minutes: String(rules.duration_minutes ?? 30),
     max_attempts: String(rules.max_attempts ?? 1),
-    passing_percentage:
-      rules.passing_percentage == null ? '' : String(rules.passing_percentage),
     passing_marks: rules.passing_marks == null ? '' : String(rules.passing_marks),
     negative_marking: String(rules.negative_marking ?? 0),
   };

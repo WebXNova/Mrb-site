@@ -1,5 +1,6 @@
-import { resultApi } from '../../../api/adminApi';
+import { studentApi } from '../../../api/studentApi';
 
+/** Canonical portal runtime — CEE entitlement + ownership (G-RT-01). */
 export const testResultApi = {
-  fetchResult: (attemptId) => resultApi.fetchByAttemptId(attemptId),
+  fetchResult: (attemptId) => studentApi.resultDetail(attemptId),
 };

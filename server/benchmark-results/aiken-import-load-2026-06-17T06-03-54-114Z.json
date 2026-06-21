@@ -1,0 +1,259 @@
+{
+  "suite": "aiken-import-load",
+  "startedAt": "2026-06-17T06:03:54.114Z",
+  "completedAt": "2026-06-17T06:08:08.613Z",
+  "fixtures": {
+    "courseId": 36,
+    "userId": 3
+  },
+  "limitsMs": {
+    "10": 2000,
+    "50": 2000,
+    "100": 2000,
+    "250": 5000,
+    "500": 10000
+  },
+  "eventLoopBlockThresholdMs": 500,
+  "results": [
+    {
+      "runId": "benchmark-10-1781676234390",
+      "questionCount": 10,
+      "success": true,
+      "imported": 10,
+      "failed": 0,
+      "failureRate": 0,
+      "batchId": 9,
+      "apiResponseMs": 2240.75,
+      "dbInsertMs": 1546.18,
+      "nonDbMs": 694.57,
+      "dbQueryCount": 124,
+      "dbMaxQueryMs": 173.57,
+      "memoryBefore": {
+        "rssMb": 52.4,
+        "heapUsedMb": 13.42,
+        "heapTotalMb": 30.43,
+        "externalMb": 2.22
+      },
+      "memoryAfter": {
+        "rssMb": 58.86,
+        "heapUsedMb": 19.16,
+        "heapTotalMb": 30.93,
+        "externalMb": 2.35
+      },
+      "memoryDeltaMb": 5.74,
+      "cpu": {
+        "userMs": 313,
+        "systemMs": 31,
+        "totalMs": 344
+      },
+      "eventLoop": {
+        "maxLagMs": 35.09,
+        "meanLagMs": 28.38,
+        "p99LagMs": 34.54
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "apiResponseMs 2240.75 exceeded limit 2000ms"
+        ],
+        "warnings": [],
+        "limitMs": 2000
+      }
+    },
+    {
+      "runId": "benchmark-50-1781676237977",
+      "questionCount": 50,
+      "success": true,
+      "imported": 50,
+      "failed": 0,
+      "failureRate": 0,
+      "batchId": 10,
+      "apiResponseMs": 11530.51,
+      "dbInsertMs": 7082.72,
+      "nonDbMs": 4447.79,
+      "dbQueryCount": 604,
+      "dbMaxQueryMs": 800.67,
+      "memoryBefore": {
+        "rssMb": 59.04,
+        "heapUsedMb": 19.36,
+        "heapTotalMb": 30.93,
+        "externalMb": 2.35
+      },
+      "memoryAfter": {
+        "rssMb": 64.59,
+        "heapUsedMb": 17.35,
+        "heapTotalMb": 32.93,
+        "externalMb": 2.34
+      },
+      "memoryDeltaMb": -2.01,
+      "cpu": {
+        "userMs": 1016,
+        "systemMs": 94,
+        "totalMs": 1110
+      },
+      "eventLoop": {
+        "maxLagMs": 413.4,
+        "meanLagMs": 30.06,
+        "p99LagMs": 54.39
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "apiResponseMs 11530.51 exceeded limit 2000ms"
+        ],
+        "warnings": [
+          "event loop max lag 413.4ms (warn > 100ms)"
+        ],
+        "limitMs": 2000
+      }
+    },
+    {
+      "runId": "benchmark-100-1781676250301",
+      "questionCount": 100,
+      "success": true,
+      "imported": 100,
+      "failed": 0,
+      "failureRate": 0,
+      "batchId": 11,
+      "apiResponseMs": 24352.56,
+      "dbInsertMs": 12657.7,
+      "nonDbMs": 11694.86,
+      "dbQueryCount": 1204,
+      "dbMaxQueryMs": 460.27,
+      "memoryBefore": {
+        "rssMb": 64.59,
+        "heapUsedMb": 17.55,
+        "heapTotalMb": 32.93,
+        "externalMb": 2.34
+      },
+      "memoryAfter": {
+        "rssMb": 78.89,
+        "heapUsedMb": 28.05,
+        "heapTotalMb": 51.93,
+        "externalMb": 2.66
+      },
+      "memoryDeltaMb": 10.5,
+      "cpu": {
+        "userMs": 1562,
+        "systemMs": 125,
+        "totalMs": 1687
+      },
+      "eventLoop": {
+        "maxLagMs": 43.38,
+        "meanLagMs": 29.12,
+        "p99LagMs": 34.6
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "apiResponseMs 24352.56 exceeded limit 2000ms"
+        ],
+        "warnings": [],
+        "limitMs": 2000
+      }
+    },
+    {
+      "runId": "benchmark-250-1781676275400",
+      "questionCount": 250,
+      "success": true,
+      "imported": 250,
+      "failed": 0,
+      "failureRate": 0,
+      "batchId": 12,
+      "apiResponseMs": 89604.79,
+      "dbInsertMs": 47468.41,
+      "nonDbMs": 42136.38,
+      "dbQueryCount": 3004,
+      "dbMaxQueryMs": 1160.13,
+      "memoryBefore": {
+        "rssMb": 78.89,
+        "heapUsedMb": 28.36,
+        "heapTotalMb": 51.93,
+        "externalMb": 2.67
+      },
+      "memoryAfter": {
+        "rssMb": 52.43,
+        "heapUsedMb": 16.97,
+        "heapTotalMb": 18.68,
+        "externalMb": 2.34
+      },
+      "memoryDeltaMb": -11.39,
+      "cpu": {
+        "userMs": 3406,
+        "systemMs": 344,
+        "totalMs": 3750
+      },
+      "eventLoop": {
+        "maxLagMs": 69.53,
+        "meanLagMs": 30.04,
+        "p99LagMs": 34.57
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "apiResponseMs 89604.79 exceeded limit 5000ms"
+        ],
+        "warnings": [],
+        "limitMs": 5000
+      }
+    },
+    {
+      "runId": "benchmark-500-1781676368328",
+      "questionCount": 500,
+      "success": true,
+      "imported": 500,
+      "failed": 0,
+      "failureRate": 0,
+      "batchId": 13,
+      "apiResponseMs": 119193.23,
+      "dbInsertMs": 61479.91,
+      "nonDbMs": 57713.32,
+      "dbQueryCount": 6004,
+      "dbMaxQueryMs": 897.17,
+      "memoryBefore": {
+        "rssMb": 52.43,
+        "heapUsedMb": 16.83,
+        "heapTotalMb": 18.68,
+        "externalMb": 2.36
+      },
+      "memoryAfter": {
+        "rssMb": 78.45,
+        "heapUsedMb": 25.69,
+        "heapTotalMb": 52.68,
+        "externalMb": 2.56
+      },
+      "memoryDeltaMb": 8.86,
+      "cpu": {
+        "userMs": 5734,
+        "systemMs": 781,
+        "totalMs": 6515
+      },
+      "eventLoop": {
+        "maxLagMs": 132.38,
+        "meanLagMs": 29.27,
+        "p99LagMs": 34.34
+      },
+      "errorMessage": null,
+      "evaluation": {
+        "pass": false,
+        "failures": [
+          "apiResponseMs 119193.23 exceeded limit 10000ms"
+        ],
+        "warnings": [
+          "event loop max lag 132.38ms (warn > 100ms)"
+        ],
+        "limitMs": 10000
+      }
+    }
+  ],
+  "summary": {
+    "totalRuns": 5,
+    "passedRuns": 0,
+    "failedRuns": 5,
+    "eventLoopBlocked": false
+  }
+}

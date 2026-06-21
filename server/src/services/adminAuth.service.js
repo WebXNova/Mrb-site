@@ -77,3 +77,43 @@ export async function loginAdmin(email, password, authContext = {}) {
 export async function logoutAdmin(refreshToken) {
   await revokeAuthSessionByRefreshToken(refreshToken);
 }
+
+export async function getAdminMePayload(adminId) {
+  const uid = Number(adminId);
+  if (!Number.isInteger(uid) || uid <= 0) return null;
+
+  try {
+    const [rows] = await mysqlPool.query(
+      `SELECT id, email, full_name, role, status
+       FROM users
+       WHERE id = ? AND role IN ('admin', 'super_admin')
+       LIMIT 1`,
+      [uid]
+    );
+    const row = rows[0];
+    if (!row || String(row.status || '').toLowerCase() !== 'active') return null;
+    return {
+      id: row.id,
+      email: row.email,
+      fullName: row.full_name,
+      role: row.role,
+    };
+  } catch (error) {
+    if (error?.code !== 'ER_BAD_FIELD_ERROR') throw error;
+    const [rows] = await mysqlPool.query(
+      `SELECT id, email, full_name, role
+       FROM users
+       WHERE id = ? AND role IN ('admin', 'super_admin')
+       LIMIT 1`,
+      [uid]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      email: row.email,
+      fullName: row.full_name,
+      role: row.role,
+    };
+  }
+}

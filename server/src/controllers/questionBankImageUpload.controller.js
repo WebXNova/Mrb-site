@@ -14,7 +14,7 @@ import {
 } from '../services/questionBankImageUpload.service.js';
 import { normalizeUploadExtension } from '../utils/secureRasterImageValidation.js';
 
-const ALLOWED_MIME = /^image\/(jpeg|png|webp)$/i;
+const ALLOWED_MIME = /^image\/(jpe?g|png|webp)$/i;
 
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {

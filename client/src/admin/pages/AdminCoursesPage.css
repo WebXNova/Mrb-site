@@ -1,8 +1,8 @@
 /* Lighter layout for admin course management — less visual weight than default admin cards */
 
 .admin-page--courses {
-  gap: var(--space-5);
-  max-width: 960px;
+  gap: var(--space-6);
+  max-width: none;
 }
 
 .admin-page--courses .admin-courses__stack {

@@ -8,30 +8,39 @@ function getGlobalScope() {
 function getStore() {
   const scope = getGlobalScope();
   if (!scope[REFRESH_STORE_KEY]) {
-    scope[REFRESH_STORE_KEY] = { promise: null };
+    scope[REFRESH_STORE_KEY] = Object.create(null);
   }
   return scope[REFRESH_STORE_KEY];
 }
 
-export function getRefreshInFlightPromise() {
-  return getStore().promise;
+/** @param {'admin' | 'student' | 'teacher'} authScope */
+export function getRefreshInFlightPromise(authScope) {
+  if (!authScope) return null;
+  return getStore()[authScope] || null;
 }
 
-export function hasRefreshInFlight() {
-  return Boolean(getStore().promise);
+/** @param {'admin' | 'student' | 'teacher'} authScope */
+export function hasRefreshInFlight(authScope) {
+  return Boolean(getRefreshInFlightPromise(authScope));
 }
 
-export function runSingleFlightRefresh(startRefresh) {
+/**
+ * One in-flight refresh per auth scope so student/admin/teacher boot probes
+ * cannot block or short-circuit each other's cookie rotation.
+ *
+ * @param {'admin' | 'student' | 'teacher'} authScope
+ */
+export function runSingleFlightRefresh(authScope, startRefresh) {
   const store = getStore();
-  if (store.promise) {
-    return store.promise;
+  if (store[authScope]) {
+    return store[authScope];
   }
 
-  store.promise = Promise.resolve()
+  store[authScope] = Promise.resolve()
     .then(startRefresh)
     .finally(() => {
-      store.promise = null;
+      delete store[authScope];
     });
 
-  return store.promise;
+  return store[authScope];
 }

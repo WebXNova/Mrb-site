@@ -6,6 +6,9 @@ export function buildDefaultWizardCourse() {
     level: 'beginner',
     thumbnail_url: undefined,
     is_active: true,
+    start_date: null,
+    end_date: null,
+    admission_status: 'CLOSED',
   };
 }
 
@@ -24,29 +27,40 @@ export function buildDefaultWizardPricing() {
 }
 
 export function buildDefaultWizardBatch() {
-  const start = new Date();
-  start.setUTCMonth(start.getUTCMonth() + 2, 1);
-  const end = new Date(start);
-  end.setUTCMonth(end.getUTCMonth() + 4, 28);
-  const open = new Date();
-  const close = new Date(start);
-  close.setUTCDate(close.getUTCDate() - 2);
+  const now = new Date();
+  const start = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 27 * 60 * 60 * 1000);
   return {
     title: 'Primary cohort',
-    start_date: start.toISOString().slice(0, 10),
-    end_date: end.toISOString().slice(0, 10),
-    enrollment_open_at: open.toISOString(),
-    enrollment_close_at: close.toISOString(),
+    start_date: start.toISOString(),
+    end_date: end.toISOString(),
     total_seats: 40,
     instructor_name: '',
     schedule_label: '',
     timezone: 'Asia/Karachi',
     status: 'draft',
     is_active: true,
-    allow_enrollment: true,
     show_publicly: true,
-    certificate_enabled: false,
     recordings_enabled: true,
+  };
+}
+
+/** Drop deprecated batch keys (e.g. certificate_enabled) from saved drafts. */
+export function sanitizeWizardBatch(batch) {
+  const defaults = buildDefaultWizardBatch();
+  if (!batch || typeof batch !== 'object') return defaults;
+  return {
+    title: batch.title ?? defaults.title,
+    start_date: batch.start_date ?? defaults.start_date,
+    end_date: batch.end_date ?? defaults.end_date,
+    total_seats: batch.total_seats ?? defaults.total_seats,
+    instructor_name: batch.instructor_name ?? defaults.instructor_name,
+    schedule_label: batch.schedule_label ?? defaults.schedule_label,
+    timezone: batch.timezone ?? defaults.timezone,
+    status: batch.status ?? defaults.status,
+    is_active: batch.is_active !== false,
+    show_publicly: batch.show_publicly !== false,
+    recordings_enabled: batch.recordings_enabled !== false,
   };
 }
 

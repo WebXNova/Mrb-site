@@ -1,3 +1,4 @@
+import { adminRoute } from '../../config/adminPaths';
 import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
@@ -9,6 +10,8 @@ import {
   batchStatusLabel,
   formatEnrollmentWindow,
   formatSeatLine,
+  fromLocalDatetimeValue,
+  toLocalDatetimeValue,
 } from '../../course/batchPresentation';
 
 class CourseBatchesErrorBoundary extends Component {
@@ -211,7 +214,7 @@ function AdminCourseBatchesInner() {
         <section className="admin-card">
           <h2 className="heading-3">Invalid course</h2>
           <p className="admin-error">Course id in the URL is not valid.</p>
-          <Link to="/admin/courses" className="btn btn--secondary">
+          <Link to={adminRoute('courses')} className="btn btn--secondary">
             Back to Courses
           </Link>
         </section>
@@ -224,7 +227,7 @@ function AdminCourseBatchesInner() {
       <section className="admin-card">
         <div className="admin-row-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 className="heading-3">{headerTitle}</h2>
-          <Link to="/admin/courses" className="btn btn--secondary btn--sm">
+          <Link to={adminRoute('courses')} className="btn btn--secondary btn--sm">
             Back to Courses
           </Link>
         </div>
@@ -247,30 +250,50 @@ function AdminCourseBatchesInner() {
               <input id="code" name="code" value={form.code} onChange={onChange} maxLength={120} required />
             </div>
             <div className="admin-field">
-              <label htmlFor="start_date">Start date (YYYY-MM-DD)</label>
-              <input id="start_date" name="start_date" value={form.start_date} onChange={onChange} required />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="end_date">End date (YYYY-MM-DD)</label>
-              <input id="end_date" name="end_date" value={form.end_date} onChange={onChange} required />
-            </div>
-            <div className="admin-field">
-              <label htmlFor="enrollment_open_at">Enrollment opens (ISO 8601)</label>
+              <label htmlFor="start_date">Start date & time</label>
               <input
-                id="enrollment_open_at"
-                name="enrollment_open_at"
-                value={form.enrollment_open_at}
-                onChange={onChange}
+                id="start_date"
+                type="datetime-local"
+                value={toLocalDatetimeValue(form.start_date)}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, start_date: fromLocalDatetimeValue(e.target.value) }))
+                }
                 required
               />
             </div>
             <div className="admin-field">
-              <label htmlFor="enrollment_close_at">Enrollment closes (ISO 8601)</label>
+              <label htmlFor="end_date">End date & time</label>
+              <input
+                id="end_date"
+                type="datetime-local"
+                value={toLocalDatetimeValue(form.end_date)}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, end_date: fromLocalDatetimeValue(e.target.value) }))
+                }
+                required
+              />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="enrollment_open_at">Enrollment opens</label>
+              <input
+                id="enrollment_open_at"
+                type="datetime-local"
+                value={toLocalDatetimeValue(form.enrollment_open_at)}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, enrollment_open_at: fromLocalDatetimeValue(e.target.value) }))
+                }
+                required
+              />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="enrollment_close_at">Enrollment closes</label>
               <input
                 id="enrollment_close_at"
-                name="enrollment_close_at"
-                value={form.enrollment_close_at}
-                onChange={onChange}
+                type="datetime-local"
+                value={toLocalDatetimeValue(form.enrollment_close_at)}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, enrollment_close_at: fromLocalDatetimeValue(e.target.value) }))
+                }
                 required
               />
             </div>

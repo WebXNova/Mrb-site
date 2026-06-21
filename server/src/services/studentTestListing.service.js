@@ -8,6 +8,7 @@ import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { toStudentTestListResponse } from '../dto/studentTestList.dto.js';
+import { loadTestSubjectPresentationBatch } from './testSubjectPresentation.service.js';
 import {
   COUNT_STUDENT_ELIGIBLE_TESTS_SQL,
   LIST_STUDENT_ELIGIBLE_TESTS_SQL,
@@ -58,12 +59,23 @@ export async function listStudentEligibleTests(studentId, query) {
 
     const [rows] = await mysqlPool.query(LIST_STUDENT_ELIGIBLE_TESTS_SQL, listParams);
 
+    const presentationByTestId = await loadTestSubjectPresentationBatch(rows.map((row) => Number(row.id)));
+    const enrichedRows = rows.map((row) => {
+      const presentation = presentationByTestId.get(Number(row.id));
+      return {
+        ...row,
+        subject_label: presentation?.displayLabel ?? null,
+        subject_ids: presentation?.subjectIds ?? [],
+      };
+    });
+
     const statusCounts = { available: 0, in_progress: 0, completed: 0 };
-    for (const row of rows) {
+    for (const row of enrichedRows) {
       const { status } = computeStudentTestListingStatus({
         maxAttempts: row.max_attempts,
         attemptsUsed: row.attempts_used,
         activeAttemptId: row.active_attempt_id,
+        allowRetake: Boolean(Number(row.allow_retake ?? 0)),
       });
       statusCounts[status] += 1;
     }
@@ -73,11 +85,11 @@ export async function listStudentEligibleTests(studentId, query) {
       page,
       limit,
       total,
-      returned: rows.length,
+      returned: enrichedRows.length,
       statusCounts,
     });
 
-    return toStudentTestListResponse(rows, { page, limit, total });
+    return toStudentTestListResponse(enrichedRows, { page, limit, total });
   } catch (error) {
     logger.error('student test listing failed', {
       studentId: uid,

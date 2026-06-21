@@ -2,21 +2,17 @@
  * CEE Enrollment Lifecycle — single source of truth for access_status mutations.
  *
  * Business rule: at most one enrollment per user with access_status = 'active'.
+ * Admission status (OPEN/CLOSED) is not checked on activation — students who enrolled
+ * or have payment in flight retain their path to access.
+ *
  * No database triggers — transactional application enforcement with row locks.
- *
- * Concurrency strategy:
- * - BEGIN transaction
- * - SELECT target enrollment FOR UPDATE (serializes competing activations on same row)
- * - SELECT all active enrollments for user FOR UPDATE (serializes cross-enrollment races)
- * - Deactivate all other active rows, activate target, verify count === 1
- * - COMMIT or ROLLBACK on any failure
- *
- * Idempotency: if target is already the sole active approved enrollment, return success without error.
  */
 
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { auditEnrollmentLifecycleEvent } from './enrollmentLifecycleAudit.js';
+import { assertAndReserveBatchSeat } from './batchSeat.service.js';
+import { assertActivationSwitchAllowed } from './enrollmentState.service.js';
 import {
   EnrollmentActivationDeniedError,
   EnrollmentIntegrityViolationError,
@@ -45,6 +41,8 @@ import {
  * @property {string} [reason]
  * @property {boolean} [requirePaidOrder=true]
  * @property {boolean} [setStatusApproved=true]
+ * @property {'free'|'paid'|null} [enrollmentSource]
+ * @property {boolean} [confirmSwitch=false]
  */
 
 /**
@@ -163,7 +161,7 @@ async function validateActivationEligibility(connection, enrollment, options) {
   }
 
   const [courseRows] = await connection.query(
-    `SELECT id, is_active FROM courses WHERE id = ? LIMIT 1`,
+    `SELECT id, is_active, admission_status FROM courses WHERE id = ? LIMIT 1`,
     [courseId]
   );
   if (!courseRows[0]) {
@@ -172,6 +170,7 @@ async function validateActivationEligibility(connection, enrollment, options) {
   if (!courseRows[0].is_active) {
     throw new EnrollmentActivationDeniedError({ enrollmentId, reason: 'course_inactive' });
   }
+  // admission_status intentionally not checked — existing enrollments activate regardless
 
   if (String(enrollment.access_status).toLowerCase() === 'revoked') {
     throw new EnrollmentRevokedStateError({ enrollmentId, userId });
@@ -255,6 +254,16 @@ export async function activateEnrollmentInTransaction(connection, options) {
     };
   }
 
+  await assertActivationSwitchAllowed(connection, {
+    userId,
+    enrollmentId,
+    courseId,
+    enrollmentSource: options.enrollmentSource ?? null,
+    confirmSwitch: options.confirmSwitch === true,
+  });
+
+  await assertAndReserveBatchSeat(connection, courseId);
+
   const [deactRes] = await connection.query(
     `UPDATE enrollments
      SET access_status = 'inactive', updated_at = CURRENT_TIMESTAMP
@@ -271,6 +280,10 @@ export async function activateEnrollmentInTransaction(connection, options) {
   if (orderId != null) {
     setParts.unshift('order_id = ?');
     updateParams.push(orderId);
+  }
+  if (options.enrollmentSource != null) {
+    setParts.unshift('enrollment_source = ?');
+    updateParams.push(options.enrollmentSource);
   }
   updateParams.push(enrollmentId, userId);
 

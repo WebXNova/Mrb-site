@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { coursePricingWriteBodySchema } from './coursePricing.schema.js';
 import { subjectSeedForCourseCreateSchema } from './subjectWrite.schema.js';
+import { ADMISSION_STATUS, normalizeDateOnly, validateCourseDateRange } from '../models/course.model.js';
+
+const dateOnlyField = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v) => normalizeDateOnly(v))
+  .pipe(z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional());
 
 function preprocessCourseBody(raw) {
   const obj = typeof raw === 'object' && raw !== null ? { ...raw } : {};
@@ -28,7 +34,21 @@ const courseBaseObject = z.object({
   level: z.enum(['beginner', 'intermediate', 'advanced']),
   thumbnail_url: z.string().max(1000).optional().nullable(),
   is_active: z.boolean().optional(),
+  start_date: dateOnlyField,
+  end_date: dateOnlyField,
+  admission_status: z.enum([ADMISSION_STATUS.OPEN, ADMISSION_STATUS.CLOSED]).optional(),
 });
+
+function admissionDateRefine(data, ctx) {
+  const check = validateCourseDateRange(data.start_date ?? null, data.end_date ?? null);
+  if (!check.ok) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: check.message,
+      path: ['end_date'],
+    });
+  }
+}
 
 /**
  * Allowed fields for `PUT /admin/courses/:id`. Course identity only — pricing
@@ -36,7 +56,7 @@ const courseBaseObject = z.object({
  */
 export const courseWriteBodySchema = z.preprocess(
   preprocessCourseBody,
-  courseBaseObject.strip()
+  courseBaseObject.strip().superRefine(admissionDateRefine)
 );
 
 /**
@@ -53,4 +73,5 @@ export const courseCreateBodySchema = z.preprocess(
       subjects: z.array(subjectSeedForCourseCreateSchema).min(1).max(200),
     })
     .strip()
+    .superRefine(admissionDateRefine)
 );

@@ -40,6 +40,8 @@ assertMatch('audit service — logSecurityEvent', audit, /export function logSec
 assertMatch('audit — PUBLISH_ATTEMPT', audit, /PUBLISH_ATTEMPT/);
 assertMatch('audit — LEGACY_ENDPOINT_ACCESS', audit, /LEGACY_ENDPOINT_ACCESS/);
 assertMatch('controller — publish audit', controller, /PUBLISH_ATTEMPT/);
+assertMatch('controller — completeness ownership gate', controller, /assertTestCompletenessAccess/);
+assertMatch('mutation access — completeness helper', read('src/services/testMutationAccess.service.js'), /assertTestCompletenessAccess/);
 assertMatch('controller — putTest 410', controller, /LEGACY_ENDPOINT_ACCESS[\s\S]*putTest/s);
 assertMatch('controller — putTestPublish 410', controller, /putTestPublish[\s\S]*410/);
 assertMatch('test.service — createTest disabled', testService, /createTest_service_deprecated/);

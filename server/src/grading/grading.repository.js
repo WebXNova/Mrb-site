@@ -13,7 +13,7 @@ export const LOCK_SUBMITTED_ATTEMPT_SQL = `
     a.submitted_at,
     TIMESTAMPDIFF(SECOND, a.started_at, a.submitted_at) AS time_taken_seconds,
     t.course_id,
-    t.passing_percentage,
+    t.passing_marks,
     t.negative_marking
   FROM test_attempts a
   INNER JOIN tests t ON t.id = a.test_id AND t.deleted_at IS NULL

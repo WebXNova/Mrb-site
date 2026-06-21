@@ -3,6 +3,8 @@
  * and by the admin client (via Vite alias `@course-wizard-schema`) so rules stay aligned.
  */
 import { z } from 'zod';
+import { validateBatchScheduleWindow, parseBatchTimestamp } from '../utils/batchDateTime.js';
+import { ADMISSION_STATUS, normalizeDateOnly, validateCourseDateRange } from '../models/course.model.js';
 
 export const COURSE_WIZARD_LEVELS = ['beginner', 'intermediate', 'advanced'];
 
@@ -53,6 +55,24 @@ export const courseWizardCourseSchema = z.object({
     return t === '' ? null : t;
   }, z.union([z.string().max(1000), z.null()]).optional()),
   is_active: z.boolean().optional().default(true),
+  start_date: z
+    .union([z.string(), z.null(), z.undefined()])
+    .transform((v) => normalizeDateOnly(v))
+    .pipe(z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional()),
+  end_date: z
+    .union([z.string(), z.null(), z.undefined()])
+    .transform((v) => normalizeDateOnly(v))
+    .pipe(z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional()),
+  admission_status: z.enum([ADMISSION_STATUS.OPEN, ADMISSION_STATUS.CLOSED]).optional().default(ADMISSION_STATUS.CLOSED),
+}).superRefine((data, ctx) => {
+  const check = validateCourseDateRange(data.start_date ?? null, data.end_date ?? null);
+  if (!check.ok) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: check.message,
+      path: ['end_date'],
+    });
+  }
 });
 
 export const courseWizardPricingSchema = z
@@ -105,17 +125,22 @@ export const courseWizardPricingSchema = z
     }
   });
 
-const dateOnlySchema = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
-  .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00.000Z`)), 'invalid date');
-
 const dateTimeSchema = z
   .string()
   .trim()
   .min(1)
   .refine((s) => !Number.isNaN(Date.parse(s)), 'invalid ISO datetime');
+
+function addBatchScheduleIssues(val, ctx) {
+  const result = validateBatchScheduleWindow(val);
+  if (!result.ok) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: result.message,
+      path: [result.field ?? 'end_date'],
+    });
+  }
+}
 
 const batchStatusSchema = z
   .string()
@@ -136,13 +161,36 @@ const batchStatusSchema = z
     { message: 'invalid batch status' }
   );
 
+function preprocessWizardBatchItem(raw) {
+  if (typeof raw !== 'object' || raw === null) return {};
+  const allowed = [
+    'title',
+    'start_date',
+    'end_date',
+    'total_seats',
+    'instructor_name',
+    'schedule_label',
+    'timezone',
+    'status',
+    'is_active',
+    'show_publicly',
+    'recordings_enabled',
+  ];
+  const out = {};
+  for (const k of allowed) {
+    if (Object.prototype.hasOwnProperty.call(raw, k)) out[k] = raw[k];
+  }
+  return out;
+}
+
 export const courseWizardBatchItemSchema = z
+  .preprocess(
+    preprocessWizardBatchItem,
+    z
   .object({
     title: z.string().trim().min(1).max(180),
-    start_date: dateOnlySchema,
-    end_date: dateOnlySchema,
-    enrollment_open_at: dateTimeSchema,
-    enrollment_close_at: dateTimeSchema,
+    start_date: dateTimeSchema,
+    end_date: dateTimeSchema,
     total_seats: z.number().int().min(1).max(100_000),
     instructor_name: z.union([z.string().max(160), z.null()]).optional(),
     schedule_label: z.union([z.string().max(180), z.null()]).optional(),
@@ -153,46 +201,14 @@ export const courseWizardBatchItemSchema = z
       .refine((tz) => COURSE_WIZARD_BATCH_TIMEZONES.includes(tz), { message: 'unsupported timezone' }),
     status: batchStatusSchema.optional().default('draft'),
     is_active: z.boolean().optional().default(true),
-    allow_enrollment: z.boolean().optional().default(true),
     show_publicly: z.boolean().optional().default(true),
-    certificate_enabled: z.boolean().optional().default(false),
     recordings_enabled: z.boolean().optional().default(true),
   })
   .strict()
   .superRefine((val, ctx) => {
-    if (val.start_date >= val.end_date) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'end_date must be after start_date',
-        path: ['end_date'],
-      });
-    }
-    const open = Date.parse(val.enrollment_open_at);
-    const close = Date.parse(val.enrollment_close_at);
-    if (!(open < close)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'enrollment_open_at must be before enrollment_close_at',
-        path: ['enrollment_close_at'],
-      });
-    }
-    const endDay = Date.parse(`${val.end_date}T23:59:59.999Z`);
-    if (close > endDay) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'enrollment_close_at must not be after course end_date',
-        path: ['enrollment_close_at'],
-      });
-    }
-    const batchStart = Date.parse(`${val.start_date}T00:00:00.000Z`);
-    if (Number.isFinite(close) && Number.isFinite(batchStart) && !(close < batchStart)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'enrollment_close_at must be before batch start_date',
-        path: ['enrollment_close_at'],
-      });
-    }
-  });
+    addBatchScheduleIssues(val, ctx);
+  })
+  );
 
 export const courseWizardSubjectItemSchema = z.object({
   title: z.string().trim().min(1).max(180),
@@ -206,10 +222,10 @@ export const courseWizardSubjectItemSchema = z.object({
 });
 
 function batchesOverlap(a, b) {
-  const a0 = Date.parse(`${a.start_date}T00:00:00.000Z`);
-  const a1 = Date.parse(`${a.end_date}T23:59:59.999Z`);
-  const b0 = Date.parse(`${b.start_date}T00:00:00.000Z`);
-  const b1 = Date.parse(`${b.end_date}T23:59:59.999Z`);
+  const a0 = parseBatchTimestamp(a.start_date);
+  const a1 = parseBatchTimestamp(a.end_date);
+  const b0 = parseBatchTimestamp(b.start_date);
+  const b1 = parseBatchTimestamp(b.end_date);
   if (![a0, a1, b0, b1].every(Number.isFinite)) return false;
   const active = (r) =>
     r.is_active !== false &&

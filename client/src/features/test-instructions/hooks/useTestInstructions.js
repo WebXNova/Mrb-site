@@ -45,11 +45,11 @@ export function useTestInstructions(slug) {
 
       if (token) {
         try {
-          const prepResponse = await testInstructionsApi.fetchPrep(normalizedSlug, token);
+          const prepResponse = await testInstructionsApi.fetchPrep(normalizedSlug);
           setPrep(prepResponse?.data ?? null);
         } catch (prepErr) {
           setPrep(null);
-          if (prepErr?.status === 401 || prepErr?.status === 403) {
+          if (prepErr?.status === 401) {
             setIsAuthenticated(false);
           }
         }
@@ -119,20 +119,17 @@ export function useStartTest(slug) {
       setStartError('');
 
       try {
-        const response = await testInstructionsApi.startTest(
-          normalizedSlug,
-          { studentName: studentName?.trim() || null },
-          token
-        );
+        const response = await testInstructionsApi.startTest(normalizedSlug, {
+          studentName: studentName?.trim() || null,
+        });
         const data = response?.data;
 
-        if (!data?.attemptId || !data?.attemptToken) {
+        if (!data?.attemptId) {
           throw new Error('Could not start the test. Please try again.');
         }
 
         setAttemptSession(normalizedSlug, {
           attemptId: data.attemptId,
-          attemptToken: data.attemptToken,
           expiresAt: data.expiresAt ?? null,
         });
 

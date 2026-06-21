@@ -1,8 +1,23 @@
+import { useLocation } from 'react-router-dom';
+import { getAdminShellSegment } from '../../config/adminShellConfig.js';
 import './MobileWhatsAppButton.css';
 
 const WHATSAPP_URL = 'https://wa.me/923141227364';
 
+function isStaffPanelPath(pathname) {
+  const path = String(pathname || '');
+  if (path === '/teacher' || path.startsWith('/teacher/')) return true;
+  const adminBase = `/${getAdminShellSegment()}`;
+  return path === adminBase || path.startsWith(`${adminBase}/`);
+}
+
 export default function MobileWhatsAppButton() {
+  const { pathname } = useLocation();
+
+  if (isStaffPanelPath(pathname)) {
+    return null;
+  }
+
   return (
     <a
       className="mobile-whatsapp-button"

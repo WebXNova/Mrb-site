@@ -84,7 +84,7 @@ export async function executePublishTestStatus(testId, publicSlug, executor = my
   await executor.query(
     `UPDATE tests
      SET status = 'published', public_slug = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ? AND deleted_at IS NULL`,
+     WHERE id = ? AND deleted_at IS NULL AND LOWER(TRIM(status)) <> 'published'`,
     [publicSlug, tid]
   );
 }

@@ -69,7 +69,8 @@
     width: 1.75rem;
     height: 1.75rem;
     border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-bg-soft);
+    color: var(--color-ink-600);
     font-size: 0.6875rem;
     font-weight: var(--fw-bold);
     flex-shrink: 0;
@@ -91,7 +92,8 @@
     width: 1.75rem;
     height: 1.75rem;
     border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-bg-soft);
+    color: var(--color-ink-600);
     font-size: 0.6875rem;
     font-weight: var(--fw-bold);
     flex-shrink: 0;
@@ -450,6 +452,13 @@
   color: var(--color-danger);
 }
 
+.admin-action-menu__item:disabled,
+.admin-action-menu__item[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .admin-action-menu__label {
   display: block;
   font-size: 0.6875rem;
@@ -649,5 +658,173 @@
     flex-direction: row;
     align-items: center;
     flex-wrap: wrap;
+  }
+}
+
+/* ---- Registrations page ---- */
+@media (max-width: 1279px) {
+  .admin-registrations-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-registrations-sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .admin-registrations-filter-grid--sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1199px) {
+  .admin-reg-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-registrations-filter-grid--primary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-registrations-filter-grid--location {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-table--registrations .admin-reg-col--gender,
+  .admin-table--registrations .admin-reg-col--dob,
+  .admin-table--registrations .admin-reg-col--order {
+    display: none;
+  }
+}
+
+@media (max-width: 991px) {
+  .admin-reg-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-registrations-filter-grid--primary,
+  .admin-registrations-filter-grid--location {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-table--registrations .admin-reg-col--location,
+  .admin-table--registrations .admin-reg-col--account,
+  .admin-table--registrations .admin-reg-col--whatsapp {
+    display: none;
+  }
+
+  .admin-table--registrations {
+    min-width: 880px;
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-reg-filters-toggle {
+    display: inline-flex;
+  }
+
+  .admin-reg-filters-panel:not(.admin-reg-filters-panel--open) {
+    display: none;
+  }
+
+  .admin-registrations-filter-grid--primary,
+  .admin-registrations-filter-grid--location {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-reg-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-reg-toolbar__right {
+    width: 100%;
+  }
+
+  .admin-reg-toolbar__right .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-reg-table-desktop {
+    display: none !important;
+  }
+
+  .admin-reg-mobile-list {
+    display: grid;
+  }
+
+  .admin-reg-page-head .heading-3 {
+    font-size: 1.25rem;
+  }
+
+  .admin-reg-stat__label {
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+
+  .admin-reg-page-head .admin-muted {
+    font-size: var(--fs-13);
+  }
+
+  .admin-reg-detail-actions .btn,
+  .admin-reg-detail-actions .btn--course-danger {
+    flex: 1 1 calc(50% - 0.3rem);
+    justify-content: center;
+  }
+}
+
+@media (min-width: 768px) {
+  .admin-reg-filters-toggle {
+    display: none;
+  }
+
+  .admin-reg-filters-panel {
+    display: grid !important;
+  }
+
+  .admin-reg-mobile-list {
+    display: none !important;
+  }
+}
+
+/* ---- Global admin filter grids & tables ---- */
+.admin-form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1024px) {
+  .admin-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-card {
+    padding: var(--space-4);
+  }
+}
+
+@media (min-width: 768px) {
+  .admin-card {
+    padding: var(--space-6);
+  }
+}
+
+.admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 768px) {
+  .admin-tests-toolbar {
+    grid-template-columns: minmax(12rem, 1fr) auto auto;
+    align-items: center;
   }
 }

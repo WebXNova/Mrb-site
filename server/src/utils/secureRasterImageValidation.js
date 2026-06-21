@@ -36,25 +36,66 @@ const ALLOWED_MIME_BY_KIND = Object.freeze({
   webp: new Set(['image/webp']),
 });
 
-/** Polyglot / disguised payload markers (case-sensitive where relevant). */
-const DANGEROUS_MARKERS = Object.freeze([
+/** Text markers injected immediately after a JPEG header. */
+const EARLY_INJECTION_MARKERS = Object.freeze([
   Buffer.from('<?php'),
-  Buffer.from('<?'),
+  Buffer.from('<?='),
   Buffer.from('<script'),
   Buffer.from('<html'),
   Buffer.from('%PDF'),
   Buffer.from('PK\x03\x04'),
-  Buffer.from('MZ'),
-  Buffer.from('#!/'),
 ]);
+
+/** Markers appended after the image end (polyglot suffix attacks). */
+const TRAILING_MARKERS = EARLY_INJECTION_MARKERS;
+
+/** Bytes after the JPEG SOI where polyglot payloads are typically injected. */
+const JPEG_EARLY_SCAN_START = 3;
+const JPEG_EARLY_SCAN_BYTES = 64;
+
+const JPEG_EOI = Buffer.from([0xff, 0xd9]);
+const PNG_IEND = Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+
+/**
+ * Reject path traversal and double extensions (e.g. shell.php.jpg).
+ * @param {string} base
+ */
+function assertSafeBasename(base) {
+  if (!base || base.includes('..') || /[\\/]/.test(base)) {
+    return { ok: false, reason: 'invalid_filename', ext: null };
+  }
+  const segments = base.split('.');
+  if (segments.length < 2) {
+    return { ok: false, reason: 'missing_extension', ext: null };
+  }
+  for (let i = 1; i < segments.length - 1; i += 1) {
+    const innerExt = `.${segments[i].toLowerCase()}`;
+    if (BLOCKED_EXTENSIONS.has(innerExt)) {
+      return { ok: false, reason: 'double_extension', ext: innerExt };
+    }
+  }
+  return { ok: true };
+}
 
 /**
  * @param {string} originalName
  */
 export function normalizeUploadExtension(originalName) {
-  const base = path.basename(String(originalName || ''));
+  const raw = String(originalName || '');
+  if (raw.includes('..') || /[\\/]/.test(raw)) {
+    return { ok: false, reason: 'invalid_filename', ext: null };
+  }
+
+  const base = path.basename(raw);
+  const safe = assertSafeBasename(base);
+  if (!safe.ok) {
+    return { ok: false, reason: safe.reason, ext: safe.ext };
+  }
+
   const ext = path.extname(base).toLowerCase();
-  if (!ext) return '';
+  if (!ext) {
+    return { ok: false, reason: 'missing_extension', ext: null };
+  }
   if (BLOCKED_EXTENSIONS.has(ext)) {
     return { ok: false, reason: 'blocked_extension', ext };
   }
@@ -62,22 +103,83 @@ export function normalizeUploadExtension(originalName) {
 }
 
 /**
- * @param {string} filePath
+ * @param {Buffer} buf
  */
-function readProbeBuffer(filePath, maxBytes = 512) {
-  const fd = fs.openSync(filePath, 'r');
-  try {
-    const buf = Buffer.alloc(maxBytes);
-    const n = fs.readSync(fd, buf, 0, maxBytes, 0);
-    return buf.subarray(0, n);
-  } finally {
-    fs.closeSync(fd);
+function findJpegTrailingStart(buf) {
+  for (let i = buf.length - 2; i >= 0; i -= 1) {
+    if (buf[i] === JPEG_EOI[0] && buf[i + 1] === JPEG_EOI[1]) {
+      return i + JPEG_EOI.length;
+    }
   }
+  return null;
 }
 
-function containsDangerousMarker(buf) {
-  for (const marker of DANGEROUS_MARKERS) {
-    if (buf.includes(marker)) return marker.toString('utf8', 0, Math.min(marker.length, 16));
+/**
+ * @param {Buffer} buf
+ */
+function findPngTrailingStart(buf) {
+  const lastIdx = buf.lastIndexOf(PNG_IEND);
+  if (lastIdx !== -1) {
+    return lastIdx + PNG_IEND.length;
+  }
+  return 8;
+}
+
+/**
+ * @param {Buffer} buf
+ */
+function findWebpTrailingStart(buf) {
+  if (buf.length < 8) return null;
+  const riffSize = buf.readUInt32LE(4);
+  const declaredEnd = 8 + riffSize;
+  if (!Number.isFinite(riffSize) || declaredEnd > buf.length) {
+    return 12;
+  }
+  return declaredEnd;
+}
+
+/**
+ * Scan only the post-JPEG-header band and bytes appended after the image end marker.
+ * PNG/WebP bodies are not scanned — only trailing payload bytes after IEND/RIFF end.
+ *
+ * @param {string} filePath
+ * @param {'jpeg'|'png'|'webp'} kind
+ */
+function readPolyglotScanBuffers(filePath, kind) {
+  const buf = fs.readFileSync(filePath);
+  if (buf.length === 0) {
+    return { earlyRegion: Buffer.alloc(0), trailingRegion: Buffer.alloc(0) };
+  }
+
+  let earlyRegion = Buffer.alloc(0);
+  if (kind === 'jpeg') {
+    const earlyEnd = Math.min(buf.length, JPEG_EARLY_SCAN_START + JPEG_EARLY_SCAN_BYTES);
+    if (earlyEnd > JPEG_EARLY_SCAN_START) {
+      earlyRegion = buf.subarray(JPEG_EARLY_SCAN_START, earlyEnd);
+    }
+  }
+
+  let trailingStart = null;
+  if (kind === 'jpeg') trailingStart = findJpegTrailingStart(buf);
+  else if (kind === 'png') trailingStart = findPngTrailingStart(buf);
+  else if (kind === 'webp') trailingStart = findWebpTrailingStart(buf);
+
+  const trailingRegion =
+    trailingStart != null && trailingStart < buf.length ? buf.subarray(trailingStart) : Buffer.alloc(0);
+
+  return { earlyRegion, trailingRegion };
+}
+
+function containsDangerousMarker(earlyRegion, trailingRegion) {
+  for (const marker of EARLY_INJECTION_MARKERS) {
+    if (earlyRegion.includes(marker)) {
+      return marker.toString('utf8', 0, Math.min(marker.length, 16));
+    }
+  }
+  for (const marker of TRAILING_MARKERS) {
+    if (trailingRegion.includes(marker)) {
+      return marker.toString('utf8', 0, Math.min(marker.length, 16));
+    }
   }
   return null;
 }
@@ -132,8 +234,8 @@ export function validateSecureRasterImageUpload({
     });
   }
 
-  const probe = readProbeBuffer(filePath);
-  const dangerous = containsDangerousMarker(probe);
+  const { earlyRegion, trailingRegion } = readPolyglotScanBuffers(filePath, kind);
+  const dangerous = containsDangerousMarker(earlyRegion, trailingRegion);
   if (dangerous) {
     throw Object.assign(new Error('File contains disallowed embedded content.'), {
       code: 'POLYGLOT_REJECTED',

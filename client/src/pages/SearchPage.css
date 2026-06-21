@@ -1,0 +1,28 @@
+.search-page {
+  padding: var(--space-10) 0 var(--space-16);
+}
+
+.search-page__head {
+  max-width: 42rem;
+  margin-bottom: var(--space-10);
+}
+
+.search-page__lead {
+  margin-top: var(--space-4);
+  color: var(--color-ink-600);
+}
+
+.search-page__status {
+  color: var(--color-ink-500);
+  margin-bottom: var(--space-6);
+}
+
+.search-page__status--error {
+  color: var(--color-danger);
+}
+
+.search-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-6);
+}

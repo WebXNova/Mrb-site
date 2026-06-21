@@ -24,6 +24,25 @@ function toActivityLog(row) {
   };
 }
 
+/**
+ * Low-level activity_logs insert — throws on failure (used by hardened Q&A audit pipeline).
+ */
+export async function insertActivityLogRecord({
+  userId = null,
+  role = 'system',
+  action,
+  entityType,
+  entityId = null,
+  metadata = {},
+}) {
+  const safeMetadata = sanitizeMetadata(metadata || {});
+  await mysqlPool.query(
+    `INSERT INTO activity_logs (user_id, role, action, entity_type, entity_id, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, role, action, entityType, entityId, JSON.stringify(safeMetadata)]
+  );
+}
+
 export async function logActivity({
   userId = null,
   role = 'system',
@@ -33,14 +52,16 @@ export async function logActivity({
   metadata = {},
 }) {
   try {
-    const safeMetadata = sanitizeMetadata(metadata || {});
-    await mysqlPool.query(
-      `INSERT INTO activity_logs (user_id, role, action, entity_type, entity_id, metadata_json)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, role, action, entityType, entityId, JSON.stringify(safeMetadata)]
-    );
+    await insertActivityLogRecord({
+      userId,
+      role,
+      action,
+      entityType,
+      entityId,
+      metadata,
+    });
   } catch (error) {
-    // Swallow logging failures to avoid blocking primary flow.
+    // Legacy non-Q&A paths: swallow to avoid blocking primary flow.
     console.error('ActivityLog error:', error.message);
   }
 }

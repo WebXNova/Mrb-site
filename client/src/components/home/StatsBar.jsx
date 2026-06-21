@@ -5,7 +5,7 @@ import './StatsBar.css';
 export default function StatsBar() {
   const stats = useMemo(() => platformStats.map(parseStatValue), []);
   const [displayValues, setDisplayValues] = useState(() =>
-    stats.map((stat) => (stat.type === 'count' ? formatCountValue(0, stat) : stat.value))
+    stats.map((stat) => (isAnimatedStat(stat) ? formatAnimatedValue(0, stat) : stat.value))
   );
   const [fadeInTime, setFadeInTime] = useState(false);
   const sectionRef = useRef(null);
@@ -31,9 +31,9 @@ export default function StatsBar() {
 
         setDisplayValues(
           stats.map((stat) => {
-            if (stat.type !== 'count') return stat.value;
+            if (!isAnimatedStat(stat)) return stat.value;
             const current = Math.round(stat.target * eased);
-            return formatCountValue(current, stat);
+            return formatAnimatedValue(current, stat);
           })
         );
         setFadeInTime(progress > 0.5);
@@ -68,9 +68,9 @@ export default function StatsBar() {
               <span
                 className="stats-bar__value"
                 style={
-                  stat.type === 'time'
+                  stat.type === 'ratio'
                     ? {
-                        opacity: fadeInTime ? 1 : 0.45,
+                        opacity: fadeInTime ? 1 : 0.85,
                         transition: 'opacity 420ms ease-out',
                       }
                     : undefined
@@ -108,10 +108,13 @@ function parseStatValue(stat) {
     };
   }
 
-  if (/^\d+h$/i.test(value)) {
+  if (/^\d+\/\d+$/.test(value)) {
+    const [hours, days] = value.split('/');
     return {
       ...stat,
-      type: 'time',
+      type: 'ratio',
+      target: Number.parseInt(hours, 10),
+      suffix: `/${days}`,
     };
   }
 
@@ -121,6 +124,13 @@ function parseStatValue(stat) {
   };
 }
 
-function formatCountValue(number, stat) {
+function isAnimatedStat(stat) {
+  return stat.type === 'count' || stat.type === 'ratio';
+}
+
+function formatAnimatedValue(number, stat) {
+  if (stat.type === 'ratio') {
+    return number >= stat.target ? `${stat.target}${stat.suffix}` : String(number);
+  }
   return `${number}${stat.suffix}`;
 }

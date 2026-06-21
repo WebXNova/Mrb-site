@@ -6,7 +6,7 @@ import { AppError } from '../errors/base/AppError.js';
 import { VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
 import { mysqlPool } from '../config/mysql.js';
 import { loadTestSubjectIds } from './testSubjectValidation.service.js';
-import { countActiveComposedQuestionsForTest } from './testQuestionComposition.service.js';
+import { resolveTestQuestionAuthority } from './testQuestionAuthority.service.js';
 
 export const TEST_LIFECYCLE_STATES = Object.freeze({
   INCOMPLETE: 'INCOMPLETE',
@@ -21,9 +21,11 @@ export const COMPLETENESS_ERROR_CODES = Object.freeze({
   TEST_TYPE_REQUIRED: 'TEST_TYPE_REQUIRED',
   DURATION_REQUIRED: 'DURATION_REQUIRED',
   MAX_ATTEMPTS_REQUIRED: 'MAX_ATTEMPTS_REQUIRED',
+  PASSING_MARKS_REQUIRED: 'PASSING_MARKS_REQUIRED',
   ACCESS_MODE_REQUIRED: 'ACCESS_MODE_REQUIRED',
   CANNOT_PUBLISH_INCOMPLETE_RULES: 'CANNOT_PUBLISH_INCOMPLETE_RULES',
   NO_QUESTIONS_ADDED: 'NO_QUESTIONS_ADDED',
+  NO_QUIZ_DRAFT: 'NO_QUIZ_DRAFT',
   TEST_NOT_COMPLETE: 'TEST_NOT_COMPLETE',
 });
 
@@ -118,6 +120,12 @@ function evaluateStep2(testRow, missingFields) {
     return false;
   }
 
+  const passingMarks = testRow.passing_marks;
+  if (passingMarks == null || !Number.isFinite(Number(passingMarks)) || Number(passingMarks) < 0) {
+    missingFields.push('passing_marks');
+    return false;
+  }
+
   return true;
 }
 
@@ -135,20 +143,73 @@ function evaluateStep3(testRow, missingFields) {
 }
 
 /**
+ * Question count used for wizard step 4 / publish readiness.
+ * Unpublished tests publish via quiz-draft materialization — runtime links alone do not count.
+ *
+ * @param {Record<string, unknown>} testRow
+ * @param {Record<string, unknown>} authorityMeta
+ */
+export function resolveWizardQuestionCount(testRow, authorityMeta = {}) {
+  if (isPublishedDbStatus(testRow.status)) {
+    return Number(authorityMeta.questionCount ?? 0);
+  }
+  if (authorityMeta.hasQuizDraft) {
+    return Number(authorityMeta.draftQuestionCount ?? 0);
+  }
+  return 0;
+}
+
+/**
+ * @param {Record<string, unknown>} testRow
+ * @param {Record<string, unknown>} authorityMeta
+ * @param {string[]} missingFields
+ */
+function evaluateStep4(testRow, authorityMeta, missingFields) {
+  const hasQuizDraft = Boolean(authorityMeta.hasQuizDraft);
+  const wizardQuestionCount = resolveWizardQuestionCount(testRow, authorityMeta);
+
+  if (isPublishedDbStatus(testRow.status)) {
+    if (wizardQuestionCount < 1) {
+      missingFields.push('questions');
+      return false;
+    }
+    return true;
+  }
+
+  if (!hasQuizDraft) {
+    missingFields.push('quiz_draft');
+    return false;
+  }
+
+  if (wizardQuestionCount < 1) {
+    missingFields.push('questions');
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * @param {Record<string, unknown>} testRow
  * @param {number} questionCount
  * @param {'general'|'publish'} [context]
  */
-export function evaluateTestCompleteness(testRow, questionCount = 0, context = 'general', subjectIds = []) {
+export function evaluateTestCompleteness(
+  testRow,
+  questionCount = 0,
+  context = 'general',
+  subjectIds = [],
+  authorityMeta = {}
+) {
   const missingFields = [];
   const step1_complete = evaluateStep1(testRow, subjectIds, missingFields);
   const step2_complete = evaluateStep2(testRow, missingFields);
   const step3_complete = evaluateStep3(testRow, missingFields);
-  const step4_complete = Number(questionCount) >= 1;
-
-  if (context === 'publish' && !step4_complete) {
-    missingFields.push('questions');
-  }
+  const wizardQuestionCount = resolveWizardQuestionCount(testRow, {
+    ...authorityMeta,
+    questionCount: authorityMeta.questionCount ?? questionCount,
+  });
+  const step4_complete = evaluateStep4(testRow, authorityMeta, missingFields);
 
   const uniqueMissing = [...new Set(missingFields)];
   const can_publish = step1_complete && step2_complete && step3_complete && step4_complete;
@@ -172,7 +233,12 @@ export function evaluateTestCompleteness(testRow, questionCount = 0, context = '
     can_publish,
     missing_fields: uniqueMissing,
     lifecycle_status,
-    question_count: Number(questionCount) || 0,
+    question_count: wizardQuestionCount,
+    question_authority_source: authorityMeta.source ?? null,
+    runtime_composed_count: authorityMeta.runtimeComposedCount ?? null,
+    draft_question_count: authorityMeta.draftQuestionCount ?? null,
+    draft_total_count: authorityMeta.draftTotalCount ?? null,
+    has_quiz_draft: authorityMeta.hasQuizDraft ?? false,
   };
 }
 
@@ -183,7 +249,7 @@ export function evaluateTestCompleteness(testRow, questionCount = 0, context = '
 export async function loadTestCompletenessRow(testId, executor = mysqlPool) {
   const tid = Number(testId);
   const [rows] = await executor.query(
-    `SELECT id, course_id, title, category, test_type, duration_minutes, max_attempts, access_mode, status
+    `SELECT id, course_id, title, category, test_type, duration_minutes, max_attempts, passing_marks, access_mode, status
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
      LIMIT 1`,
@@ -210,9 +276,9 @@ export async function countLinkedQuestionsForTest(testId, executor = mysqlPool) 
 export async function getTestCompletenessReport(testId, executor = mysqlPool) {
   const row = await loadTestCompletenessRow(testId, executor);
   if (!row) return null;
-  const questionCount = await countActiveComposedQuestionsForTest(testId, executor);
+  const authority = await resolveTestQuestionAuthority(testId, executor, { testRow: row });
   const subjectIds = await loadTestSubjectIds(testId, executor);
-  return evaluateTestCompleteness(row, questionCount, 'general', subjectIds);
+  return evaluateTestCompleteness(row, authority.questionCount, 'general', subjectIds, authority);
 }
 
 /**
@@ -226,13 +292,13 @@ export async function syncTestLifecycleStatus(testId, executor = mysqlPool) {
 
   const subjectIds = await loadTestSubjectIds(testId, executor);
 
+  const authority = await resolveTestQuestionAuthority(testId, executor, { testRow: row });
+
   if (isPublishedDbStatus(row.status)) {
-    const questionCount = await countActiveComposedQuestionsForTest(testId, executor);
-    return evaluateTestCompleteness(row, questionCount, 'general', subjectIds);
+    return evaluateTestCompleteness(row, authority.questionCount, 'general', subjectIds, authority);
   }
 
-  const questionCount = await countActiveComposedQuestionsForTest(testId, executor);
-  const report = evaluateTestCompleteness(row, questionCount, 'general', subjectIds);
+  const report = evaluateTestCompleteness(row, authority.questionCount, 'general', subjectIds, authority);
   const dbStatus = parseStrictTestDbStatus(mapLifecycleStatusToDb(report.lifecycle_status));
 
   await executor.query(`UPDATE tests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL`, [

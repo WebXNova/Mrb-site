@@ -12,6 +12,7 @@ import {
   toLinkedTestQuestionStudentDto,
 } from '../dto/testQuestion.dto.js';
 import { TestNotFoundError } from '../errors/testBuilder/TestBuilderErrors.js';
+import { computeTestTotalMarks } from './testTotalMarks.service.js';
 
 /** Server-authored instructions shown on the pre-test page (never client-only). */
 export const STANDARD_TEST_INSTRUCTIONS = Object.freeze([
@@ -33,7 +34,9 @@ const COMPOSED_LINK_SQL = `
     tq.created_at,
     tq.updated_at,
     qb.question_text,
+    qb.question_html,
     qb.explanation,
+    qb.explanation_html,
     qb.marks,
     qb.difficulty,
     qb.topic,
@@ -56,7 +59,7 @@ async function loadOptionsByQuestionIds(questionIds, executor = mysqlPool) {
 
   const placeholders = ids.map(() => '?').join(',');
   const [rows] = await executor.query(
-    `SELECT id, question_id, option_text, is_correct, sort_order
+    `SELECT id, question_id, option_text, option_html, is_correct, sort_order
      FROM question_options
      WHERE question_id IN (${placeholders})
      ORDER BY question_id ASC, sort_order ASC, id ASC`,
@@ -106,6 +109,27 @@ function logOrphanedTestQuestionLinks(testId, orphanedQuestionIds) {
  * @param {number} testId
  * @param {{ audience?: 'admin' | 'student', connection?: import('mysql2/promise').PoolConnection, logOrphans?: boolean }} [options]
  */
+/**
+ * Admin read model — runtime composed questions linked to a test.
+ * @param {number} testId
+ */
+export async function listComposedTestQuestionsAdmin(testId) {
+  const tid = Number(testId);
+  if (!Number.isInteger(tid) || tid <= 0) {
+    throw new TestNotFoundError({ testId: tid });
+  }
+
+  const [testRows] = await mysqlPool.query(
+    `SELECT id FROM tests WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+    [tid]
+  );
+  if (!testRows[0]) {
+    throw new TestNotFoundError({ testId: tid });
+  }
+
+  return loadComposedTestQuestions(tid, { audience: 'admin' });
+}
+
 export async function loadComposedTestQuestions(testId, options = {}) {
   const tid = Number(testId);
   if (!Number.isInteger(tid) || tid <= 0) {
@@ -196,7 +220,8 @@ export function mapComposedQuestionsForStudentAttempt(composed) {
       id: o.optionId,
       text: o.optionText,
     })),
-    marks: q.marks,
+    marks: q.effectiveMarks ?? q.marks,
+    effectiveMarks: q.effectiveMarks ?? q.marks,
     orderIndex: q.displayOrder,
   }));
 }
@@ -246,7 +271,7 @@ export async function loadPublishedTestMetaBySlug(publicSlug) {
 
   const [rows] = await mysqlPool.query(
     `SELECT id, title, description, duration_minutes, public_slug, course_id,
-            passing_percentage, negative_marking, max_attempts
+            passing_marks, negative_marking, max_attempts
      FROM tests
      WHERE public_slug = ? AND status = 'published' AND deleted_at IS NULL
      LIMIT 1`,
@@ -257,6 +282,7 @@ export async function loadPublishedTestMetaBySlug(publicSlug) {
 
   const testId = Number(test.id);
   const questionCount = await countComposedTestQuestions(testId);
+  const totalMarks = await computeTestTotalMarks(testId);
   const subjectPresentation = await loadTestSubjectPresentation(testId);
   const negativeMarking = Number(test.negative_marking ?? 0);
   const customInstructions =
@@ -273,7 +299,8 @@ export async function loadPublishedTestMetaBySlug(publicSlug) {
     durationMinutes: Number(test.duration_minutes ?? 0),
     publicSlug: test.public_slug,
     questionCount,
-    passingPercentage: Number(test.passing_percentage ?? 0),
+    passingMarks: Number(test.passing_marks ?? 0),
+    totalMarks,
     negativeMarking,
     negativeMarkingEnabled: negativeMarking > 0,
     maxAttempts: Number(test.max_attempts ?? 1),

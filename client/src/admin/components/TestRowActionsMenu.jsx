@@ -1,9 +1,10 @@
+import { adminRoute } from '../../config/adminPaths';
 import { Link } from 'react-router-dom';
 import { isTestPublishedStatus } from '../utils/testBasicInfoValidation';
+import { isAnyPublishBusy, isTestPublishBusy, publishMenuLabel } from '../utils/testPublishBusyState';
 import AdminActionMenu, {
   AdminActionMenuDivider,
   AdminActionMenuItem,
-  AdminActionMenuLabel,
 } from './AdminActionMenu';
 
 export default function TestRowActionsMenu({
@@ -11,64 +12,69 @@ export default function TestRowActionsMenu({
   onPublish,
   onDuplicate,
   onDownloadResults,
+  onExportTest,
   onDelete,
   onCopyLink,
   busyAction = '',
 }) {
   const published = isTestPublishedStatus(test.status);
+  const publishing = isAnyPublishBusy(busyAction);
+  const publishingThisTest = isTestPublishBusy(busyAction, test.id);
+  const exportBusy = busyAction === `export-csv-${test.id}`;
 
   return (
-    <div className="admin-tests-row-actions">
+    <div className="admin-tests-row-actions" aria-busy={publishingThisTest || exportBusy || undefined}>
+      {published ? (
+        <Link
+          className="btn btn--primary btn--sm admin-touch-target"
+          to={adminRoute(`tests/${test.id}/edit`)}
+        >
+          Edit
+        </Link>
+      ) : null}
       <Link
         className="btn btn--secondary btn--sm admin-touch-target"
-        to={`/admin/tests/${test.id}/edit/basic-info`}
+        to={adminRoute(`tests/${test.id}/setup`)}
       >
-        Edit
+        {published ? 'View setup' : 'Setup'}
       </Link>
       <Link
-        className="btn btn--primary btn--sm admin-touch-target"
-        to={`/admin/tests/${test.id}/questions`}
+        className={`btn btn--sm admin-touch-target${published ? ' btn--secondary' : ' btn--primary'}`}
+        to={adminRoute(`tests/${test.id}/questions`)}
         aria-busy={busyAction === 'questions' || undefined}
       >
-        {busyAction === 'questions' ? 'Loading…' : 'Questions'}
+        {busyAction === 'questions' ? 'Loading…' : published ? 'View questions' : 'Questions'}
       </Link>
       <button
-        className="btn btn--danger btn--sm admin-touch-target"
         type="button"
-        onClick={() => onDelete(test)}
-        disabled={busyAction === 'delete'}
+        className="btn btn--secondary btn--sm admin-touch-target"
+        disabled={exportBusy}
+        aria-busy={exportBusy || undefined}
+        onClick={() => onExportTest(test.id)}
       >
-        {busyAction === 'delete' ? 'Deleting…' : 'Delete'}
+        {exportBusy ? 'Exporting…' : '📥 Export CSV'}
       </button>
 
       <AdminActionMenu triggerLabel="More" triggerClassName="btn btn--secondary btn--sm admin-touch-target">
         {({ close }) => (
           <>
-            <AdminActionMenuItem as={Link} to={`/admin/tests/${test.id}/details`} onClick={close}>
-              Details
+            <AdminActionMenuItem as={Link} to={adminRoute(`tests/${test.id}/details`)} onClick={close}>
+              Publish
             </AdminActionMenuItem>
             <AdminActionMenuDivider />
-            <AdminActionMenuLabel>Edit steps</AdminActionMenuLabel>
-            <AdminActionMenuItem as={Link} to={`/admin/tests/${test.id}/edit/basic-info`} onClick={close}>
-              Basic Info
-            </AdminActionMenuItem>
-            <AdminActionMenuItem as={Link} to={`/admin/tests/${test.id}/edit/rules`} onClick={close}>
-              Rules & Scoring
-            </AdminActionMenuItem>
-            <AdminActionMenuItem as={Link} to={`/admin/tests/${test.id}/edit/settings`} onClick={close}>
-              Settings & Access
-            </AdminActionMenuItem>
-            <AdminActionMenuDivider />
-            <AdminActionMenuLabel>Test</AdminActionMenuLabel>
             {!published ? (
               <AdminActionMenuItem
+                disabled={publishing}
+                aria-busy={publishingThisTest || undefined}
+                aria-disabled={publishing || undefined}
                 onClick={() => {
+                  if (publishing) return;
                   close();
                   onPublish(test.id);
                 }}
                 className="admin-action-menu__item--primary"
               >
-                Publish
+                {publishMenuLabel(busyAction, test.id)}
               </AdminActionMenuItem>
             ) : null}
             <AdminActionMenuItem
@@ -110,15 +116,17 @@ export default function TestRowActionsMenu({
               </>
             ) : null}
             <AdminActionMenuDivider />
-            <AdminActionMenuItem
-              onClick={() => {
-                close();
-                onDelete(test);
-              }}
-              className="admin-action-menu__item--danger"
-            >
-              Delete test
-            </AdminActionMenuItem>
+            {!published ? (
+              <AdminActionMenuItem
+                onClick={() => {
+                  close();
+                  onDelete(test);
+                }}
+                className="admin-action-menu__item--danger"
+              >
+                Delete test
+              </AdminActionMenuItem>
+            ) : null}
           </>
         )}
       </AdminActionMenu>

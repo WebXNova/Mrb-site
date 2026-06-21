@@ -1,9 +1,2 @@
-import { http } from './http';
-
-/** Public courses (`/api/courses`) — unauthenticated */
-export const catalogApi = {
-  listCourses: () => http.get('/courses/public', { authScope: null }),
-  getCourse: (courseId) => http.get(`/courses/${encodeURIComponent(String(courseId))}`, { authScope: null }),
-  listCourseBatches: (courseId) =>
-    http.get(`/courses/${encodeURIComponent(String(courseId))}/batches`, { authScope: null }),
-};
+/** @deprecated Import from `./courseApi.js` — re-export for backward compatibility. */
+export { catalogApi, courseApi } from './courseApi.js';

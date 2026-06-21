@@ -9,6 +9,11 @@ import {
 } from '../services/lecture.service.js';
 import { logActivity } from '../services/activityLog.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
+import {
+  parseAdminListFilters,
+  resolveHierarchyCourseScope,
+} from '../utils/parseAdminListFilters.js';
+import { mysqlPool } from '../config/mysql.js';
 
 const YOUTUBE_URL_REGEX =
   /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=[\w-]{11}(&.*)?|youtu\.be\/[\w-]{11}(\?.*)?)$/i;
@@ -49,7 +54,21 @@ const lectureSchema = z.preprocess(
 );
 
 export const getLectures = asyncHandler(async (req, res) => {
-  const lectures = await listLectures();
+  const parsed = parseAdminListFilters(req.query, { defaultLimit: 100, maxLimit: 500 });
+  const scope = await resolveHierarchyCourseScope(mysqlPool, parsed);
+
+  const lectures = await listLectures({
+    ...parsed,
+    courseId: scope.courseId,
+    subjectId: scope.subjectId,
+    chapterId: scope.chapterId,
+  });
+
+  if (lectures && typeof lectures === 'object' && Array.isArray(lectures.items)) {
+    sendSuccess(res, lectures);
+    return;
+  }
+
   sendSuccess(res, lectures);
 });
 

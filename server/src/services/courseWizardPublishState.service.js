@@ -1,4 +1,6 @@
 import { ApiError } from '../utils/apiError.js';
+import { validateBatchScheduleWindow } from '../utils/batchDateTime.js';
+import { normalizeBatchStatusForPublish } from './courseBatch.service.js';
 
 /**
  * Centralized Publish State Resolver
@@ -34,9 +36,7 @@ export function resolveWizardPublishState(payload) {
   // RULE 3: Process batches with publish-aware defaults
   const batches = (payload.batches || []).map(batch => {
     const rawStatus = String(batch.status || 'draft').toLowerCase();
-    
-    // If publishing and batch is draft, auto-upgrade to upcoming
-    const effectiveStatus = publishIntent && rawStatus === 'draft' ? 'upcoming' : rawStatus;
+    const effectiveStatus = publishIntent ? normalizeBatchStatusForPublish(rawStatus) : rawStatus;
     
     // If publishing, at least first batch should be active; draft => inactive
     const effectiveActive = publishIntent ? true : false;
@@ -130,33 +130,13 @@ export function validatePublishStateInvariants(payload, resolved) {
   // INVARIANT 5: Batch enrollment windows must be valid
   for (let i = 0; i < resolved.batches.length; i++) {
     const batch = resolved.batches[i];
-    
-    const enrollmentOpen = Date.parse(batch.enrollment_open_at);
-    const enrollmentClose = Date.parse(batch.enrollment_close_at);
-    const batchStart = Date.parse(`${batch.start_date}T00:00:00.000Z`);
-    const batchEnd = Date.parse(`${batch.end_date}T23:59:59.999Z`);
-    
-    if (!(enrollmentOpen < enrollmentClose)) {
-      errors.push({
-        code: 'INVALID_BATCH_ENROLLMENT_WINDOW',
-        message: `Batch ${i + 1}: enrollment_open_at must be before enrollment_close_at`,
-        field: `batches[${i}].enrollment_close_at`,
-      });
-    }
-    
-    if (!(enrollmentClose < batchStart)) {
+    const scheduleCheck = validateBatchScheduleWindow(batch);
+
+    if (!scheduleCheck.ok) {
       errors.push({
         code: 'INVALID_BATCH_LIFECYCLE',
-        message: `Batch ${i + 1}: enrollment must close before batch starts`,
-        field: `batches[${i}].enrollment_close_at`,
-      });
-    }
-    
-    if (!(batchStart < batchEnd)) {
-      errors.push({
-        code: 'INVALID_BATCH_DATES',
-        message: `Batch ${i + 1}: start_date must be before end_date`,
-        field: `batches[${i}].end_date`,
+        message: `Batch ${i + 1}: ${scheduleCheck.message}`,
+        field: `batches[${i}].${scheduleCheck.field ?? 'start_date'}`,
       });
     }
   }

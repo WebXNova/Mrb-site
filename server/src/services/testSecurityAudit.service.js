@@ -14,6 +14,7 @@ export const TEST_SECURITY_ACTIONS = Object.freeze({
   VALIDATION_FAILURE: 'test.validation_failure',
   INVALID_TEST_MUTATION: 'test.invalid_mutation',
   PUBLISHED_TEST_EDIT_ATTEMPT: 'test.published_edit_attempt',
+  PUBLISHED_TEST_EDIT: 'test.published_edit',
   QUESTION_LINKING_REJECTION: 'test.question_linking_rejection',
   INVALID_SUBJECT_INJECTION: 'test.invalid_subject_injection',
   LIFECYCLE_VIOLATION: 'test.lifecycle_violation',

@@ -19,17 +19,10 @@ export default function OptionsBuilder({
   onCorrectOptionChange,
   onClearOptionImageError,
   disabled = false,
+  embedded = false,
 }) {
-  return (
-    <section className="admin-card cq-section" aria-labelledby="cq-options-heading">
-      <h2 id="cq-options-heading" className="heading-4">
-        Options
-      </h2>
-      <p className="admin-field__hint cq-section__hint">
-        Single-choice MCQ — exactly one correct answer (A–D).
-      </p>
-
-      <div className="cq-option-cards">
+  const cards = (
+    <div className="cq-option-cards">
         {OPTION_KEYS.map((key) => (
           <OptionCard
             key={key}
@@ -45,13 +38,34 @@ export default function OptionsBuilder({
             disabled={disabled}
           />
         ))}
-      </div>
+    </div>
+  );
 
-      {errors.options ? (
-        <div className="admin-field__error" role="alert">
-          {errors.options}
-        </div>
-      ) : null}
+  const errorBlock = errors.options ? (
+    <div className="admin-field__error" role="alert">
+      {errors.options}
+    </div>
+  ) : null;
+
+  if (embedded) {
+    return (
+      <>
+        {cards}
+        {errorBlock}
+      </>
+    );
+  }
+
+  return (
+    <section className="admin-card cq-section" aria-labelledby="cq-options-heading">
+      <h2 id="cq-options-heading" className="heading-4">
+        Options
+      </h2>
+      <p className="admin-field__hint cq-section__hint">
+        Single-choice MCQ — exactly one correct answer (A–D).
+      </p>
+      {cards}
+      {errorBlock}
     </section>
   );
 }

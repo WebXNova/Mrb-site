@@ -7,6 +7,7 @@ import {
   deactivateSubject,
   getSubjectForCourse,
   listSubjectsForCourse,
+  listUniqueActiveSubjectsForAdmin,
   reorderSubjects,
   updateSubject,
 } from '../services/subject.service.js';
@@ -38,6 +39,11 @@ export const getSubjects = asyncHandler(async (req, res) => {
   if (!courseId) throw invalidCourseId();
   const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
   const data = await listSubjectsForCourse(courseId, { includeInactive });
+  sendSuccess(res, data);
+});
+
+export const getUniqueActiveSubjects = asyncHandler(async (req, res) => {
+  const data = await listUniqueActiveSubjectsForAdmin();
   sendSuccess(res, data);
 });
 

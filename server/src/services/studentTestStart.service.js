@@ -7,7 +7,7 @@
  * 3. Test exists
  * 4. Test published & not deleted
  * 5. Student authorized (assertStudentOwnsTest)
- * 6. Test within availability window
+ * 6. Test within availability window (G-RT-03)
  * 7. Attempts remaining
  * 8. Resume active attempt if present
  */
@@ -28,6 +28,27 @@ import {
   TestNotFoundError,
 } from '../errors/testAttempt/TestAttemptErrors.js';
 import {
+  assertCanCreateNewTestAttempt,
+} from './testRetakePolicy.service.js';
+import {
+  recordAttemptCreation,
+} from '../observability/studentRuntimeMetrics.service.js';
+import {
+  emitStudentRuntimeAudit,
+  STUDENT_RUNTIME_AUDIT_EVENTS,
+} from '../observability/studentRuntimeObservability.service.js';
+import {
+  initializeAttemptDeliveryLayout,
+  isShuffleEnabled,
+} from './attemptDeliveryLayout.service.js';
+import {
+  assertTestAvailabilityWindow,
+  AVAILABILITY_PHASE,
+  fetchUtcNowMs,
+  getAvailabilityNowMs,
+  toAvailabilityIso,
+} from './testAvailabilityWindow.service.js';
+import {
   LOAD_TEST_BY_ID_SQL,
   LOCK_TEST_BY_ID_SQL,
   LOCK_ACTIVE_ATTEMPT_SQL,
@@ -39,44 +60,21 @@ import {
 const logger = new StructuredLogger({ service: 'studentTestStart' });
 
 /**
+ * @deprecated Use toAvailabilityIso from testAvailabilityWindow.service.js
  * @param {unknown} value
  * @returns {string|null}
  */
 function toIsoDateTime(value) {
-  if (value == null) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  return toAvailabilityIso(value);
 }
 
-/**
- * @param {Record<string, unknown>} testRow
- * @param {Date} [now]
- */
+/** @deprecated Use assertTestAvailabilityWindow from testAvailabilityWindow.service.js */
 export function assertTestWithinAvailabilityWindow(testRow, now = new Date()) {
-  const startRaw = testRow.start_date;
-  const endRaw = testRow.end_date;
-
-  if (startRaw) {
-    const start = new Date(startRaw);
-    if (!Number.isNaN(start.getTime()) && now < start) {
-      throw new TestNotAccessibleError({
-        testId: testRow.id,
-        reason: 'test_not_yet_available',
-        startDate: toIsoDateTime(start),
-      });
-    }
-  }
-
-  if (endRaw) {
-    const end = new Date(endRaw);
-    if (!Number.isNaN(end.getTime()) && now > end) {
-      throw new TestNotAccessibleError({
-        testId: testRow.id,
-        reason: 'test_no_longer_available',
-        endDate: toIsoDateTime(end),
-      });
-    }
-  }
+  assertTestAvailabilityWindow(testRow, {
+    phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
+    nowMs: now.getTime(),
+    context: 'studentTestStart.assertTestWithinAvailabilityWindow',
+  });
 }
 
 /**
@@ -149,16 +147,28 @@ export async function startOrResumeStudentTest(input) {
   const [[previewRow]] = await mysqlPool.query(LOAD_TEST_BY_ID_SQL, [testId]);
   validateTestExistsAndPublished(previewRow);
   await assertStudentOwnsTest(studentId, testId);
-  assertTestWithinAvailabilityWindow(previewRow);
+
+  const previewNowMs = await getAvailabilityNowMs(mysqlPool);
+  assertTestAvailabilityWindow(previewRow, {
+    phase: AVAILABILITY_PHASE.ANY_ACCESS,
+    nowMs: previewNowMs,
+    context: 'studentTestStart.preview',
+  });
 
   const connection = await mysqlPool.getConnection();
 
   try {
     await connection.beginTransaction();
 
+    const nowMs = await fetchUtcNowMs(connection);
+
     const [[testRow]] = await connection.query(LOCK_TEST_BY_ID_SQL, [testId]);
     validateTestExistsAndPublished(testRow);
-    assertTestWithinAvailabilityWindow(testRow);
+    assertTestAvailabilityWindow(testRow, {
+      phase: AVAILABILITY_PHASE.ANY_ACCESS,
+      nowMs,
+      context: 'studentTestStart.lock',
+    });
 
     const [activeRows] = await connection.query(LOCK_ACTIVE_ATTEMPT_SQL, [
       testId,
@@ -168,16 +178,20 @@ export async function startOrResumeStudentTest(input) {
     const activeAttempt = activeRows[0];
 
     if (activeAttempt) {
-      const nowMs = Date.now();
       const expiredNow = await expireAttemptIfExpired({
         attemptId: activeAttempt.id,
         nowMs,
         executor: connection,
       });
 
-      // If the attempt expired between the initial active attempt query and now,
-      // treat it as non-resumable and create a new attempt.
       if (!expiredNow) {
+        assertTestAvailabilityWindow(testRow, {
+          phase: AVAILABILITY_PHASE.IN_PROGRESS,
+          nowMs,
+          attemptStartedAt: activeAttempt.started_at,
+          context: 'studentTestStart.resume',
+        });
+
         await connection.commit();
         const result = {
           attemptId: Number(activeAttempt.id),
@@ -190,18 +204,39 @@ export async function startOrResumeStudentTest(input) {
           testId,
           attemptId: result.attemptId,
         });
+        recordAttemptCreation({ stack: 'portal', resumed: true });
+        emitStudentRuntimeAudit({
+          event: STUDENT_RUNTIME_AUDIT_EVENTS.ATTEMPT_CREATED,
+          stack: 'portal',
+          operation: 'portalStart',
+          outcome: 'success',
+          userId: studentId,
+          attemptId: result.attemptId,
+          testId,
+          metadata: { resumed: true },
+        });
         return result;
       }
     }
+
+    assertTestAvailabilityWindow(testRow, {
+      phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
+      nowMs,
+      context: 'studentTestStart.create',
+    });
 
     const [[countRow]] = await connection.query(COUNT_STUDENT_TEST_ATTEMPTS_SQL, [
       testId,
       studentId,
       studentId,
     ]);
-    const attemptsUsed = Number(countRow?.total ?? 0);
-    const maxAttempts = Number(testRow.max_attempts ?? 1);
-    assertAttemptsRemaining(maxAttempts, attemptsUsed, testId);
+    const totalAttempts = Number(countRow?.total ?? 0);
+
+    assertCanCreateNewTestAttempt(
+      testRow,
+      { totalAttempts, hasActiveAttempt: false },
+      { testId, context: 'studentTestStart.create' }
+    );
 
     const [[nextRow]] = await connection.query(NEXT_ATTEMPT_NUMBER_SQL, [testId, studentId]);
     const attemptNumber = Number(nextRow?.next_attempt ?? 1);
@@ -227,12 +262,27 @@ export async function startOrResumeStudentTest(input) {
       durationMinutes,
       ipAddress,
       userAgent,
+      studentId,
+      studentId,
+      testId,
     ]);
 
     const attemptId = Number(insertResult?.insertId);
     if (!Number.isInteger(attemptId) || attemptId <= 0) {
-      throw new ApiError(500, 'Failed to create test attempt', { code: 'ATTEMPT_CREATE_FAILED' });
+      throw new ApiError(403, 'Cannot start a new attempt for this test.', {
+        code: 'ATTEMPT_CREATE_DENIED',
+        testId,
+      });
     }
+
+    await initializeAttemptDeliveryLayout({
+      attemptId,
+      testId,
+      shuffleQuestions: isShuffleEnabled(testRow.shuffle_questions),
+      shuffleOptions: isShuffleEnabled(testRow.shuffle_options),
+      attemptNonce: null,
+      connection,
+    });
 
     await connection.commit();
 
@@ -253,6 +303,18 @@ export async function startOrResumeStudentTest(input) {
       testId,
       attemptId,
       attemptNumber,
+    });
+
+    recordAttemptCreation({ stack: 'portal', resumed: false });
+    emitStudentRuntimeAudit({
+      event: STUDENT_RUNTIME_AUDIT_EVENTS.ATTEMPT_CREATED,
+      stack: 'portal',
+      operation: 'portalStart',
+      outcome: 'success',
+      userId: studentId,
+      attemptId,
+      testId,
+      metadata: { resumed: false, attemptNumber },
     });
 
     return result;

@@ -2,6 +2,8 @@
  * Course Entitlement Engine (CEE) — authoritative requireEntitlement service.
  *
  * JWT establishes identity only; enrollment access_status = 'active' grants instructional access.
+ * courses.admission_status is NOT consulted here — existing students retain access when closed.
+ * New students are blocked at enrollment creation (assertAdmissionOpen), not at content reads.
  */
 
 import {
@@ -17,6 +19,8 @@ import { UnauthorizedError, EnrollmentNotFoundError } from '../../errors/entitle
 
 /**
  * Require a valid active entitlement for the authenticated user (fail-closed).
+ * Does not check courses.admission_status — active access_status is sufficient.
+ *
  * @param {number} userId
  * @param {{ courseId?: number }} [options] — when set, enforces course_id match
  * @returns {Promise<EntitlementContext>}
@@ -38,7 +42,11 @@ export async function requireEntitlement(userId, options = {}) {
 
   const entitlement = await resolveActiveEntitlement(uid);
   if (!entitlement) {
-    throw new EnrollmentNotFoundError({ userId: uid, context: 'cee_require_entitlement' });
+    throw new EnrollmentNotFoundError({
+      userId: uid,
+      context: 'cee_require_entitlement',
+      access_decision: 'denied_no_active_entitlement',
+    });
   }
 
   assertEntitlementGrantable(entitlement, { userId: uid, courseId: entitlement.courseId });
@@ -57,5 +65,18 @@ export function attachEntitlementToRequest(req, entitlement) {
     enrollmentId: entitlement.enrollmentId,
     courseId: entitlement.courseId,
     userId: entitlement.userId,
+    /** Instructional access granted via active enrollment — admission_status not evaluated. */
+    accessVia: 'active_enrollment',
   };
+}
+
+/**
+ * Resolve full EntitlementContext from request after CEE middleware.
+ * @param {import('express').Request} req
+ * @returns {EntitlementContext|null}
+ */
+export function resolveRequestEntitlement(req) {
+  if (req?.cee?.entitlement) return req.cee.entitlement;
+  if (req?.entitlement) return req.entitlement;
+  return null;
 }

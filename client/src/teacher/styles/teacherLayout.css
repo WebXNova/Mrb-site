@@ -1,0 +1,36 @@
+.student-shell--teacher .student-content--teacher {
+  padding-top: 0;
+}
+
+.student-shell--teacher .tq-ws {
+  margin-top: 0;
+}
+
+.student-bottom-nav--teacher {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 820px) {
+  .student-shell--teacher .tq-ws--chat-open .tq-ws__center {
+    inset: 0 0 64px;
+  }
+
+  .student-shell--teacher .tq-ws {
+    min-height: calc(100dvh - 64px);
+    margin: 0;
+  }
+
+  .student-shell--teacher .tq-ws__sidebar--left {
+    min-height: calc(100dvh - 64px);
+  }
+}
+
+.teacher-profile__logout {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-ink-100, #e2e8f0);
+}
+
+.teacher-profile__logout-btn {
+  width: 100%;
+}

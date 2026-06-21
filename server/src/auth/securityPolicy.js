@@ -1,6 +1,6 @@
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
-import { requireAdmin, requireStudent } from '../middleware/auth.js';
+import { requireAdmin, requireStudent, requireTeacher } from '../middleware/auth.js';
 import { requireStudentVerified } from '../middleware/requireStudentVerified.js';
 import { requireCsrf } from '../middleware/csrf.js';
 import { env } from '../config/env.js';
@@ -18,6 +18,10 @@ function runMiddleware(middleware, req, res) {
 export async function requireAuth(req, res, role = 'student') {
   if (role === 'admin') {
     await runMiddleware(requireAdmin, req, res);
+    return;
+  }
+  if (role === 'teacher') {
+    await runMiddleware(requireTeacher, req, res);
     return;
   }
   await runMiddleware(requireStudent, req, res);

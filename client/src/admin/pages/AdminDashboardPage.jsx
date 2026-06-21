@@ -1,14 +1,27 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { adminRoute } from '../../config/adminPaths';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 
-function StatCard({ label, value }) {
+function StatCard({ label, value, hint }) {
   return (
     <article className="admin-stat-card">
       <p className="admin-stat-card__label">{label}</p>
       <p className="admin-stat-card__value">{value}</p>
+      {hint ? (
+        <p className="admin-stat-card__label" style={{ marginTop: '0.25rem', fontSize: '0.75rem' }}>
+          {hint}
+        </p>
+      ) : null}
     </article>
   );
+}
+
+function formatActivityDate(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
 }
 
 export default function AdminDashboardPage() {
@@ -16,16 +29,21 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState({});
+  const [transferStats, setTransferStats] = useState(null);
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       try {
-        const response = await adminApi.dashboard(token);
+        const [dashboardRes, transferRes] = await Promise.all([
+          adminApi.dashboard(token),
+          adminApi.getTestTransferDashboard(token).catch(() => null),
+        ]);
         if (!mounted) return;
-        setStats(response?.data?.stats || {});
-        setLogs(response?.data?.recentLogs || []);
+        setStats(dashboardRes?.data?.stats || {});
+        setLogs(dashboardRes?.data?.recentLogs || []);
+        setTransferStats(transferRes?.data?.stats ?? transferRes?.stats ?? null);
       } catch (err) {
         if (!mounted) return;
         setError(err.message || 'Failed to load dashboard');
@@ -54,6 +72,38 @@ export default function AdminDashboardPage() {
         <StatCard label="Lectures" value={stats.totalLectures || 0} />
         <StatCard label="Tests" value={stats.totalTests || 0} />
       </div>
+
+      {transferStats ? (
+        <section className="admin-card" style={{ marginTop: 'var(--space-4)' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <h2 className="heading-3">Test export / import</h2>
+            <Link className="btn btn--secondary admin-touch-target" to={adminRoute('tests/transfer')}>
+              View history
+            </Link>
+          </div>
+          <div className="admin-grid" style={{ marginTop: '1rem' }}>
+            <StatCard label="Exports" value={transferStats.export_count ?? 0} />
+            <StatCard label="Imports" value={transferStats.import_count ?? 0} />
+            <StatCard
+              label="Failures"
+              value={transferStats.failure_count ?? 0}
+              hint={`${transferStats.export_failures ?? 0} export · ${transferStats.import_failures ?? 0} import`}
+            />
+            <StatCard
+              label="Last activity"
+              value={formatActivityDate(transferStats.last_activity_at)}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="admin-card">
         <h2 className="heading-3">Recent Activity</h2>

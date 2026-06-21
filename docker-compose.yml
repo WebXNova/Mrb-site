@@ -1,6 +1,8 @@
 version: "3.9"
 
-# Local MySQL for development (avoids ER_ACCESS_DENIED when host MySQL user is not set up).
+# Local development only — bind mounts and Vite dev server (hot reload).
+# Production: use docker-compose.prod.yml (built assets, npm start, no bind mounts).
+#
 # Start only DB:  npm run db:docker   (from server/)
 # App on host:    MYSQL_HOST=127.0.0.1 MYSQL_PORT=3307 in server/.env
 # App in Docker:  backend service sets MYSQL_HOST=mysql automatically.

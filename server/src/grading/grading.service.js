@@ -20,12 +20,13 @@ import {
   loadGradingQuestionRows,
   lockSubmittedAttempt,
 } from './grading.repository.js';
+import { calculateMarksBasedResult, normalizeEffectiveMarks } from './gradingCalculation.js';
 
 const logger = new StructuredLogger({ service: 'gradingEngine' });
 
 /**
  * @typedef {object} GradingTestConfig
- * @property {number} passingPercentage
+ * @property {number} passingMarks
  * @property {boolean} negativeMarkingEnabled
  * @property {number} negativeMarkingValue
  */
@@ -33,6 +34,7 @@ const logger = new StructuredLogger({ service: 'gradingEngine' });
 /**
  * @typedef {object} GradingQuestionRow
  * @property {number} questionId
+ * @property {number} effectiveMarks
  * @property {number|null} selectedOptionId
  * @property {number|null} correctOptionId
  */
@@ -59,56 +61,7 @@ const logger = new StructuredLogger({ service: 'gradingEngine' });
  * @returns {CalculatedResult}
  */
 export function calculateResult({ questions, testConfig }) {
-  const totalQuestions = questions.length;
-  let correctAnswers = 0;
-  let wrongAnswers = 0;
-  let unansweredAnswers = 0;
-  let maxScore = 0;
-
-  for (const question of questions) {
-    maxScore += 1;
-
-    const selected =
-      question.selectedOptionId == null ? null : Number(question.selectedOptionId);
-    const correctOptionId =
-      question.correctOptionId == null ? null : Number(question.correctOptionId);
-
-    if (selected == null) {
-      unansweredAnswers += 1;
-      continue;
-    }
-
-    if (correctOptionId != null && selected === correctOptionId) {
-      correctAnswers += 1;
-    } else {
-      wrongAnswers += 1;
-    }
-  }
-
-  let score = correctAnswers;
-  if (testConfig.negativeMarkingEnabled && testConfig.negativeMarkingValue > 0) {
-    score = correctAnswers - wrongAnswers * testConfig.negativeMarkingValue;
-  }
-  score = Math.max(0, Number(score.toFixed(2)));
-
-  const percentage =
-    totalQuestions > 0
-      ? Number(((correctAnswers / totalQuestions) * 100).toFixed(2))
-      : 0;
-
-  const passStatus =
-    percentage >= testConfig.passingPercentage ? 'PASS' : 'FAIL';
-
-  return {
-    totalQuestions,
-    correctAnswers,
-    wrongAnswers,
-    unansweredAnswers,
-    score,
-    maxScore,
-    percentage,
-    passStatus,
-  };
+  return calculateMarksBasedResult({ questions, testConfig });
 }
 
 /**
@@ -187,12 +140,13 @@ function buildGradingContext(attemptRow, questionRows) {
     courseId: Number(attemptRow.course_id),
     timeTakenSeconds: Math.max(0, Number(attemptRow.time_taken_seconds ?? 0)),
     testConfig: {
-      passingPercentage: Number(attemptRow.passing_percentage ?? 0),
+      passingMarks: Number(attemptRow.passing_marks ?? 0),
       negativeMarkingEnabled: negativeMarkingValue > 0,
       negativeMarkingValue,
     },
     questions: questionRows.map((row) => ({
       questionId: Number(row.question_id),
+      effectiveMarks: normalizeEffectiveMarks(row.effective_marks),
       selectedOptionId:
         row.selected_option_id == null ? null : Number(row.selected_option_id),
       correctOptionId:

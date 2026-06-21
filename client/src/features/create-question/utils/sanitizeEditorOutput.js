@@ -1,55 +1,10 @@
 import DOMPurify from 'dompurify';
-
-/**
- * Frontend safety layer for CKEditor output.
- * CKEditor output is NEVER trusted.
- * Backend will re-validate content again.
- */
-
-/** Aligned with server questionHtmlSanitizer allowlist + CKEditor table wrapper. */
-const ALLOWED_TAGS = [
-  'p',
-  'br',
-  'strong',
-  'b',
-  'em',
-  'i',
-  'u',
-  'ul',
-  'ol',
-  'li',
-  'table',
-  'thead',
-  'tbody',
-  'tr',
-  'td',
-  'th',
-  'sub',
-  'sup',
-  'span',
-  'div',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'blockquote',
-  'figure',
-];
-
-const ALLOWED_ATTR = [
-  'style',
-  'class',
-  'colspan',
-  'rowspan',
-  'align',
-];
-
-const FORBIDDEN_TAGS = ['script', 'iframe', 'svg', 'embed', 'object', 'form', 'link', 'style', 'base'];
-
-const BLOCKED_URI_PATTERN = /^\s*javascript:/i;
-const BLOCKED_DATA_URI_PATTERN = /^\s*data:/i;
+import { validateImageUrl } from './image/validateImageUrl.js';
+import {
+  BLOCKED_URI_PATTERN,
+  createRichHtmlDomPurifyConfig,
+  stripResidualDangerousMarkup,
+} from '../../../security/richHtmlPolicy.js';
 
 let hooksRegistered = false;
 
@@ -60,8 +15,17 @@ function registerDomPurifyHooks() {
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
     if (data.attrName === 'href' || data.attrName === 'src' || data.attrName === 'xlink:href') {
       const value = String(data.attrValue || '');
-      if (BLOCKED_URI_PATTERN.test(value) || BLOCKED_DATA_URI_PATTERN.test(value)) {
+      if (BLOCKED_URI_PATTERN.test(value)) {
         data.keepAttr = false;
+        return;
+      }
+      if (data.attrName === 'src' && node.tagName === 'IMG') {
+        const check = validateImageUrl(value, { allowEmpty: true });
+        if (!check.ok || !check.url) {
+          data.keepAttr = false;
+        } else {
+          data.attrValue = check.url;
+        }
       }
     }
     if (data.attrName === 'style') {
@@ -69,6 +33,9 @@ function registerDomPurifyHooks() {
       if (/url\s*\(\s*javascript:/i.test(value) || /expression\s*\(/i.test(value)) {
         data.keepAttr = false;
       }
+    }
+    if (String(data.attrName || '').toLowerCase().startsWith('on')) {
+      data.keepAttr = false;
     }
   });
 }
@@ -83,20 +50,6 @@ registerDomPurifyHooks();
  * @returns {string}
  */
 export function sanitizeEditorOutput(html) {
-  const raw = String(html ?? '');
-
-  const cleaned = DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOW_DATA_ATTR: false,
-    FORBID_TAGS: FORBIDDEN_TAGS,
-    FORBID_CONTENTS: FORBIDDEN_TAGS,
-  });
-
-  return cleaned
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<svg[\s\S]*?>[\s\S]*?<\/svg>/gi, '')
-    .replace(/\s(href|src)\s*=\s*["']?\s*javascript:[^"'>\s]*/gi, '')
-    .trim();
+  const purified = DOMPurify.sanitize(String(html ?? ''), createRichHtmlDomPurifyConfig());
+  return stripResidualDangerousMarkup(purified);
 }

@@ -6,13 +6,20 @@ function toIsoTimestamp(v) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+import {
+  resolveQuestionHtml,
+  resolveExplanationHtml,
+  resolveOptionHtml,
+} from '../utils/richHtmlContent.js';
+
 /** @param {Record<string, unknown>} row */
 export function toQuestionOptionDto(row) {
   if (!row) return null;
   return {
     id: Number(row.id),
     option_key: row.option_key == null ? null : String(row.option_key),
-    option_text: String(row.option_text ?? ''),
+    option_text: resolveOptionHtml(row),
+    option_html: resolveOptionHtml(row),
     image_url: row.image_url == null ? null : String(row.image_url),
     is_correct: Boolean(Number(row.is_correct)),
     sort_order: Number(row.sort_order ?? 0),
@@ -31,9 +38,11 @@ export function toQuestionBankDto(row, options = []) {
     topic: row.topic == null ? null : String(row.topic),
     difficulty: row.difficulty == null ? null : String(row.difficulty),
     question_type: String(row.question_type ?? 'mcq'),
-    question_text: String(row.question_text ?? ''),
+    question_text: resolveQuestionHtml(row),
+    question_html: resolveQuestionHtml(row),
     question_image_url: row.question_image_url == null ? null : String(row.question_image_url),
-    explanation: row.explanation == null ? null : String(row.explanation),
+    explanation: resolveExplanationHtml(row),
+    explanation_html: resolveExplanationHtml(row),
     marks: Number(row.marks),
     created_by: Number(row.created_by),
     created_at: toIsoTimestamp(row.created_at),

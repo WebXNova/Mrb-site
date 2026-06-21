@@ -24,6 +24,12 @@ import {
 } from '../../errors/testAttempt/TestAttemptErrors.js';
 import { mysqlPool } from '../../config/mysql.js';
 import { loadTestSubjectPresentation } from '../testSubjectPresentation.service.js';
+import {
+  assertTestAvailabilityWindow,
+  AVAILABILITY_PHASE,
+  getAvailabilityNowMs,
+  parseTestAvailabilityInstant,
+} from '../testAvailabilityWindow.service.js';
 
 /**
  * @typedef {import('../entitlement.service.js').EntitlementContext} EntitlementContext
@@ -40,6 +46,7 @@ import { loadTestSubjectPresentation } from '../testSubjectPresentation.service.
  * @property {Date|string|null} submitted_at
  * @property {string|null} completion_reason
  * @property {string|null} attempt_nonce
+ * @property {unknown|null} delivery_layout_json
  * @property {number|null} result_id
  */
 
@@ -56,7 +63,11 @@ import { loadTestSubjectPresentation } from '../testSubjectPresentation.service.
  * @property {number} show_explanations
  * @property {number} negative_marking
  * @property {number} max_attempts
- * @property {number} passing_percentage
+ * @property {number} passing_marks
+ * @property {number} shuffle_questions
+ * @property {number} shuffle_options
+ * @property {Date|string|null} start_date
+ * @property {Date|string|null} end_date
  */
 
 /**
@@ -81,6 +92,7 @@ import { loadTestSubjectPresentation } from '../testSubjectPresentation.service.
  * @property {boolean} [forUpdate]
  * @property {import('mysql2/promise').PoolConnection} [connection]
  * @property {string} [auditContext]
+ * @property {number} [nowMs] — authoritative UTC ms (from getAvailabilityNowMs)
  */
 
 const ATTEMPT_TEST_SELECT = `
@@ -94,6 +106,7 @@ const ATTEMPT_TEST_SELECT = `
          a.submitted_at,
          a.completion_reason,
          a.attempt_nonce,
+         a.delivery_layout_json,
          a.result_id,
          t.id AS t_id,
          t.course_id,
@@ -105,7 +118,11 @@ const ATTEMPT_TEST_SELECT = `
          t.show_explanations,
          t.negative_marking,
          t.max_attempts,
-         t.passing_percentage
+         t.passing_marks,
+         t.shuffle_questions,
+         t.shuffle_options,
+         t.start_date,
+         t.end_date
   FROM test_attempts a
   INNER JOIN tests t ON t.id = a.test_id
     AND t.course_id = ?
@@ -142,6 +159,7 @@ function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
     expires_at: row.expires_at,
     submitted_at: row.submitted_at ?? null,
     attempt_nonce: row.attempt_nonce ?? null,
+    delivery_layout_json: row.delivery_layout_json ?? null,
     result_id: row.result_id != null ? Number(row.result_id) : null,
   };
 
@@ -157,7 +175,11 @@ function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
     show_explanations: Number(row.show_explanations ?? 0),
     negative_marking: Number(row.negative_marking ?? 0),
     max_attempts: Number(row.max_attempts ?? 0),
-    passing_percentage: Number(row.passing_percentage ?? 0),
+    passing_marks: Number(row.passing_marks ?? 0),
+    shuffle_questions: Number(row.shuffle_questions ?? 0),
+    shuffle_options: Number(row.shuffle_options ?? 0),
+    start_date: row.start_date ?? null,
+    end_date: row.end_date ?? null,
   };
 
   return Object.freeze({
@@ -295,6 +317,12 @@ export async function resolveSecureAttemptContext(input) {
   const subjectPresentation = await loadTestSubjectPresentation(Number(row.t_id));
   const ctx = mapRowToSecureContext(row, entitlement, subjectPresentation.displayLabel);
 
+  const executor = input.connection ?? mysqlPool;
+  const nowMs =
+    input.nowMs != null && Number.isFinite(input.nowMs)
+      ? input.nowMs
+      : await getAvailabilityNowMs(executor);
+
   if (input.requireInProgress) {
     if (ctx.attempt.status !== 'in_progress') {
       throw new AttemptInvalidStateError({
@@ -303,7 +331,8 @@ export async function resolveSecureAttemptContext(input) {
         required: 'in_progress',
       });
     }
-    if (new Date(ctx.attempt.expires_at).getTime() < Date.now()) {
+    const expiresMs = parseTestAvailabilityInstant(ctx.attempt.expires_at);
+    if (expiresMs != null && nowMs > expiresMs) {
       throw new AttemptExpiredError({ attemptId, expiresAt: ctx.attempt.expires_at });
     }
   }
@@ -316,6 +345,20 @@ export async function resolveSecureAttemptContext(input) {
         required: 'submitted',
       });
     }
+  } else if (input.requireInProgress || input.enforceAvailabilityWindow !== false) {
+    assertTestAvailabilityWindow(
+      {
+        id: ctx.test.id,
+        start_date: row.start_date,
+        end_date: row.end_date,
+      },
+      {
+        phase: AVAILABILITY_PHASE.IN_PROGRESS,
+        nowMs,
+        attemptStartedAt: ctx.attempt.started_at,
+        context: input.auditContext ?? 'testAttempt.resolveSecureAttemptContext',
+      }
+    );
   }
 
   return ctx;

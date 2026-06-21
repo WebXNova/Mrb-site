@@ -147,7 +147,10 @@ export default function CoursesPage() {
               </div>
               <div className="grid-cards">
                 {filteredCourses.map((course) => (
-                  <CourseCard key={String(course.id)} course={course} />
+                  <CourseCard
+                    key={String(course.id)}
+                    course={course}
+                  />
                 ))}
               </div>
             </>

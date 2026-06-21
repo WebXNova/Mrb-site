@@ -3,15 +3,23 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
+import {
+  getAdminApiMountPath,
+  getAdminSecretPathSegments,
+} from './config/adminSecretPath.config.js';
 import authRoutes from './routes/auth.routes.js';
+import adminAuthRoutes from './routes/adminAuth.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import adminCoursesReadRoutes from './routes/adminCoursesRead.routes.js';
+import testQuizDraftRoutes from './routes/testQuizDraft.routes.js';
 import testsRoutes from './routes/tests.routes.js';
 import studentRoutes from './routes/student.routes.js';
-import emailProviderRoutes from './routes/emailProvider.routes.js';
+import teacherRoutes from './routes/teacher.routes.js';
+import emailProviderRoutes, { emailProviderWebhookRouter } from './routes/emailProvider.routes.js';
 import { isRedisReady } from './config/redis.js';
 import { getEmailQueue } from './config/queue.js';
 import contactRoutes from './routes/contact.routes.js';
-import enrollmentRoutes from './routes/enrollment.routes.js';
+import enrollmentRoutes, { adminEnrollmentRouter } from './routes/enrollment.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
 import locationsRoutes from './routes/locations.routes.js';
 import questionsRoutes from './routes/questions.routes.js';
@@ -20,11 +28,21 @@ import attemptRoutes from './attempt/attempt.routes.js';
 import answerRoutes from './answer/answer.routes.js';
 import submitRoutes from './submit/submit.routes.js';
 import resultRoutes from './result/result.routes.js';
+import legacyRuntimeRoutes from './routes/legacyRuntime.routes.js';
+import { isLegacyStudentRuntimeEnabled } from './runtime/legacyRuntimeDeprecation.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { attachRequestContext } from './middleware/requestContext.js';
 import { sendError, sendSuccess } from './utils/httpEnvelope.js';
 import { applyCeeProtectionGrid } from './security/cee/protectionGrid.js';
+import { studentRuntimeMetricsMiddleware } from './middleware/studentRuntimeMetrics.middleware.js';
 import secureMediaRoutes from './routes/secureMedia.routes.js';
+import { getMetrics } from './controllers/metrics.controller.js';
+import {
+  optionalAdminContext,
+  requireMetricsAccess,
+} from './middleware/observabilityAccess.js';
+import { buildReadinessResponse, probeMySqlReadiness } from './services/observabilityReadiness.service.js';
+import { adminSecretPathGate } from './middleware/adminSecretPathGate.js';
 
 export const app = express();
 app.set('trust proxy', env.security.trustProxy);
@@ -62,10 +80,11 @@ app.use(
       reportOnly: env.nodeEnv !== 'production',
       directives: {
         "default-src": ["'self'"],
-        "connect-src": ["'self'", ...allowedOrigins],
+        "connect-src": ["'self'", ...allowedOrigins, 'https://accounts.google.com'],
         "img-src": ["'self'", 'data:', 'https:'],
-        "script-src": ["'self'"],
-        "style-src": ["'self'"],
+        "script-src": ["'self'", 'https://accounts.google.com'],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "frame-src": ["'self'", 'https://accounts.google.com'],
         "object-src": ["'none'"],
         "base-uri": ["'self'"],
         "frame-ancestors": ["'none'"],
@@ -91,50 +110,99 @@ app.use(attachRequestContext);
  */
 app.use('/api/payments', paymentsWebhookRouter);
 
+/** Email provider webhook — raw body HMAC before express.json(). */
+app.use('/api/email', emailProviderWebhookRouter);
+
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
+/** Secret-path gate — before auth, authorization, and controllers (generic 404). */
+app.use(adminSecretPathGate);
+
 /** CEE Protection Grid — entitlement enforcement before instructional route handlers. */
 applyCeeProtectionGrid(app);
+
+/** Student runtime HTTP metrics + audit (slug, portal, legacy). */
+app.use(studentRuntimeMetricsMiddleware);
 
 /** Secure media (replaces express.static — entitlement required via grid). */
 app.use('/api/uploads', secureMediaRoutes);
 
 app.get('/api/health', (req, res) => {
-  sendSuccess(res, { message: 'Server healthy' }, 200, { requestId: req.requestId });
+  sendSuccess(res, { status: 'ok' }, 200, { requestId: req.requestId });
 });
 
-app.get('/api/ready', async (req, res) => {
+app.get('/api/metrics', requireMetricsAccess, getMetrics);
+
+app.get('/api/ready', optionalAdminContext, async (req, res) => {
   const queue = getEmailQueue();
-  const ready = {
+  const mysql = await probeMySqlReadiness();
+  const readiness = buildReadinessResponse(req, {
     redis: isRedisReady(),
+    mysql,
     emailQueue: Boolean(queue),
-  };
-  const statusCode = ready.redis || env.nodeEnv !== 'production' ? 200 : 503;
-  if (statusCode === 200) {
-    sendSuccess(res, { ready }, 200, { requestId: req.requestId });
+  });
+
+  if (readiness.statusCode === 200) {
+    sendSuccess(res, readiness.body, 200, { requestId: req.requestId });
     return;
   }
-  sendError(res, 503, 'SERVICE_NOT_READY', 'Redis is required for readiness in production.', {
+
+  sendError(res, readiness.statusCode, readiness.code, readiness.message, {
     requestId: req.requestId,
-    ready,
+    ...readiness.body,
   });
 });
 
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
+
+/** Admin portal — `/api/admin/<ADMIN_SECRET_PATH>/...` */
+const adminApiMount = getAdminApiMountPath();
+app.use(`${adminApiMount}/auth`, adminAuthRoutes);
+app.use(adminApiMount, adminRoutes);
+app.use(`${adminApiMount}/enrollments`, adminEnrollmentRouter);
+app.use(`${adminApiMount}/courses`, adminCoursesReadRoutes);
+app.use(`${adminApiMount}/questions`, questionsRoutes);
+app.use(`${adminApiMount}/tests`, testQuizDraftRoutes);
+
+/** Rotation window: accept previous secret segments until env is updated. */
+for (const previousSegment of getAdminSecretPathSegments().slice(1)) {
+  const previousMount = `/api/admin/${previousSegment}`;
+  app.use(`${previousMount}/auth`, adminAuthRoutes);
+  app.use(previousMount, adminRoutes);
+  app.use(`${previousMount}/enrollments`, adminEnrollmentRouter);
+  app.use(`${previousMount}/courses`, adminCoursesReadRoutes);
+  app.use(`${previousMount}/questions`, questionsRoutes);
+  app.use(`${previousMount}/tests`, testQuizDraftRoutes);
+}
+
 app.use('/api/tests', testsRoutes);
 app.use('/api/student', studentRoutes);
-app.use('/api/attempt', attemptRoutes);
-app.use('/api/attempts', answerRoutes);
-app.use('/api/attempts', submitRoutes);
-app.use('/api/attempts', resultRoutes);
+app.use('/api/teacher', teacherRoutes);
+/**
+ * Student test runtime mounts (G-RT-01 / G-RT-02).
+ * Default: legacy /api/attempt(s) return 410 with canonical migration map.
+ * Emergency rollback only: LEGACY_RUNTIME_ALLOW=true (CEE entitlement still enforced).
+ */
+if (isLegacyStudentRuntimeEnabled()) {
+  if (env.nodeEnv === 'production') {
+    console.warn(
+      '[runtime] LEGACY_RUNTIME_ALLOW is enabled — legacy student endpoints are exposed. Migrate to /api/tests and /api/student.'
+    );
+  }
+  app.use('/api/attempt', attemptRoutes);
+  app.use('/api/attempts', answerRoutes);
+  app.use('/api/attempts', submitRoutes);
+  app.use('/api/attempts', resultRoutes);
+} else {
+  app.use('/api/attempt', legacyRuntimeRoutes);
+  app.use('/api/attempts', legacyRuntimeRoutes);
+}
 app.use('/api/email', emailProviderRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/locations', locationsRoutes);
-app.use('/api/questions', questionsRoutes);
 app.use('/api/payments', paymentsApiRouter);
 
 app.use(notFoundHandler);

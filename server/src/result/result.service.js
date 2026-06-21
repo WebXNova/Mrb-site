@@ -8,8 +8,14 @@ import { mysqlPool } from '../config/mysql.js';
 import { ATTEMPT_DB_STATUS } from '../attempt/attempt.constants.js';
 import { parsePositiveInt } from '../attempt/attempt.util.js';
 import { StructuredLogger } from '../utils/requestId.js';
-import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
-import { ResultNotAccessibleError, ResultNotFoundError } from './result.errors.js';
+import { resolveAttemptTimeTakenSeconds } from '../services/attemptTiming.service.js';
+import { ResultNotFoundError } from './result.errors.js';
+import {
+  assertStudentResultVisible,
+  isShowAnswersAfterSubmitEnabled,
+  isShowExplanationsEnabled,
+  loadSanitizedPortalAnswerReview,
+} from '../services/testResultVisibility.service.js';
 import {
   loadDetailedAnswerRows,
   loadResultContextRow,
@@ -54,12 +60,10 @@ function assertResultVisibility(row) {
     });
   }
 
-  if (!Boolean(Number(row.show_result_immediately))) {
-    throw new ResultNotAccessibleError({
-      attemptId: row.attempt_id,
-      reason: 'show_result_immediately_disabled',
-    });
-  }
+  assertStudentResultVisible(row, {
+    attemptId: row.attempt_id,
+    context: 'result.service.assertResultVisibility',
+  });
 }
 
 /**
@@ -74,7 +78,11 @@ export function getResultSummary(row) {
     correct_answers: Number(row.correct_answers ?? 0),
     wrong_answers: Number(row.wrong_answers ?? 0),
     unanswered_answers: Number(row.unanswered_answers ?? 0),
-    time_taken_seconds: Number(row.time_taken_seconds ?? 0),
+    time_taken_seconds: resolveAttemptTimeTakenSeconds({
+      startedAt: row.started_at,
+      submittedAt: row.submitted_at,
+      storedSeconds: row.time_taken_seconds,
+    }),
   };
 }
 
@@ -83,33 +91,13 @@ export function getResultSummary(row) {
  * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [db]
  */
 export async function getDetailedResult(context, db = mysqlPool) {
-  if (!Boolean(Number(context.show_answers_after_submit))) {
-    return null;
-  }
-
-  const attemptId = Number(context.attempt_id);
-  const testId = Number(context.test_id);
-  const includeExplanations = Boolean(Number(context.show_explanations));
-
-  const rows = await loadDetailedAnswerRows(db, attemptId, testId);
-
-  return rows.map((row) => {
-    /** @type {Record<string, string>} */
-    const item = {
-      question: sanitizeRichHtml(row.question_text),
-      your_answer:
-        row.selected_option_text == null ? '' : String(row.selected_option_text),
-      correct_answer:
-        row.correct_option_text == null ? '' : String(row.correct_option_text),
-      status: String(row.answer_status ?? 'unanswered'),
-    };
-
-    if (includeExplanations && row.explanation != null) {
-      item.explanation = sanitizeRichHtml(row.explanation);
-    }
-
-    return item;
-  });
+  return loadSanitizedPortalAnswerReview(
+    context,
+    db,
+    Number(context.attempt_id),
+    Number(context.test_id),
+    loadDetailedAnswerRows
+  );
 }
 
 /**
@@ -156,10 +144,15 @@ export async function getResult(studentId, attemptId) {
   });
 
   return {
+    result_id: Number(context.result_id),
     test_title: String(context.test_title ?? ''),
     test_id: Number(context.test_id),
     submitted_at: context.submitted_at == null ? null : String(context.submitted_at),
     summary,
     ...(answers ? { answers } : {}),
+    visibility: {
+      showAnswersAfterSubmit: isShowAnswersAfterSubmitEnabled(context.show_answers_after_submit),
+      showExplanations: isShowExplanationsEnabled(context.show_explanations),
+    },
   };
 }

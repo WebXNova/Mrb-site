@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Badge from './Badge';
-import Button from './Button';
+import CourseEnrollmentCtaButton from '../course/CourseEnrollmentCtaButton';
 import { buildPricingDisplay } from '../../course/coursePresentation';
+import { formatSalesDate } from '../../course/courseSalesPage';
+import {
+  admissionBadgeLabel,
+  admissionBadgeTone,
+  isAdmissionOpen,
+} from '../../course/courseAdmissionPresentation';
 import './CourseCard.css';
 
 function levelBadgeTone(level) {
@@ -37,11 +43,31 @@ function CoursePricingTag({ display }) {
 
 export default function CourseCard({ course }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const { id, title, summary, thumbnail_url: thumbnailUrl, level, pricing } = course;
+  const {
+    id,
+    title,
+    summary,
+    thumbnail_url: thumbnailUrl,
+    level,
+    pricing,
+    admission_status: admissionStatus,
+    enrollment_message: enrollmentMessage,
+    is_enrollment_open: isEnrollmentOpen,
+    start_date: startDate,
+    end_date: endDate,
+  } = course;
   const pricingDisplay = buildPricingDisplay(pricing);
+  const admissionsOpen = isAdmissionOpen(course);
 
   const showCoverImage = Boolean(thumbnailUrl) && !imageFailed;
   const coursePath = `/courses/${encodeURIComponent(String(id))}`;
+  const courseAdmission = {
+    admission_status: admissionStatus,
+    is_enrollment_open: isEnrollmentOpen,
+    enrollment_message: enrollmentMessage,
+    start_date: startDate,
+    end_date: endDate,
+  };
 
   return (
     <article className="course-card">
@@ -51,8 +77,8 @@ export default function CourseCard({ course }) {
             <img
               className="course-card__cover-image"
               src={thumbnailUrl}
-              alt=""
-              loading="eager"
+              alt={`${title} course thumbnail`}
+              loading="lazy"
               decoding="async"
               sizes="(max-width: 768px) 100vw, 33vw"
               onError={() => setImageFailed(true)}
@@ -73,17 +99,33 @@ export default function CourseCard({ course }) {
               <span className="badge--dot" />
               {level}
             </Badge>
+            <Badge tone={admissionBadgeTone(admissionStatus)} size="md">
+              {admissionBadgeLabel(admissionStatus)}
+            </Badge>
             <CoursePricingTag display={pricingDisplay} />
           </div>
 
           <h3 className="course-card__title">{title}</h3>
+          {startDate || endDate ? (
+            <p className="course-card__dates">
+              Course: {formatSalesDate(startDate) || '—'} – {formatSalesDate(endDate) || '—'}
+            </p>
+          ) : null}
           <p className="course-card__summary">{summary}</p>
+          {!admissionsOpen && enrollmentMessage ? (
+            <p className="course-card__admission-note" role="status">
+              {enrollmentMessage}
+            </p>
+          ) : null}
         </div>
       </Link>
       <div className="course-card__actions">
-        <Button as={Link} to={`/enroll/${encodeURIComponent(String(id))}`} variant="accent" size="lg">
-          Enroll now
-        </Button>
+        <CourseEnrollmentCtaButton
+          courseId={id}
+          labelContext="card"
+          size="lg"
+          courseAdmission={courseAdmission}
+        />
       </div>
     </article>
   );

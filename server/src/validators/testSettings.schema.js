@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PUBLISHED_EDIT_CONTROL_KEYS } from '../services/publishedTestEdit.service.js';
 
 export const TEST_SETTINGS_ALLOWED_KEYS = Object.freeze([
   'shuffle_questions',
@@ -10,6 +11,7 @@ export const TEST_SETTINGS_ALLOWED_KEYS = Object.freeze([
   'access_mode',
   'start_date',
   'end_date',
+  ...PUBLISHED_EDIT_CONTROL_KEYS,
 ]);
 
 export const TEST_ACCESS_MODES = Object.freeze(['public', 'private']);

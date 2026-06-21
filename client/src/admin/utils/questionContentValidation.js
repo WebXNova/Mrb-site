@@ -1,4 +1,4 @@
-import DOMPurify from 'dompurify';
+import { sanitizePlainText } from '../../security/sanitizePlainText.js';
 import { validateQuestionImageUrl } from './questionImageUrlValidation.js';
 
 export function createDefaultQuestionContentForm() {
@@ -14,10 +14,7 @@ export function createDefaultQuestionContentForm() {
  * @param {string} html
  */
 export function questionTextPlainLength(html) {
-  const plain = DOMPurify.sanitize(String(html ?? ''), { ALLOWED_TAGS: [] })
-    .replace(/\u00a0/g, ' ')
-    .trim();
-  return plain.length;
+  return sanitizePlainText(html).replace(/\u00a0/g, ' ').trim().length;
 }
 
 export function isQuestionTextEmpty(html) {

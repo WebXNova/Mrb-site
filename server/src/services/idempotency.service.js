@@ -169,16 +169,12 @@ export async function storeIdempotencyResponse(
 }
 
 /**
- * Clean up expired idempotency keys (call periodically from a cron job)
+ * Clean up expired idempotency keys (scheduled job entrypoint).
+ * @param {{ dryRun?: boolean }} [opts]
+ * @returns {Promise<number>} rows deleted (0 for dry-run)
  */
-export async function cleanupExpiredIdempotencyKeys() {
-  try {
-    const [result] = await mysqlPool.query(
-      `DELETE FROM idempotency_keys WHERE expires_at < NOW()`
-    );
-    return result.affectedRows;
-  } catch (e) {
-    console.error('[idempotency] Cleanup failed:', e);
-    return 0;
-  }
+export async function cleanupExpiredIdempotencyKeys(opts = {}) {
+  const { runIdempotencyCleanup } = await import('./idempotencyCleanup.service.js');
+  const summary = await runIdempotencyCleanup({ dryRun: Boolean(opts.dryRun) });
+  return Number(summary.deleted ?? 0);
 }

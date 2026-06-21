@@ -7,6 +7,7 @@ import { StructuredLogger } from '../utils/requestId.js';
 import { LOAD_ATTEMPT_TIMER_SQL } from './attemptTimer.queries.js';
 import { expireAttemptIfExpired } from './attemptExpiry.service.js';
 import { parseMySqlDateTimeToMs } from './attemptTiming.service.js';
+import { getAvailabilityNowMs } from './testAvailabilityWindow.service.js';
 import {
   AttemptExpiredStateError,
   AttemptInvalidStateError,
@@ -28,9 +29,12 @@ const logger = new StructuredLogger({ service: 'attemptTimerValidation' });
  */
 export async function validateAttemptTimer(attemptId, options = {}) {
   const aid = Number(attemptId);
-  const nowMs = options.nowMs ?? Date.now();
   const executor = options.executor ?? mysqlPool;
   const markExpired = options.markExpired !== false;
+  const nowMs =
+    options.nowMs != null && Number.isFinite(options.nowMs)
+      ? options.nowMs
+      : await getAvailabilityNowMs(executor);
 
   if (!Number.isInteger(aid) || aid <= 0) {
     throw new AttemptNotFoundError({ reason: 'invalid_attempt_id', attemptId });

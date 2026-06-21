@@ -1,85 +1,31 @@
 import { truncatePreviewText } from '../utils/previewText.js';
-import { resolveImagePreviewSrc } from '../utils/image/imagePreviewUrl.js';
+import SafeRichPreview from './SafeRichPreview.jsx';
 
 /**
- * Live preview — structure only; plain text rendering.
- * Preview rendering must never execute raw HTML.
+ * Live student preview — sanitized content only, no raw HTML execution.
  */
 export default function LivePreview({
-  metadata,
-  questionPreviewText,
-  questionImage,
+  questionSanitizedHtml,
   options,
   explanationPreviewText,
 }) {
   const correctOption = options.find((opt) => opt.isCorrect) ?? null;
-  const imagePreviewSrc = resolveImagePreviewSrc(questionImage?.url ?? '');
 
   return (
-    <section className="admin-card cq-preview" aria-labelledby="cq-preview-heading">
-      <h2 id="cq-preview-heading" className="heading-4">
-        Live preview
-      </h2>
+    <section className="cq-preview qaw-live-preview" aria-labelledby="cq-preview-heading">
+      <div className="qaw-live-preview__header">
+        <h2 id="cq-preview-heading" className="heading-4">
+          Student preview
+        </h2>
+        <span className="qaw-live-preview__badge">Read-only</span>
+      </div>
       <p className="admin-field__hint cq-section__hint">
-        Plain-text mirror only — no HTML execution.
+        Mirrors what students see — plain text, validated images, and tables only.
       </p>
 
       <div className="cq-preview__block">
-        <h3 className="cq-preview__label">Metadata</h3>
-        <dl className="cq-preview__meta">
-          <div>
-            <dt>Course</dt>
-            <dd>{metadata.courseId || '—'}</dd>
-          </div>
-          <div>
-            <dt>Subject</dt>
-            <dd>{metadata.subjectId || '—'}</dd>
-          </div>
-          <div>
-            <dt>Topic</dt>
-            <dd>{metadata.topic || '—'}</dd>
-          </div>
-          <div>
-            <dt>Difficulty</dt>
-            <dd>{metadata.difficulty || '—'}</dd>
-          </div>
-          <div>
-            <dt>Marks</dt>
-            <dd>{metadata.marks}</dd>
-          </div>
-          <div>
-            <dt>Type</dt>
-            <dd>{metadata.questionType}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className="cq-preview__block">
         <h3 className="cq-preview__label">Question</h3>
-        <p className="cq-preview__text">
-          {questionPreviewText ? (
-            questionPreviewText
-          ) : (
-            <span className="cq-preview__empty">No question text yet</span>
-          )}
-        </p>
-      </div>
-
-      <div className="cq-preview__block">
-        <h3 className="cq-preview__label">Question image</h3>
-        {imagePreviewSrc ? (
-          <img
-            src={imagePreviewSrc}
-            alt="Question preview"
-            className="admin-question-image-preview__img"
-            referrerPolicy="no-referrer"
-            loading="lazy"
-          />
-        ) : (
-          <p className="cq-preview__text">
-            <span className="cq-preview__empty">No image</span>
-          </p>
-        )}
+        <SafeRichPreview sanitizedHtml={questionSanitizedHtml} />
       </div>
 
       <div className="cq-preview__block">
@@ -88,13 +34,15 @@ export default function LivePreview({
           {options.map((option) => (
             <li
               key={option.key}
-              className={option.isCorrect ? 'cq-preview__option cq-preview__option--correct' : 'cq-preview__option'}
+              className={
+                option.isCorrect
+                  ? 'cq-preview__option cq-preview__option--correct'
+                  : 'cq-preview__option'
+              }
             >
               <span className="cq-preview__option-label">{option.label}.</span>
               <span>{truncatePreviewText(option.text, 120) || '—'}</span>
-              {option.imageUrl ? (
-                <span className="admin-field__hint"> · image</span>
-              ) : null}
+              {option.imageUrl ? <span className="admin-field__hint"> · image</span> : null}
               {option.isCorrect ? (
                 <span className="cq-preview__badge" aria-label="Marked correct">
                   ✓
@@ -104,9 +52,7 @@ export default function LivePreview({
           ))}
         </ol>
         {correctOption ? (
-          <p className="admin-field__hint">
-            Correct: {correctOption.label}
-          </p>
+          <p className="admin-field__hint">Correct: {correctOption.label}</p>
         ) : null}
       </div>
 

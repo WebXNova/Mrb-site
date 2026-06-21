@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { COURSE_BATCH_STATUSES } from '../constants/courseBatchStatus.js';
+import { validateBatchScheduleWindow } from '../utils/batchDateTime.js';
 
 /** Reject C0 control characters except tab/newline are not allowed in batch text fields. */
 const HAS_ILLEGAL_CTRL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
@@ -65,17 +66,22 @@ const codeSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/, 'code must be alphanumeric with optional ._- and start with alphanumeric')
   .transform((s) => s.toUpperCase());
 
-const dateOnlySchema = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
-  .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00.000Z`)), 'invalid date');
-
 const dateTimeSchema = z
   .string()
   .trim()
   .min(1)
   .refine((s) => !Number.isNaN(Date.parse(s)), 'invalid ISO datetime');
+
+function addScheduleWindowIssues(val, ctx) {
+  const result = validateBatchScheduleWindow(val);
+  if (!result.ok) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: result.message,
+      path: [result.field ?? 'start_date'],
+    });
+  }
+}
 
 function preprocessStripUnknown(raw) {
   if (typeof raw !== 'object' || raw === null) return {};
@@ -84,17 +90,13 @@ function preprocessStripUnknown(raw) {
     'code',
     'start_date',
     'end_date',
-    'enrollment_open_at',
-    'enrollment_close_at',
     'total_seats',
     'instructor_name',
     'schedule_label',
     'timezone',
     'status',
     'is_active',
-    'allow_enrollment',
     'show_publicly',
-    'certificate_enabled',
     'recordings_enabled',
   ];
   const out = {};
@@ -114,19 +116,15 @@ export const courseBatchCreateBodySchema = z.preprocess(
         .transform(normalizeTitle)
         .refine((s) => s.length >= 1, 'title required'),
       code: codeSchema,
-      start_date: dateOnlySchema,
-      end_date: dateOnlySchema,
-      enrollment_open_at: dateTimeSchema,
-      enrollment_close_at: dateTimeSchema,
+      start_date: dateTimeSchema,
+      end_date: dateTimeSchema,
       total_seats: z.number().int().min(1).max(100_000),
       instructor_name: z.union([z.string().max(160), z.null()]).optional(),
       schedule_label: z.union([z.string().max(180), z.null()]).optional(),
       timezone: timezoneEnum.optional().default('UTC'),
       status: batchStatusSchema.optional().default('draft'),
       is_active: z.boolean().optional().default(true),
-      allow_enrollment: z.boolean().optional().default(true),
       show_publicly: z.boolean().optional().default(true),
-      certificate_enabled: z.boolean().optional().default(false),
       recordings_enabled: z.boolean().optional().default(true),
     })
     .strict()
@@ -140,38 +138,7 @@ export const courseBatchCreateBodySchema = z.preprocess(
           for (const iss of e.issues) ctx.addIssue(iss);
         }
       }
-      if (val.start_date >= val.end_date) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'end_date must be after start_date',
-          path: ['end_date'],
-        });
-      }
-      const open = Date.parse(val.enrollment_open_at);
-      const close = Date.parse(val.enrollment_close_at);
-      if (!(open < close)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'enrollment_open_at must be before enrollment_close_at',
-          path: ['enrollment_close_at'],
-        });
-      }
-      const endDay = Date.parse(`${val.end_date}T23:59:59.999Z`);
-      if (close > endDay) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'enrollment_close_at must not be after course end_date',
-          path: ['enrollment_close_at'],
-        });
-      }
-      const batchStart = Date.parse(`${val.start_date}T00:00:00.000Z`);
-      if (Number.isFinite(close) && Number.isFinite(batchStart) && !(close < batchStart)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'enrollment_close_at must be before batch start_date',
-          path: ['enrollment_close_at'],
-        });
-      }
+      addScheduleWindowIssues(val, ctx);
     })
 );
 
@@ -182,17 +149,13 @@ function preprocessUpdate(raw) {
     'code',
     'start_date',
     'end_date',
-    'enrollment_open_at',
-    'enrollment_close_at',
     'total_seats',
     'instructor_name',
     'schedule_label',
     'timezone',
     'status',
     'is_active',
-    'allow_enrollment',
     'show_publicly',
-    'certificate_enabled',
     'recordings_enabled',
   ];
   const out = {};
@@ -202,7 +165,6 @@ function preprocessUpdate(raw) {
   return out;
 }
 
-const optionalDateOnly = dateOnlySchema.optional();
 const optionalDateTime = dateTimeSchema.optional();
 
 export const courseBatchUpdateBodySchema = z.preprocess(
@@ -216,19 +178,15 @@ export const courseBatchUpdateBodySchema = z.preprocess(
         .optional()
         .refine((v) => v === undefined || v.length >= 1, { message: 'title cannot be empty' }),
       code: codeSchema.optional(),
-      start_date: optionalDateOnly,
-      end_date: optionalDateOnly,
-      enrollment_open_at: optionalDateTime,
-      enrollment_close_at: optionalDateTime,
+      start_date: optionalDateTime,
+      end_date: optionalDateTime,
       total_seats: z.number().int().min(1).max(100_000).optional(),
       instructor_name: z.union([z.string().max(160), z.null()]).optional(),
       schedule_label: z.union([z.string().max(180), z.null()]).optional(),
       timezone: timezoneEnum.optional(),
       status: batchStatusSchema.optional(),
       is_active: z.boolean().optional(),
-      allow_enrollment: z.boolean().optional(),
       show_publicly: z.boolean().optional(),
-      certificate_enabled: z.boolean().optional(),
       recordings_enabled: z.boolean().optional(),
     })
     .strict()
@@ -242,21 +200,11 @@ export const courseBatchUpdateBodySchema = z.preprocess(
           for (const iss of e.issues) ctx.addIssue(iss);
         }
       }
-      if (val.start_date && val.end_date && val.start_date >= val.end_date) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'end_date must be after start_date',
-          path: ['end_date'],
-        });
-      }
-      const openAt = val.enrollment_open_at;
-      const closeAt = val.enrollment_close_at;
-      if (openAt && closeAt && !(Date.parse(openAt) < Date.parse(closeAt))) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'enrollment_open_at must be before enrollment_close_at',
-          path: ['enrollment_close_at'],
-        });
+      if (val.start_date && val.end_date) {
+        addScheduleWindowIssues(
+          { start_date: val.start_date, end_date: val.end_date },
+          ctx
+        );
       }
     })
 );

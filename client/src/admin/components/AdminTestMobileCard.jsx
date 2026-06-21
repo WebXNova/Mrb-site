@@ -8,8 +8,10 @@ export default function AdminTestMobileCard({
   onPublish,
   onDuplicate,
   onDownloadResults,
+  onExportTest,
   onDelete,
   onCopyLink,
+  busyAction = '',
 }) {
   return (
     <article className="admin-test-mobile-card">
@@ -48,8 +50,10 @@ export default function AdminTestMobileCard({
           onPublish={onPublish}
           onDuplicate={onDuplicate}
           onDownloadResults={onDownloadResults}
+          onExportTest={onExportTest}
           onDelete={onDelete}
           onCopyLink={onCopyLink}
+          busyAction={busyAction}
         />
       </div>
     </article>

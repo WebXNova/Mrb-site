@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import {
@@ -20,6 +21,7 @@ import { AdminChapterTableRow } from '../../components/admin/AdminChapterTableRo
 import { useAdminHierarchyCascade } from '../../components/admin/useAdminHierarchyCascade';
 import { useDebouncedValue } from '../../components/admin/useDebouncedValue';
 import './AdminChaptersPage.css';
+import '../styles/admin-courses-dashboard.css';
 
 const EMPTY_CREATE_FORM = {
   courseId: '',
@@ -85,6 +87,7 @@ export default function AdminChaptersPage() {
   const debouncedSearch = useDebouncedValue(filters.search, 300);
 
   const [formMode, setFormMode] = useState('create');
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingChapterId, setEditingChapterId] = useState(null);
   const [lockedEditTitles, setLockedEditTitles] = useState(
     /** @type {LockedTitles} */ ({ course: '', subject: '' })
@@ -460,6 +463,7 @@ export default function AdminChaptersPage() {
 
       if (!isEditing) {
         resetCreateForm(keepCourseId, keepSubjectId);
+        setShowCreateForm(false);
       }
       bumpChapterList();
     } catch (err) {
@@ -508,6 +512,21 @@ export default function AdminChaptersPage() {
     resetCreateForm(selectedCourseId, selectedSubjectId);
   }
 
+  function openCreateForm() {
+    setShowCreateForm(true);
+    setErrorState((prev) => ({ ...prev, form: '' }));
+    resetCreateForm(selectedCourseId, selectedSubjectId);
+    window.requestAnimationFrame(() => {
+      document.getElementById('chapter-create-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function closeCreateForm() {
+    setShowCreateForm(false);
+    setErrorState((prev) => ({ ...prev, form: '' }));
+    resetCreateForm(selectedCourseId, selectedSubjectId);
+  }
+
   const filterHierarchyAlert =
     filterHierarchyErrors.courseLoad || filterHierarchyErrors.subjectLoad || filterHierarchyErrors.chapterLoad;
 
@@ -519,7 +538,7 @@ export default function AdminChaptersPage() {
   const editSurfaceOpen = formMode === 'edit' && Boolean(editingChapterId);
 
   return (
-    <section className="admin-page">
+    <section className="admin-page admin-page--courses">
       <AdminChapterEditDialog
         dialogRef={editDialogRef}
         layoutEnabled={editSurfaceOpen}
@@ -536,14 +555,31 @@ export default function AdminChaptersPage() {
         isSubmitting={isSubmitting}
       />
 
-      <section className="admin-card">
-        <h2 className="heading-3">Chapters</h2>
-        <p className="admin-muted" style={{ marginTop: '0.5rem' }}>
-          Manage chapters under Course → Subject. Select a course and subject to view and maintain chapter content.
-        </p>
-      </section>
+      <header className="admin-courses-page-header">
+        <div>
+          <h1 className="admin-courses-page-header__title">Chapter management</h1>
+          <p className="admin-courses-page-header__subtitle">
+            Manage chapters under Course → Subject. Select a course and subject to browse chapters, or create a new
+            one when you are ready.
+          </p>
+        </div>
+        <div className="admin-courses-page-header__actions">
+          {!showCreateForm ? (
+            <button type="button" className="btn--course-primary" onClick={openCreateForm}>
+              <AddIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
+              New chapter
+            </button>
+          ) : (
+            <button type="button" className="btn--course-secondary" onClick={closeCreateForm}>
+              Back to list
+            </button>
+          )}
+        </div>
+      </header>
 
-      <section className="admin-card" style={{ marginTop: '1rem' }}>
+      {!showCreateForm ? (
+        <>
+      <section className="admin-card">
         <h3 className="heading-4">Filter</h3>
         <div className="admin-form-grid" style={{ marginTop: '1rem' }}>
           <div className="admin-field">
@@ -676,7 +712,7 @@ export default function AdminChaptersPage() {
                 ? 'No chapters to display.'
                 : debouncedSearch.trim()
                 ? 'No chapters match your search.'
-                : 'No chapters yet. Create one below.'}
+                : 'No chapters yet. Click New chapter to add one.'}
           </p>
         ) : (
           <div className="admin-table-wrap" style={{ marginTop: '1rem' }}>
@@ -720,9 +756,11 @@ export default function AdminChaptersPage() {
           </div>
         )}
       </section>
+        </>
+      ) : null}
 
-      {formMode === 'create' ? (
-        <section className="admin-card" style={{ marginTop: '1rem' }}>
+      {showCreateForm && formMode === 'create' ? (
+        <section id="chapter-create-form" className="admin-card" style={{ marginTop: '1rem' }}>
           <h3 className="heading-4">Create chapter</h3>
           <form className="admin-form-grid" style={{ marginTop: '1rem' }} onSubmit={onSubmit} noValidate aria-busy={isSubmitting}>
             <AdminChapterFormFields
@@ -754,6 +792,9 @@ export default function AdminChaptersPage() {
                   disabled={chapterFormDisabled}
                 >
                   Reset form
+                </button>
+                <button type="button" className="btn btn--secondary" onClick={closeCreateForm} disabled={chapterFormDisabled}>
+                  Cancel
                 </button>
               </div>
             </AdminChapterFormFields>

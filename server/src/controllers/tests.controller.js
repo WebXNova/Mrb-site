@@ -3,6 +3,10 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { logActivity } from '../services/activityLog.service.js';
 import {
+  logTestCreated,
+  logTestUpdated,
+} from '../observability/lmsActionLogger.service.js';
+import {
   createTestBasicInfo,
   duplicateTest,
   deleteTest,
@@ -17,6 +21,7 @@ import {
   updateTestRules,
   updateTestSettings,
 } from '../services/test.service.js';
+import { getTestResultsAnalytics } from '../services/testResultsAnalytics.service.js';
 import { LEGACY_ENDPOINT_DISABLED, rejectLifecycleFieldsInBody } from '../services/testLifecycle.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import {
@@ -38,6 +43,10 @@ import {
   logSecurityEventFromRequest,
   TEST_SECURITY_ACTIONS,
 } from '../services/testSecurityAudit.service.js';
+import { assertTestCompletenessAccess } from '../services/testMutationAccess.service.js';
+import { extractPublishedEditControls } from '../services/publishedTestEdit.service.js';
+import { parseAdminListFilters, resolveHierarchyCourseScope } from '../utils/parseAdminListFilters.js';
+import { mysqlPool } from '../config/mysql.js';
 
 function rejectDeprecatedTestFields(body, auditContext = {}) {
   const forbidden = ['sub_category', 'subCategory', 'subject'];
@@ -62,8 +71,23 @@ function rejectDeprecatedTestFields(body, auditContext = {}) {
 }
 
 export const getTests = asyncHandler(async (req, res) => {
-  const tests = await listTests();
-  sendSuccess(res, tests);
+  const queryKeys = Object.keys(req.query ?? {}).filter(
+    (key) => req.query[key] != null && String(req.query[key]).trim() !== ''
+  );
+
+  if (queryKeys.length === 0) {
+    sendSuccess(res, await listTests());
+    return;
+  }
+
+  const parsed = parseAdminListFilters(req.query, { defaultLimit: 50, maxLimit: 200 });
+  const scope = await resolveHierarchyCourseScope(mysqlPool, parsed);
+  const result = await listTests({
+    ...parsed,
+    courseId: scope.courseId,
+    subjectId: scope.subjectId,
+  });
+  sendSuccess(res, result);
 });
 
 export const getTest = asyncHandler(async (req, res) => {
@@ -82,20 +106,37 @@ export const getTestCreateOptions = asyncHandler(async (_req, res) => {
 
 export const patchTestBasicInfo = asyncHandler(async (req, res) => {
   const testId = parseTestIdParam(req.params);
-  rejectLifecycleFieldsInBody(req.body, { testId, userId: req.user?.id });
-  rejectDeprecatedTestFields(req.body, { testId, userId: req.user?.id });
+  const { confirmPublishedEdit, expectedUpdatedAt, payload } = extractPublishedEditControls(req.body);
+  rejectLifecycleFieldsInBody(payload, { testId, userId: req.user?.id });
+  rejectDeprecatedTestFields(payload, { testId, userId: req.user?.id });
 
-  const whitelist = assertTestBasicInfoWhitelist(req.body);
+  const whitelist = assertTestBasicInfoWhitelist(payload);
   if (!whitelist.ok) {
     throw new ApiError(422, whitelist.error, { code: 'VALIDATION_ERROR', unknownKeys: whitelist.unknownKeys });
   }
 
-  const parsed = testBasicInfoBodySchema.safeParse(req.body);
+  const parsed = testBasicInfoBodySchema.safeParse(payload);
   if (!parsed.success) {
     throw new ApiError(422, 'Invalid test basic info payload', parsed.error.flatten());
   }
 
-  const result = await updateTestBasicInfo(testId, parsed.data);
+  const result = await updateTestBasicInfo(testId, parsed.data, {
+    userId: req.user?.id,
+    role: req.user?.role,
+    confirmPublishedEdit,
+    expectedUpdatedAt,
+  });
+
+  logTestUpdated({
+    userId: req.user?.id,
+    entityId: testId,
+    testId,
+    role: req.user?.role,
+    section: 'basic_info',
+    courseId: parsed.data.course_id,
+    testType: parsed.data.test_type,
+    requestId: req.requestId ?? null,
+  });
 
   await logActivity({
     userId: req.user?.id,
@@ -128,6 +169,16 @@ export const postTest = asyncHandler(async (req, res) => {
 
   const created = await createTestBasicInfo(parsed.data, req.user?.id ?? null);
 
+  logTestCreated({
+    userId: req.user?.id,
+    entityId: created.testId,
+    testId: created.testId,
+    role: req.user?.role,
+    courseId: parsed.data.course_id,
+    testType: parsed.data.test_type,
+    requestId: req.requestId ?? null,
+  });
+
   await logActivity({
     userId: req.user?.id,
     role: req.user?.role,
@@ -159,19 +210,36 @@ export const getTestRules = asyncHandler(async (req, res) => {
 
 export const patchTestRules = asyncHandler(async (req, res) => {
   const testId = parseTestIdParam(req.params);
-  rejectLifecycleFieldsInBody(req.body, { testId, userId: req.user?.id });
+  const { confirmPublishedEdit, expectedUpdatedAt, payload } = extractPublishedEditControls(req.body);
+  rejectLifecycleFieldsInBody(payload, { testId, userId: req.user?.id });
 
-  const whitelist = assertTestRulesWhitelist(req.body);
+  const whitelist = assertTestRulesWhitelist(payload);
   if (!whitelist.ok) {
     throw new ApiError(422, whitelist.error, { code: 'VALIDATION_ERROR', unknownKeys: whitelist.unknownKeys });
   }
 
-  const parsed = testRulesBodySchema.safeParse(req.body);
+  const parsed = testRulesBodySchema.safeParse(payload);
   if (!parsed.success) {
     throw new ApiError(422, 'Invalid test rules payload', parsed.error.flatten());
   }
 
-  const result = await updateTestRules(testId, parsed.data);
+  const result = await updateTestRules(testId, parsed.data, {
+    userId: req.user?.id,
+    role: req.user?.role,
+    confirmPublishedEdit,
+    expectedUpdatedAt,
+  });
+
+  logTestUpdated({
+    userId: req.user?.id,
+    entityId: testId,
+    testId,
+    role: req.user?.role,
+    section: 'rules',
+    durationMinutes: parsed.data.duration_minutes,
+    maxAttempts: parsed.data.max_attempts,
+    requestId: req.requestId ?? null,
+  });
 
   await logActivity({
     userId: req.user?.id,
@@ -190,7 +258,11 @@ export const patchTestRules = asyncHandler(async (req, res) => {
 
 export const getTestCompletenessHandler = asyncHandler(async (req, res) => {
   const testId = parseTestIdParam(req.params);
-  const report = await getTestCompleteness(testId);
+  await assertTestCompletenessAccess(testId, req.user?.id, req.user?.role);
+  const report = await getTestCompleteness(testId, {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
   sendSuccess(res, report);
 });
 
@@ -202,19 +274,36 @@ export const getTestSettings = asyncHandler(async (req, res) => {
 
 export const patchTestSettings = asyncHandler(async (req, res) => {
   const testId = parseTestIdParam(req.params);
-  rejectLifecycleFieldsInBody(req.body, { testId, userId: req.user?.id });
+  const { confirmPublishedEdit, expectedUpdatedAt, payload } = extractPublishedEditControls(req.body);
+  rejectLifecycleFieldsInBody(payload, { testId, userId: req.user?.id });
 
-  const whitelist = assertTestSettingsWhitelist(req.body);
+  const whitelist = assertTestSettingsWhitelist(payload);
   if (!whitelist.ok) {
     throw new ApiError(422, whitelist.error, { code: 'VALIDATION_ERROR', unknownKeys: whitelist.unknownKeys });
   }
 
-  const parsed = testSettingsBodySchema.safeParse(req.body);
+  const parsed = testSettingsBodySchema.safeParse(payload);
   if (!parsed.success) {
     throw new ApiError(422, 'Invalid test settings payload', parsed.error.flatten());
   }
 
-  const result = await updateTestSettings(testId, parsed.data);
+  const result = await updateTestSettings(testId, parsed.data, {
+    userId: req.user?.id,
+    role: req.user?.role,
+    confirmPublishedEdit,
+    expectedUpdatedAt,
+  });
+
+  logTestUpdated({
+    userId: req.user?.id,
+    entityId: testId,
+    testId,
+    role: req.user?.role,
+    section: 'settings',
+    accessMode: parsed.data.access_mode,
+    lifecycleStatus: result.lifecycle_status,
+    requestId: req.requestId ?? null,
+  });
 
   await logActivity({
     userId: req.user?.id,
@@ -250,7 +339,7 @@ export const putTest = asyncHandler(async (req, res) => {
 export const removeTest = asyncHandler(async (req, res) => {
   const testId = Number(req.params.testId);
   if (!testId) throw new ApiError(400, 'Invalid test id');
-  const removed = await deleteTest(testId, { userId: req.user?.id });
+  const removed = await deleteTest(testId, { userId: req.user?.id, role: req.user?.role });
   if (!removed) throw new ApiError(404, 'Test not found');
   await logActivity({
     userId: req.user?.id,
@@ -274,7 +363,11 @@ export const postTestPublish = asyncHandler(async (req, res) => {
   });
 
   try {
-    const updated = await publishTest(testId, { userId: req.user?.id });
+    const updated = await publishTest(testId, {
+      userId: req.user?.id,
+      role: req.user?.role,
+      requestId: req.requestId ?? null,
+    });
     if (!updated) throw new ApiError(404, 'Test not found');
 
     logSecurityEventFromRequest(req, {
@@ -331,7 +424,10 @@ export const postDuplicateTest = asyncHandler(async (req, res) => {
     reason: 'duplicate_requested',
     outcome: 'allowed',
   });
-  const copied = await duplicateTest(testId, req.user?.id || null);
+  const copied = await duplicateTest(testId, req.user?.id || null, {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
   if (!copied) throw new ApiError(404, 'Test not found');
   sendSuccess(res, copied, 201);
 });
@@ -339,9 +435,20 @@ export const postDuplicateTest = asyncHandler(async (req, res) => {
 export const getTestResultsExport = asyncHandler(async (req, res) => {
   const testId = Number(req.params.testId);
   if (!testId) throw new ApiError(400, 'Invalid test id');
-  const exported = await exportTestResultsWorkbook(testId);
+  const exported = await exportTestResultsWorkbook(testId, {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
   if (!exported) throw new ApiError(404, 'Test not found');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
   res.send(exported.buffer);
+});
+
+export const getTestResultsAnalyticsHandler = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const analytics = await getTestResultsAnalytics(testId);
+  if (!analytics) throw new ApiError(404, 'Test not found');
+  sendSuccess(res, analytics);
 });

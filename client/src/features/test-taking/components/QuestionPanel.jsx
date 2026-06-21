@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import DOMPurify from 'dompurify';
+import { sanitizeStudentRichHtml } from '../../../security/sanitizeStudentRichHtml.js';
 import QuestionOptions from './QuestionOptions';
 
 function QuestionPanel({
@@ -42,7 +42,7 @@ function QuestionPanel({
       <div
         className="tt-question__text"
         dangerouslySetInnerHTML={{
-          __html: DOMPurify.sanitize(question.questionText || ''),
+          __html: sanitizeStudentRichHtml(question.questionText || ''),
         }}
       />
 

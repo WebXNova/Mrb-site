@@ -92,3 +92,16 @@ export function startEmailQueueWorker() {
   return worker;
 }
 
+/** Graceful shutdown — drain BullMQ worker before process exit. */
+export async function stopEmailQueueWorker() {
+  if (!worker) return;
+  const active = worker;
+  worker = null;
+  try {
+    await active.close();
+    console.log('[email-worker] Worker stopped');
+  } catch (error) {
+    console.warn('[email-worker] Worker stop error:', error?.message || error);
+  }
+}
+

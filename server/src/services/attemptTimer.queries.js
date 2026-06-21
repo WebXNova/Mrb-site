@@ -10,9 +10,9 @@ export const LOAD_ATTEMPT_TIMER_SQL = `
 `;
 
 /**
- * Expire attempt when `NOW() > expires_at` (strict).
+ * Expire attempt when UTC now is past expires_at (strict).
  *
- * Note: uses `expires_at < NOW()` (not <=) so expiry happens only after the timestamp passes.
+ * Note: uses `expires_at < UTC_TIMESTAMP()` (not <=) so expiry happens only after the timestamp passes.
  *
  * Sets:
  * - status = 'expired'
@@ -22,10 +22,10 @@ export const EXPIRE_ATTEMPT_IF_EXPIRED_SQL = `
   UPDATE test_attempts
   SET status = 'expired',
       completion_reason = 'expired',
-      updated_at = CURRENT_TIMESTAMP
+      updated_at = UTC_TIMESTAMP()
   WHERE id = ?
     AND status = 'in_progress'
     AND expires_at IS NOT NULL
-    AND expires_at < NOW()
+    AND expires_at < UTC_TIMESTAMP()
 `;
 

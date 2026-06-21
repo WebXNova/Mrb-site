@@ -31,7 +31,7 @@ const socialItems = [
   },
   {
     name: 'Facebook',
-    href: 'https://www.facebook.com/MRB-CLASSES',
+    href: 'https://www.facebook.com/profile.php?id=61574737812603',
     handle: 'MRB-CLASSES',
     className: 'social-links__icon--facebook',
     icon: (
@@ -45,8 +45,8 @@ const socialItems = [
   },
   {
     name: 'YouTube',
-    href: 'https://www.youtube.com/@MuzamilRB',
-    handle: 'Muzami lRB',
+    href: 'https://www.youtube.com/@786muzamilrb',
+    handle: '@786muzamilrb',
     className: 'social-links__icon--youtube',
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">

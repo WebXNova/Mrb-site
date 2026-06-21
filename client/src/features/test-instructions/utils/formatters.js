@@ -13,6 +13,15 @@ export function formatDuration(minutes) {
   return `${hours}h ${remainder}m`;
 }
 
+export function formatPassingMarks(passingMarks, totalMarks) {
+  const passing = Number(passingMarks);
+  const total = Number(totalMarks);
+  if (!Number.isFinite(passing)) return 'Not set';
+  if (!Number.isFinite(total) || total <= 0) return `${passing} marks`;
+  return `${passing} / ${total} marks`;
+}
+
+/** @deprecated Use formatPassingMarks — percentage is derived server-side only. */
 export function formatPassingPercentage(value) {
   const pct = Number(value);
   if (!Number.isFinite(pct)) return 'Not set';

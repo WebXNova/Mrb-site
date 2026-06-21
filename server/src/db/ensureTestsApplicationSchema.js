@@ -3,6 +3,8 @@
  * and student portal on databases bootstrapped from canonical schema.sql.
  */
 
+import { ensurePassingMarksMigration } from './ensurePassingMarksMigration.js';
+
 async function tableExists(pool, db, tableName) {
   const [rows] = await pool.query(
     `SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.TABLES
@@ -43,7 +45,6 @@ async function ensureTestsColumns(pool, db) {
 
   await addColumn(pool, db, 'tests', 'subject', 'subject VARCHAR(80) NULL AFTER description');
   await addColumn(pool, db, 'tests', 'category', 'category VARCHAR(80) NULL AFTER subject');
-  await addColumn(pool, db, 'tests', 'passing_marks', 'passing_marks INT NULL AFTER duration_minutes');
   await addColumn(pool, db, 'tests', 'negative_marking', 'negative_marking DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER max_attempts');
   await addColumn(pool, db, 'tests', 'show_explanations', 'show_explanations TINYINT(1) NOT NULL DEFAULT 1 AFTER shuffle_options');
   await addColumn(pool, db, 'tests', 'access_mode', "access_mode VARCHAR(20) NOT NULL DEFAULT 'private' AFTER show_explanations");
@@ -82,7 +83,8 @@ async function ensureTestAttemptsColumns(pool, db) {
   await addColumn(pool, db, 'test_attempts', 'device_fingerprint', 'device_fingerprint VARCHAR(128) NULL AFTER user_agent');
   await addColumn(pool, db, 'test_attempts', 'used_code_hash', 'used_code_hash VARCHAR(128) NULL AFTER device_fingerprint');
   await addColumn(pool, db, 'test_attempts', 'attempt_nonce', 'attempt_nonce VARCHAR(64) NULL AFTER used_code_hash');
-  await addColumn(pool, db, 'test_attempts', 'result_id', 'result_id BIGINT NULL AFTER attempt_nonce');
+  await addColumn(pool, db, 'test_attempts', 'delivery_layout_json', 'delivery_layout_json JSON NULL AFTER attempt_nonce');
+  await addColumn(pool, db, 'test_attempts', 'result_id', 'result_id BIGINT NULL AFTER delivery_layout_json');
   await addColumn(pool, db, 'test_attempts', 'completion_reason', 'completion_reason VARCHAR(50) NULL AFTER submitted_at');
 
   if (
@@ -114,4 +116,9 @@ export async function ensureTestsApplicationSchema(mysqlPool) {
   await ensureTestsColumns(mysqlPool, db);
   await ensureTestAttemptsColumns(mysqlPool, db);
   await ensureTestResultsColumns(mysqlPool, db);
+
+  const migrationResult = await ensurePassingMarksMigration(mysqlPool);
+  if (migrationResult?.steps?.length) {
+    console.log('[schema] Passing marks migration applied:', migrationResult.steps.join(', '));
+  }
 }

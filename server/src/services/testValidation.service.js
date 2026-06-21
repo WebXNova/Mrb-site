@@ -8,6 +8,7 @@
 
 import { mysqlPool } from '../config/mysql.js';
 import { findLinkedMcqsWithoutOptions } from './testQuestionComposition.service.js';
+import { buildTestPublishSummary } from './testPublishSummary.service.js';
 import { AppError } from '../errors/base/AppError.js';
 import {
   INVALID_CATEGORY,
@@ -37,11 +38,11 @@ import {
   loadTestCompletenessRow,
 } from './testCompleteness.service.js';
 import { getCourseSubjectIds, loadTestSubjectIds } from './testSubjectValidation.service.js';
-import { QUESTION_MUTATION_NOT_ALLOWED } from '../errors/codes/ErrorCodes.js';
 import {
   logTestValidationFailure,
   TEST_SECURITY_ACTIONS,
 } from './testSecurityAudit.service.js';
+import { assertTestUnpublished, enforceUnpublishedTest } from './publishedTestLock.service.js';
 
 export const TEST_VALIDATION_CODES = Object.freeze({
   INVALID_TEST_STATE,
@@ -198,7 +199,7 @@ export function validateTestState(testRow) {
 export async function loadTestValidationRow(testId, executor = mysqlPool) {
   const tid = Number(testId);
   const [rows] = await executor.query(
-    `SELECT id, course_id, title, category, test_type, duration_minutes, max_attempts,
+    `SELECT id, course_id, title, category, test_type, duration_minutes, max_attempts, passing_marks,
             access_mode, status
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
@@ -211,23 +212,12 @@ export async function loadTestValidationRow(testId, executor = mysqlPool) {
 /**
  * @param {Record<string, unknown>} testRow
  */
-export function enforceEditableTest(testRow, options = {}) {
-  if (options.allowPublishedMaintenance) return;
-  if (isPublishedDbStatus(testRow.status)) {
-    logTestValidationFailure({
-      testId: Number(testRow.id),
-      errorCode: TEST_IS_LOCKED,
-      reason: 'PUBLISHED_TEST_EDIT_ATTEMPT',
-      action: TEST_SECURITY_ACTIONS.PUBLISHED_TEST_EDIT_ATTEMPT,
-    });
-    throw new AppError({
-      message: 'Published tests cannot be modified through the test builder.',
-      errorCode: TEST_IS_LOCKED,
-      httpStatus: 409,
-      isOperational: true,
-      metadata: { testId: testRow.id, status: testRow.status },
-    });
-  }
+export function enforceEditableTest(testRow) {
+  assertTestUnpublished(testRow, {
+    testId: Number(testRow?.id),
+    reason: 'PUBLISHED_TEST_WIZARD_MUTATION',
+    action: TEST_SECURITY_ACTIONS.PUBLISHED_TEST_EDIT_ATTEMPT,
+  });
 }
 
 /**
@@ -396,7 +386,9 @@ export async function enforceWizardWrite(testId, step, executor = mysqlPool, opt
     });
   }
 
-  enforceEditableTest(row, options);
+  if (!options.allowPublishedEdit) {
+    enforceEditableTest(row);
+  }
   const stateReport = validateTestState(row);
   if (!stateReport.valid) throwFromValidationReport(stateReport);
 
@@ -433,30 +425,11 @@ export async function enforceWizardWrite(testId, step, executor = mysqlPool, opt
  * @param {number} testId
  * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
  */
-export async function enforceQuestionMutationPreconditions(testId, executor = mysqlPool) {
-  const row = await loadTestValidationRow(testId, executor);
-  if (!row) {
-    throw new AppError({
-      message: 'Test was not found.',
-      errorCode: NOT_FOUND,
-      httpStatus: 404,
-      isOperational: true,
-      metadata: { testId: Number(testId) },
-    });
-  }
-  if (isPublishedDbStatus(row.status)) {
-    logTestValidationFailure({
-      testId: Number(testId),
-      errorCode: QUESTION_MUTATION_NOT_ALLOWED,
+export async function enforceQuestionMutationPreconditions(testId, executor = mysqlPool, options = {}) {
+  if (!options.allowPublishedEdit) {
+    await enforceUnpublishedTest(testId, executor, {
       reason: 'PUBLISHED_TEST_QUESTION_MUTATION',
       action: TEST_SECURITY_ACTIONS.QUESTION_LINKING_REJECTION,
-    });
-    throw new AppError({
-      message: 'Questions cannot be added, removed, or reordered on a published test.',
-      errorCode: QUESTION_MUTATION_NOT_ALLOWED,
-      httpStatus: 409,
-      isOperational: true,
-      metadata: { testId: Number(testId), status: row.status },
     });
   }
 
@@ -497,13 +470,20 @@ export async function getFullTestValidationReport(testId, executor = mysqlPool) 
   const compositionReport = await validateTestComposition(testId, executor);
   const { evaluatePublishEligibility } = await import('./testPublishEligibility.service.js');
   const publishReport = await evaluatePublishEligibility(testId, executor);
-  const questionCount = publishReport.active_question_count ?? 0;
+  const questionCount =
+    publishReport.effective_question_count ??
+    publishReport.question_authority?.questionCount ??
+    publishReport.active_question_count ??
+    0;
 
   const errors = [...new Set([...stateReport.errors, ...compositionReport.errors, ...publishReport.errors])];
+  const publish_summary = await buildTestPublishSummary(testId, executor);
 
   return {
     ...publishReport.wizard,
     question_count: questionCount,
+    publish_summary,
+    question_authority_source: publishReport.question_authority?.source ?? publishReport.wizard?.question_authority_source ?? null,
     valid: publishReport.valid && stateReport.valid,
     errors,
     validation: {

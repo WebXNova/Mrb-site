@@ -3,6 +3,7 @@ import { ApiError } from '../utils/apiError.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { COURSE_BATCH_PUBLIC_STATUSES, COURSE_BATCH_STATUSES } from '../constants/courseBatchStatus.js';
 import { toCourseBatchAdminDto, toCourseBatchPublicDto } from '../dto/courseBatch.dto.js';
+import { validateBatchScheduleWindow } from '../utils/batchDateTime.js';
 import { formatMySqlDateTime } from '../utils/dateTime.js';
 import { customAlphabet } from 'nanoid';
 
@@ -16,8 +17,6 @@ export const COURSE_BATCH_ROW_SELECT = `
     b.code,
     b.start_date,
     b.end_date,
-    b.enrollment_open_at,
-    b.enrollment_close_at,
     b.total_seats,
     b.seats_filled,
     b.instructor_name,
@@ -25,9 +24,7 @@ export const COURSE_BATCH_ROW_SELECT = `
     b.timezone,
     b.status,
     b.is_active,
-    b.allow_enrollment,
     b.show_publicly,
-    b.certificate_enabled,
     b.recordings_enabled,
     b.created_by,
     b.created_at,
@@ -52,6 +49,19 @@ function isDupEntry(err) {
 }
 
 /**
+ * Normalize batch lifecycle status when a course is being published.
+ * Maps draft/operational UI picks to catalog-safe statuses reachable from insert (`draft` → X).
+ *
+ * @param {string} rawStatus
+ */
+export function normalizeBatchStatusForPublish(rawStatus) {
+  const status = String(rawStatus || 'draft').toLowerCase();
+  if (status === 'draft') return 'upcoming';
+  if (['published', 'upcoming', 'enrollment_open'].includes(status)) return status;
+  return 'upcoming';
+}
+
+/**
  * @param {string} from
  * @param {string} to
  * @param {{ isSuperAdmin?: boolean }} [ctx] True when LMS session satisfies `isAdminRole()` (`admin` or `super_admin`); wired from authenticated admin routes only.
@@ -69,7 +79,7 @@ export function validateBatchStateTransition(from, to, ctx = {}) {
   const graph = {
     draft: ['published', 'upcoming', 'enrollment_open', 'cancelled', 'archived'],
     published: ['upcoming', 'enrollment_open', 'cancelled', 'archived'],
-    upcoming: ['enrollment_open', 'cancelled', 'archived'],
+    upcoming: ['published', 'enrollment_open', 'cancelled', 'archived'],
     enrollment_open: ['running', 'cancelled', 'archived'],
     running: ['completed', 'cancelled', 'archived'],
     completed: ['archived'],
@@ -87,40 +97,37 @@ export function validateBatchStateTransition(from, to, ctx = {}) {
 }
 
 /**
- * @param {{
- *   start_date: string,
- *   end_date: string,
- *   enrollment_open_at: string,
- *   enrollment_close_at: string,
- * }} row
+ * @param {{ start_date: string, end_date: string }} row
  */
 export function validateEnrollmentWindow(row) {
-  const sd = Date.parse(`${row.start_date}T00:00:00.000Z`);
-  const ed = Date.parse(`${row.end_date}T23:59:59.999Z`);
-  const open = Date.parse(row.enrollment_open_at);
-  const close = Date.parse(row.enrollment_close_at);
-  if (![sd, ed, open, close].every(Number.isFinite)) {
-    throw new ApiError(422, 'Invalid enrollment or schedule dates', { code: 'INVALID_ENROLLMENT_WINDOW' });
+  const result = validateBatchScheduleWindow(row);
+  if (!result.ok) {
+    throw new ApiError(422, result.message, { code: 'INVALID_BATCH_SCHEDULE' });
   }
-  if (!(sd < ed)) {
-    throw new ApiError(422, 'end_date must be after start_date', { code: 'INVALID_ENROLLMENT_WINDOW' });
+}
+
+/**
+ * Legacy NOT NULL columns on course_batches — default to batch schedule when omitted.
+ * @param {object} payload
+ * @param {string} startDate formatted MySQL datetime
+ * @param {string} endDate formatted MySQL datetime
+ */
+function resolveBatchEnrollmentDatetimes(payload, startDate, endDate) {
+  if (payload.enrollment_open_at) {
+    return {
+      enrollment_open_at: formatMySqlDateTime(payload.enrollment_open_at, {
+        fieldName: 'enrollment_open_at',
+      }),
+      enrollment_close_at: formatMySqlDateTime(
+        payload.enrollment_close_at || payload.end_date || endDate,
+        { fieldName: 'enrollment_close_at' }
+      ),
+    };
   }
-  if (!(open < close)) {
-    throw new ApiError(422, 'enrollment_open_at must be before enrollment_close_at', {
-      code: 'INVALID_ENROLLMENT_WINDOW',
-    });
-  }
-  if (close > ed) {
-    throw new ApiError(422, 'enrollment_close_at must not be after course end_date', {
-      code: 'INVALID_ENROLLMENT_WINDOW',
-    });
-  }
-  const batchStart = Date.parse(`${row.start_date}T00:00:00.000Z`);
-  if (Number.isFinite(close) && Number.isFinite(batchStart) && !(close < batchStart)) {
-    throw new ApiError(422, 'enrollment_close_at must be before batch start_date', {
-      code: 'INVALID_ENROLLMENT_WINDOW',
-    });
-  }
+  return {
+    enrollment_open_at: startDate,
+    enrollment_close_at: endDate,
+  };
 }
 
 /**
@@ -228,11 +235,18 @@ export async function createBatch(courseId, payload, createdByUserId) {
   const rowLike = {
     start_date: payload.start_date,
     end_date: payload.end_date,
-    enrollment_open_at: payload.enrollment_open_at,
-    enrollment_close_at: payload.enrollment_close_at,
   };
   validateEnrollmentWindow(rowLike);
-  const initial = String(payload.status || 'draft').toLowerCase();
+  const rawInitial = String(payload.status || 'draft').toLowerCase();
+  const allowedFromDraft = new Set([
+    'draft',
+    'published',
+    'upcoming',
+    'enrollment_open',
+    'cancelled',
+    'archived',
+  ]);
+  const initial = allowedFromDraft.has(rawInitial) ? rawInitial : 'upcoming';
   validateSeatRules({ total_seats: payload.total_seats, seats_filled: 0, status: initial });
   validateBatchStateTransition('draft', initial, { isSuperAdmin: false });
 
@@ -243,39 +257,35 @@ export async function createBatch(courseId, payload, createdByUserId) {
   const code = `B${genBatchCode()}`;
 
   // Normalize datetimes for MySQL
-  const enrollmentOpenAt = formatMySqlDateTime(payload.enrollment_open_at, {
-    fieldName: 'enrollment_open_at',
-  });
-  const enrollmentCloseAt = formatMySqlDateTime(payload.enrollment_close_at, {
-    fieldName: 'enrollment_close_at',
-  });
+  const startDate = formatMySqlDateTime(payload.start_date, { fieldName: 'start_date' });
+  const endDate = formatMySqlDateTime(payload.end_date, { fieldName: 'end_date' });
+  const enrollmentWindow = resolveBatchEnrollmentDatetimes(payload, startDate, endDate);
 
   try {
     const [result] = await mysqlPool.query(
       `INSERT INTO course_batches (
         course_id, title, code, start_date, end_date,
-        enrollment_open_at, enrollment_close_at, total_seats, seats_filled,
+        enrollment_open_at, enrollment_close_at,
+        total_seats, seats_filled,
         instructor_name, schedule_label, timezone, status, is_active,
-        allow_enrollment, show_publicly, certificate_enabled, recordings_enabled,
+        show_publicly, recordings_enabled,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cid,
         payload.title,
         code,
-        payload.start_date,
-        payload.end_date,
-        enrollmentOpenAt,
-        enrollmentCloseAt,
+        startDate,
+        endDate,
+        enrollmentWindow.enrollment_open_at,
+        enrollmentWindow.enrollment_close_at,
         payload.total_seats,
         insInstructor,
         insSchedule,
         payload.timezone || 'UTC',
         initial,
         Boolean(payload.is_active),
-        payload.allow_enrollment !== false ? 1 : 0,
         payload.show_publicly !== false ? 1 : 0,
-        payload.certificate_enabled === true ? 1 : 0,
         payload.recordings_enabled !== false ? 1 : 0,
         createdByUserId ?? null,
       ]
@@ -291,16 +301,16 @@ export async function createBatch(courseId, payload, createdByUserId) {
   }
 }
 
-function mysqlDateToYmd(v) {
-  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString().slice(0, 10);
-  const s = String(v ?? '').trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  return s;
-}
-
 function mysqlDateTimeToInput(v) {
   if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString();
-  return String(v ?? '');
+  const s = String(v ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+    return new Date(`${s.replace(' ', 'T')}Z`).toISOString();
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return new Date(`${s}T00:00:00.000Z`).toISOString();
+  }
+  return s;
 }
 
 export async function updateBatch(batchId, patch, { isSuperAdmin = false } = {}) {
@@ -322,8 +332,8 @@ export async function updateBatch(batchId, patch, { isSuperAdmin = false } = {})
   }
 
   const mergedDates = {
-    start_date: patch.start_date ?? mysqlDateToYmd(row.start_date),
-    end_date: patch.end_date ?? mysqlDateToYmd(row.end_date),
+    start_date: patch.start_date ?? mysqlDateTimeToInput(row.start_date),
+    end_date: patch.end_date ?? mysqlDateTimeToInput(row.end_date),
     enrollment_open_at: patch.enrollment_open_at ?? mysqlDateTimeToInput(row.enrollment_open_at),
     enrollment_close_at: patch.enrollment_close_at ?? mysqlDateTimeToInput(row.enrollment_close_at),
   };
@@ -361,51 +371,37 @@ export async function updateBatch(batchId, patch, { isSuperAdmin = false } = {})
         ? null
         : String(row.schedule_label);
 
-  const nextAllowEn =
-    patch.allow_enrollment !== undefined ? Boolean(patch.allow_enrollment) : Boolean(Number(row.allow_enrollment ?? 1));
   const nextShowPub =
     patch.show_publicly !== undefined ? Boolean(patch.show_publicly) : Boolean(Number(row.show_publicly ?? 1));
-  const nextCert =
-    patch.certificate_enabled !== undefined
-      ? Boolean(patch.certificate_enabled)
-      : Boolean(Number(row.certificate_enabled ?? 0));
   const nextRec =
     patch.recordings_enabled !== undefined
       ? Boolean(patch.recordings_enabled)
       : Boolean(Number(row.recordings_enabled ?? 1));
 
   // Normalize datetimes for MySQL
-  const enrollmentOpenAt = formatMySqlDateTime(mergedDates.enrollment_open_at, {
-    fieldName: 'enrollment_open_at',
-  });
-  const enrollmentCloseAt = formatMySqlDateTime(mergedDates.enrollment_close_at, {
-    fieldName: 'enrollment_close_at',
-  });
+  const startDate = formatMySqlDateTime(mergedDates.start_date, { fieldName: 'start_date' });
+  const endDate = formatMySqlDateTime(mergedDates.end_date, { fieldName: 'end_date' });
 
   try {
     await mysqlPool.query(
       `UPDATE course_batches SET
         title = ?, code = ?, start_date = ?, end_date = ?,
-        enrollment_open_at = ?, enrollment_close_at = ?, total_seats = ?,
+        total_seats = ?,
         instructor_name = ?, schedule_label = ?, timezone = ?, status = ?, is_active = ?,
-        allow_enrollment = ?, show_publicly = ?, certificate_enabled = ?, recordings_enabled = ?
+        show_publicly = ?, recordings_enabled = ?
       WHERE id = ?`,
       [
         nextTitle,
         nextCode,
-        mergedDates.start_date,
-        mergedDates.end_date,
-        enrollmentOpenAt,
-        enrollmentCloseAt,
+        startDate,
+        endDate,
         nextTotal,
         insInstructor,
         insSchedule,
         nextTz,
         nextStatus,
         nextIsActive,
-        nextAllowEn ? 1 : 0,
         nextShowPub ? 1 : 0,
-        nextCert ? 1 : 0,
         nextRec ? 1 : 0,
         id,
       ]
@@ -497,12 +493,19 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
   const rowLike = {
     start_date: payload.start_date,
     end_date: payload.end_date,
-    enrollment_open_at: payload.enrollment_open_at,
-    enrollment_close_at: payload.enrollment_close_at,
   };
   validateEnrollmentWindow(rowLike);
 
-  const initial = String(payload.status || 'draft').toLowerCase();
+  const rawInitial = String(payload.status || 'draft').toLowerCase();
+  const allowedFromDraft = new Set([
+    'draft',
+    'published',
+    'upcoming',
+    'enrollment_open',
+    'cancelled',
+    'archived',
+  ]);
+  const initial = allowedFromDraft.has(rawInitial) ? rawInitial : 'upcoming';
   validateSeatRules({ total_seats: payload.total_seats, seats_filled: 0, status: initial });
   validateBatchStateTransition('draft', initial, { isSuperAdmin: false });
 
@@ -514,39 +517,35 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
   const insSchedule = payload.schedule_label == null ? null : String(payload.schedule_label).trim() || null;
 
   // Normalize datetimes for MySQL
-  const enrollmentOpenAt = formatMySqlDateTime(payload.enrollment_open_at, {
-    fieldName: 'enrollment_open_at',
-  });
-  const enrollmentCloseAt = formatMySqlDateTime(payload.enrollment_close_at, {
-    fieldName: 'enrollment_close_at',
-  });
+  const startDate = formatMySqlDateTime(payload.start_date, { fieldName: 'start_date' });
+  const endDate = formatMySqlDateTime(payload.end_date, { fieldName: 'end_date' });
+  const enrollmentWindow = resolveBatchEnrollmentDatetimes(payload, startDate, endDate);
 
   try {
     const [result] = await connection.query(
       `INSERT INTO course_batches (
         course_id, title, code, start_date, end_date,
-        enrollment_open_at, enrollment_close_at, total_seats, seats_filled,
+        enrollment_open_at, enrollment_close_at,
+        total_seats, seats_filled,
         instructor_name, schedule_label, timezone, status, is_active,
-        allow_enrollment, show_publicly, certificate_enabled, recordings_enabled,
+        show_publicly, recordings_enabled,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cid,
         payload.title,
         code,
-        payload.start_date,
-        payload.end_date,
-        enrollmentOpenAt,
-        enrollmentCloseAt,
+        startDate,
+        endDate,
+        enrollmentWindow.enrollment_open_at,
+        enrollmentWindow.enrollment_close_at,
         payload.total_seats,
         insInstructor,
         insSchedule,
         payload.timezone || 'UTC',
         initial,
         Boolean(payload.is_active),
-        payload.allow_enrollment !== false ? 1 : 0,
         payload.show_publicly !== false ? 1 : 0,
-        payload.certificate_enabled === true ? 1 : 0,
         payload.recordings_enabled !== false ? 1 : 0,
         createdByUserId ?? null,
       ]

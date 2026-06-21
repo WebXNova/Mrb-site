@@ -1,31 +1,75 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { adminRoute } from '../../config/adminPaths';
+import { Link, useSearchParams } from 'react-router-dom';
+import AddIcon from '@mui/icons-material/Add';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { useDebouncedValue } from '../../components/admin/useDebouncedValue';
+import AdminHierarchySelectors from '../../components/admin/AdminHierarchySelectors';
+import { useAdminHierarchyCascade } from '../../components/admin/useAdminHierarchyCascade';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import AdminCollapsibleCard from '../components/AdminCollapsibleCard';
 import AdminSearchField from '../components/AdminSearchField';
+import AdminSectionErrorBoundary from '../components/AdminSectionErrorBoundary';
 import AdminTestMobileCard from '../components/AdminTestMobileCard';
 import TestRowActionsMenu from '../components/TestRowActionsMenu';
+import TestPublishListModal from '../components/TestPublishListModal';
 import TestStatusBadge from '../components/TestStatusBadge';
 import { useAdminToast } from '../context/AdminToastContext';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { isTestPublishedStatus } from '../utils/testBasicInfoValidation';
-import { TEST_STATUS_FILTERS, filterTestsList } from '../utils/testListFilters';
+import { TEST_STATUS_FILTERS } from '../utils/testListFilters';
+import { isAnyPublishBusy, publishBusyKey } from '../utils/testPublishBusyState';
+import {
+  readAdminFiltersFromUrl,
+  writeAdminFiltersToUrl,
+} from '../utils/adminListFilterQuery.js';
+import AdminTestResultsAnalyticsPanel from '../components/AdminTestResultsAnalyticsPanel';
+import '../styles/admin-courses-dashboard.css';
+import '../styles/admin-test-results-analytics.css';
 
 const PAGE_SIZE = 10;
 
 export default function AdminTestsPage() {
+  return (
+    <AdminSectionErrorBoundary title="Test management could not load">
+      <AdminTestsPageContent />
+    </AdminSectionErrorBoundary>
+  );
+}
+
+function AdminTestsPageContent() {
   const token = getAdminToken();
   const toast = useAdminToast();
+  const toastErrorRef = useRef(toast.error);
+  toastErrorRef.current = toast.error;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlHydratedRef = useRef(false);
+  const [filtersReady, setFiltersReady] = useState(false);
+  const filterCascade = useAdminHierarchyCascade({ token, depth: 2 });
+  const {
+    selectedCourseId,
+    selectedSubjectId,
+    selectCourse,
+    selectSubject,
+    applyHierarchySelection,
+  } = filterCascade;
+
   const [tests, setTests] = useState([]);
+  const [statsTests, setStatsTests] = useState([]);
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [listError, setListError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
+  const [listTotal, setListTotal] = useState(0);
   const [busyAction, setBusyAction] = useState('');
-  const [workflowExpanded, setWorkflowExpanded] = useLocalStorageState('admin.tests.workflowExpanded', true);
+  const publishInFlightRef = useRef(null);
+  const [publishModalTest, setPublishModalTest] = useState(null);
+  const [workflowExpanded, setWorkflowExpanded] = useLocalStorageState('admin.tests.workflowExpanded', false);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
@@ -35,49 +79,125 @@ export default function AdminTestsPage() {
     return map;
   }, [courses]);
 
-  const filteredTests = useMemo(
-    () =>
-      filterTestsList(tests, {
-        search: debouncedSearch,
-        statusFilter,
-        courseTitleById,
-      }),
-    [tests, debouncedSearch, statusFilter, courseTitleById]
-  );
+  const publishedCount = statsTests.filter((test) => isTestPublishedStatus(test.status)).length;
+  const draftsCount = statsTests.length - publishedCount;
 
-  const publishedCount = tests.filter((test) => isTestPublishedStatus(test.status)).length;
-  const draftsCount = tests.length - publishedCount;
-
-  const totalPages = Math.max(1, Math.ceil(filteredTests.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(listTotal / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
 
-  const paginatedTests = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredTests.slice(start, start + PAGE_SIZE);
-  }, [filteredTests, currentPage]);
+  const paginatedTests = tests;
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, selectedCourseId, selectedSubjectId, dateFrom, dateTo]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  async function loadTests() {
-    const response = await adminApi.tests(token);
-    setTests(response?.data || []);
-  }
+  const loadTests = useCallback(async () => {
+    const response = await adminApi.tests(token, {
+      courseId: selectedCourseId || undefined,
+      subjectId: selectedSubjectId || undefined,
+      search: debouncedSearch || undefined,
+      status: statusFilter !== 'all' ? statusFilter : undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      limit: PAGE_SIZE,
+      offset: (currentPage - 1) * PAGE_SIZE,
+    });
+    const payload = response?.data;
+    if (payload && Array.isArray(payload.items)) {
+      setTests(payload.items);
+      setListTotal(Number(payload.total ?? payload.items.length));
+      return;
+    }
+    const rows = Array.isArray(payload) ? payload : [];
+    setTests(rows);
+    setListTotal(rows.length);
+  }, [
+    token,
+    selectedCourseId,
+    selectedSubjectId,
+    debouncedSearch,
+    statusFilter,
+    dateFrom,
+    dateTo,
+    currentPage,
+  ]);
 
   useEffect(() => {
+    if (urlHydratedRef.current) return;
+    const urlFilters = readAdminFiltersFromUrl(searchParams);
+    if (urlFilters.courseId || urlFilters.subjectId) {
+      applyHierarchySelection({
+        courseId: urlFilters.courseId,
+        subjectId: urlFilters.subjectId,
+      });
+    }
+    if (urlFilters.search) setSearchQuery(urlFilters.search);
+    if (urlFilters.status && urlFilters.status !== 'all') setStatusFilter(urlFilters.status);
+    if (urlFilters.dateFrom) setDateFrom(urlFilters.dateFrom);
+    if (urlFilters.dateTo) setDateTo(urlFilters.dateTo);
+    if (urlFilters.page) setPage(Math.max(1, Number(urlFilters.page) || 1));
+    urlHydratedRef.current = true;
+    setFiltersReady(true);
+  }, [searchParams, applyHierarchySelection]);
+
+  useEffect(() => {
+    if (!urlHydratedRef.current) return;
+    setSearchParams(
+      writeAdminFiltersToUrl(new URLSearchParams(), {
+        courseId: selectedCourseId,
+        subjectId: selectedSubjectId,
+        search: searchQuery,
+        status: statusFilter,
+        dateFrom,
+        dateTo,
+        page: String(currentPage),
+      }),
+      { replace: true }
+    );
+  }, [
+    selectedCourseId,
+    selectedSubjectId,
+    searchQuery,
+    statusFilter,
+    dateFrom,
+    dateTo,
+    currentPage,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
+    adminApi.courses(token).then((response) => setCourses(Array.isArray(response?.data) ? response.data : [])).catch(() => {});
+    adminApi
+      .tests(token)
+      .then((response) => {
+        const payload = response?.data;
+        setStatsTests(Array.isArray(payload) ? payload : payload?.items ?? []);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!filtersReady) return undefined;
+    let cancelled = false;
     setIsLoading(true);
-    Promise.all([
-      loadTests(),
-      adminApi.courses(token).then((response) => setCourses(Array.isArray(response?.data) ? response.data : [])),
-    ])
-      .catch((err) => toast.error(err.message || 'Failed to load tests'))
-      .finally(() => setIsLoading(false));
-  }, []);
+    setListError('');
+    loadTests()
+      .catch((err) => {
+        const message = err.message || 'Failed to load tests';
+        setListError(message);
+        toastErrorRef.current(message);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadTests, filtersReady]);
 
   async function removeTest(test) {
     const testId = test.id;
@@ -99,26 +219,39 @@ export default function AdminTestsPage() {
     }
   }
 
-  async function publish(testId) {
-    setBusyAction(`publish-${testId}`);
-    try {
-      const completenessResponse = await adminApi.getTestCompleteness(token, testId);
-      const report = completenessResponse?.data;
-      if (!report?.can_publish) {
-        const missing = Array.isArray(report?.missing_fields) ? report.missing_fields.join(', ') : 'required fields';
-        toast.error(`Cannot publish — incomplete. Missing: ${missing}`);
-        return;
-      }
-
-      const response = await adminApi.publishTest(token, testId);
-      const link = response?.data?.publicLink;
-      toast.success(link ? `Test published. Public link ready.` : 'Test published successfully.');
-      await loadTests();
-    } catch (err) {
-      toast.error(err.message || 'Failed to publish test');
-    } finally {
-      setBusyAction('');
+  function openPublishModal(test) {
+    if (publishInFlightRef.current || isAnyPublishBusy(busyAction)) {
+      return;
     }
+    setPublishModalTest(test);
+  }
+
+  function closePublishModal() {
+    if (isAnyPublishBusy(busyAction)) return;
+    setPublishModalTest(null);
+  }
+
+  async function handlePublishedFromModal() {
+    await loadTests();
+    setBusyAction('');
+    publishInFlightRef.current = null;
+    setPublishModalTest(null);
+  }
+
+  function handlePublishModalOpen(testId) {
+    const test = tests.find((row) => Number(row.id) === Number(testId));
+    if (test) openPublishModal(test);
+  }
+
+  function handlePublishBusyChange(isPublishing, testId) {
+    if (isPublishing) {
+      const actionKey = publishBusyKey(testId);
+      publishInFlightRef.current = actionKey;
+      setBusyAction(actionKey);
+      return;
+    }
+    publishInFlightRef.current = null;
+    setBusyAction('');
   }
 
   async function copyPublicLink(link) {
@@ -164,11 +297,76 @@ export default function AdminTestsPage() {
     }
   }
 
-  const showEmpty = !isLoading && filteredTests.length === 0;
-  const showFilteredEmpty = !isLoading && tests.length > 0 && filteredTests.length === 0;
+  async function exportTestDefinition(testId) {
+    const actionKey = `export-csv-${testId}`;
+    setBusyAction(actionKey);
+    try {
+      const { blob, filename } = await adminApi.exportTest(token, testId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || `test-${testId}-export.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('CSV export download started.');
+    } catch (err) {
+      toast.error(err.message || 'Failed to export test as CSV');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  function hasActiveListFilters() {
+    return Boolean(
+      selectedCourseId ||
+        selectedSubjectId ||
+        debouncedSearch ||
+        statusFilter !== 'all' ||
+        dateFrom ||
+        dateTo
+    );
+  }
+
+  const showEmpty = !isLoading && listTotal === 0 && !hasActiveListFilters();
+  const showFilteredEmpty = !isLoading && listTotal === 0 && hasActiveListFilters();
+
+  function clearAllFilters() {
+    selectCourse('');
+    selectSubject('');
+    setSearchQuery('');
+    setStatusFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  }
 
   return (
     <section className="admin-page admin-page--tests">
+      <header className="admin-courses-page-header">
+        <div>
+          <h1 className="admin-courses-page-header__title">Test management</h1>
+          <p className="admin-courses-page-header__subtitle">
+            Create, publish, and maintain assessments. Use the list below to find tests or start a new one with the
+            guided builder.
+          </p>
+        </div>
+        <div className="admin-courses-page-header__actions">
+          <Link className="btn btn--secondary admin-touch-target" to={adminRoute('tests/transfer')}>
+            Export / import history
+          </Link>
+          <Link className="btn btn--secondary admin-touch-target" to={adminRoute('tests/import')}>
+            <FileUploadIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
+            Import test
+          </Link>
+          <Link className="btn--course-primary admin-touch-target" to={adminRoute('tests/new')}>
+            <AddIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
+            New test
+          </Link>
+        </div>
+      </header>
+
       <section className="admin-grid" aria-busy={isLoading}>
         {isLoading ? (
           <>
@@ -180,7 +378,7 @@ export default function AdminTestsPage() {
           <>
             <article className="admin-stat-card">
               <p className="admin-stat-card__label">Total Tests</p>
-              <p className="admin-stat-card__value">{tests.length}</p>
+              <p className="admin-stat-card__value">{statsTests.length}</p>
             </article>
             <article className="admin-stat-card">
               <p className="admin-stat-card__label">Published</p>
@@ -194,6 +392,10 @@ export default function AdminTestsPage() {
         )}
       </section>
 
+      <AdminSectionErrorBoundary title="Test results analytics could not load">
+        <AdminTestResultsAnalyticsPanel tests={statsTests} />
+      </AdminSectionErrorBoundary>
+
       <AdminCollapsibleCard
         title="Test builder workflow"
         className="admin-card admin-tests-workflow"
@@ -202,7 +404,7 @@ export default function AdminTestsPage() {
       >
         <ol className="admin-workflow-list">
           <li>
-            <strong>Create:</strong> <Link to="/admin/tests/new">New test</Link> — basic info, then rules, settings, and
+            <strong>Create:</strong> <Link to={adminRoute('tests/new')}>New test</Link> — basic info, then rules, settings, and
             questions.
           </li>
           <li>
@@ -210,7 +412,9 @@ export default function AdminTestsPage() {
             each row.
           </li>
           <li>
-            <strong>Publish:</strong> When all steps show complete, publish from the row actions menu.
+            <strong>Publish:</strong> When all steps show complete, use <strong>Publish test</strong> on the
+            Questions/Settings page or <strong>More → Publish</strong> here. Public access mode alone does not
+            publish.
           </li>
         </ol>
       </AdminCollapsibleCard>
@@ -218,9 +422,23 @@ export default function AdminTestsPage() {
       <section className="admin-card">
         <div className="admin-tests-list-head">
           <h2 className="heading-3">All tests</h2>
-          <Link className="btn btn--primary admin-touch-target" to="/admin/tests/new">
-            Create test
-          </Link>
+        </div>
+
+        <div className="admin-form-grid" style={{ marginBottom: '1rem' }}>
+          <AdminHierarchySelectors cascade={filterCascade} depth={2} idPrefix={{ course: 'testsCourse', subject: 'testsSubject' }} />
+          <div className="admin-field">
+            <label htmlFor="testsDateFrom">Start date</label>
+            <input
+              id="testsDateFrom"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+          <div className="admin-field">
+            <label htmlFor="testsDateTo">End date</label>
+            <input id="testsDateTo" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
         </div>
 
         <div className="admin-tests-toolbar">
@@ -232,6 +450,11 @@ export default function AdminTestsPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onClear={() => setSearchQuery('')}
           />
+
+          <Link className="btn btn--secondary admin-touch-target" to={adminRoute('tests/import')}>
+            <FileUploadIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
+            Import test
+          </Link>
 
           <div className="admin-status-filters" role="tablist" aria-label="Filter tests by status">
             {TEST_STATUS_FILTERS.map((filter) => (
@@ -249,6 +472,8 @@ export default function AdminTestsPage() {
           </div>
         </div>
 
+        {listError ? <p className="admin-error">{listError}</p> : null}
+
         {isLoading ? (
           <div aria-hidden>
             <div className="admin-skeleton admin-skeleton-row" />
@@ -259,7 +484,7 @@ export default function AdminTestsPage() {
           <div className="admin-empty-state">
             <p className="admin-empty-state__title">No tests match your search</p>
             <p className="admin-empty-state__text">Try a different keyword or clear filters.</p>
-            <button type="button" className="btn btn--secondary admin-touch-target" onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}>
+            <button type="button" className="btn btn--secondary admin-touch-target" onClick={clearAllFilters}>
               Clear filters
             </button>
           </div>
@@ -267,7 +492,7 @@ export default function AdminTestsPage() {
           <div className="admin-empty-state">
             <p className="admin-empty-state__title">No tests available</p>
             <p className="admin-empty-state__text">Create your first test to get started.</p>
-            <Link className="btn btn--primary admin-touch-target" to="/admin/tests/new">
+            <Link className="btn btn--primary admin-touch-target" to={adminRoute('tests/new')}>
               Create test
             </Link>
           </div>
@@ -320,9 +545,10 @@ export default function AdminTestsPage() {
                         <td data-label="Actions">
                           <TestRowActionsMenu
                             test={test}
-                            onPublish={publish}
+                            onPublish={handlePublishModalOpen}
                             onDuplicate={duplicateExistingTest}
                             onDownloadResults={downloadResults}
+                            onExportTest={exportTestDefinition}
                             onDelete={removeTest}
                             onCopyLink={copyPublicLink}
                             busyAction={busyAction}
@@ -341,20 +567,22 @@ export default function AdminTestsPage() {
                   key={test.id}
                   test={test}
                   courseTitle={test.courseId ? courseTitleById.get(Number(test.courseId)) : ''}
-                  onPublish={publish}
+                  onPublish={handlePublishModalOpen}
                   onDuplicate={duplicateExistingTest}
                   onDownloadResults={downloadResults}
+                  onExportTest={exportTestDefinition}
                   onDelete={removeTest}
                   onCopyLink={copyPublicLink}
+                  busyAction={busyAction}
                 />
               ))}
             </div>
 
-            {filteredTests.length > PAGE_SIZE ? (
+            {listTotal > PAGE_SIZE ? (
               <nav className="admin-pagination" aria-label="Tests pagination">
                 <p className="admin-pagination__info">
-                  Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredTests.length)} of{' '}
-                  {filteredTests.length}
+                  Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, listTotal)} of{' '}
+                  {listTotal}
                 </p>
                 <div className="admin-pagination__controls">
                   <button
@@ -379,6 +607,15 @@ export default function AdminTestsPage() {
           </>
         )}
       </section>
+
+      <TestPublishListModal
+        testId={publishModalTest?.id}
+        testTitle={publishModalTest?.title}
+        open={Boolean(publishModalTest)}
+        onClose={closePublishModal}
+        onPublished={handlePublishedFromModal}
+        onBusyChange={handlePublishBusyChange}
+      />
     </section>
   );
 }
