@@ -178,6 +178,36 @@ export function validateRichContentQuestions(pkg, courseId) {
     const question = pkg.questions[index];
     const normalized = normalizeImportQuestionRichFields(question);
 
+    // Determine question type: check if imported question has a type specified, otherwise use PHASE_1
+    const importedQuestionType = String(question.question_type ?? '').toLowerCase().trim();
+    const questionType = importedQuestionType === 'short' ? 'short' : PHASE_1_QUESTION_TYPE;
+
+    // For short-answer questions, validate the question text but skip options validation
+    if (questionType === 'short') {
+      if (!normalized.question_text || !String(normalized.question_text).trim()) {
+        details.push({
+          questionIndex: index + 1,
+          code: 'QUESTION_TEXT_REQUIRED',
+          message: 'Question text is required',
+          validationLayer: 'BUSINESS_RULES',
+        });
+        continue;
+      }
+
+      preparedQuestions.push({
+        display_order: question.display_order,
+        marks_override: question.marks_override ?? null,
+        prepared: attachRichHtmlMirrorFields({
+          ...normalized,
+          question_text: normalized.question_text,
+          question_type: 'short',
+          options: [],
+        }),
+      });
+      continue;
+    }
+
+    // For MCQ questions, apply full validation
     const writePayload = {
       course_id: courseId,
       subject_id: null,

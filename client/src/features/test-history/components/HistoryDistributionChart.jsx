@@ -3,6 +3,7 @@ import { Doughnut } from 'react-chartjs-2';
 import { useIsStudentMobileNav } from '../../../student/hooks/useMediaQuery';
 import { buildDistributionChartData } from '../utils/buildChartData';
 import { createCenterTextPlugin, ensureHistoryChartsRegistered } from '../utils/chartSetup';
+import { useStudentTheme } from '../../../student/context/StudentThemeContext';
 
 ensureHistoryChartsRegistered();
 
@@ -11,6 +12,7 @@ ensureHistoryChartsRegistered();
  * @param {{ statistics?: Record<string, unknown>, items?: Array<Record<string, unknown>> }} props
  */
 export default function HistoryDistributionChart({ statistics, items = [] }) {
+  const { isDark } = useStudentTheme();
   const isMobile = useIsStudentMobileNav();
   const distribution = useMemo(
     () => buildDistributionChartData(statistics, items),
@@ -25,14 +27,21 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
       datasets: [
         {
           data: distribution.slices.map((slice) => slice.value),
-          backgroundColor: distribution.slices.map((slice) => slice.color),
-          borderColor: '#0B0E14',
+          backgroundColor: distribution.slices.map((slice) => {
+            if (isDark) {
+              if (slice.key === 'passed') return '#2b8a3e'; // emerald green
+              if (slice.key === 'failed') return '#e6776d'; // coral/rose
+              if (slice.key === 'pending') return '#fcc419'; // gold/amber
+            }
+            return slice.color;
+          }),
+          borderColor: isDark ? '#122b44' : '#0B0E14',
           borderWidth: 3,
           hoverOffset: 6,
         },
       ],
     }),
-    [distribution.slices]
+    [distribution.slices, isDark]
   );
 
   const plugins = useMemo(
@@ -52,11 +61,15 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
       maintainAspectRatio: false,
       cutout: isMobile ? '58%' : '62%',
       interaction: { mode: 'nearest', intersect: true },
+      animation: {
+        duration: 1000,
+        easing: 'easeOutQuart',
+      },
       plugins: {
         legend: {
           position: isMobile ? 'bottom' : 'right',
           labels: {
-            color: '#CBD5E1',
+            color: isDark ? '#8ba3c7' : '#CBD5E1',
             boxWidth: 12,
             boxHeight: 12,
             padding: isMobile ? 10 : 14,
@@ -77,10 +90,10 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
           },
         },
         tooltip: {
-          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          backgroundColor: isDark ? '#122b44' : 'rgba(15, 23, 42, 0.95)',
           titleColor: '#FFFFFF',
-          bodyColor: '#E2E8F0',
-          borderColor: 'rgba(59, 130, 246, 0.45)',
+          bodyColor: isDark ? '#e8edf3' : '#E2E8F0',
+          borderColor: isDark ? '#1e405b' : 'rgba(59, 130, 246, 0.45)',
           borderWidth: 1,
           callbacks: {
             label(context) {
@@ -93,7 +106,7 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
         },
       },
     }),
-    [isMobile]
+    [isMobile, isDark]
   );
 
   const hasData = distribution.slices.some((slice) => slice.value > 0);

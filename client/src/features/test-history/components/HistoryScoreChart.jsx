@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { Bar } from 'react-chartjs-2';
 import { buildScoreChartData } from '../utils/buildChartData';
 import { createBarGradient, ensureHistoryChartsRegistered } from '../utils/chartSetup';
+import { useStudentTheme } from '../../../student/context/StudentThemeContext';
 
 ensureHistoryChartsRegistered();
 
@@ -10,6 +11,7 @@ ensureHistoryChartsRegistered();
  * @param {{ items: Array<Record<string, unknown>>, averagePercentage?: number|null }} props
  */
 export default function HistoryScoreChart({ items, averagePercentage = null }) {
+  const { isDark } = useStudentTheme();
   const chartRef = useRef(null);
   const chartData = useMemo(
     () => buildScoreChartData(items, averagePercentage),
@@ -27,8 +29,8 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
         backgroundColor(context) {
           const chart = context.chart;
           const { ctx, chartArea } = chart;
-          if (!chartArea) return '#6366F1';
-          return createBarGradient(ctx, '#6366F1', '#A855F7');
+          if (!chartArea) return isDark ? '#22b8cf' : '#6366F1';
+          return createBarGradient(ctx, isDark ? '#22b8cf' : '#6366F1', isDark ? '#3bc9db' : '#A855F7');
         },
       },
     ];
@@ -43,8 +45,8 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
         backgroundColor(context) {
           const chart = context.chart;
           const { ctx, chartArea } = chart;
-          if (!chartArea) return '#14B8A6';
-          return createBarGradient(ctx, '#14B8A6', '#06B6D4');
+          if (!chartArea) return isDark ? '#8ba3c7' : '#14B8A6';
+          return createBarGradient(ctx, isDark ? '#8ba3c7' : '#14B8A6', isDark ? '#a5b4fc' : '#06B6D4');
         },
       });
     }
@@ -53,29 +55,33 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
       labels: chartData.labels,
       datasets,
     };
-  }, [chartData]);
+  }, [chartData, isDark]);
 
   const options = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      animation: {
+        duration: 1000,
+        easing: 'easeOutQuart',
+      },
       plugins: {
         legend: {
           position: 'top',
           align: 'end',
           labels: {
-            color: '#CBD5E1',
+            color: isDark ? '#8ba3c7' : '#CBD5E1',
             boxWidth: 12,
             boxHeight: 12,
             usePointStyle: true,
           },
         },
         tooltip: {
-          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          backgroundColor: isDark ? '#122b44' : 'rgba(15, 23, 42, 0.95)',
           titleColor: '#FFFFFF',
-          bodyColor: '#E2E8F0',
-          borderColor: 'rgba(59, 130, 246, 0.45)',
+          bodyColor: isDark ? '#e8edf3' : '#E2E8F0',
+          borderColor: isDark ? '#1e405b' : 'rgba(59, 130, 246, 0.45)',
           borderWidth: 1,
           padding: 12,
           callbacks: {
@@ -98,24 +104,24 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
       scales: {
         x: {
           ticks: {
-            color: '#94A3B8',
+            color: isDark ? '#8ba3c7' : '#94A3B8',
             maxRotation: 45,
             minRotation: 0,
           },
-          grid: { color: 'rgba(148, 163, 184, 0.12)' },
+          grid: { color: isDark ? 'rgba(30, 64, 91, 0.3)' : 'rgba(148, 163, 184, 0.12)' },
         },
         y: {
           min: 0,
           max: 100,
           ticks: {
-            color: '#94A3B8',
+            color: isDark ? '#8ba3c7' : '#94A3B8',
             callback: (value) => `${value}%`,
           },
-          grid: { color: 'rgba(148, 163, 184, 0.12)' },
+          grid: { color: isDark ? 'rgba(30, 64, 91, 0.3)' : 'rgba(148, 163, 184, 0.12)' },
         },
       },
     }),
-    [chartData.rawItems]
+    [chartData.rawItems, isDark]
   );
 
   if (!chartData.labels.length) {

@@ -9,7 +9,7 @@ import {
 } from '../constants/testRichContent.constants.js';
 
 const TESTMOZ_MARKERS = new Set(['HTML', 'GROUP']);
-const TESTMOZ_QUESTION_TYPES = new Set(['one', 'multiple', 'mcq', 'multiple_choice']);
+const TESTMOZ_QUESTION_TYPES = new Set(['one', 'multiple', 'mcq', 'multiple_choice', 'short']);
 export const TESTMOZ_IMPORT_FORMAT = 'TESTMOZ_FORMAT';
 export const MRB_NATIVE_CSV_FORMAT = 'MRB_NATIVE_CSV_FORMAT';
 
@@ -143,6 +143,50 @@ function isLikelyHtml(value) {
   return /<\/?[a-z][\s\S]*>/i.test(String(value ?? ''));
 }
 
+/**
+ * Detect if a question is a student information question that should be skipped.
+ * These are profile/demographic questions, not exam questions.
+ *
+ * @param {string} questionHtml
+ * @returns {boolean}
+ */
+function isStudentInfoQuestion(questionHtml) {
+  // Strip HTML tags and normalize text
+  const text = String(questionHtml ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  if (!text) return false;
+
+  // Patterns for student information questions
+  const patterns = [
+    /what\s+is\s+your\s+name/i,
+    /what\s+is\s+your\s+father['']?s?\s+name/i,
+    /what\s+is\s+your\s+parent['']?s?\s+name/i,
+    /what\s+is\s+your\s+guardian['']?s?\s+name/i,
+    /what\s+is\s+your\s+district/i,
+    /what\s+is\s+your\s+city/i,
+    /what\s+is\s+your\s+email/i,
+    /what\s+is\s+your\s+phone\s+number/i,
+    /what\s+is\s+your\s+contact\s+number/i,
+    /whatsapp\s+number/i,
+    /what\s+is\s+your\s+whatsapp/i,
+    /fresh\s+or\s+improve/i,
+    /improve?r\s+or\s+fresh/i,
+    /freshmen\s+or\s+improve/i,
+    /what\s+is\s+your\s+status/i,
+    /what\s+is\s+your\s+gender/i,
+    /what\s+is\s+your\s+date\s+of\s+birth/i,
+    /what\s+is\s+your\s+address/i,
+    /what\s+is\s+your\s+roll\s+number/i,
+    /what\s+is\s+your\s+enrollment\s+number/i,
+  ];
+
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 function testmozQuestionType(value) {
   const type = normalizeTestmozCell(value).toLowerCase();
   return TESTMOZ_QUESTION_TYPES.has(type) ? type : '';
@@ -153,7 +197,7 @@ function isTestmozQuestionRow(row) {
   const first = normalizeTestmozCell(row[0]);
   if (!first || first === '*') return false;
   const type = testmozQuestionType(row[2]);
-  return Boolean(type || isLikelyHtml(first));
+  return Boolean(type);
 }
 
 function buildTestmozOption(row, index) {
@@ -258,28 +302,48 @@ export class TestmozImportParser {
         });
       }
 
-      if (current.options.length < 2) {
-        logTestmozValidationFailure(current, questionNumber, line, 'TESTMOZ_OPTION_COUNT');
-        throw Object.assign(new Error('At least two options are required.'), {
-          code: 'TESTMOZ_OPTION_COUNT',
-          line,
-        });
+      // Type-aware validation based on sourceQuestionType
+      const sourceType = normalizeTestmozCell(current.sourceQuestionType).toLowerCase();
+      
+      // Short-answer questions: no option validation or correct answer validation
+      if (sourceType === 'short') {
+        // Short-answer questions legitimately have 0 options and no correct answer
+        console.log(`[TestmozImportParser] Question ${questionNumber}: short-answer type, skipping MCQ validation`);
+      } else {
+        // MCQ questions (one, multiple, mcq, multiple_choice): require options and correct answer
+        if (current.options.length < 2) {
+          logTestmozValidationFailure(current, questionNumber, line, 'TESTMOZ_OPTION_COUNT');
+          throw Object.assign(new Error('At least two options are required.'), {
+            code: 'TESTMOZ_OPTION_COUNT',
+            line,
+          });
+        }
+
+        if (!current.options.some((option) => option.is_correct)) {
+          logTestmozValidationFailure(current, questionNumber, line, 'TESTMOZ_CORRECT_ANSWER_MISSING');
+          throw Object.assign(new Error('A correct answer marked with * is required.'), {
+            code: 'TESTMOZ_CORRECT_ANSWER_MISSING',
+            line,
+          });
+        }
+
+        if (current.options.length > 4) {
+          logTestmozValidationFailure(current, questionNumber, line, 'TESTMOZ_OPTION_COUNT');
+          throw Object.assign(new Error('Only four MCQ options (A-D) are supported by this importer.'), {
+            code: 'TESTMOZ_OPTION_COUNT',
+            line,
+          });
+        }
       }
 
-      if (!current.options.some((option) => option.is_correct)) {
-        logTestmozValidationFailure(current, questionNumber, line, 'TESTMOZ_CORRECT_ANSWER_MISSING');
-        throw Object.assign(new Error('A correct answer marked with * is required.'), {
-          code: 'TESTMOZ_CORRECT_ANSWER_MISSING',
-          line,
-        });
-      }
-
-      if (current.options.length > 4) {
-        logTestmozValidationFailure(current, questionNumber, line, 'TESTMOZ_OPTION_COUNT');
-        throw Object.assign(new Error('Only four MCQ options (A-D) are supported by this importer.'), {
-          code: 'TESTMOZ_OPTION_COUNT',
-          line,
-        });
+      // Map sourceQuestionType to normalized question_type
+      let normalizedQuestionType = 'mcq';
+      if (sourceType === 'short') {
+        normalizedQuestionType = 'short';
+      } else if (sourceType === 'one') {
+        normalizedQuestionType = 'mcq';
+      } else if (sourceType === 'multiple') {
+        normalizedQuestionType = 'mcq';
       }
 
       questions.push({
@@ -287,7 +351,7 @@ export class TestmozImportParser {
         marks_override: current.marks,
         topic: current.topic,
         difficulty: null,
-        question_type: 'mcq',
+        question_type: normalizedQuestionType,
         question_html: current.question_html,
         question_text: current.question_html,
         question_image_url: null,
@@ -326,15 +390,26 @@ export class TestmozImportParser {
 
         if (isTestmozQuestionRow(row)) {
           flush(rowIndex + 1);
+          const questionHtml = String(row[0] ?? '').trim();
           const marks = Number(row[1]);
           const explanation = normalizeTestmozCell(row[3]);
           const sourceQuestionType = normalizeTestmozCell(row[2]);
+
+          // Skip student information questions
+          if (isStudentInfoQuestion(questionHtml)) {
+            console.log(`[TestmozImportParser] Row ${rowIndex + 1}: student info question skipped`, {
+              question: testmozQuestionTitle(questionHtml),
+              row,
+            });
+            continue;
+          }
+
           console.log(`[TestmozImportParser] Row ${rowIndex + 1}: question row started`, {
             sourceQuestionType,
             row,
           });
           current = {
-            question_html: String(row[0] ?? '').trim(),
+            question_html: questionHtml,
             explanation_html: explanation === '' ? null : explanation,
             marks: Number.isFinite(marks) && marks > 0 ? marks : 1,
             topic: activeGroup,
