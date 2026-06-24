@@ -270,9 +270,6 @@ export function useQuizDraftPersistence({
 
       if (publishedEditEnabledRef.current) {
         body.confirm_published_edit = true;
-        if (publishedEditUpdatedAtRef.current) {
-          body.expected_updated_at = publishedEditUpdatedAtRef.current;
-        }
       }
 
       const startedAt = performance.now();

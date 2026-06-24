@@ -6,6 +6,7 @@ import { getAdminToken } from '../../auth/session';
 import BasicInfoForm from '../components/BasicInfoForm';
 import RulesForm from '../components/RulesForm';
 import SettingsForm from '../components/SettingsForm';
+import TestSetupLayout from '../components/TestSetupLayout';
 import { useTestCompleteness } from '../hooks/useTestCompleteness';
 import { TEST_WIZARD_BUTTONS } from '../config/testWizardConfig';
 import { useTestBasicInfoForm } from '../hooks/useTestBasicInfoForm';

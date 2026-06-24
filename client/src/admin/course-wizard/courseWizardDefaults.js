@@ -42,6 +42,7 @@ export function buildDefaultWizardBatch() {
     is_active: true,
     show_publicly: true,
     recordings_enabled: true,
+    seats_fantasy: 0,
   };
 }
 
@@ -61,6 +62,7 @@ export function sanitizeWizardBatch(batch) {
     is_active: batch.is_active !== false,
     show_publicly: batch.show_publicly !== false,
     recordings_enabled: batch.recordings_enabled !== false,
+    seats_fantasy: batch.seats_fantasy ?? defaults.seats_fantasy,
   };
 }
 

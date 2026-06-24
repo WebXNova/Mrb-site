@@ -81,13 +81,6 @@ export function validatePublishRequirements(payload) {
         });
       }
 
-      if (!batch.enrollment_open_at || !batch.enrollment_close_at) {
-        errors.push({
-          field: `batches[${index}]`,
-          message: `Batch ${index + 1} must have enrollment window dates`,
-        });
-      }
-
       if (!batch.total_seats || batch.total_seats <= 0) {
         errors.push({
           field: `batches[${index}]`,

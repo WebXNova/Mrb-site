@@ -313,6 +313,9 @@ export default function AdminRegistrationsPage() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [pageInput, setPageInput] = useState('');
 
   const sharedCourses = useMemo(
     () => ({
@@ -348,6 +351,12 @@ export default function AdminRegistrationsPage() {
     [registrations, selectedId]
   );
 
+  const totalPages = Math.max(1, Math.ceil(registrations.length / pageSize));
+  const paginatedRegistrations = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return registrations.slice(start, start + pageSize);
+  }, [registrations, currentPage, pageSize]);
+
   useEffect(() => {
     if (!selected) return;
     setAdminNoteDraft(selected.adminNote || '');
@@ -361,6 +370,11 @@ export default function AdminRegistrationsPage() {
   useEffect(() => {
     if (!isMobileNav) setFiltersExpanded(true);
   }, [isMobileNav]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setPageInput('');
+  }, [registrations.length]);
 
   useEffect(() => {
     if (urlHydratedRef.current) return;
@@ -1080,7 +1094,7 @@ export default function AdminRegistrationsPage() {
             </thead>
             <tbody>
               {registrations.length ? (
-                registrations.map((item) => {
+                paginatedRegistrations.map((item) => {
                   const detailOpen = Number(selectedId) === Number(item.id);
                   const approveBlocked = approveDisabledReason(item);
                   const whatsappHref = buildWhatsAppHref(item.whatsappNumber);
@@ -1095,8 +1109,8 @@ export default function AdminRegistrationsPage() {
                           <span className="admin-muted">{item.fatherName || '-'}</span>
                         </div>
                       </td>
-                      <td className="admin-reg-col--course">{item.courseTitle || '-'}</td>
-                      <td className="admin-reg-col--email">
+                      <td className="admin-reg-col--course" title={item.courseTitle || '-'}>{item.courseTitle || '-'}</td>
+                      <td className="admin-reg-col--email" title={item.email || '-'}>
                         {item.email ? (
                           <a href={`mailto:${item.email}`} className="admin-reg-link">
                             {item.email}
@@ -1105,7 +1119,7 @@ export default function AdminRegistrationsPage() {
                           '-'
                         )}
                       </td>
-                      <td className="admin-reg-col--whatsapp">
+                      <td className="admin-reg-col--whatsapp" title={item.whatsappNumber || '-'}>
                         {whatsappHref ? (
                           <a href={whatsappHref} target="_blank" rel="noreferrer" className="admin-reg-link">
                             {item.whatsappNumber}
@@ -1114,7 +1128,7 @@ export default function AdminRegistrationsPage() {
                           '-'
                         )}
                       </td>
-                      <td className="admin-reg-col--location">
+                      <td className="admin-reg-col--location" title={[item.province, item.district, item.city].filter(Boolean).join(' / ') || '-'}>
                         <div className="admin-reg-cell-stack">
                           <span>{item.province || '-'}</span>
                           <span className="admin-muted">
@@ -1170,7 +1184,7 @@ export default function AdminRegistrationsPage() {
 
         <div className={`admin-reg-mobile-list ${syncingList ? 'admin-reg-mobile-list--muted' : ''}`}>
           {registrations.length ? (
-            registrations.map((item) => {
+            paginatedRegistrations.map((item) => {
               const detailOpen = Number(selectedId) === Number(item.id);
               const approveBlocked = approveDisabledReason(item);
               return (
@@ -1199,6 +1213,109 @@ export default function AdminRegistrationsPage() {
             </p>
           )}
         </div>
+
+        {registrations.length > pageSize && (
+          <div className="admin-reg-pagination">
+            <p className="admin-reg-pagination__info">
+              Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> ({registrations.length} total)
+            </p>
+            <div className="admin-reg-pagination__controls">
+              <button
+                type="button"
+                className="admin-reg-pagination__btn"
+                disabled={currentPage <= 1}
+                onClick={() => { setCurrentPage(1); setPageInput(''); }}
+              >
+                First
+              </button>
+              <button
+                type="button"
+                className="admin-reg-pagination__btn"
+                disabled={currentPage <= 1}
+                onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); setPageInput(''); }}
+              >
+                Prev
+              </button>
+              {(() => {
+                const maxVisible = 5;
+                let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                let end = Math.min(totalPages, start + maxVisible - 1);
+                if (end - start + 1 < maxVisible) {
+                  start = Math.max(1, end - maxVisible + 1);
+                }
+                const pages = [];
+                for (let i = start; i <= end; i++) pages.push(i);
+                const nodes = [];
+                if (start > 1) {
+                  nodes.push(<span key="start-ellipsis" className="admin-reg-pagination__ellipsis">…</span>);
+                }
+                pages.forEach(p => {
+                  nodes.push(
+                    <button
+                      key={p}
+                      type="button"
+                      className={`admin-reg-pagination__btn ${p === currentPage ? 'admin-reg-pagination__btn--active' : ''}`}
+                      onClick={() => { setCurrentPage(p); setPageInput(''); }}
+                    >
+                      {p}
+                    </button>
+                  );
+                });
+                if (end < totalPages) {
+                  nodes.push(<span key="end-ellipsis" className="admin-reg-pagination__ellipsis">…</span>);
+                }
+                return nodes;
+              })()}
+              <button
+                type="button"
+                className="admin-reg-pagination__btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); setPageInput(''); }}
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                className="admin-reg-pagination__btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => { setCurrentPage(totalPages); setPageInput(''); }}
+              >
+                Last
+              </button>
+              <div className="admin-reg-pagination__jump">
+                <label htmlFor="reg-page-jump">Go to</label>
+                <input
+                  id="reg-page-jump"
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const p = parseInt(pageInput, 10);
+                      if (p >= 1 && p <= totalPages) {
+                        setCurrentPage(p);
+                        setPageInput('');
+                      }
+                    }
+                  }}
+                  onBlur={() => setPageInput('')}
+                />
+              </div>
+              <select
+                className="admin-reg-pagination__size-select"
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); setPageInput(''); }}
+                aria-label="Rows per page"
+              >
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
+          </div>
+        )}
       </section>
 
       {selected ? (

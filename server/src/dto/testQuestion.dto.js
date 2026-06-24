@@ -19,7 +19,9 @@ function toIsoTimestamp(value) {
 export function toTestQuestionOptionAdminDto(optionRow) {
   return {
     optionId: Number(optionRow.id),
+    optionKey: optionRow.option_key == null ? null : String(optionRow.option_key),
     optionText: sanitizeRichHtml(resolveOptionHtml(optionRow)),
+    imageUrl: optionRow.image_url == null ? null : String(optionRow.image_url),
     isCorrect: Boolean(Number(optionRow.is_correct)),
     sortOrder: Number(optionRow.sort_order ?? 0),
   };
@@ -31,7 +33,9 @@ export function toTestQuestionOptionAdminDto(optionRow) {
 export function toTestQuestionOptionStudentDto(optionRow) {
   return {
     optionId: Number(optionRow.id),
+    optionKey: optionRow.option_key == null ? null : String(optionRow.option_key),
     optionText: sanitizeRichHtml(resolveOptionHtml(optionRow)),
+    imageUrl: optionRow.image_url == null ? null : String(optionRow.image_url),
     sortOrder: Number(optionRow.sort_order ?? 0),
   };
 }
@@ -51,6 +55,7 @@ export function toLinkedTestQuestionAdminDto(linkRow, optionRows = []) {
     marksOverride,
     effectiveMarks: marksOverride ?? bankMarks,
     questionText: sanitizeRichHtml(resolveQuestionHtml(linkRow)),
+    questionImageUrl: linkRow.question_image_url == null ? null : String(linkRow.question_image_url),
     explanation:
       resolveExplanationHtml(linkRow) == null
         ? null
@@ -80,6 +85,7 @@ export function toLinkedTestQuestionStudentDto(linkRow, optionRows = []) {
     marks: effectiveMarks,
     effectiveMarks,
     questionText: sanitizeRichHtml(resolveQuestionHtml(linkRow)),
+    questionImageUrl: linkRow.question_image_url == null ? null : String(linkRow.question_image_url),
     options: optionRows.map(toTestQuestionOptionStudentDto),
   };
 }

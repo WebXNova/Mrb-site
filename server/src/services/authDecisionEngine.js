@@ -48,9 +48,9 @@ export function readAccessToken(req, role) {
  */
 export function readMultiRealmAccessToken(req) {
   const cookieToken =
+    req.cookies?.admin_access_token ||
     req.cookies?.teacher_access_token ||
     req.cookies?.student_access_token ||
-    req.cookies?.admin_access_token ||
     null;
   const bearerToken = parseBearer(req.headers.authorization);
   if (cookieToken) return { token: cookieToken, source: 'cookie' };

@@ -5,11 +5,6 @@ import { normalizeBatchStatusForPublish } from './courseBatch.service.js';
 /**
  * Centralized Publish State Resolver
  * 
- * CRITICAL: Single source of truth for course wizard publish state.
- * Prevents domain-state inconsistencies like:
- * - publish=true + course inactive + active batches
- * - inactive course with active pricing
- * 
  * INVARIANTS:
  * 1. If publish=true → course MUST be active
  * 2. If publish=true → at least one batch MUST be active

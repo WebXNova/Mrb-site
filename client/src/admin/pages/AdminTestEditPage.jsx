@@ -128,31 +128,45 @@ function PublishedTestEditForm({
     }
     if (hasErrors || !basicPayload) return;
 
-    const editControls = {
-      confirmPublishedEdit: true,
-      expectedUpdatedAt: updatedAt,
-    };
-
     setIsSubmitting(true);
     try {
+      let expectedUpdatedAt = updatedAt;
+
       await adminApi.patchTestBasicInfo(
         token,
         testId,
-        withPublishedEditControls(basicPayload, editControls)
+        withPublishedEditControls(basicPayload, {
+          confirmPublishedEdit: true,
+          expectedUpdatedAt,
+        })
       );
+
+      const refreshed1 = await adminApi.getTest(token, testId).catch(() => null);
+      expectedUpdatedAt = refreshed1?.data?.updatedAt ?? expectedUpdatedAt;
+
       await adminApi.patchTestRules(
         token,
         testId,
-        withPublishedEditControls(rulesValidation.payload, editControls)
+        withPublishedEditControls(rulesValidation.payload, {
+          confirmPublishedEdit: true,
+          expectedUpdatedAt,
+        })
       );
+
+      const refreshed2 = await adminApi.getTest(token, testId).catch(() => null);
+      expectedUpdatedAt = refreshed2?.data?.updatedAt ?? expectedUpdatedAt;
+
       const settingsResult = await adminApi.patchTestSettings(
         token,
         testId,
-        withPublishedEditControls(settingsValidation.payload, editControls)
+        withPublishedEditControls(settingsValidation.payload, {
+          confirmPublishedEdit: true,
+          expectedUpdatedAt,
+        })
       );
 
       const refreshed = await adminApi.getTest(token, testId);
-      const nextUpdatedAt = refreshed?.data?.updatedAt ?? updatedAt;
+      const nextUpdatedAt = refreshed?.data?.updatedAt ?? expectedUpdatedAt;
       setUpdatedAt(nextUpdatedAt);
       setSuccess('Published test updated successfully.');
       onSaved?.(settingsResult?.data);

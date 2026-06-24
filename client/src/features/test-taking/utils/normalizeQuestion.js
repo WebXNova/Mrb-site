@@ -17,6 +17,7 @@ export function normalizeAttemptQuestion(raw) {
   return {
     id: String(id),
     questionText,
+    questionImageUrl: raw.questionImageUrl ?? raw.question_image_url ?? null,
     options,
   };
 }

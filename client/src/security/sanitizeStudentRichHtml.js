@@ -1,12 +1,29 @@
 import DOMPurify from 'dompurify';
-import { validateImageUrl } from '../features/create-question/utils/image/validateImageUrl.js';
 import {
   BLOCKED_URI_PATTERN,
   createRichHtmlDomPurifyConfig,
   stripResidualDangerousMarkup,
 } from './richHtmlPolicy.js';
 
+/** @type {RegExp} matches `![alt](url)` or `![alt](url "title")` */
+const MARKDOWN_IMAGE_RE = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g;
+
 let hooksRegistered = false;
+
+/**
+ * Convert Markdown image syntax `![alt](url)` to HTML `<img>` tags.
+ * Must run before DOMPurify so the resulting `<img>` tags are sanitized.
+ */
+function convertMarkdownImages(html) {
+  return String(html ?? '').replace(MARKDOWN_IMAGE_RE, (_match, alt, url) => {
+    const safeAlt = String(alt ?? '').trim();
+    const safeUrl = String(url ?? '').trim();
+    if (!safeUrl) return _match;
+    const escapedAlt = safeAlt.replace(/"/g, '&quot;');
+    const escapedUrl = safeUrl.replace(/"/g, '&quot;');
+    return `<img src="${escapedUrl}" alt="${escapedAlt}" />`;
+  });
+}
 
 function registerStudentRichHtmlHooks() {
   if (hooksRegistered || typeof window === 'undefined') return;
@@ -26,12 +43,9 @@ function registerStudentRichHtmlHooks() {
         data.keepAttr = false;
         return;
       }
-      if (attr === 'src' && node.tagName === 'IMG') {
-        const check = validateImageUrl(value, { allowEmpty: true });
-        if (!check.ok || !check.url) {
+      if (attr === 'src' && node.tagName === 'IMG' && value.trim()) {
+        if (/[\s<>"']/.test(value) || value.includes('..')) {
           data.keepAttr = false;
-        } else {
-          data.attrValue = check.url;
         }
       }
     }
@@ -60,6 +74,7 @@ registerStudentRichHtmlHooks();
  * @returns {string}
  */
 export function sanitizeStudentRichHtml(html) {
-  const purified = DOMPurify.sanitize(String(html ?? ''), createRichHtmlDomPurifyConfig());
+  const withImages = convertMarkdownImages(String(html ?? ''));
+  const purified = DOMPurify.sanitize(withImages, createRichHtmlDomPurifyConfig());
   return stripResidualDangerousMarkup(purified);
 }

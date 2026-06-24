@@ -421,6 +421,22 @@ export class TestmozImportParser {
         }
 
         if (current) {
+          const first = normalizeTestmozCell(row[0]);
+          
+          // END marker: flush current question and skip this row
+          if (first === 'END') {
+            flush(rowIndex + 1);
+            console.log(`[TestmozImportParser] Row ${rowIndex + 1}: END marker - question finalized`, row);
+            continue;
+          }
+          
+          // Skip image-only HTML rows without proper option markers
+          // Valid option rows start with '*' (correct marker) or '' (unmarked option)
+          if (isLikelyHtml(first) && first !== '' && !normalizeTestmozCell(row[1])) {
+            console.log(`[TestmozImportParser] Row ${rowIndex + 1}: image-only HTML row skipped`, row);
+            continue;
+          }
+          
           const option = buildTestmozOption(row, current.options.length);
           console.log(`[TestmozImportParser] Row ${rowIndex + 1}: option row candidate`, {
             beginsWithComma: normalizeTestmozCell(row[0]) === '',
@@ -536,7 +552,9 @@ export function csvRowsToImportPackage(rows) {
 
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex += 1) {
     const record = rowToRecord(headers, dataRows[rowIndex]);
-    let options = ['A', 'B', 'C', 'D'].map((letter) => buildOptionFromCsv(record, letter));
+    let options = ['A', 'B', 'C', 'D']
+      .map((letter) => buildOptionFromCsv(record, letter))
+      .filter((o) => o.option_html.trim().length > 0);
     options = applyCorrectAnswerKey(options, record.correct_answer_key);
 
     const marksOverrideRaw = record.marks_override;

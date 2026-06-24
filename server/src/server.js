@@ -1,3 +1,4 @@
+import './utils/productionLogFilter.js';
 import './bootstrapFatalHandlers.js';
 import 'dotenv/config';
 import fs from 'fs/promises';
@@ -38,6 +39,7 @@ import { ensureTestQuizDraftsSchema } from './db/ensureTestQuizDraftsSchema.js';
 import { ensureQuestionImportBatchItemsSchema } from './db/ensureQuestionImportBatchItemsSchema.js';
 import { ensureQuestionBankRichHtmlSchema } from './db/ensureQuestionBankRichHtmlSchema.js';
 import { ensureTestTransferAuditSchema } from './db/ensureTestTransferAuditSchema.js';
+import { ensureExportLogsSchema } from './db/ensureExportLogsSchema.js';
 import { ensureStudentStreakSchema } from './db/ensureStudentStreakSchema.js';
 import { ensureTestEnumConstraints } from './db/ensureTestEnumConstraints.js';
 import { ensureCeeDbConstraints } from './db/ensureCeeDbConstraints.js';
@@ -201,6 +203,7 @@ async function startServer() {
   await ensureQuestionImportBatchItemsSchema(mysqlPool);
   await ensureQuestionBankRichHtmlSchema(mysqlPool);
   await ensureTestTransferAuditSchema(mysqlPool);
+  await ensureExportLogsSchema(mysqlPool);
   await ensureStudentStreakSchema(mysqlPool);
   await ensureTestEnumConstraints(mysqlPool);
   await ensureCeeDbConstraints(mysqlPool);

@@ -46,6 +46,12 @@ export function normalizeResultPayload(payload) {
 function normalizeReviewItem(item) {
   if (!item || typeof item !== 'object') return null;
 
+  const rawStatus = item.status ?? (item.isCorrect != null
+    ? (item.isCorrect ? 'correct' : 'wrong')
+    : '');
+
+  const rawOptions = Array.isArray(item.options) ? item.options : [];
+
   return {
     questionHtml:
       item.question ??
@@ -53,9 +59,25 @@ function normalizeReviewItem(item) {
       item.question_text ??
       item.questionHtml ??
       '',
-    yourAnswer: item.your_answer ?? item.yourAnswer ?? item.selectedOption ?? '',
-    correctAnswer: item.correct_answer ?? item.correctAnswer ?? item.correctOption ?? '',
-    status: String(item.status ?? ''),
+    questionImageUrl:
+      item.question_image_url ??
+      item.questionImageUrl ??
+      null,
+    yourAnswer: item.your_answer ?? item.yourAnswer ?? item.selectedOption ?? item.selectedOptionText ?? '',
+    correctAnswer: item.correct_answer ?? item.correctAnswer ?? item.correctOption ?? item.correctOptionText ?? '',
+    selectedOptionId: item.selectedOptionId ?? item.selected_option_id ?? null,
+    selectedOptionKey: item.selectedOptionKey ?? item.selected_option_key ?? null,
+    correctOptionKey: item.correctOptionKey ?? item.correct_option_key ?? null,
+    status: String(rawStatus),
+    marks: item.marks != null ? Number(item.marks) : null,
+    marksAwarded: item.marksAwarded != null ? Number(item.marksAwarded) : null,
+    options: rawOptions.map((o) => ({
+      id: o.id ?? o.optionId,
+      key: o.key ?? o.optionKey ?? '',
+      text: o.text ?? o.optionText ?? '',
+      imageUrl: o.imageUrl ?? o.image_url ?? null,
+      isCorrect: Boolean(o.isCorrect ?? o.is_correct ?? false),
+    })),
     explanationHtml:
       item.explanation != null && String(item.explanation).trim() !== ''
         ? String(item.explanation)

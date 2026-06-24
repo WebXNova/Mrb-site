@@ -42,10 +42,13 @@ export const LOAD_DETAILED_ANSWERS_SQL = `
   SELECT
     qb.id AS question_id,
     qb.question_text,
+    qb.question_image_url,
     qb.explanation,
     sa.selected_option_id,
     selected_opt.option_text AS selected_option_text,
+    selected_opt.option_key AS selected_option_key,
     correct_opt.option_text AS correct_option_text,
+    correct_opt.option_key AS correct_option_key,
     CASE
       WHEN sa.selected_option_id IS NULL THEN 'unanswered'
       WHEN sa.selected_option_id = correct_opt.id THEN 'correct'
@@ -66,6 +69,25 @@ export const LOAD_DETAILED_ANSWERS_SQL = `
 `;
 
 /**
+ * Load all options for test questions — used to build full option list per question.
+ * Params: testId
+ */
+export const LOAD_TEST_OPTIONS_SQL = `
+  SELECT
+    qo.id AS option_id,
+    qo.question_id,
+    qo.option_key,
+    qo.option_text,
+    qo.image_url,
+    qo.is_correct,
+    qo.sort_order
+  FROM question_options qo
+  INNER JOIN test_questions tq ON tq.question_id = qo.question_id
+  WHERE tq.test_id = ?
+  ORDER BY qo.question_id ASC, qo.sort_order ASC, qo.id ASC
+`;
+
+/**
  * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} db
  * @param {number} attemptId
  */
@@ -82,4 +104,27 @@ export async function loadResultContextRow(db, attemptId) {
 export async function loadDetailedAnswerRows(db, attemptId, testId) {
   const [rows] = await db.query(LOAD_DETAILED_ANSWERS_SQL, [attemptId, testId]);
   return rows;
+}
+
+/**
+ * Load all options for all questions in a test — merged into answer review.
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} db
+ * @param {number} testId
+ * @returns {Promise<Map<number, Array<Record<string, unknown>>>>}
+ */
+export async function loadTestQuestionOptions(db, testId) {
+  const [rows] = await db.query(LOAD_TEST_OPTIONS_SQL, [testId]);
+  const map = new Map();
+  for (const row of rows) {
+    const qid = Number(row.question_id);
+    if (!map.has(qid)) map.set(qid, []);
+    map.get(qid).push({
+      optionId: Number(row.option_id),
+      optionKey: row.option_key == null ? null : String(row.option_key),
+      optionText: String(row.option_text ?? ''),
+      imageUrl: row.image_url == null ? null : String(row.image_url),
+      isCorrect: Boolean(Number(row.is_correct)),
+    });
+  }
+  return map;
 }

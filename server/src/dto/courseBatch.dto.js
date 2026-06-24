@@ -28,7 +28,8 @@ function toBatchTimestampIso(v) {
 export function computeSeatsRemaining(row, _opts = {}) {
   const total = Number(row.total_seats ?? 0);
   const filled = Number(row.seats_filled ?? 0);
-  return Math.max(0, total - filled);
+  const fantasy = Number(row.seats_fantasy ?? 0);
+  return Math.max(0, total - (filled + fantasy));
 }
 
 /**
@@ -42,7 +43,7 @@ export function computeBatchSelectable(row, opts = {}) {
   const t = now.getTime();
   const status = String(row.status || '').toLowerCase();
   if (!row.is_active) return false;
-  if (['draft', 'cancelled', 'archived', 'completed'].includes(status)) return false;
+  if (['draft', 'archived'].includes(status)) return false;
   const start = parseBatchTimestamp(row.start_date);
   const end = parseBatchTimestamp(row.end_date);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return false;

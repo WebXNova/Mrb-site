@@ -19,6 +19,7 @@ import {
 import {
   loadDetailedAnswerRows,
   loadResultContextRow,
+  loadTestQuestionOptions,
 } from './result.repository.js';
 
 const logger = new StructuredLogger({ service: 'resultApi' });
@@ -91,12 +92,16 @@ export function getResultSummary(row) {
  * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [db]
  */
 export async function getDetailedResult(context, db = mysqlPool) {
+  const attemptId = Number(context.attempt_id);
+  const testId = Number(context.test_id);
+  const optionsMap = await loadTestQuestionOptions(db, testId);
   return loadSanitizedPortalAnswerReview(
     context,
     db,
-    Number(context.attempt_id),
-    Number(context.test_id),
-    loadDetailedAnswerRows
+    attemptId,
+    testId,
+    loadDetailedAnswerRows,
+    optionsMap
   );
 }
 

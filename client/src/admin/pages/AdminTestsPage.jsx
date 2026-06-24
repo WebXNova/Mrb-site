@@ -24,6 +24,7 @@ import {
   readAdminFiltersFromUrl,
   writeAdminFiltersToUrl,
 } from '../utils/adminListFilterQuery.js';
+import { getAuthSnapshot } from '../../auth/authStateMachine';
 import AdminTestResultsAnalyticsPanel from '../components/AdminTestResultsAnalyticsPanel';
 import '../styles/admin-courses-dashboard.css';
 import '../styles/admin-test-results-analytics.css';
@@ -277,19 +278,25 @@ function AdminTestsPageContent() {
     }
   }
 
-  async function downloadResults(testId) {
-    setBusyAction(`results-${testId}`);
+  async function downloadResults(testId, format = 'xlsx') {
+    const authState = getAuthSnapshot();
+    if (authState.status !== 'authenticated') {
+      toast.error('Session expired, login again');
+      return;
+    }
+    const actionKey = `results-${testId}-${format}`;
+    setBusyAction(actionKey);
     try {
-      const { blob, filename } = await adminApi.exportTestResults(token, testId);
+      const { blob, filename } = await adminApi.exportTestResults(token, testId, format);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = filename || `test-${testId}-results.xlsx`;
+      link.download = filename || `test-${testId}-results.${format}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success('Results download started.');
+      toast.success(`Results download started (${format.toUpperCase()}).`);
     } catch (err) {
       toast.error(err.message || 'Failed to download results');
     } finally {
@@ -298,6 +305,11 @@ function AdminTestsPageContent() {
   }
 
   async function exportTestDefinition(testId) {
+    const authState = getAuthSnapshot();
+    if (authState.status !== 'authenticated') {
+      toast.error('Session expired, login again');
+      return;
+    }
     const actionKey = `export-csv-${testId}`;
     setBusyAction(actionKey);
     try {

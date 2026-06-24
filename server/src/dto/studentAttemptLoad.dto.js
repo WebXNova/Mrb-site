@@ -57,10 +57,13 @@ export function toStudentAttemptLoadQuestionsDto(composed) {
   return composed.map((question) => ({
     question_id: Number(question.questionId),
     question_text: sanitizeRichHtml(question.questionText),
+    question_image_url: question.questionImageUrl ?? null,
     marks: Number(question.marks ?? 0),
     options: (question.options || []).map((option) => ({
       option_id: Number(option.optionId),
+      option_key: option.optionKey ?? null,
       option_text: String(option.optionText ?? ''),
+      image_url: option.imageUrl ?? null,
     })),
   }));
 }

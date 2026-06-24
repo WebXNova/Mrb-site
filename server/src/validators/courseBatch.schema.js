@@ -91,6 +91,7 @@ function preprocessStripUnknown(raw) {
     'start_date',
     'end_date',
     'total_seats',
+    'seats_fantasy',
     'instructor_name',
     'schedule_label',
     'timezone',
@@ -119,6 +120,7 @@ export const courseBatchCreateBodySchema = z.preprocess(
       start_date: dateTimeSchema,
       end_date: dateTimeSchema,
       total_seats: z.number().int().min(1).max(100_000),
+      seats_fantasy: z.number().int().min(0).max(100_000).optional().default(0),
       instructor_name: z.union([z.string().max(160), z.null()]).optional(),
       schedule_label: z.union([z.string().max(180), z.null()]).optional(),
       timezone: timezoneEnum.optional().default('UTC'),
@@ -165,7 +167,10 @@ function preprocessUpdate(raw) {
   return out;
 }
 
-const optionalDateTime = dateTimeSchema.optional();
+const optionalDateTime = z.preprocess(
+  (v) => (v === '' || v == null ? undefined : v),
+  dateTimeSchema.optional()
+);
 
 export const courseBatchUpdateBodySchema = z.preprocess(
   preprocessUpdate,

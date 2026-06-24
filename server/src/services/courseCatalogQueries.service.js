@@ -8,7 +8,7 @@ import { mysqlPool } from '../config/mysql.js';
 export const COURSE_CORE_COLUMNS_QUALIFIED = `
   c.id, c.title, c.description, c.short_description, c.level, c.image_url,
   c.start_date, c.end_date, c.admission_status,
-  c.is_active, c.created_by, c.created_at, c.updated_at
+  c.is_active, c.status, c.created_by, c.created_at, c.updated_at
 `;
 
 /**
@@ -45,7 +45,7 @@ function buildCatalogSelect({ activeOnly = false } = {}) {
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}, ${PRICING_PROJECTION}
     FROM courses c
     ${EFFECTIVE_PRICING_JOIN}
-    ${activeOnly ? 'WHERE c.is_active = TRUE' : ''}
+    ${activeOnly ? "WHERE c.is_active = TRUE AND c.status = 'published'" : ''}
   `;
 }
 
@@ -73,7 +73,7 @@ function buildCatalogSelectCoreOnly({ activeOnly = false } = {}) {
   return `
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}
     FROM courses c
-    ${activeOnly ? 'WHERE c.is_active = TRUE' : ''}
+    ${activeOnly ? "WHERE c.is_active = TRUE AND c.status = 'published'" : ''}
   `;
 }
 
@@ -101,13 +101,13 @@ export async function getCourseRowById(courseId, { activeOnly = false } = {}) {
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}, ${PRICING_PROJECTION}
     FROM courses c
     ${EFFECTIVE_PRICING_JOIN}
-    WHERE c.id = ?${activeOnly ? ' AND c.is_active = TRUE' : ''}
+    WHERE c.id = ?${activeOnly ? " AND c.is_active = TRUE AND c.status = 'published'" : ''}
     LIMIT 1
   `;
   const fallbackSql = `
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}
     FROM courses c
-    WHERE c.id = ?${activeOnly ? ' AND c.is_active = TRUE' : ''}
+    WHERE c.id = ?${activeOnly ? " AND c.is_active = TRUE AND c.status = 'published'" : ''}
     LIMIT 1
   `;
 

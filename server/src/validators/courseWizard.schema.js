@@ -148,16 +148,7 @@ const batchStatusSchema = z
   .toLowerCase()
   .refine(
     (s) =>
-      [
-        'draft',
-        'published',
-        'upcoming',
-        'enrollment_open',
-        'running',
-        'completed',
-        'cancelled',
-        'archived',
-      ].includes(s),
+      ['draft', 'published', 'archived'].includes(s),
     { message: 'invalid batch status' }
   );
 
@@ -168,6 +159,7 @@ function preprocessWizardBatchItem(raw) {
     'start_date',
     'end_date',
     'total_seats',
+    'seats_fantasy',
     'instructor_name',
     'schedule_label',
     'timezone',
@@ -192,6 +184,7 @@ export const courseWizardBatchItemSchema = z
     start_date: dateTimeSchema,
     end_date: dateTimeSchema,
     total_seats: z.number().int().min(1).max(100_000),
+    seats_fantasy: z.number().int().min(0).max(100_000).optional().default(0),
     instructor_name: z.union([z.string().max(160), z.null()]).optional(),
     schedule_label: z.union([z.string().max(180), z.null()]).optional(),
     timezone: z
@@ -229,7 +222,7 @@ function batchesOverlap(a, b) {
   if (![a0, a1, b0, b1].every(Number.isFinite)) return false;
   const active = (r) =>
     r.is_active !== false &&
-    !['draft', 'cancelled', 'archived'].includes(String(r.status || '').toLowerCase());
+    String(r.status || '').toLowerCase() === 'published';
   if (!active(a) || !active(b)) return false;
   return a0 <= b1 && b0 <= a1;
 }

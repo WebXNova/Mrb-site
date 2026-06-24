@@ -212,22 +212,27 @@ export async function updateLecture(lectureId, payload) {
 
   const { chapterId, courseId } = await resolveChapterOwnership(payload.chapterId);
 
+  const setters = [
+    'course_id = ?',
+    'chapter_id = ?',
+    'title = ?',
+    'youtube_url = ?',
+    'youtube_video_id = ?',
+    'topic = ?',
+    'sort_order = ?',
+  ];
+  const setValues = [courseId, chapterId, payload.title, payload.youtubeUrl, videoId, payload.topic || null, payload.sortOrder || 0];
+
+  if (payload.isActive !== undefined) {
+    setters.push('is_active = ?');
+    setValues.push(payload.isActive);
+  }
+
+  setValues.push(lectureId);
+
   await mysqlPool.query(
-    `UPDATE lectures
-     SET course_id = ?, chapter_id = ?, title = ?, youtube_url = ?, youtube_video_id = ?, topic = ?, sort_order = ?, is_active = ?,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [
-      courseId,
-      chapterId,
-      payload.title,
-      payload.youtubeUrl,
-      videoId,
-      payload.topic || null,
-      payload.sortOrder || 0,
-      payload.isActive ?? true,
-      lectureId,
-    ]
+    `UPDATE lectures SET ${setters.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    setValues
   );
 
   return fetchLectureDto(lectureId);

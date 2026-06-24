@@ -19,6 +19,7 @@ export const COURSE_BATCH_ROW_SELECT = `
     b.end_date,
     b.total_seats,
     b.seats_filled,
+    b.seats_fantasy,
     b.instructor_name,
     b.schedule_label,
     b.timezone,
@@ -50,15 +51,14 @@ function isDupEntry(err) {
 
 /**
  * Normalize batch lifecycle status when a course is being published.
- * Maps draft/operational UI picks to catalog-safe statuses reachable from insert (`draft` → X).
  *
  * @param {string} rawStatus
  */
 export function normalizeBatchStatusForPublish(rawStatus) {
   const status = String(rawStatus || 'draft').toLowerCase();
-  if (status === 'draft') return 'upcoming';
-  if (['published', 'upcoming', 'enrollment_open'].includes(status)) return status;
-  return 'upcoming';
+  if (status === 'draft') return 'published';
+  if (status === 'published') return 'published';
+  return 'published';
 }
 
 /**
@@ -73,23 +73,15 @@ export function validateBatchStateTransition(from, to, ctx = {}) {
   if (!COURSE_BATCH_STATUSES.includes(t)) {
     throw new ApiError(422, 'Invalid batch status', { code: 'INVALID_BATCH_STATUS' });
   }
-  if (f === 'cancelled' && t === 'running') {
-    throw new ApiError(409, 'Cancelled batches cannot become running', { code: 'INVALID_BATCH_STATE_TRANSITION' });
-  }
   const graph = {
-    draft: ['published', 'upcoming', 'enrollment_open', 'cancelled', 'archived'],
-    published: ['upcoming', 'enrollment_open', 'cancelled', 'archived'],
-    upcoming: ['published', 'enrollment_open', 'cancelled', 'archived'],
-    enrollment_open: ['running', 'cancelled', 'archived'],
-    running: ['completed', 'cancelled', 'archived'],
-    completed: ['archived'],
-    cancelled: ['archived'],
+    draft: ['published', 'archived'],
+    published: ['archived'],
     archived: [],
   };
   const allowed = graph[f] || [];
   if (allowed.includes(t)) return;
   const { isSuperAdmin = false } = ctx;
-  if (isSuperAdmin && f === 'cancelled' && (t === 'draft' || t === 'upcoming')) return;
+  if (isSuperAdmin && f === 'archived' && t === 'draft') return;
   throw new ApiError(409, 'Disallowed batch status transition', {
     code: 'INVALID_BATCH_STATE_TRANSITION',
     details: { from: f, to: t },
@@ -137,6 +129,7 @@ function resolveBatchEnrollmentDatetimes(payload, startDate, endDate) {
 export function validateSeatRules(row, patch = {}) {
   const total = Number(row.total_seats ?? 0);
   const filled = Number(row.seats_filled ?? 0);
+  const fantasy = Number(row.seats_fantasy ?? 0);
   const nextTotal = patch.nextTotalSeats != null ? Number(patch.nextTotalSeats) : total;
   if (!Number.isFinite(nextTotal) || nextTotal < 1) {
     throw new ApiError(422, 'total_seats must be at least 1', { code: 'INVALID_BATCH_SEAT_CONFIGURATION' });
@@ -147,14 +140,17 @@ export function validateSeatRules(row, patch = {}) {
   if (filled > total) {
     throw new ApiError(409, 'seats_filled exceeds total_seats', { code: 'INVALID_BATCH_SEAT_CONFIGURATION' });
   }
+  if (fantasy > total) {
+    throw new ApiError(422, 'seats_fantasy cannot exceed total_seats', { code: 'INVALID_BATCH_SEAT_CONFIGURATION' });
+  }
   if (filled > nextTotal) {
     throw new ApiError(409, 'Cannot reduce total_seats below seats_filled', {
       code: 'INVALID_BATCH_SEAT_CONFIGURATION',
     });
   }
   const st = String(row.status || '').toLowerCase();
-  if (st === 'running' && nextTotal < filled) {
-    throw new ApiError(409, 'Running batches cannot reduce total_seats below seats_filled', {
+  if (st === 'published' && nextTotal < filled) {
+    throw new ApiError(409, 'Published batches cannot reduce total_seats below seats_filled', {
       code: 'INVALID_BATCH_SEAT_CONFIGURATION',
     });
   }
@@ -241,17 +237,14 @@ export async function createBatch(courseId, payload, createdByUserId) {
   const allowedFromDraft = new Set([
     'draft',
     'published',
-    'upcoming',
-    'enrollment_open',
-    'cancelled',
-    'archived',
   ]);
-  const initial = allowedFromDraft.has(rawInitial) ? rawInitial : 'upcoming';
+  const initial = allowedFromDraft.has(rawInitial) ? rawInitial : 'draft';
   validateSeatRules({ total_seats: payload.total_seats, seats_filled: 0, status: initial });
   validateBatchStateTransition('draft', initial, { isSuperAdmin: false });
 
-  const insInstructor = payload.instructor_name == null ? null : String(payload.instructor_name).trim() || null;
+    const insInstructor = payload.instructor_name == null ? null : String(payload.instructor_name).trim() || null;
   const insSchedule = payload.schedule_label == null ? null : String(payload.schedule_label).trim() || null;
+  const insFantasy = Number(payload.seats_fantasy ?? 0);
 
   // CRITICAL: Backend always generates secure batch codes
   const code = `B${genBatchCode()}`;
@@ -266,11 +259,11 @@ export async function createBatch(courseId, payload, createdByUserId) {
       `INSERT INTO course_batches (
         course_id, title, code, start_date, end_date,
         enrollment_open_at, enrollment_close_at,
-        total_seats, seats_filled,
+        total_seats, seats_filled, seats_fantasy,
         instructor_name, schedule_label, timezone, status, is_active,
         show_publicly, recordings_enabled,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cid,
         payload.title,
@@ -280,6 +273,7 @@ export async function createBatch(courseId, payload, createdByUserId) {
         enrollmentWindow.enrollment_open_at,
         enrollmentWindow.enrollment_close_at,
         payload.total_seats,
+        insFantasy,
         insInstructor,
         insSchedule,
         payload.timezone || 'UTC',
@@ -500,12 +494,8 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
   const allowedFromDraft = new Set([
     'draft',
     'published',
-    'upcoming',
-    'enrollment_open',
-    'cancelled',
-    'archived',
   ]);
-  const initial = allowedFromDraft.has(rawInitial) ? rawInitial : 'upcoming';
+  const initial = allowedFromDraft.has(rawInitial) ? rawInitial : 'draft';
   validateSeatRules({ total_seats: payload.total_seats, seats_filled: 0, status: initial });
   validateBatchStateTransition('draft', initial, { isSuperAdmin: false });
 
@@ -515,6 +505,7 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
 
   const insInstructor = payload.instructor_name == null ? null : String(payload.instructor_name).trim() || null;
   const insSchedule = payload.schedule_label == null ? null : String(payload.schedule_label).trim() || null;
+  const insFantasy = Number(payload.seats_fantasy ?? 0);
 
   // Normalize datetimes for MySQL
   const startDate = formatMySqlDateTime(payload.start_date, { fieldName: 'start_date' });
@@ -526,11 +517,11 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
       `INSERT INTO course_batches (
         course_id, title, code, start_date, end_date,
         enrollment_open_at, enrollment_close_at,
-        total_seats, seats_filled,
+        total_seats, seats_filled, seats_fantasy,
         instructor_name, schedule_label, timezone, status, is_active,
         show_publicly, recordings_enabled,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cid,
         payload.title,
@@ -540,6 +531,7 @@ export async function insertCourseBatchWithConnection(connection, courseId, payl
         enrollmentWindow.enrollment_open_at,
         enrollmentWindow.enrollment_close_at,
         payload.total_seats,
+        insFantasy,
         insInstructor,
         insSchedule,
         payload.timezone || 'UTC',

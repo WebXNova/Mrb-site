@@ -28,7 +28,6 @@ import path from 'path';
 import {
   assertCourseExistsForImport,
   assertImportedQuestionIntegrity,
-  assertSubjectsBelongToCourse,
   createTestImportBatch,
   finalizeTestImportBatchFailure,
   finalizeTestImportBatchSuccess,
@@ -317,7 +316,23 @@ export async function confirmTestImport(request, userId, role = 'admin') {
     }
 
     await assertCourseExistsForImport(connection, courseId);
-    await assertSubjectsBelongToCourse(connection, pkg.subject_ids, courseId);
+
+    // Resolve subject_ids: silently drop any that don't exist in the target course
+    const resolvedSubjectIds = [];
+    if (Array.isArray(pkg.subject_ids) && pkg.subject_ids.length) {
+      const placeholders = pkg.subject_ids.map(() => '?').join(',');
+      const [subjectRows] = await connection.query(
+        `SELECT id FROM subjects WHERE course_id = ? AND id IN (${placeholders})`,
+        [courseId, ...pkg.subject_ids]
+      );
+      const foundIds = new Set(subjectRows.map((r) => r.id));
+      for (const sid of pkg.subject_ids) {
+        if (foundIds.has(sid)) {
+          resolvedSubjectIds.push(sid);
+        }
+      }
+    }
+    pkg.subject_ids = resolvedSubjectIds;
 
     const testId = await insertImportedTestRow(connection, pkg.test, courseId, userId);
     if (!Number.isFinite(testId) || testId <= 0) {

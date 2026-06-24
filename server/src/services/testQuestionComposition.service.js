@@ -42,7 +42,8 @@ const COMPOSED_LINK_SQL = `
     qb.topic,
     qb.subject_id,
     qb.question_type,
-    qb.course_id
+    qb.course_id,
+    qb.question_image_url
   FROM test_questions tq
   INNER JOIN tests t ON t.id = tq.test_id
   INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
@@ -59,7 +60,7 @@ async function loadOptionsByQuestionIds(questionIds, executor = mysqlPool) {
 
   const placeholders = ids.map(() => '?').join(',');
   const [rows] = await executor.query(
-    `SELECT id, question_id, option_text, option_html, is_correct, sort_order
+    `SELECT id, question_id, option_key, option_text, option_html, image_url, is_correct, sort_order
      FROM question_options
      WHERE question_id IN (${placeholders})
      ORDER BY question_id ASC, sort_order ASC, id ASC`,
@@ -215,7 +216,7 @@ export function mapComposedQuestionsForStudentAttempt(composed) {
   return composed.map((q) => ({
     id: q.questionId,
     questionText: q.questionText,
-    questionImageUrl: null,
+    questionImageUrl: q.questionImageUrl ?? null,
     options: (q.options || []).map((o) => ({
       id: o.optionId,
       text: o.optionText,

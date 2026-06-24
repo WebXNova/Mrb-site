@@ -46,6 +46,17 @@ function QuestionPanel({
         }}
       />
 
+      {question.questionImageUrl && (
+        <div className="tt-question__image">
+          <img
+            src={question.questionImageUrl}
+            alt="Question image"
+            className="tt-question__img"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        </div>
+      )}
+
       <QuestionOptions
         questionId={question.id}
         options={question.options}

@@ -31,6 +31,34 @@ import { validateQuestionWritePayload } from './questionWritePrepare.service.js'
 import { PHASE_1_QUESTION_TYPE } from '../validators/questionWrite.schema.js';
 
 /**
+ * Pad an options array to exactly 4 elements (A-D) for question write validation.
+ * Adds placeholder options with '-' text for any missing keys.
+ *
+ * @param {Array<Record<string, unknown>>} options
+ * @returns {Array<Record<string, unknown>>}
+ */
+function padImportOptionsToFour(options) {
+  if (options.length >= 4) return options;
+  const usedKeys = new Set(options.map((o) => o.option_key));
+  const allKeys = ['A', 'B', 'C', 'D'];
+  const padded = [...options];
+  for (const key of allKeys) {
+    if (padded.length >= 4) break;
+    if (!usedKeys.has(key)) {
+      padded.push({
+        option_key: key,
+        option_html: '-',
+        option_text: '-',
+        image_url: null,
+        is_correct: false,
+        sort_order: padded.length,
+      });
+    }
+  }
+  return padded;
+}
+
+/**
  * @param {string|Buffer|Uint8Array} raw
  * @returns {{ ok: true, byteLength: number } | { ok: false, code: string, message: string, validationLayer: string }}
  */
@@ -218,7 +246,7 @@ export function validateRichContentQuestions(pkg, courseId) {
       question_image_url: normalized.question_image_url ?? null,
       explanation: normalized.explanation ?? null,
       marks: normalized.marks,
-      options: normalized.options,
+      options: padImportOptionsToFour(normalized.options),
     };
 
     const validation = validateQuestionWritePayload(writePayload);
@@ -517,7 +545,7 @@ export function validateTestImportWithDiagnostics(rawPackage, courseId) {
       question_image_url: normalized.question_image_url ?? null,
       explanation: normalized.explanation ?? null,
       marks: normalized.marks,
-      options: normalized.options,
+      options: padImportOptionsToFour(normalized.options),
     };
 
     const validation = validateQuestionWritePayload(writePayload, { allowArchivePaths });

@@ -11,7 +11,7 @@ import { getClientIp } from '../utils/network.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const COURSE_UPLOAD_NAMESPACE = 'courses';
-export const COURSE_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+export const COURSE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 export const COURSE_UPLOAD_DIR = path.resolve(__dirname, '../../uploads/courses');
 
 const LOG_PREFIX = '[course-image-upload]';

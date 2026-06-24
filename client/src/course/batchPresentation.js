@@ -1,12 +1,7 @@
-/** Mirrors server `COURSE_BATCH_STATUSES` — keep aligned with `courseBatchStatus.js`. */
+/** Mirrors server `COURSE_BATCH_STATUSES` — only 3 lifecycle states. */
 export const BATCH_STATUSES = [
   'draft',
   'published',
-  'upcoming',
-  'enrollment_open',
-  'running',
-  'completed',
-  'cancelled',
   'archived',
 ];
 
@@ -32,11 +27,6 @@ export const BATCH_TIMEZONES = [
 const STATUS_LABEL = {
   draft: 'Draft',
   published: 'Published',
-  upcoming: 'Upcoming',
-  enrollment_open: 'Enrollment open',
-  running: 'Running',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
   archived: 'Archived',
 };
 

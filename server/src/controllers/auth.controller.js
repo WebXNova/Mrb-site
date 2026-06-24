@@ -366,6 +366,8 @@ export const adminLogin = asyncHandler(async (req, res) => {
     metadata: { email: result.admin.email, ipAddress: clientIp, userAgent },
   });
 
+  console.log('Admin logged in', { adminId: result.admin.id, email: result.admin.email });
+
   finalizeAuthSuccessResponse(res);
   sendSuccess(res, { admin: result.admin });
 });

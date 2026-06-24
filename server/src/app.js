@@ -51,7 +51,6 @@ const allowedOrigins = env.security.trustedOrigins;
 
 if (env.nodeEnv !== 'production') {
   app.use((req, res, next) => {
-    console.log('GLOBAL REQUEST:', req.method, req.url);
     next();
   });
 }

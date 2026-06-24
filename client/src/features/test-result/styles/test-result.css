@@ -402,6 +402,118 @@
   }
 }
 
+/* Question image */
+.tr-review-item__question-image {
+  margin-bottom: var(--space-4);
+}
+
+.tr-review-item__img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-100);
+}
+
+/* Option list */
+.tr-review-item__option-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tr-review-item__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-ink-100);
+  background: var(--color-bg-soft);
+  font-size: var(--fs-15);
+  line-height: var(--lh-relaxed);
+  color: var(--color-ink-800);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tr-review-item__option-key {
+  font-weight: var(--fw-bold);
+  color: var(--color-ink-500);
+  flex-shrink: 0;
+  min-width: 1.5rem;
+}
+
+.tr-review-item__option-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.tr-review-item__option-text p {
+  margin: 0;
+}
+
+.tr-review-item__option-img {
+  max-width: 120px;
+  max-height: 80px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.tr-review-item__option-badge {
+  flex-shrink: 0;
+  font-size: var(--fs-11);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.tr-option--selected-correct {
+  border-color: var(--color-success);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.tr-option--selected-correct .tr-review-item__option-badge {
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857;
+}
+
+.tr-option--selected-wrong {
+  border-color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.tr-option--selected-wrong .tr-review-item__option-badge {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.tr-option--correct {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.tr-option--correct .tr-review-item__option-badge {
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857;
+}
+
+/* Marks display */
+.tr-review-item__marks {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-700);
+  background: var(--color-bg-soft);
+  border-radius: var(--radius-md);
+  display: inline-block;
+}
+
 @media (max-width: 479px) {
   .tr-footer {
     flex-direction: column;

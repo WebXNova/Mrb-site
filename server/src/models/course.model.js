@@ -11,6 +11,20 @@ export const ADMISSION_STATUS = Object.freeze({
 /** @type {readonly ('OPEN'|'CLOSED')[]} */
 export const ADMISSION_STATUS_VALUES = Object.freeze([ADMISSION_STATUS.OPEN, ADMISSION_STATUS.CLOSED]);
 
+/** Course lifecycle statuses — controls visibility and editability. */
+export const COURSE_STATUS = Object.freeze({
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+  ARCHIVED: 'archived',
+});
+
+/** @type {readonly ('draft'|'published'|'archived')[]} */
+export const COURSE_STATUS_VALUES = Object.freeze([
+  COURSE_STATUS.DRAFT,
+  COURSE_STATUS.PUBLISHED,
+  COURSE_STATUS.ARCHIVED,
+]);
+
 export const COURSE_LEVELS = Object.freeze(['beginner', 'intermediate', 'advanced']);
 
 export const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -27,6 +41,7 @@ export const COURSE_MODEL_FIELDS = Object.freeze([
   'level',
   'image_url',
   'is_active',
+  'status',
   'created_by',
   'start_date',
   'end_date',
@@ -153,6 +168,17 @@ export function extractDeprecatedEnrollmentFields(row) {
 }
 
 /**
+ * Normalize a raw status value to one of the valid course lifecycle statuses.
+ * @param {unknown} value
+ * @returns {'draft'|'published'|'archived'}
+ */
+export function normalizeCourseStatus(value) {
+  const s = String(value || '').toLowerCase();
+  if (COURSE_STATUS_VALUES.includes(s)) return /** @type {'draft'|'published'|'archived'} */ (s);
+  return COURSE_STATUS.DRAFT;
+}
+
+/**
  * @param {Record<string, unknown>|null|undefined} row
  */
 export function isCourseEnrollmentOpen(row) {
@@ -187,7 +213,7 @@ export function deriveCourseAdmissionFromBatch(batch) {
 
   let admission_status = ADMISSION_STATUS.CLOSED;
   if (
-    ['enrollment_open', 'published', 'upcoming'].includes(String(batch.status || '').toLowerCase())
+    String(batch.status || '').toLowerCase() === 'published'
   ) {
     admission_status = ADMISSION_STATUS.OPEN;
   }

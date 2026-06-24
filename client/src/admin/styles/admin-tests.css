@@ -279,7 +279,8 @@
 .admin-tests-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 640px;
+  min-width: 900px;
+  table-layout: fixed;
 }
 
 .admin-tests-table th {
@@ -289,23 +290,34 @@
   letter-spacing: 0.04em;
   color: var(--color-ink-500);
   background: var(--color-bg-soft);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-3);
   border-bottom: 1px solid var(--color-ink-100);
   white-space: nowrap;
+  text-align: left;
+  vertical-align: middle;
 }
 
 .admin-tests-table td {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-3);
   border-bottom: 1px solid var(--color-ink-100);
   font-size: 0.8125rem;
   color: var(--color-ink-700);
   vertical-align: middle;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
+
+.admin-tests-table th:nth-child(1) { width: 20%; }
+.admin-tests-table th:nth-child(2) { width: 15%; }
+.admin-tests-table th:nth-child(3) { width: 10%; }
+.admin-tests-table th:nth-child(4) { width: 10%; }
+.admin-tests-table th:nth-child(5) { width: 8%; }
+.admin-tests-table th:nth-child(6) { width: 15%; }
+.admin-tests-table th:nth-child(7) { width: 22%; }
 
 .admin-tests-table td[data-label='Actions'] {
   overflow: visible;
   position: relative;
-  min-width: 17rem;
 }
 
 .admin-tests-table tbody tr:hover {
@@ -319,6 +331,23 @@
 .admin-tests-table__title {
   font-weight: var(--fw-semibold);
   color: var(--color-ink-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-tests-table td[data-label='Title'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+.admin-tests-table td[data-label='Course'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
 }
 
 .admin-tests-table__meta {
@@ -328,9 +357,9 @@
 }
 
 .admin-tests-link-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
   align-items: center;
 }
 
@@ -412,9 +441,17 @@
 }
 
 .admin-tests-row-actions .btn--sm {
-  --btn-padding-x: 0.65rem;
-  --btn-padding-y: 0.3rem;
-  --btn-fs: 0.75rem;
+  --btn-padding-x: 0.55rem;
+  --btn-padding-y: 0.25rem;
+  --btn-fs: 0.7rem;
+  white-space: nowrap;
+}
+
+.admin-tests-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
 }
 
 .btn--danger {
@@ -874,6 +911,67 @@
     flex: 1;
     justify-content: center;
   }
+}
+
+/* Download results dropdown */
+.dropdown-btn-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+  background: transparent;
+}
+
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 200;
+  min-width: 11rem;
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: admin-menu-in-up 0.15s ease;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--fs-13);
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-800);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus-visible {
+  background: var(--color-bg-soft);
+  outline: none;
+}
+
+.dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-test-page-header__actions .btn:has(.admin-spinner) {
+  display: inline-flex;
+  align-items: center;
 }
 
 .admin-publish-callout {

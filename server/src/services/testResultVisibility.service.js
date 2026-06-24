@@ -74,18 +74,36 @@ export function sanitizeGradingDetailItems(details, settings) {
   const items = Array.isArray(details) ? details : [];
 
   return items.map((item) => {
+    let selectedOptionText = item.selectedOptionText == null ? '' : String(item.selectedOptionText);
+    const correctOptionText = item.correctOptionText == null ? '' : String(item.correctOptionText);
+    const isCorrect = Boolean(item.isCorrect);
+
+    if (!selectedOptionText && item.selectedOptionId != null && isCorrect) {
+      selectedOptionText = correctOptionText;
+    }
+
     const row = {
       questionId: item.questionId,
       questionText: sanitizeRichHtml(item.questionText),
+      questionImageUrl: item.questionImageUrl ?? null,
       selectedOptionId: item.selectedOptionId ?? null,
-      selectedOptionText: item.selectedOptionText == null ? '' : String(item.selectedOptionText),
+      selectedOptionKey: item.selectedOptionKey == null ? '' : String(item.selectedOptionKey),
+      selectedOptionText,
       correctOptionId: item.correctOptionId ?? null,
-      correctOptionText: item.correctOptionText == null ? '' : String(item.correctOptionText),
-      isCorrect: Boolean(item.isCorrect),
+      correctOptionKey: item.correctOptionKey == null ? '' : String(item.correctOptionKey),
+      correctOptionText,
+      isCorrect,
       marks: item.marks,
       marksAwarded: item.marksAwarded,
       selectedOption: item.selectedOption == null ? '' : String(item.selectedOption),
       correctOption: item.correctOption == null ? '' : String(item.correctOption),
+      options: Array.isArray(item.options) ? item.options.map((o) => ({
+        id: o.id ?? o.optionId,
+        key: o.key ?? o.optionKey ?? '',
+        text: o.text ?? o.optionText ?? '',
+        imageUrl: o.imageUrl ?? null,
+        isCorrect: Boolean(o.isCorrect ?? o.is_correct),
+      })) : undefined,
     };
 
     if (showExplanations && item.explanation != null && String(item.explanation).trim() !== '') {
@@ -104,13 +122,15 @@ export function sanitizeGradingDetailItems(details, settings) {
  * @param {number} attemptId
  * @param {number} testId
  * @param {(db: import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection, attemptId: number, testId: number) => Promise<Array<Record<string, unknown>>>} loadRows
+ * @param {Map<number, Array<Record<string, unknown>>>} [optionsMap]
  */
 export async function loadSanitizedPortalAnswerReview(
   settings,
   db,
   attemptId,
   testId,
-  loadRows
+  loadRows,
+  optionsMap
 ) {
   if (!isShowAnswersAfterSubmitEnabled(settings?.show_answers_after_submit)) {
     return null;
@@ -120,16 +140,40 @@ export async function loadSanitizedPortalAnswerReview(
   const rows = await loadRows(db, attemptId, testId);
 
   return rows.map((row) => {
-    /** @type {Record<string, string>} */
+    const questionId = Number(row.question_id);
+    let selectedText = row.selected_option_text == null ? '' : String(row.selected_option_text);
+    const correctText = row.correct_option_text == null ? '' : String(row.correct_option_text);
+    const status = String(row.answer_status ?? 'unanswered');
+
+    if (!selectedText && row.selected_option_id != null && status === 'correct') {
+      selectedText = correctText;
+    }
+
+    /** @type {Record<string, unknown>} */
     const item = {
+      question_id: questionId,
       question: sanitizeRichHtml(row.question_text),
-      your_answer: row.selected_option_text == null ? '' : String(row.selected_option_text),
-      correct_answer: row.correct_option_text == null ? '' : String(row.correct_option_text),
-      status: String(row.answer_status ?? 'unanswered'),
+      question_image_url: row.question_image_url == null ? null : String(row.question_image_url),
+      your_answer: selectedText,
+      correct_answer: correctText,
+      selected_option_id: row.selected_option_id == null ? null : Number(row.selected_option_id),
+      selected_option_key: row.selected_option_key == null ? null : String(row.selected_option_key),
+      correct_option_key: row.correct_option_key == null ? null : String(row.correct_option_key),
+      status,
     };
 
     if (showExplanations && row.explanation != null) {
       item.explanation = sanitizeRichHtml(row.explanation);
+    }
+
+    if (optionsMap && optionsMap.has(questionId)) {
+      item.options = optionsMap.get(questionId).map((o) => ({
+        id: o.optionId,
+        key: o.optionKey,
+        text: o.optionText,
+        imageUrl: o.imageUrl,
+        isCorrect: o.isCorrect,
+      }));
     }
 
     return item;
@@ -156,7 +200,7 @@ export function redactStudentResultListItem(row) {
 /**
  * Map portal answer rows to legacy `details` field for student portal consumers.
  *
- * @param {Array<Record<string, string>>|null} answers
+ * @param {Array<Record<string, unknown>>|null} answers
  */
 export function mapPortalAnswersToLegacyDetails(answers) {
   if (!Array.isArray(answers) || !answers.length) {
@@ -164,10 +208,17 @@ export function mapPortalAnswersToLegacyDetails(answers) {
   }
 
   return answers.map((item) => ({
+    questionId: item.question_id ?? null,
     questionText: item.question,
-    selectedOptionText: item.your_answer,
-    correctOptionText: item.correct_answer,
+    questionImageUrl: item.question_image_url ?? null,
+    selectedOptionId: item.selected_option_id == null ? null : Number(item.selected_option_id),
+    selectedOptionKey: item.selected_option_key ?? null,
+    selectedOptionText: item.your_answer ?? '',
+    correctOptionKey: item.correct_option_key ?? null,
+    correctOptionText: item.correct_answer ?? '',
     isCorrect: item.status === 'correct',
+    status: item.status ?? 'unanswered',
+    options: Array.isArray(item.options) ? item.options : undefined,
     explanation: item.explanation ?? '',
   }));
 }

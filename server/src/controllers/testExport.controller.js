@@ -19,7 +19,11 @@ import {
  * Shared export handler — GET (legacy) and POST (preferred).
  */
 async function handleTestExport(req, res, formatOverride = null) {
-  const testId = parsePositiveTestIdParam(req.params);
+  const parsed = parsePositiveTestIdParam(req.params.testId);
+  if (!parsed.ok) {
+    throw new ApiError(400, 'Invalid test ID', { code: parsed.error.code });
+  }
+  const testId = parsed.id;
   const userId = req.user?.id ?? null;
   const role = req.user?.role ?? 'admin';
   const format =
@@ -116,7 +120,11 @@ export const postTestExport = asyncHandler(async (req, res) => {
  * GET /tests/:testId/export/rich — JSON envelope for API clients (backward compatible).
  */
 export const getRichContentTestExport = asyncHandler(async (req, res) => {
-  const testId = parsePositiveTestIdParam(req.params);
+  const parsed = parsePositiveTestIdParam(req.params.testId);
+  if (!parsed.ok) {
+    throw new ApiError(400, 'Invalid test ID', { code: parsed.error.code });
+  }
+  const testId = parsed.id;
   const userId = req.user?.id ?? null;
   const role = req.user?.role ?? 'admin';
 

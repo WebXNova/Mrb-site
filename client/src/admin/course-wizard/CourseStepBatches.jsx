@@ -2,7 +2,7 @@ import { COURSE_WIZARD_BATCH_TIMEZONES } from '@course-wizard-schema';
 import { fromLocalDatetimeValue, toLocalDatetimeValue } from '../../course/batchPresentation';
 import CourseAdmissionStatusField from './CourseAdmissionStatusField.jsx';
 
-const BATCH_STATUSES = ['draft', 'published', 'upcoming', 'enrollment_open', 'running', 'completed', 'cancelled', 'archived'];
+const BATCH_STATUSES = ['draft', 'published', 'archived'];
 
 /**
  * Single-batch operational delivery editor with course admission status.
@@ -78,38 +78,70 @@ export default function CourseStepBatches({
               ))}
             </select>
           </div>
-          <div className="admin-field">
-            <label>Course start date & time</label>
-            <input
-              type="datetime-local"
-              value={toLocalDatetimeValue(b.start_date)}
-              onChange={(e) => onBatchChange(0, { start_date: fromLocalDatetimeValue(e.target.value) })}
-            />
+
+          {/* Date/time row — side by side on desktop */}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: 'var(--space-4)',
+            }}
+          >
+            <div className="admin-field">
+              <label>Course start date & time</label>
+              <input
+                type="datetime-local"
+                value={toLocalDatetimeValue(b.start_date)}
+                onChange={(e) => onBatchChange(0, { start_date: fromLocalDatetimeValue(e.target.value) })}
+              />
+            </div>
+            <div className="admin-field">
+              <label>Course end date & time</label>
+              <input
+                type="datetime-local"
+                value={toLocalDatetimeValue(b.end_date)}
+                onChange={(e) => onBatchChange(0, { end_date: fromLocalDatetimeValue(e.target.value) })}
+              />
+            </div>
           </div>
-          <div className="admin-field">
-            <label>Course end date & time</label>
-            <input
-              type="datetime-local"
-              value={toLocalDatetimeValue(b.end_date)}
-              onChange={(e) => onBatchChange(0, { end_date: fromLocalDatetimeValue(e.target.value) })}
-            />
+
+          {/* Seats row — three fields side by side on desktop */}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: 'var(--space-4)',
+            }}
+          >
+            <div className="admin-field">
+              <label>Seats</label>
+              <input
+                type="number"
+                min={1}
+                value={b.total_seats}
+                onChange={(e) => onBatchChange(0, { total_seats: Number(e.target.value) })}
+              />
+            </div>
+            <div className="admin-field">
+              <label>Reserved seats (fantasy)</label>
+              <input
+                type="number"
+                min={0}
+                value={b.seats_fantasy ?? 0}
+                onChange={(e) => onBatchChange(0, { seats_fantasy: Number(e.target.value) })}
+              />
+            </div>
+            <div className="admin-field">
+              <label>Schedule label</label>
+              <input
+                value={b.schedule_label ?? ''}
+                onChange={(e) => onBatchChange(0, { schedule_label: e.target.value || null })}
+              />
+            </div>
           </div>
-          <div className="admin-field">
-            <label>Seats</label>
-            <input
-              type="number"
-              min={1}
-              value={b.total_seats}
-              onChange={(e) => onBatchChange(0, { total_seats: Number(e.target.value) })}
-            />
-          </div>
-          <div className="admin-field">
-            <label>Schedule label</label>
-            <input
-              value={b.schedule_label ?? ''}
-              onChange={(e) => onBatchChange(0, { schedule_label: e.target.value || null })}
-            />
-          </div>
+
           <div className="admin-field">
             <label>Status</label>
             <select value={b.status} onChange={(e) => onBatchChange(0, { status: e.target.value })}>
@@ -120,33 +152,70 @@ export default function CourseStepBatches({
               ))}
             </select>
           </div>
-          <div className="admin-field">
-            <label className="admin-field__inline">
+
+          {/* Toggles row — horizontal on desktop */}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 'var(--space-5)',
+              alignItems: 'center',
+              paddingTop: 'var(--space-2)',
+            }}
+          >
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                fontSize: 'var(--fs-14)',
+                fontWeight: 'var(--fw-semibold)',
+                color: 'var(--color-ink-700)',
+              }}
+            >
               <input
                 type="checkbox"
                 checked={!!b.is_active}
                 onChange={(e) => onBatchChange(0, { is_active: e.target.checked })}
-              />{' '}
+              />
               Active
             </label>
-          </div>
-          <div className="admin-field">
-            <label className="admin-field__inline">
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                fontSize: 'var(--fs-14)',
+                fontWeight: 'var(--fw-semibold)',
+                color: 'var(--color-ink-700)',
+              }}
+            >
               <input
                 type="checkbox"
                 checked={!!b.show_publicly}
                 onChange={(e) => onBatchChange(0, { show_publicly: e.target.checked })}
-              />{' '}
+              />
               Show publicly
             </label>
-          </div>
-          <div className="admin-field">
-            <label className="admin-field__inline">
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                fontSize: 'var(--fs-14)',
+                fontWeight: 'var(--fw-semibold)',
+                color: 'var(--color-ink-700)',
+              }}
+            >
               <input
                 type="checkbox"
                 checked={!!b.recordings_enabled}
                 onChange={(e) => onBatchChange(0, { recordings_enabled: e.target.checked })}
-              />{' '}
+              />
               Recordings enabled
             </label>
           </div>

@@ -54,9 +54,9 @@ function applyDraftState(d, setters) {
 
 function normalizeBatchStatusForPublish(rawStatus) {
   const status = String(rawStatus || 'draft').toLowerCase();
-  if (status === 'draft') return 'upcoming';
-  if (['published', 'upcoming', 'enrollment_open'].includes(status)) return status;
-  return 'upcoming';
+  if (status === 'draft') return 'published';
+  if (status === 'published') return 'published';
+  return 'published';
 }
 
 function buildWizardPayload(publish, course, pricing, batches, subjects) {
@@ -96,6 +96,7 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
         start_date: b.start_date,
         end_date: b.end_date,
         total_seats: Math.trunc(Number(b.total_seats)),
+        seats_fantasy: Math.trunc(Number(b.seats_fantasy ?? 0)),
         instructor_name: (b.instructor_name && String(b.instructor_name).trim()) || null,
         schedule_label: (b.schedule_label && String(b.schedule_label).trim()) || null,
         timezone: b.timezone || 'UTC',

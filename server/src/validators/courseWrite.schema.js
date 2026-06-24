@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { coursePricingWriteBodySchema } from './coursePricing.schema.js';
 import { subjectSeedForCourseCreateSchema } from './subjectWrite.schema.js';
-import { ADMISSION_STATUS, normalizeDateOnly, validateCourseDateRange } from '../models/course.model.js';
+import { ADMISSION_STATUS, COURSE_STATUS_VALUES, normalizeDateOnly, validateCourseDateRange } from '../models/course.model.js';
 
 const dateOnlyField = z
   .union([z.string(), z.null(), z.undefined()])
@@ -34,6 +34,7 @@ const courseBaseObject = z.object({
   level: z.enum(['beginner', 'intermediate', 'advanced']),
   thumbnail_url: z.string().max(1000).optional().nullable(),
   is_active: z.boolean().optional(),
+  status: z.enum(COURSE_STATUS_VALUES).optional().default('draft'),
   start_date: dateOnlyField,
   end_date: dateOnlyField,
   admission_status: z.enum([ADMISSION_STATUS.OPEN, ADMISSION_STATUS.CLOSED]).optional(),

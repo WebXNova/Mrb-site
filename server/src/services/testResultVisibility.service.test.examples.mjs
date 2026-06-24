@@ -116,8 +116,9 @@ try {
     details?.length === 1 &&
       details[0].correctOptionText === 'B' &&
       details[0].explanation == null &&
-      details[0].options == null,
-    'answer review strips explanations and options metadata'
+      Array.isArray(details[0].options) &&
+      details[0].options.length === 1,
+    'answer review strips explanations but preserves options metadata'
   );
 }
 

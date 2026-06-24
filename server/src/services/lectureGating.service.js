@@ -65,38 +65,15 @@ export function evaluateBatchContentGate(batchRow) {
     return { locked: false, unlockReason: null };
   }
 
-  if (status === 'upcoming' || status === 'published' || status === 'enrollment_open') {
-    return {
-      locked: true,
-      unlockReason: 'This course has not started yet.',
-    };
-  }
-
-  if (status === 'completed') {
-    return {
-      locked: true,
-      unlockReason: 'This course has ended.',
-    };
-  }
-
-  if (status === 'cancelled' || status === 'archived') {
+  if (status === 'archived') {
     return {
       locked: true,
       unlockReason: 'This course cohort is no longer available.',
     };
   }
 
-  if (status === 'draft') {
-    return {
-      locked: true,
-      unlockReason: 'This course is not yet available.',
-    };
-  }
-
-  return {
-    locked: true,
-    unlockReason: 'Lectures are not available for this course cohort yet.',
-  };
+  // draft — enrolled students can access
+  return { locked: false, unlockReason: null };
 }
 
 /**

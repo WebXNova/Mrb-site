@@ -680,34 +680,38 @@
 }
 
 .admin-registrations-filter-grid {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
 }
 
-.admin-registrations-filter-grid--primary {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+.admin-registrations-filter-grid > * {
+  flex: 1 1 160px;
+  min-width: 0;
 }
 
-.admin-registrations-filter-grid--location {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.admin-registrations-filter-grid--primary > * {
+  flex: 1 1 150px;
+}
+
+.admin-registrations-filter-grid--location > * {
+  flex: 1 1 180px;
 }
 
 .admin-filter-field--search {
-  grid-column: 1 / -1;
-}
-
-.admin-registrations-filter-grid--busy {
-  opacity: 0.78;
+  flex: 2 1 260px;
 }
 
 .admin-filter-field select,
 .admin-filter-field input {
+  font-size: var(--fs-13);
+  padding: 0.35rem 0.5rem;
   width: 100%;
 }
 
-.admin-filter-field--grow {
-  grid-column: span 2;
+.admin-filter-field select {
+  min-height: 0;
 }
 
 .admin-registrations-course-board__hint {
@@ -754,12 +758,13 @@
   margin-top: 1rem;
   border: 1px solid var(--color-ink-100);
   border-radius: var(--radius-lg);
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   max-height: min(70vh, 720px);
 }
 
 .admin-table--registrations {
-  min-width: 1080px;
+  min-width: 1200px;
 }
 
 .admin-table--registrations thead th {
@@ -770,30 +775,27 @@
   box-shadow: inset 0 -1px 0 var(--color-ink-100);
 }
 
-.admin-table--registrations .admin-reg-col--student {
-  min-width: 9rem;
+.admin-table--registrations td {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.admin-table--registrations .admin-reg-col--course {
-  min-width: 8rem;
-  max-width: 12rem;
-}
-
-.admin-table--registrations .admin-reg-col--email,
-.admin-table--registrations .admin-reg-col--whatsapp {
-  min-width: 7rem;
-  max-width: 11rem;
-  word-break: break-word;
-}
-
-.admin-table--registrations .admin-reg-col--location {
-  min-width: 9rem;
-  max-width: 14rem;
-}
-
-.admin-table--registrations .admin-reg-col--actions {
-  min-width: 13rem;
-}
+.admin-table--registrations .admin-reg-col--student { min-width: 130px; white-space: normal; }
+.admin-table--registrations .admin-reg-col--course { min-width: 160px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--email { min-width: 180px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--email a { overflow: hidden; text-overflow: ellipsis; display: block; }
+.admin-table--registrations .admin-reg-col--whatsapp { min-width: 120px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--location { min-width: 140px; white-space: normal; }
+.admin-table--registrations .admin-reg-col--gender { min-width: 70px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--dob { min-width: 100px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--submitted { min-width: 140px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--order { min-width: 60px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--payment { min-width: 70px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--amount { min-width: 70px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--status { min-width: 80px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--access { min-width: 70px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--account { min-width: 70px; white-space: nowrap; }
+.admin-table--registrations .admin-reg-col--actions { min-width: 90px; white-space: normal; }
 
 .admin-reg-actions {
   flex-wrap: wrap;
@@ -1128,6 +1130,106 @@
   transition: opacity 0.18s ease;
 }
 
+.admin-reg-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--color-ink-100);
+}
+
+.admin-reg-pagination__info {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+  margin-right: auto;
+}
+
+.admin-reg-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.admin-reg-pagination__btn {
+  padding: 0.3rem 0.55rem;
+  font-size: var(--fs-13);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--color-ink-700);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+  line-height: 1.4;
+}
+
+.admin-reg-pagination__btn:hover:not(:disabled) {
+  border-color: var(--color-ink-900);
+  color: var(--color-ink-900);
+}
+
+.admin-reg-pagination__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.admin-reg-pagination__btn--active {
+  border-color: var(--color-ink-900);
+  background: var(--color-ink-900);
+  color: #fff;
+}
+
+.admin-reg-pagination__btn--active:hover:not(:disabled) {
+  background: var(--color-ink-900);
+  color: #fff;
+}
+
+.admin-reg-pagination__ellipsis {
+  padding: 0 0.25rem;
+  color: var(--color-ink-500);
+  font-size: var(--fs-13);
+}
+
+.admin-reg-pagination__jump {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+}
+
+.admin-reg-pagination__jump input {
+  width: 3.2rem;
+  padding: 0.25rem 0.3rem;
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-13);
+  text-align: center;
+  font-family: inherit;
+}
+
+.admin-reg-pagination__jump input:focus {
+  outline: none;
+  border-color: var(--color-ink-900);
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.admin-reg-pagination__size-select {
+  padding: 0.25rem 0.3rem;
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-13);
+  font-family: inherit;
+  background: #fff;
+  color: var(--color-ink-700);
+  cursor: pointer;
+}
+
 .admin-confirm-dialog__note-label {
   display: block;
   margin-top: 0.75rem;
@@ -1208,6 +1310,31 @@
   }
 
   .admin-actions {
+    width: 100%;
+  }
+}
+
+/* Responsive filter grids & stat grid */
+@media (max-width: 1100px) {
+  .admin-reg-stat-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-registrations-filter-grid > * {
+    flex: 1 1 100%;
+  }
+
+  .admin-reg-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-reg-pagination__info {
+    width: 100%;
+  }
+
+  .admin-reg-pagination__controls {
     width: 100%;
   }
 }

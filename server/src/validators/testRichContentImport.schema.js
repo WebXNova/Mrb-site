@@ -30,7 +30,7 @@ const richContentQuestionSchema = z.object({
   explanation_html: z.string().max(MAX_QUESTION_EXPLANATION_LENGTH).nullable().optional(),
   explanation: z.string().max(MAX_QUESTION_EXPLANATION_LENGTH).nullable().optional(),
   marks: z.number().positive(),
-  options: z.array(richContentOptionSchema).length(4),
+  options: z.array(richContentOptionSchema).min(2).max(4),
 });
 
 const richContentTestMetadataSchema = z.object({

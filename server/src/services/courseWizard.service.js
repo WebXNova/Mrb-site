@@ -81,11 +81,12 @@ export async function createCourseWizardTransaction(payload, actorUserId = null,
     });
 
     logger.debug('Creating course record', { courseActive: resolved.courseActive, admission_status });
+    const courseStatus = resolved.publish ? 'published' : 'draft';
     const [result] = await connection.query(
       `INSERT INTO courses
-       (title, description, short_description, level, image_url, is_active, created_by,
+       (title, description, short_description, level, image_url, is_active, status, created_by,
         start_date, end_date, admission_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         payload.course.title,
         payload.course.description,
@@ -93,6 +94,7 @@ export async function createCourseWizardTransaction(payload, actorUserId = null,
         payload.course.level,
         payload.course.thumbnail_url ?? null,
         resolved.courseActive,
+        courseStatus,
         actorUserId,
         start_date,
         end_date,

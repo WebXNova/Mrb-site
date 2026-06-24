@@ -88,10 +88,18 @@ export default function TestRowActionsMenu({
             <AdminActionMenuItem
               onClick={() => {
                 close();
-                onDownloadResults(test.id);
+                onDownloadResults(test.id, 'xlsx');
               }}
             >
-              Download results
+              Download as XLSX
+            </AdminActionMenuItem>
+            <AdminActionMenuItem
+              onClick={() => {
+                close();
+                onDownloadResults(test.id, 'csv');
+              }}
+            >
+              Download as CSV
             </AdminActionMenuItem>
             {test.publicLink ? (
               <>

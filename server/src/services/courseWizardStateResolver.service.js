@@ -66,9 +66,9 @@ export function resolveWizardPublishState(payload) {
     let effectiveStatus;
     
     if (publish) {
-      // Published course: upgrade draft batches to upcoming, keep them active
+      // Published course: upgrade draft batches to published, keep them active
       effectiveActive = true;
-      effectiveStatus = rawStatus === 'draft' ? 'upcoming' : rawStatus;
+      effectiveStatus = rawStatus === 'draft' ? 'published' : rawStatus;
     } else {
       // Draft course: batches can be inactive
       effectiveActive = courseActive ? batchWantsActive : false;

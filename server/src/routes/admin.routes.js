@@ -9,6 +9,8 @@ import {
   putUserStatus,
 } from '../controllers/admin.controller.js';
 import { postCourse, putCourse, removeCourse } from '../controllers/courses.controller.js';
+import { publishCourse, archiveCourse, unarchiveCourse } from '../controllers/courseLifecycle.controller.js';
+import { requireEditableCourse } from '../middleware/courseStatusAccess.js';
 import { postCourseImage } from '../controllers/courseImageUpload.controller.js';
 import { postCourseWizard } from '../controllers/courseWizard.controller.js';
 import {
@@ -26,7 +28,6 @@ import {
   getTest,
   getTests,
   getTestCreateOptions,
-  getTestResultsExport,
   getTestResultsAnalyticsHandler,
   getTestCompletenessHandler,
   getTestRules,
@@ -41,6 +42,7 @@ import {
   putTestPublish,
   removeTest,
 } from '../controllers/tests.controller.js';
+import { getTestResultsExport } from '../controllers/testResultExport.controller.js';
 import { getLinkedTestQuestions } from '../controllers/testQuestions.controller.js';
 import {
   getRichContentTestExport,
@@ -162,8 +164,13 @@ router.post(
   courseImageUploadUserRateLimit,
   postCourseImage
 );
-router.put('/courses/:courseId', putCourse);
+router.put('/courses/:courseId', requireEditableCourse, putCourse);
 router.delete('/courses/:courseId', removeCourse);
+
+// Course lifecycle management
+router.post('/courses/:courseId/publish', publishCourse);
+router.post('/courses/:courseId/archive', archiveCourse);
+router.post('/courses/:courseId/unarchive', unarchiveCourse);
 
 router.get('/courses/:courseId/pricing', getCoursePricing);
 router.put('/courses/:courseId/pricing', putCoursePricing);

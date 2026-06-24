@@ -98,7 +98,7 @@ export const LIST_STUDENT_ELIGIBLE_TESTS_SQL = `
  * @returns {unknown[]}
  */
 export function buildListStudentEligibleTestsParams(studentId, limit, offset) {
-  return [...buildStudentEligibleTestsBaseParams(studentId), studentId, studentId, limit, offset];
+  return [studentId, ...STUDENT_OWNED_COURSES_BLOCKING_PARAMS, studentId, studentId, STUDENT_ELIGIBLE_TEST_STATUS, limit, offset];
 }
 
 /**

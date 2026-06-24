@@ -7,6 +7,7 @@ import { getWizardStepEyebrow, TEST_WIZARD_BUTTONS } from '../config/testWizardC
 import AdminTestPageHeader from '../components/AdminTestPageHeader';
 import TestDetailsView from '../components/TestDetailsView';
 import TestWizardNav from '../components/TestWizardNav';
+import DownloadResultsButton from '../components/DownloadResultsButton';
 import { isTestPublishedStatus } from '../utils/testBasicInfoValidation';
 
 export default function AdminTestDetailsPage() {
@@ -80,6 +81,7 @@ export default function AdminTestDetailsPage() {
           <Link className="btn btn--ghost btn--sm" to={adminRoute(`tests/${testId}/setup`)}>
             {published ? 'View setup' : 'Setup'}
           </Link>
+          {testId ? <DownloadResultsButton testId={testId} /> : null}
         </AdminTestPageHeader>
 
         <p className="admin-test-step-label">{getWizardStepEyebrow('publish')}</p>
