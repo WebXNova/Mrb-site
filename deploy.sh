@@ -74,6 +74,9 @@ restart_pm2() {
     pm2 start "${ROOT_DIR}/ecosystem.config.js" --env production
   fi
   pm2 save
+  if ! systemctl is-enabled pm2-root >/dev/null 2>&1 && ! systemctl is-enabled pm2-deploy >/dev/null 2>&1; then
+    log "WARNING: PM2 startup on reboot not configured. Run: pm2 startup systemd -u $(whoami) --hp $(echo $HOME)"
+  fi
 }
 
 # --- Main deploy flow ---
@@ -101,6 +104,9 @@ bash "${ROOT_DIR}/deployment/scripts/validate-env.sh"
 set -a
 source "${ROOT_DIR}/server/.env"
 set +a
+
+# Production backend listens on port 4000 (PM2 env_production overrides .env)
+export PORT=4000
 
 log "Installing server dependencies…"
 (cd "${ROOT_DIR}/server" && npm ci --omit=dev)

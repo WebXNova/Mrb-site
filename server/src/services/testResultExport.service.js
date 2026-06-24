@@ -166,7 +166,8 @@ export function pivotAnswers(rows) {
     if (!map.has(row.attempt_id)) {
       map.set(row.attempt_id, new Map());
     }
-    map.get(row.attempt_id).set(row.display_order, row.selected_answer || '');
+    const raw = row.selected_answer;
+    map.get(row.attempt_id).set(row.display_order, raw ? String(raw).toLowerCase() : '');
   }
   return map;
 }

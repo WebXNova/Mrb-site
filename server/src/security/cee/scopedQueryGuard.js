@@ -196,7 +196,7 @@ function truncateSql(sql) {
 }
 
 function isDevVerbose() {
-  return env.nodeEnv !== 'production' || String(process.env.CEE_SCOPE_GUARD_VERBOSE || '').toLowerCase() === 'true';
+  return String(process.env.CEE_SCOPE_GUARD_VERBOSE || '').toLowerCase() === 'true';
 }
 
 /**

@@ -21,7 +21,7 @@ export async function expireAttemptIfExpired({ attemptId, nowMs, executor = mysq
   const affected = Number(result?.affectedRows ?? 0);
 
   if (affected > 0) {
-    logger.info('attempt auto-expired', { attemptId: aid });
+    logger.warn('attempt auto-expired', { attemptId: aid });
     return true;
   }
 

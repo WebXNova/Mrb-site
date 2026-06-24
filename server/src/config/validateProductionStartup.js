@@ -82,6 +82,13 @@ export function collectProductionStartupConfigIssues(processEnv = process.env) {
     missing.push('REQUIRE_REDIS_IN_PRODUCTION (must not be false in production)');
   }
 
+  if (
+    isProductionNodeEnv(processEnv.NODE_ENV) &&
+    String(processEnv.ALLOW_ADMIN_BOOTSTRAP || '').trim().toLowerCase() === 'true'
+  ) {
+    missing.push('ALLOW_ADMIN_BOOTSTRAP (must not be true in production)');
+  }
+
   return missing;
 }
 

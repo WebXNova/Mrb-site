@@ -278,25 +278,25 @@ function AdminTestsPageContent() {
     }
   }
 
-  async function downloadResults(testId, format = 'xlsx') {
+  async function downloadResults(testId) {
     const authState = getAuthSnapshot();
     if (authState.status !== 'authenticated') {
       toast.error('Session expired, login again');
       return;
     }
-    const actionKey = `results-${testId}-${format}`;
+    const actionKey = `results-${testId}-xlsx`;
     setBusyAction(actionKey);
     try {
-      const { blob, filename } = await adminApi.exportTestResults(token, testId, format);
+      const { blob, filename } = await adminApi.exportTestResults(token, testId);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = filename || `test-${testId}-results.${format}`;
+      link.download = filename || `test-${testId}-results.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(`Results download started (${format.toUpperCase()}).`);
+      toast.success('Results download started.');
     } catch (err) {
       toast.error(err.message || 'Failed to download results');
     } finally {

@@ -9,14 +9,15 @@ import { parseMysqlPoolConfigFromEnv } from './mysqlPoolConfig.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Local development only.
- * Railway ignores .env anyway, so this never affects production.
+/*
+ * Local development only — never override production env vars set by PM2.
  */
-dotenv.config({
-  path: path.resolve(__dirname, '../../.env'),
-  override: true,
-});
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({
+    path: path.resolve(__dirname, '../../.env'),
+    override: true,
+  });
+}
 
 /**
  * Safe env reader (NO CRASH ON IMPORT)
@@ -180,10 +181,13 @@ const SAFEPAY_RESOLVED_API_HOST = {
 
 const safepayEnvRaw = stripCred(process.env.SAFEPAY_ENV || '');
 const safepayEnvLower = safepayEnvRaw.toLowerCase();
+const isSafepayProduction = nodeEnv === 'production';
 
 let safepayEnvTier;
 
-if (!safepayEnvRaw || safepayEnvLower === 'sandbox') {
+if (!safepayEnvRaw) {
+  safepayEnvTier = isSafepayProduction ? 'production' : 'sandbox';
+} else if (safepayEnvLower === 'sandbox') {
   safepayEnvTier = 'sandbox';
 } else if (safepayEnvLower === 'production' || safepayEnvLower === 'prod') {
   safepayEnvTier = 'production';
@@ -226,6 +230,9 @@ if (
 ) {
   throw new Error('[safepay] Secret and publishable key must differ');
 }
+
+const safepayDebug = parseBoolean(process.env.SAFEPAY_DEBUG, false);
+const safepayWebhookCrashDebug = parseBoolean(process.env.SAFEPAY_WEBHOOK_CRASH_DEBUG, false);
 
 /** Lowercase hostname labels after '@' (comma-separated BLOCKED_EMAIL_DOMAINS); empty unless configured. */
 const blockedEmailDomains = parseCsv(process.env.BLOCKED_EMAIL_DOMAINS)
@@ -329,6 +336,8 @@ export const env = {
     apiHost: SAFEPAY_RESOLVED_API_HOST[safepayEnvTier],
     webhookSecretHex: safepayWebhookSecretHex,
     webhookSecretIsDedicated: Boolean(safepayWebhookSecretHex),
+    debug: nodeEnv === 'production' ? false : safepayDebug,
+    webhookCrashDebug: nodeEnv === 'production' ? false : safepayWebhookCrashDebug,
     webhookTimestampSkewSeconds: parseNumber(
       process.env.SAFEPAY_WEBHOOK_TIMESTAMP_SKEW_SECONDS,
       300
@@ -510,6 +519,10 @@ export const env = {
     publicCatalogMedia: parseBoolean(process.env.PUBLIC_CATALOG_MEDIA, true),
     catalogSignedUrlTtlSeconds: parseNumber(process.env.CATALOG_MEDIA_SIGNED_URL_TTL_SECONDS, 86400),
     signingSecret: stripCred(process.env.MEDIA_SIGNING_SECRET || ''),
+  },
+
+  admin: {
+    allowBootstrap: nodeEnv === 'production' ? false : parseBoolean(process.env.ALLOW_ADMIN_BOOTSTRAP, false),
   },
 
   /**

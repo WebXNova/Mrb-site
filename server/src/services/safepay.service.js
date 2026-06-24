@@ -14,10 +14,7 @@ function checkoutEnv() {
 }
 
 function shouldLogSafepayVerbose() {
-  return (
-    env.nodeEnv === 'development' ||
-    String(process.env.SAFEPAY_DEBUG || '').trim().toLowerCase() === 'true'
-  );
+  return env.nodeEnv === 'development' || env.safepay.debug;
 }
 
 function assertSafepayConfigured() {
@@ -261,13 +258,11 @@ function parseSafepayWebhookEpochSeconds(timestampHeader) {
  * @param {{ rawBodyBuffer: Buffer, headers: Record<string, string>, payload?: object | null }}
  */
 export function verifySafepayWebhookSignature({ rawBodyBuffer, headers, payload: _payload = null }) {
-  const webhookCrashDbg =
-    String(process.env.SAFEPAY_WEBHOOK_CRASH_DEBUG || '').trim().toLowerCase() === 'true';
+  const webhookCrashDbg = env.safepay.webhookCrashDebug;
 
   const logOutcome = (result) => {
     const verboseVerify =
-      env.nodeEnv !== 'production' ||
-      String(process.env.SAFEPAY_DEBUG || '').trim().toLowerCase() === 'true';
+      env.nodeEnv !== 'production' || env.safepay.debug;
     if (!verboseVerify && result.ok) return result;
     if (result.ok) {
       console.log(JSON.stringify({ tag: '[VERIFY]', ...result }));

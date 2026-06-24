@@ -33,12 +33,12 @@ export default function EnrollmentPaymentPage() {
         return;
       }
       if (import.meta.env.DEV) {
-        console.log('[safepay] client received checkout_url:', checkoutUrl);
+        // dev-only: checkout URL is available via browser devtools network tab
       } else {
         try {
           const u = new URL(checkoutUrl);
           u.searchParams.set('beacon', '(redacted)');
-          console.log('[safepay] client redirect (beacon redacted):', u.toString());
+          // logged: redirect URL available via network tab
         } catch {
           /* ignore */
         }

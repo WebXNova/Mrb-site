@@ -57,7 +57,6 @@ export default function PopularCourseCard({
   badge,
   badgeTone = 'red',
   buttonStyle = 'primary',
-  ctaLabelOverride,
   showSubject = true,
   style,
 }) {
@@ -189,7 +188,6 @@ export default function PopularCourseCard({
           size="lg"
           fullWidth
           className={buttonClass}
-          labelOverride={ctaLabelOverride}
           courseAdmission={courseAdmission}
         />
       </div>

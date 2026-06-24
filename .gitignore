@@ -27,3 +27,5 @@ server/data/qa-audit-dlq/
 node_modules/
 .env.local
 .env
+.env.lnk
+nginx-deploy.env

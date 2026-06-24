@@ -122,6 +122,6 @@ export function logSafepayWebhookRedisRecovery(detail = {}) {
     metrics: getSafepayWebhookReplayMetrics(),
   };
 
-  logger.info('Safepay webhook replay protection — Redis recovered', payload);
+  logger.warn('Safepay webhook replay protection — Redis recovered', payload);
   logPaymentSecurityEvent(PAYMENT_SECURITY_EVENTS.SAFEPAY_WEBHOOK_REDIS_RECOVERY, payload);
 }

@@ -380,15 +380,12 @@ export const adminApi = {
       token,
       authScope: 'admin',
     }),
-  exportTestResults: async (_token, testId, format = 'xlsx') => {
-    const mime = format === 'csv'
-      ? 'text/csv'
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  exportTestResults: async (_token, testId) => {
     const { blob, filename } = await adminAuthenticatedDownload(
-      `tests/${testId}/results/export?format=${format}`,
-      { method: 'GET', accept: mime }
+      `tests/${testId}/results/export`,
+      { method: 'GET', accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
     );
-    return { blob, filename: filename || `test-results.${format}` };
+    return { blob, filename: filename || 'test-results.xlsx' };
   },
   /** Export test as CSV with embedded HTML (cookie auth + CSRF). */
   exportTest: async (_token, testId) => {

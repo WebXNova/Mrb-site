@@ -2,6 +2,12 @@
  * RFC 4180 CSV parser for test import (mirrors testExportCsv.serializer output).
  */
 
+function devLog(...args) {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(...args);
+  }
+}
+
 import { CSV_UTF8_BOM, TEST_EXPORT_CSV_HEADERS } from './testExportCsv.serializer.js';
 import {
   TEST_EXPORT_CSV_VERSION,
@@ -228,13 +234,13 @@ function testmozQuestionTitle(questionHtml) {
 function logTestmozQuestionDebug(current, questionNumber, line) {
   if (!current) return;
   const correctFound = current.options.some((option) => option.is_correct);
-  console.log(`[TestmozImportParser] Question ${questionNumber}`);
-  console.log(`[TestmozImportParser] Title: ${testmozQuestionTitle(current.question_html) || '(empty)'}`);
-  console.log(`[TestmozImportParser] Options Found: ${current.options.length}`);
-  console.log(`[TestmozImportParser] Correct Answer Found: ${correctFound ? 'Yes' : 'No'}`);
-  console.log(`[TestmozImportParser] Question Type: ${current.sourceQuestionType || '(empty)'}`);
-  console.log(`[TestmozImportParser] Flush Line: ${line}`);
-  console.log('[TestmozImportParser] Raw lines used to build question:', current.rawRows);
+  devLog(`[TestmozImportParser] Question ${questionNumber}`);
+  devLog(`[TestmozImportParser] Title: ${testmozQuestionTitle(current.question_html) || '(empty)'}`);
+  devLog(`[TestmozImportParser] Options Found: ${current.options.length}`);
+  devLog(`[TestmozImportParser] Correct Answer Found: ${correctFound ? 'Yes' : 'No'}`);
+  devLog(`[TestmozImportParser] Question Type: ${current.sourceQuestionType || '(empty)'}`);
+  devLog(`[TestmozImportParser] Flush Line: ${line}`);
+  devLog('[TestmozImportParser] Raw lines used to build question:', current.rawRows);
 }
 
 function logTestmozValidationFailure(current, questionNumber, line, code) {
@@ -308,7 +314,7 @@ export class TestmozImportParser {
       // Short-answer questions: no option validation or correct answer validation
       if (sourceType === 'short') {
         // Short-answer questions legitimately have 0 options and no correct answer
-        console.log(`[TestmozImportParser] Question ${questionNumber}: short-answer type, skipping MCQ validation`);
+        devLog(`[TestmozImportParser] Question ${questionNumber}: short-answer type, skipping MCQ validation`);
       } else {
         // MCQ questions (one, multiple, mcq, multiple_choice): require options and correct answer
         if (current.options.length < 2) {
@@ -374,14 +380,14 @@ export class TestmozImportParser {
         const firstUpper = first.toUpperCase();
 
         if (firstUpper === 'HTML') {
-          console.log(`[TestmozImportParser] Row ${rowIndex + 1}: HTML marker ignored`, row);
+          devLog(`[TestmozImportParser] Row ${rowIndex + 1}: HTML marker ignored`, row);
           continue;
         }
 
         if (firstUpper === 'GROUP') {
           flush(rowIndex + 1);
           activeGroup = normalizeTestmozCell(row[1]) || null;
-          console.log(`[TestmozImportParser] Row ${rowIndex + 1}: GROUP marker applied`, {
+          devLog(`[TestmozImportParser] Row ${rowIndex + 1}: GROUP marker applied`, {
             group: activeGroup,
             row,
           });
@@ -397,14 +403,14 @@ export class TestmozImportParser {
 
           // Skip student information questions
           if (isStudentInfoQuestion(questionHtml)) {
-            console.log(`[TestmozImportParser] Row ${rowIndex + 1}: student info question skipped`, {
+            devLog(`[TestmozImportParser] Row ${rowIndex + 1}: student info question skipped`, {
               question: testmozQuestionTitle(questionHtml),
               row,
             });
             continue;
           }
 
-          console.log(`[TestmozImportParser] Row ${rowIndex + 1}: question row started`, {
+          devLog(`[TestmozImportParser] Row ${rowIndex + 1}: question row started`, {
             sourceQuestionType,
             row,
           });
@@ -426,19 +432,19 @@ export class TestmozImportParser {
           // END marker: flush current question and skip this row
           if (first === 'END') {
             flush(rowIndex + 1);
-            console.log(`[TestmozImportParser] Row ${rowIndex + 1}: END marker - question finalized`, row);
+            devLog(`[TestmozImportParser] Row ${rowIndex + 1}: END marker - question finalized`, row);
             continue;
           }
           
           // Skip image-only HTML rows without proper option markers
           // Valid option rows start with '*' (correct marker) or '' (unmarked option)
           if (isLikelyHtml(first) && first !== '' && !normalizeTestmozCell(row[1])) {
-            console.log(`[TestmozImportParser] Row ${rowIndex + 1}: image-only HTML row skipped`, row);
+            devLog(`[TestmozImportParser] Row ${rowIndex + 1}: image-only HTML row skipped`, row);
             continue;
           }
           
           const option = buildTestmozOption(row, current.options.length);
-          console.log(`[TestmozImportParser] Row ${rowIndex + 1}: option row candidate`, {
+          devLog(`[TestmozImportParser] Row ${rowIndex + 1}: option row candidate`, {
             beginsWithComma: normalizeTestmozCell(row[0]) === '',
             beginsWithStar: normalizeTestmozCell(row[0]) === '*',
             optionAccepted: Boolean(option.option_html),

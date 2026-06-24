@@ -29,6 +29,9 @@ REQUIRED_KEYS=(
   JWT_ACCESS_SECRET
   JWT_REFRESH_SECRET
   ADMIN_SECRET_PATH
+  SAFEPAY_ENV
+  SAFEPAY_MERCHANT_SECRET
+  SAFEPAY_MERCHANT_API_KEY
   SAFEPAY_WEBHOOK_SECRET
   CLIENT_URL
   TEACHER_THREAD_SECRET
@@ -71,6 +74,26 @@ fi
 if [[ "$NODE_ENV" == "production" ]]; then
   if [[ "${REFRESH_COOKIE_SECURE:-false}" != "true" || "${ACCESS_COOKIE_SECURE:-false}" != "true" ]]; then
     echo "[validate-env] ERROR: REFRESH_COOKIE_SECURE and ACCESS_COOKIE_SECURE must be true in production."
+    exit 1
+  fi
+
+  if [[ "${SAFEPAY_ENV:-sandbox}" != "production" ]]; then
+    echo "[validate-env] ERROR: SAFEPAY_ENV must be 'production' in production (got '${SAFEPAY_ENV}')."
+    exit 1
+  fi
+
+  # Debug flags must not be enabled in production
+  if [[ "${SAFEPAY_DEBUG:-false}" == "true" ]]; then
+    echo "[validate-env] ERROR: SAFEPAY_DEBUG must not be 'true' in production (logs sensitive data)."
+    exit 1
+  fi
+  if [[ "${SAFEPAY_WEBHOOK_CRASH_DEBUG:-false}" == "true" ]]; then
+    echo "[validate-env] ERROR: SAFEPAY_WEBHOOK_CRASH_DEBUG must not be 'true' in production (logs sensitive data)."
+    exit 1
+  fi
+
+  if [[ "${ALLOW_ADMIN_BOOTSTRAP:-false}" == "true" ]]; then
+    echo "[validate-env] ERROR: ALLOW_ADMIN_BOOTSTRAP must not be 'true' in production (admin bootstrap blocked)."
     exit 1
   fi
 fi

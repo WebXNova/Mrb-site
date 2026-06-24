@@ -5,7 +5,6 @@ import { assertTestMutationAccess } from '../services/testMutationAccess.service
 import {
   getCompletedAttemptCount,
   getExportFilename,
-  streamCsvToResponse,
   buildXlsxBuffer,
 } from '../services/testResultExport.service.js';
 import {
@@ -15,26 +14,18 @@ import {
   generateExportId,
 } from '../db/ensureExportLogsSchema.js';
 
-function parseFormat(query) {
-  const fmt = String(query?.format ?? 'xlsx').trim().toLowerCase();
-  if (fmt !== 'xlsx' && fmt !== 'csv') {
-    throw new ApiError(400, 'Export format must be "xlsx" or "csv".');
-  }
-  return fmt;
-}
-
 function nowDbString() {
   return new Date().toISOString().replace('T', ' ').replace(/\..+$/, '') + '.000000';
 }
 
-async function createAuditLog(userId, testId, format, exportId, startedAt) {
+async function createAuditLog(userId, testId, exportId, startedAt) {
   try {
     await ensureExportLogsSchema(mysqlPool);
     await insertExportLog(mysqlPool, {
       export_id: exportId,
       user_id: userId,
       test_id: testId,
-      format,
+      format: 'xlsx',
       total_rows_exported: 0,
       started_at: startedAt,
       completed_at: null,
@@ -78,7 +69,6 @@ export const getTestResultsExport = asyncHandler(async (req, res) => {
 
   const userId = req.user?.id ?? null;
   const role = req.user?.role ?? 'admin';
-  const format = parseFormat(req.query);
 
   const testRow = await assertTestMutationAccess(testId, userId, role, {
     action: 'export_results',
@@ -92,25 +82,7 @@ export const getTestResultsExport = asyncHandler(async (req, res) => {
 
   const exportId = generateExportId();
   const startedAt = nowDbString();
-  await createAuditLog(userId, testId, format, exportId, startedAt);
-
-  if (format === 'csv') {
-    const filename = getExportFilename(testTitle, 'csv');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-    try {
-      const totalRows = await streamCsvToResponse(res, testId);
-      res.end();
-      await completeAuditLog(exportId, totalRows, nowDbString());
-    } catch (error) {
-      await failAuditLog(exportId, error instanceof Error ? error.message : String(error));
-      if (!res.writableEnded) {
-        res.end();
-      }
-    }
-    return;
-  }
+  await createAuditLog(userId, testId, exportId, startedAt);
 
   const filename = getExportFilename(testTitle, 'xlsx');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

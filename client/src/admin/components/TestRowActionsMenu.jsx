@@ -21,9 +21,10 @@ export default function TestRowActionsMenu({
   const publishing = isAnyPublishBusy(busyAction);
   const publishingThisTest = isTestPublishBusy(busyAction, test.id);
   const exportBusy = busyAction === `export-csv-${test.id}`;
+  const resultsBusy = busyAction === `results-${test.id}-xlsx`;
 
   return (
-    <div className="admin-tests-row-actions" aria-busy={publishingThisTest || exportBusy || undefined}>
+    <div className="admin-tests-row-actions" aria-busy={publishingThisTest || exportBusy || resultsBusy || undefined}>
       {published ? (
         <Link
           className="btn btn--primary btn--sm admin-touch-target"
@@ -88,18 +89,10 @@ export default function TestRowActionsMenu({
             <AdminActionMenuItem
               onClick={() => {
                 close();
-                onDownloadResults(test.id, 'xlsx');
+                onDownloadResults(test.id);
               }}
             >
-              Download as XLSX
-            </AdminActionMenuItem>
-            <AdminActionMenuItem
-              onClick={() => {
-                close();
-                onDownloadResults(test.id, 'csv');
-              }}
-            >
-              Download as CSV
+              Download Result
             </AdminActionMenuItem>
             {test.publicLink ? (
               <>

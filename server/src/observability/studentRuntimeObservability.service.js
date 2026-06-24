@@ -53,8 +53,6 @@ export function emitStudentRuntimeAudit(payload) {
 
   if (payload.outcome === 'failure') {
     logger.warn('student runtime operation failed', row);
-  } else {
-    logger.info('student runtime operation succeeded', row);
   }
 }
 

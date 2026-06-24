@@ -56,7 +56,7 @@ function safeWebhookPayloadJson(payload) {
 }
 
 function shouldLogWebhookVerbose() {
-  return env.nodeEnv !== 'production' || String(process.env.SAFEPAY_DEBUG || '').trim().toLowerCase() === 'true';
+  return env.nodeEnv !== 'production' || env.safepay.debug;
 }
 
 /** Always-on transaction / durability trace (rollback investigations). */

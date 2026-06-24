@@ -87,7 +87,7 @@ export async function validateAttemptTimer(attemptId, options = {}) {
       await expireAttemptIfExpired({ attemptId: aid, nowMs, executor });
     }
 
-    logger.info('attempt rejected — expired', {
+    logger.warn('attempt rejected — expired', {
       attemptId: aid,
       nowMs,
       expiresAt: expiresAtRaw,

@@ -1,6 +1,10 @@
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
 
+const PLACEHOLDER_EMAIL = 'admin@example.com';
+const PLACEHOLDER_USERNAME = 'secure.admin';
+const PLACEHOLDER_PASSWORD = 'a_strong_admin_password_at_least_12_chars';
+
 function requiredEnv(name) {
   const value = process.env[name];
   if (!value || !String(value).trim()) {
@@ -9,15 +13,32 @@ function requiredEnv(name) {
   return String(value).trim();
 }
 
+function rejectPlaceholder(value, label, placeholder) {
+  if (String(value).trim().toLowerCase() === String(placeholder).trim().toLowerCase()) {
+    throw new Error(
+      `${label} is still set to the example placeholder value. Generate a unique value instead.`
+    );
+  }
+}
+
 async function createAdmin() {
   try {
     if (process.env.NODE_ENV === 'production' && process.env.ALLOW_ADMIN_BOOTSTRAP !== 'true') {
       throw new Error('Admin bootstrap is blocked in production unless ALLOW_ADMIN_BOOTSTRAP=true');
     }
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_ADMIN_BOOTSTRAP === 'true') {
+      console.warn(
+        '\n⚠️  WARNING: Running admin bootstrap in production mode with ALLOW_ADMIN_BOOTSTRAP=true\n' +
+        '   Ensure this is a deliberate action and remove the flag after completion.\n'
+      );
+    }
 
     const email = requiredEnv('ADMIN_EMAIL').toLowerCase();
     const username = requiredEnv('ADMIN_USERNAME').toLowerCase();
     const password = requiredEnv('ADMIN_PASSWORD');
+    rejectPlaceholder(email, 'ADMIN_EMAIL', PLACEHOLDER_EMAIL);
+    rejectPlaceholder(username, 'ADMIN_USERNAME', PLACEHOLDER_USERNAME);
+    rejectPlaceholder(password, 'ADMIN_PASSWORD', PLACEHOLDER_PASSWORD);
     if (password.length < 12) {
       throw new Error('ADMIN_PASSWORD must be at least 12 characters');
     }

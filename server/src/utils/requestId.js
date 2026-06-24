@@ -27,6 +27,10 @@ export class StructuredLogger {
   }
 
   _log(level, message, data = {}) {
+    if ((level === 'info' || level === 'debug') && process.env.VERBOSE_TELEMETRY !== 'true') {
+      return;
+    }
+
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,

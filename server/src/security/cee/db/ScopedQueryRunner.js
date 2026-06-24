@@ -5,7 +5,6 @@
  */
 
 import { mysqlPool } from '../../../config/mysql.js';
-import { env } from '../../../config/env.js';
 import { CeeInvalidBypassError } from '../../../errors/cee/ScopedQueryErrors.js';
 import { courseScopeWhere, validateScopedQuery } from '../scopedQueryGuard.js';
 import { getCeeProtectedTable } from '../protectedTableRegistry.js';
@@ -203,7 +202,7 @@ export class ScopedQueryRunner {
    * @param {import('../scopedQueryGuard.js').ScopedQueryGuardResult} guardResult
    */
   #logDevDiagnostics(action, sql, guardResult) {
-    if (env.nodeEnv === 'production' && String(process.env.CEE_SCOPE_GUARD_VERBOSE || '') !== 'true') {
+    if (String(process.env.CEE_SCOPE_GUARD_VERBOSE || '') !== 'true') {
       return;
     }
     const snippet = sql.replace(/\s+/g, ' ').trim().slice(0, 200);

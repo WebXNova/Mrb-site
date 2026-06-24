@@ -38,11 +38,9 @@ module.exports = {
       out_file: path.join(logDir, 'mrb-api-out.log'),
       error_file: path.join(logDir, 'mrb-api-error.log'),
       env_file: path.join(serverDir, '.env'),
-      env: {
-        NODE_ENV: 'development',
-      },
       env_production: {
         NODE_ENV: 'production',
+        PORT: '4000',
         /** Bind loopback only — Nginx reverse-proxies /api */
         LISTEN_HOST: '127.0.0.1',
       },

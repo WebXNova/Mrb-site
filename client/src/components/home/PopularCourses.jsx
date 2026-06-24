@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { catalogApi } from '../../api/catalogApi';
 import { buildPricingDisplay, mapCatalogCourseToCardProps } from '../../course/coursePresentation';
 import { useInView } from '../../hooks/useInView';
+import { prefetchEnrollmentStates } from '../../hooks/useEnrollment';
 import PopularCourseCard from './PopularCourseCard';
 import './PopularCourses.css';
 
@@ -34,7 +35,9 @@ export default function PopularCourses() {
         const res = await catalogApi.listCourses();
         const rows = Array.isArray(res?.data) ? res.data : [];
         if (!cancelled) {
-          setCourses(rows.map(mapCatalogCourseToCardProps).filter(Boolean));
+          const mapped = rows.map(mapCatalogCourseToCardProps).filter(Boolean);
+          setCourses(mapped);
+          prefetchEnrollmentStates(mapped.map((c) => c.id));
         }
       } catch (e) {
         if (!cancelled) setError(e?.message || 'Failed to load courses');
@@ -127,7 +130,6 @@ export default function PopularCourses() {
                   badge="FREE"
                   badgeTone="blue"
                   buttonStyle="free"
-                  ctaLabelOverride="Enroll Now"
                   showSubject={false}
                   style={{ '--card-i': index }}
                 />

@@ -13,6 +13,7 @@ import { getApiBaseUrl, getRequestTimeoutMs } from './api/runtimeConfig';
 import AppShellSkeleton from './components/ui/AppShellSkeleton';
 import MobileWhatsAppButton from './components/ui/MobileWhatsAppButton';
 import AppRouter from './routes/AppRouter';
+import GoogleAnalytics from './analytics/GoogleAnalytics';
 import { authBootMark, authBootSpan, authBootSummary } from './observability/authBootProfile';
 import { SeoProvider } from './seo/SeoContext.jsx';
 
@@ -87,6 +88,7 @@ export default function App() {
 
   return (
     <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+      <GoogleAnalytics />
       <SeoProvider>
         <AppRouter authStatus={authStatus} />
       </SeoProvider>

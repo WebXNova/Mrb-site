@@ -29,10 +29,7 @@ export default function EnrollmentPaymentFailedPage() {
           <div className="enrollment-actions">
             <Button as={Link} to="/enrollment/payment" state={retryState} variant="accent" size="md">
               Try again
-              
             </Button>
-            const checkoutUrl = response?.data?.checkout_url;
-console.log('CHECKOUT URL:', checkoutUrl); // ADD THIS
             <Button as={Link} to="/contact" variant="secondary" size="md">
               Contact support
             </Button>

@@ -129,7 +129,7 @@ export async function enforceExpiry(attempt, db) {
     if (status === ATTEMPT_DB_STATUS.ACTIVE && isPastExpiry) {
       await db.query(EXPIRE_ATTEMPT_IF_PAST_DEADLINE_SQL, [attemptId]);
     }
-    logger.info('attempt blocked — expired', { attemptId, event: 'ATTEMPT_EXPIRED_BLOCKED' });
+    logger.warn('attempt blocked — expired', { attemptId, event: 'ATTEMPT_EXPIRED_BLOCKED' });
     throw new AttemptExpiredStateError({ attemptId });
   }
 
