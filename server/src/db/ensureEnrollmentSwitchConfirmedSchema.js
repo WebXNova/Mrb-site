@@ -11,8 +11,7 @@ const MIGRATION_NAME = 'enrollment_switch_confirmed';
  * Column order is cosmetic; application code references by name only.
  */
 export const ADD_SWITCH_CONFIRMED_COLUMN_SQL = `ALTER TABLE enrollments
-  ADD COLUMN switch_confirmed_at TIMESTAMP NULL DEFAULT NULL,
-  ALGORITHM=INSTANT, LOCK=NONE`;
+  ADD COLUMN switch_confirmed_at TIMESTAMP NULL DEFAULT NULL`;
 
 async function tableExists(pool, db, table) {
   const [rows] = await pool.query(

@@ -41,6 +41,10 @@ function isQuizDraftMutationPath(path) {
 }
 
 /** Student portal test runtime writes (student.routes requireCsrf). */
+function isLectureCompletePath(path) {
+  return /^\/student\/lectures\/[^/]+\/complete$/.test(path);
+}
+
 function isStudentTestWritePath(path) {
   return (
     /^\/student\/tests\/[^/]+\/start$/.test(path) ||
@@ -75,6 +79,7 @@ export function shouldAttachCsrf(path, method = 'GET') {
   if (isQuizDraftMutationPath(p)) return true;
   /** Student portal test start + answer autosave */
   if (isStudentTestWritePath(p)) return true;
+  if (isLectureCompletePath(p)) return true;
   /** Student enrollment mutations */
   if (p === '/enrollments' || p === '/enrollments/draft') return true;
   /** Payment checkout session creation */

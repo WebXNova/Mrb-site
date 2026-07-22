@@ -190,7 +190,7 @@ async function startServer() {
   await ensureProcessedWebhooksRetentionIndex(mysqlPool);
   await ensureTestsCourseSchema(mysqlPool);
   await ensureTestsApplicationSchema(mysqlPool);
-  await ensurePerformanceIndexesSchema(mysqlPool);
+//  await ensurePerformanceIndexesSchema(mysqlPool);
   await ensureTestSubjectsSchema(mysqlPool);
   await ensureTeacherSubjectsSchema(mysqlPool);
   await ensureStudentQuestionsSchema(mysqlPool);

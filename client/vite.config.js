@@ -224,11 +224,13 @@ const apiProxyTarget = resolveApiDevProxyTarget();
 
 export default defineConfig(({ mode }) => ({
   customLogger: mode === 'development' ? createDevLogger() : undefined,
+
   plugins: [
     react(),
     adminShellInjectionPlugin(),
     ...(mode === 'development' ? [backendOfflineOverlayPlugin()] : []),
   ],
+
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
@@ -237,20 +239,12 @@ export default defineConfig(({ mode }) => ({
     target: 'es2020',
     cssCodeSplit: true,
     chunkSizeWarningLimit: 900,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          if (id.includes('@mui/') || id.includes('@emotion/')) return 'mui';
-          if (id.includes('ckeditor') || id.includes('@ckeditor')) return 'ckeditor';
-          if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'charts';
-          if (id.includes('react-router')) return 'router';
-          if (id.includes('react-dom') || id.includes('react/')) return 'react-vendor';
-          return 'vendor';
-        },
-      },
-    },
+
+    	
+
+      
   },
+
   resolve: {
     alias: {
       '@course-wizard-schema': path.resolve(process.cwd(), '../server/src/validators/courseWizard.schema.js'),
@@ -262,6 +256,7 @@ export default defineConfig(({ mode }) => ({
       '@assets': path.resolve(process.cwd(), './src/assets'),
     },
   },
+
   server: {
     port: 5173,
     open: true,
@@ -272,6 +267,7 @@ export default defineConfig(({ mode }) => ({
       '/api': createApiProxyOptions(apiProxyTarget),
     },
   },
+
   preview: {
     port: 4173,
     host: true,

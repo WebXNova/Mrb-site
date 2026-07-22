@@ -69,6 +69,19 @@ export default function AdminCoursesPage() {
         'Hide this course from the catalog? It will be archived — lectures stay attached until you purge the course.',
     });
   }
+  async function onActivate(courseId) {
+    setError('');
+    try {
+      await adminApi.publishCourse(token, courseId);
+      await loadCourses();
+      toast.success('Course activated.');
+      setSuccess('Course activated.');
+    } catch (err) {
+      const msg = err.message || 'Activate failed';
+      setError(msg);
+      toast.error(msg);
+    }
+  }
 
   function onPurge(course) {
     setConfirmDialog({
@@ -203,6 +216,7 @@ export default function AdminCoursesPage() {
           loading={coursesLoading}
           onEdit={onEdit}
           onArchive={onArchive}
+          onActivate={onActivate}
           onPurge={onPurge}
           onBulkArchive={onBulkArchive}
         />

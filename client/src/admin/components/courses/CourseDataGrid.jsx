@@ -47,6 +47,7 @@ export default function CourseDataGrid({
   loading = false,
   onEdit,
   onArchive,
+  onActivate,
   onPurge,
   onBulkArchive,
 }) {
@@ -296,6 +297,7 @@ export default function CourseDataGrid({
                         <AdminActionMenuItem as={Link} to={adminRoute(`courses/${course.id}/batches`)}>
                           Batches
                         </AdminActionMenuItem>
+                        <AdminActionMenuItem onClick={() => onActivate(course.id)}>Activate</AdminActionMenuItem>
                         <AdminActionMenuItem onClick={() => onArchive(course.id)}>Archive</AdminActionMenuItem>
                         <AdminActionMenuItem className="admin-action-menu__item--danger" onClick={() => onPurge(course)}>
                           Purge

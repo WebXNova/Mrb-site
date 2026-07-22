@@ -29,3 +29,10 @@ node_modules/
 .env
 .env.lnk
 nginx-deploy.env
+server/uploads/
+server/backup_*.sql
+server/*.sql
+*.save
+client/vendor-*.js
+node_modules/
+.env
