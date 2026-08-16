@@ -291,7 +291,7 @@ export default function RemarksSession() {
     <div className="remarks-session">
       <header className="remarks-session__header">
         <div className="remarks-session__header-copy">
-          <h2 className="remarks-session__title">Admin / Remarks</h2>
+          <h2 className="remarks-session__title">Remarks</h2>
           <p className="remarks-session__subtitle">
             Remarks and message are shown publicly on the homepage when posted.
           </p>

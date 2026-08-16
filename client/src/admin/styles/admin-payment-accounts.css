@@ -1,0 +1,594 @@
+.admin-page--payment-accounts {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-payment-accounts__hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-payment-accounts__title {
+  margin: 0 0 2px;
+  letter-spacing: -0.02em;
+}
+
+.admin-payment-accounts__subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted, #64748b);
+}
+
+.admin-payment-accounts__add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.admin-payment-accounts__role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--color-muted, #64748b);
+}
+
+.admin-payment-accounts__readonly-banner {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.18);
+}
+
+/* —— Method logos —— */
+.admin-payment-accounts__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.admin-payment-accounts__logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.admin-payment-accounts__logo--sm {
+  width: 56px;
+  height: 28px;
+  padding: 4px 6px;
+}
+
+.admin-payment-accounts__logo--md {
+  width: 72px;
+  height: 36px;
+  padding: 5px 8px;
+}
+
+.admin-payment-accounts__logo--lg {
+  width: 96px;
+  height: 44px;
+  padding: 6px 10px;
+}
+
+/* —— Summary cards —— */
+.admin-payment-accounts__summary {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.admin-payment-accounts__summary-card {
+  position: relative;
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(165deg, #fff 0%, #f8fafc 100%);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.admin-payment-accounts__summary-card.is-live {
+  border-color: rgba(22, 163, 74, 0.22);
+  box-shadow: 0 6px 24px rgba(22, 163, 74, 0.08);
+}
+
+.admin-payment-accounts__summary-card--jazzcash.is-live {
+  background: linear-gradient(165deg, #fff 0%, rgba(232, 93, 4, 0.04) 100%);
+}
+
+.admin-payment-accounts__summary-card--easypaisa.is-live {
+  background: linear-gradient(165deg, #fff 0%, rgba(22, 163, 74, 0.05) 100%);
+}
+
+.admin-payment-accounts__summary-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-payment-accounts__summary-body {
+  min-height: 52px;
+}
+
+.admin-payment-accounts__summary-number {
+  margin: 0 0 2px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+
+.admin-payment-accounts__summary-title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted, #64748b);
+}
+
+.admin-payment-accounts__summary-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted, #94a3b8);
+}
+
+/* —— Pills —— */
+.admin-payment-accounts__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-payment-accounts__pill--live {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.admin-payment-accounts__pill--idle {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+}
+
+/* —— Table —— */
+.admin-payment-accounts__main {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.05);
+}
+
+.admin-payment-accounts__table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 0;
+}
+
+.admin-payment-accounts__table-toolbar h3 {
+  margin: 0;
+}
+
+.admin-payment-accounts__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--color-muted, #64748b);
+}
+
+.admin-payment-accounts__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 20px;
+  font-size: 13px;
+  color: var(--color-muted, #64748b);
+}
+
+.admin-payment-accounts__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+@media (min-width: 1100px) {
+  .admin-payment-accounts__layout:has(.admin-payment-accounts__audit-panel) {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  }
+}
+
+.admin-payment-accounts__table-wrap {
+  overflow-x: auto;
+  padding: 14px 20px 20px;
+}
+
+.admin-payment-accounts__table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-muted, #94a3b8);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.admin-payment-accounts__table tbody tr {
+  transition: background 0.15s;
+}
+
+.admin-payment-accounts__table tbody tr.is-selected {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.admin-payment-accounts__number {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.04);
+  border: none;
+}
+
+.admin-payment-accounts__title-cell {
+  font-weight: 500;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-payment-accounts__updated {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+}
+
+.admin-payment-accounts__updated small {
+  font-size: 11px;
+  color: var(--color-muted, #94a3b8);
+}
+
+.admin-payment-accounts__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.admin-payment-accounts__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text, #0f172a);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.admin-payment-accounts__icon-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.14);
+}
+
+.admin-payment-accounts__icon-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.admin-payment-accounts__icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.admin-payment-accounts__icon-btn--primary {
+  color: var(--color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.admin-payment-accounts__icon-btn--danger {
+  color: var(--color-danger, #dc2626);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+/* —— Audit panel —— */
+.admin-payment-accounts__audit-panel {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 16px 18px;
+  background: #f8fafc;
+  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (min-width: 1100px) {
+  .admin-payment-accounts__audit-panel {
+    border-top: none;
+    border-left: 1px solid rgba(15, 23, 42, 0.06);
+    max-height: none;
+  }
+}
+
+.admin-payment-accounts__audit-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.admin-payment-accounts__audit-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-payment-accounts__audit-panel-title h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.admin-payment-accounts__audit-sub {
+  margin: 0;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--color-muted, #64748b);
+}
+
+.admin-payment-accounts__audit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.admin-payment-accounts__audit-item {
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.admin-payment-accounts__audit-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-payment-accounts__audit-item-head time {
+  font-size: 11px;
+  color: var(--color-muted, #94a3b8);
+  white-space: nowrap;
+}
+
+.admin-payment-accounts__audit-meta {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--color-muted, #94a3b8);
+}
+
+.admin-payment-accounts__audit-action {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-payment-accounts__audit-action--created {
+  color: var(--color-primary, #2563eb);
+}
+
+.admin-payment-accounts__audit-action--updated {
+  color: #7c3aed;
+}
+
+.admin-payment-accounts__audit-action--activated {
+  color: #15803d;
+}
+
+.admin-payment-accounts__audit-action--deactivated {
+  color: #64748b;
+}
+
+/* —— Empty —— */
+.admin-payment-accounts__empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 56px 24px;
+  text-align: center;
+}
+
+.admin-payment-accounts__empty-logos {
+  display: flex;
+  gap: 16px;
+  opacity: 0.85;
+}
+
+.admin-payment-accounts__empty p {
+  margin: 0;
+  color: var(--color-muted, #64748b);
+}
+
+/* —— Modal —— */
+.admin-payment-accounts__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1200;
+}
+
+.admin-payment-accounts__modal {
+  width: min(100%, 400px);
+  background: #fff;
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+}
+
+.admin-payment-accounts__modal--form {
+  width: min(100%, 420px);
+}
+
+.admin-payment-accounts__modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.admin-payment-accounts__modal-head h3 {
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.admin-payment-accounts__form {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-payment-accounts__field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-text, #0f172a);
+}
+
+.admin-payment-accounts__method-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* —— Method picker (modal) —— */
+.admin-payment-accounts__method-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.admin-payment-accounts__method-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border-radius: 12px;
+  border: 2px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.admin-payment-accounts__method-option span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted, #64748b);
+}
+
+.admin-payment-accounts__method-option:hover:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: #f8fafc;
+}
+
+.admin-payment-accounts__method-option.is-selected {
+  border-color: var(--color-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.04);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.admin-payment-accounts__method-option.is-selected span {
+  color: var(--color-primary, #2563eb);
+}
+
+.admin-payment-accounts__method-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-payment-accounts__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.admin-payment-accounts__confirm-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.admin-payment-accounts__confirm-msg {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--color-muted, #64748b);
+  text-align: center;
+}
+
+.admin-payment-accounts__modal .heading-4 {
+  text-align: center;
+  margin: 0 0 6px;
+}
+
+.admin-payment-accounts__modal-actions {
+  margin-top: 16px;
+}
+
+.admin-payment-accounts__form .admin-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-payment-accounts__form input {
+  border-radius: 10px;
+}

@@ -24,5 +24,9 @@ export default function TestStatusBadge({ status }) {
   const variant = getTestStatusVariant(status);
   const label = formatTestStatusLabel(status);
 
-  return <span className={`admin-test-status admin-test-status--${variant}`}>{label}</span>;
+  return (
+    <span className={`admin-test-status admin-test-status--${variant}`} title={label}>
+      {label}
+    </span>
+  );
 }

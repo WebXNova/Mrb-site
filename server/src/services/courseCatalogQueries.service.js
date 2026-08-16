@@ -84,15 +84,63 @@ export async function listActiveCourseRowsWithoutPricing() {
   return rows;
 }
 
-export async function listActiveCourseRows() {
+function isMissingCategorySchemaError(error) {
+  const code = String(error?.code || '');
+  const msg = String(error?.message || '').toLowerCase();
+  return (
+    code === 'ER_NO_SUCH_TABLE' ||
+    code === 'ER_BAD_FIELD_ERROR' ||
+    msg.includes('course_category')
+  );
+}
+
+/**
+ * @param {{ categoryId?: number|null }} [opts]
+ */
+function buildActiveCatalogQuery({ categoryId = null } = {}) {
+  const params = [];
+  let categoryJoin = '';
+  if (categoryId != null) {
+    const cid = Number(categoryId);
+    if (Number.isInteger(cid) && cid > 0) {
+      categoryJoin = `
+        INNER JOIN course_category_map ccm ON ccm.course_id = c.id
+        INNER JOIN course_categories cc ON cc.id = ccm.category_id AND cc.is_active = TRUE AND cc.id = ?
+      `;
+      params.push(cid);
+    }
+  }
+  return { categoryJoin, params };
+}
+
+/**
+ * @param {{ categoryId?: number|null }} [opts]
+ */
+export async function listActiveCourseRows(opts = {}) {
+  const { categoryJoin, params } = buildActiveCatalogQuery(opts);
   try {
     const [rows] = await mysqlPool.query(
-      `${buildCatalogSelect({ activeOnly: true })} ORDER BY c.created_at DESC`
+      `${buildCatalogSelect({ activeOnly: true }).replace(
+        'FROM courses c',
+        `FROM courses c${categoryJoin}`
+      )} ORDER BY c.created_at DESC`,
+      params
     );
     return rows;
   } catch (error) {
+    if (isMissingCategorySchemaError(error)) {
+      if (opts.categoryId != null) return [];
+      if (!isMissingPricingSchemaError(error)) throw error;
+    }
     if (!isMissingPricingSchemaError(error)) throw error;
-    return listActiveCourseRowsWithoutPricing();
+    const [rows] = await mysqlPool.query(
+      `${buildCatalogSelectCoreOnly({ activeOnly: true }).replace(
+        'FROM courses c',
+        `FROM courses c${categoryJoin}`
+      )} ORDER BY c.created_at DESC`,
+      params
+    );
+    return rows;
   }
 }
 

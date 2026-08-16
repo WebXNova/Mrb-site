@@ -168,7 +168,7 @@ test('parseCreateEnrollmentDto valid payload', () => {
     province_id: 1,
     district_id: 2,
     city_id: 3,
-    hsscStatus: 'Inter Class',
+    hsscStatus: '9th',
     mdcatAttemptType: 'Fresher',
   });
   assert.equal(dto.course_id, 5);

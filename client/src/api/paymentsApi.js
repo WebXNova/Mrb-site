@@ -13,4 +13,24 @@ export const paymentsApi = {
         course_id: courseId,
       },
     }),
+
+  getManualCheckoutInfo: (orderId) =>
+    studentRequest(`/payments/manual/checkout-info?order_id=${encodeURIComponent(orderId)}`),
+
+  getManualStatus: (orderId) => studentRequest(`/payments/manual/${encodeURIComponent(orderId)}/status`),
+
+  validateManualPaymentCoupon: (orderId, code) =>
+    studentRequest('/payments/manual/validate-coupon', {
+      method: 'POST',
+      body: {
+        order_id: orderId,
+        code,
+      },
+    }),
+
+  submitManualPayment: (orderId, formData) =>
+    studentRequest(`/payments/manual/${encodeURIComponent(orderId)}/submit`, {
+      method: 'POST',
+      body: formData,
+    }),
 };

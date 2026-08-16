@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { adminRoute } from '../../config/adminPaths';
 import { http } from '../../api/http';
 
 const initialSettings = {
@@ -116,6 +118,17 @@ export default function AdminSettingsPage() {
         <p className="body-md admin-muted">
           Webhooks, SMTP, and audit retention controls are the next backend settings module.
         </p>
+        <div className="admin-actions" style={{ marginTop: '12px' }}>
+          <Link className="btn btn--secondary btn--sm" to={adminRoute('settings/course-categories')}>
+            Course Categories
+          </Link>
+          <Link className="btn btn--secondary btn--sm" to={adminRoute('settings/coupons')}>
+            Coupons
+          </Link>
+          <Link className="btn btn--secondary btn--sm" to={adminRoute('settings/payment-accounts')}>
+            Payment Accounts
+          </Link>
+        </div>
       </section>
     </section>
   );

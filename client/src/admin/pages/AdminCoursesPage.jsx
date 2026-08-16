@@ -1,5 +1,5 @@
 import { adminRoute } from '../../config/adminPaths';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import { adminApi } from '../../api/adminApi';
@@ -9,8 +9,8 @@ import AdminConfirmDialog from '../components/AdminConfirmDialog';
 import CourseDataGrid from '../components/courses/CourseDataGrid';
 import AdminCourseEditView from '../components/courses/AdminCourseEditView';
 import CourseCreateWizard from '../course-wizard/CourseCreateWizard.jsx';
+import '../styles/admin-courses-page-redesign.css';
 import './AdminCoursesPage.css';
-import '../styles/admin-courses-dashboard.css';
 
 const VALID_TABS = new Set(['general', 'pricing', 'subjects', 'batch', 'health']);
 
@@ -25,6 +25,7 @@ export default function AdminCoursesPage() {
   const activeTab = VALID_TABS.has(searchParams.get('tab')) ? searchParams.get('tab') : 'general';
 
   const [courses, setCourses] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [error, setError] = useState('');
@@ -34,8 +35,12 @@ export default function AdminCoursesPage() {
   async function loadCourses() {
     setCoursesLoading(true);
     try {
-      const response = await adminApi.courses(token);
-      setCourses(response?.data || []);
+      const [coursesRes, categoriesRes] = await Promise.all([
+        adminApi.courses(token),
+        adminApi.courseCategories(token).catch(() => ({ data: { categories: [] } })),
+      ]);
+      setCourses(coursesRes?.data || []);
+      setCategoryOptions(categoriesRes?.data?.categories ?? []);
     } finally {
       setCoursesLoading(false);
     }
@@ -141,24 +146,27 @@ export default function AdminCoursesPage() {
     setSuccess('');
   }
 
+  const activeCount = useMemo(() => courses.filter((c) => c.is_active).length, [courses]);
+  const inactiveCount = courses.length - activeCount;
+
   return (
-    <section className="admin-page admin-page--courses">
+    <section className="admin-page admin-page--courses courses-page">
       {!editingId ? (
-        <header className="admin-courses-page-header">
-          <div>
-            <h1 className="admin-courses-page-header__title">Course management</h1>
-            <p className="admin-courses-page-header__subtitle">
-              Create, publish, and manage your learning catalog with a guided workflow and real-time preview.
+        <header className="courses-page__header">
+          <div className="courses-page__header-main">
+            <h1 className="courses-page__title">Courses</h1>
+            <p className="courses-page__description">
+              Create and manage your learning catalog. Use the library below to find, edit, or publish courses.
             </p>
           </div>
-          <div className="admin-courses-page-header__actions">
+          <div className="courses-page__header-actions">
             {!showCreateWizard ? (
-              <button type="button" className="btn--course-primary" onClick={openCreateWizard}>
-                <AddIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
+              <button type="button" className="courses-page__btn courses-page__btn--primary" onClick={openCreateWizard}>
+                <AddIcon fontSize="inherit" aria-hidden />
                 New course
               </button>
             ) : (
-              <button type="button" className="btn--course-secondary" onClick={resetForm}>
+              <button type="button" className="courses-page__btn courses-page__btn--secondary" onClick={resetForm}>
                 Back to list
               </button>
             )}
@@ -170,7 +178,7 @@ export default function AdminCoursesPage() {
       {success && !editingId ? <p className="admin-success">{success}</p> : null}
 
       {showCreateWizard && !editingId ? (
-        <div id="course-create-wizard">
+        <div id="course-create-wizard" className="courses-page__wizard">
           <CourseCreateWizard
             token={token}
             onCreated={(created) => {
@@ -198,14 +206,49 @@ export default function AdminCoursesPage() {
       ) : null}
 
       {!showCreateWizard && !editingId ? (
-        <CourseDataGrid
-          courses={courses}
-          loading={coursesLoading}
-          onEdit={onEdit}
-          onArchive={onArchive}
-          onPurge={onPurge}
-          onBulkArchive={onBulkArchive}
-        />
+        <>
+          <section className="courses-metrics-strip" aria-busy={coursesLoading} aria-label="Course overview">
+            {coursesLoading ? (
+              <>
+                <div className="admin-skeleton admin-skeleton-card" />
+                <div className="admin-skeleton admin-skeleton-card" />
+                <div className="admin-skeleton admin-skeleton-card" />
+              </>
+            ) : (
+              <>
+                <article className="courses-metric">
+                  <p className="courses-metric__label">Total courses</p>
+                  <p className="courses-metric__value">{courses.length}</p>
+                </article>
+                <article className="courses-metric">
+                  <p className="courses-metric__label">Active</p>
+                  <p className="courses-metric__value">{activeCount}</p>
+                </article>
+                <article className="courses-metric">
+                  <p className="courses-metric__label">Inactive</p>
+                  <p className="courses-metric__value">{inactiveCount}</p>
+                </article>
+              </>
+            )}
+          </section>
+
+          <section className="courses-page__management">
+            <header className="courses-page__section-head">
+              <h2 className="courses-page__section-title">All courses</h2>
+              <p className="courses-page__section-lead">Search, filter, and manage your course library.</p>
+            </header>
+
+            <CourseDataGrid
+              courses={courses}
+              categoryOptions={categoryOptions}
+              loading={coursesLoading}
+              onEdit={onEdit}
+              onArchive={onArchive}
+              onPurge={onPurge}
+              onBulkArchive={onBulkArchive}
+            />
+          </section>
+        </>
       ) : null}
 
       <AdminConfirmDialog

@@ -2,6 +2,7 @@ export const studentNavItems = [
   { to: '/dashboard', label: 'Dashboard', end: true, icon: 'dashboard' },
   { to: '/dashboard/lectures', label: 'Lectures', icon: 'video' },
   { to: '/dashboard/tests', label: 'Tests', icon: 'clipboard-check' },
+  { to: '/dashboard/notes', label: 'Notes', icon: 'file-text' },
   { to: '/dashboard/tests/history', label: 'Results', icon: 'bar-chart' },
   { to: '/student/questions', label: 'Doubts', icon: 'help-circle' },
 ];
@@ -24,6 +25,7 @@ export function getStudentPageTitle(pathname) {
   if (pathname.startsWith('/dashboard/tests/history')) return 'Results';
   if (pathname.match(/\/dashboard\/tests\/[^/]+\/results\//)) return 'Result detail';
   if (pathname.startsWith('/dashboard/tests')) return 'Tests';
+  if (pathname.startsWith('/dashboard/notes')) return 'Notes';
   if (pathname.startsWith('/student/questions/') && pathname !== '/student/questions') return 'Question';
   if (pathname.startsWith('/student/questions')) return 'Doubts';
   if (pathname.startsWith('/dashboard/questions/')) return 'Question';

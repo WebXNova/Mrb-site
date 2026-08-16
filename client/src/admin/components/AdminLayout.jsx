@@ -1,8 +1,6 @@
 import { adminRoute } from '../../config/adminPaths';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
-import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { adminApi } from '../../api/adminApi';
@@ -17,6 +15,9 @@ import '../styles/admin.css';
 import '../styles/admin-tests.css';
 import '../styles/admin-responsive.css';
 import '../styles/admin-shell-v2.css';
+import '../styles/admin-density.css';
+import '../styles/admin-layout-cleanup.css';
+import '../styles/admin-course-edit-layout.css';
 import AdminToastContainer from './AdminToastContainer';
 import AdminBreadcrumbs from './AdminBreadcrumbs';
 
@@ -28,7 +29,6 @@ function AdminShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorageState('mrb_admin_sidebar_collapsed', false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const profileRef = useRef(null);
 
   const breadcrumbs = buildAdminBreadcrumbs(location.pathname);
@@ -77,7 +77,11 @@ function AdminShell() {
     navigate(adminRoute('login'));
   }
 
-  const initials = (adminUser?.fullName || adminUser?.email || 'A')
+  const displayName = adminUser?.fullName || adminUser?.username || 'Admin';
+  const email = adminUser?.email || '—';
+  const username = adminUser?.username || adminUser?.fullName || 'Admin';
+
+  const initials = (displayName || email || 'A')
     .split(/[\s@]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -166,27 +170,7 @@ function AdminShell() {
             </div>
           </div>
 
-          <div className="admin-topbar__search">
-            <div className="admin-topbar-search">
-              <span className="admin-topbar-search__icon" aria-hidden>
-                <SearchOutlinedIcon fontSize="small" />
-              </span>
-              <input
-                type="search"
-                className="admin-topbar-search__input"
-                placeholder="Search admin…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Search admin"
-              />
-            </div>
-          </div>
-
           <div className="admin-topbar__actions">
-            <button type="button" className="admin-topbar-icon-btn" aria-label="Notifications">
-              <NotificationsNoneOutlinedIcon fontSize="small" />
-            </button>
-
             <div className="admin-profile-menu" ref={profileRef}>
               <button
                 type="button"
@@ -194,28 +178,43 @@ function AdminShell() {
                 onClick={() => setProfileOpen((o) => !o)}
                 aria-expanded={profileOpen}
                 aria-haspopup="menu"
+                aria-label={`Account menu for ${displayName}`}
               >
                 <span className="admin-profile-menu__avatar" aria-hidden>
                   {initials}
                 </span>
-                <span className="admin-profile-menu__meta">
-                  <span className="admin-profile-menu__name">{adminUser?.fullName || adminUser?.email || 'Admin'}</span>
-                  <span className="admin-profile-menu__role">{adminUser?.role || 'administrator'}</span>
-                </span>
               </button>
               {profileOpen ? (
-                <div className="admin-profile-menu__panel" role="menu">
-                  <button type="button" className="admin-profile-menu__item" role="menuitem" onClick={() => navigate(adminRoute('settings'))}>
-                    Settings
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-profile-menu__item admin-profile-menu__item--danger"
-                    role="menuitem"
-                    onClick={handleLogout}
-                  >
-                    Log out
-                  </button>
+                <div className="admin-profile-menu__panel" role="menu" aria-label="Admin account menu">
+                  <header className="admin-profile-menu__header">
+                    <span className="admin-profile-menu__avatar admin-profile-menu__avatar--lg" aria-hidden>
+                      {initials}
+                    </span>
+                    <p className="admin-profile-menu__name">{username}</p>
+                    <p className="admin-profile-menu__email">{email}</p>
+                  </header>
+                  <div className="admin-profile-menu__divider" aria-hidden />
+                  <div className="admin-profile-menu__items">
+                    <button
+                      type="button"
+                      className="admin-profile-menu__item"
+                      role="menuitem"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        navigate(adminRoute('settings'));
+                      }}
+                    >
+                      Settings
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-profile-menu__item admin-profile-menu__item--danger"
+                      role="menuitem"
+                      onClick={handleLogout}
+                    >
+                      Log out
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>

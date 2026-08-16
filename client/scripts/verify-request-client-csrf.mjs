@@ -90,6 +90,18 @@ function testSlugTestWriteMutations() {
 function testPaymentCheckoutMutation() {
   assert(shouldAttachCsrf('/payments/create-session', 'POST'), 'POST /payments/create-session attaches CSRF');
   assert(!shouldAttachCsrf('/payments/create-session', 'GET'), 'GET /payments/create-session does not attach CSRF');
+  assert(
+    shouldAttachCsrf('/payments/manual/42/submit', 'POST'),
+    'POST /payments/manual/:orderId/submit attaches CSRF'
+  );
+  assert(
+    !shouldAttachCsrf('/payments/manual/42/submit', 'GET'),
+    'GET /payments/manual/:orderId/submit does not attach CSRF'
+  );
+  assert(
+    !shouldAttachCsrf('/payments/manual/42/status', 'GET'),
+    'GET /payments/manual/:orderId/status does not attach CSRF'
+  );
 }
 
 function testTeacherThreadMessageMutation() {

@@ -2,6 +2,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import {
+  listAllCities,
   listCitiesByDistrictId,
   listDistrictsByProvinceId,
   listIntermediateBoards,
@@ -32,6 +33,12 @@ export const getDistricts = asyncHandler(async (req, res) => {
 });
 
 export const getCities = asyncHandler(async (req, res) => {
+  const rawDistrictId = req.query.district_id;
+  if (rawDistrictId === undefined || rawDistrictId === null || String(rawDistrictId).trim() === '') {
+    const data = await listAllCities();
+    sendSuccess(res, data);
+    return;
+  }
   const districtId = readRequiredQueryId(req, 'district_id');
   const data = await listCitiesByDistrictId(districtId);
   sendSuccess(res, data);

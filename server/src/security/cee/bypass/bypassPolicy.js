@@ -92,7 +92,13 @@ export function isBypassDeniedForHttpRoute(route) {
   if (!rule) return false;
 
   if (rule.policy === 'entitlement') return true;
-  if (rule.label === 'courses_public_catalog' || rule.label === 'course_public_detail') return true;
+  if (
+    rule.label === 'courses_public_catalog' ||
+    rule.label === 'courses_public_categories' ||
+    rule.label === 'course_public_detail'
+  ) {
+    return true;
+  }
   if (rule.label === 'course_batches_public') return true;
   return false;
 }

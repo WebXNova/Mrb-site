@@ -1,18 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import Button from '../components/ui/Button';
+import { buildEnrollmentPaymentPath } from '../utils/enrollmentPaymentRoute.js';
 import './EnrollmentPage.css';
 
 export default function EnrollmentPaymentFailedPage() {
   const location = useLocation();
-  const enrollmentId = location.state?.enrollmentId ?? null;
-  const courseId = location.state?.courseId ?? null;
 
-  const retryState = {
-    enrollmentId,
+  const retryTo = buildEnrollmentPaymentPath({
     orderId: location.state?.orderId ?? null,
-    courseId,
-  };
+    courseId: location.state?.courseId ?? null,
+  });
 
   return (
     <PageLayout>
@@ -27,7 +25,7 @@ export default function EnrollmentPaymentFailedPage() {
           </header>
 
           <div className="enrollment-actions">
-            <Button as={Link} to="/enrollment/payment" state={retryState} variant="accent" size="md">
+            <Button as={Link} to={retryTo} state={location.state} variant="accent" size="md">
               Try again
             </Button>
             <Button as={Link} to="/contact" variant="secondary" size="md">

@@ -13,6 +13,7 @@ import {
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { safepayPaymentWebhookRateLimit } from '../middleware/rateLimit.js';
 import { requireCsrf } from '../middleware/csrf.js';
+import manualPaymentsRouter from './manualPayments.routes.js';
 
 /**
  * Safepay payment webhook ingress — MUST be mounted in `app.js` **before** `express.json()` on the same
@@ -45,5 +46,7 @@ paymentsApiRouter.post(
   paymentCheckoutRateLimit,
   postCreatePaymentSession
 );
+
+paymentsApiRouter.use('/manual', manualPaymentsRouter);
 
 export default paymentsApiRouter;

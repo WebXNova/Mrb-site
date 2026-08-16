@@ -11,6 +11,7 @@ import AdminTestPageHeader from './AdminTestPageHeader';
 import PublishedTestReadOnlyBanner from './PublishedTestReadOnlyBanner';
 import TestWizardNav from './TestWizardNav';
 import { TestWizardProgress } from './TestWizardProgress';
+import '../styles/admin-test-setup-redesign.css';
 
 /**
  * Shared chrome for the unified Setup step (step 1 of 3).
@@ -50,7 +51,7 @@ export default function TestSetupLayout({ testId, children }) {
   }, [token, testId]);
 
   return (
-    <section className="admin-page admin-page--tests">
+    <section className="admin-page admin-page--tests admin-page--test-setup">
       <section className="admin-card">
         <AdminTestPageHeader
           title={testPageHeading(testTitle, testId)}

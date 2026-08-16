@@ -251,7 +251,9 @@
 
 .admin-row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  align-items: center;
 }
 
 .admin-actions {
@@ -453,6 +455,35 @@
   background: color-mix(in srgb, var(--color-primary) 16%, white);
   color: var(--color-ink-900);
   font-weight: var(--fw-semibold);
+}
+
+/* Manual payment coupon indicator — shared (admissions queue + registrations) */
+.mp-coupon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, white);
+  background: color-mix(in srgb, var(--color-primary) 8%, white);
+  color: var(--color-ink-700, #334155);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.mp-coupon-detail {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, white);
+  background: color-mix(in srgb, var(--color-primary) 6%, white);
+  color: var(--color-ink-700, #334155);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .admin-inline-image {
@@ -1041,6 +1072,20 @@
   color: #991b1b;
 }
 
+.admin-access-badge-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-stale-indicator {
+  display: inline-flex;
+  align-items: center;
+  color: #b45309;
+  cursor: help;
+  line-height: 0;
+}
+
 .admin-account-badge--active {
   background: #f0fdf4;
   border-color: #bbf7d0;
@@ -1228,6 +1273,94 @@
   background: #fff;
   color: var(--color-ink-700);
   cursor: pointer;
+}
+
+/* Confirm dialog — global overlay (required on pages with fixed drawers/modals) */
+.admin-confirm-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 900);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4, 1rem);
+  background: color-mix(in srgb, var(--admin-primary, #0f172a) 40%, transparent);
+}
+
+.admin-confirm-dialog__panel {
+  width: 100%;
+  max-width: 420px;
+  background: var(--admin-surface, #fff);
+  border-radius: var(--admin-radius-card, 12px);
+  box-shadow: var(--shadow-xl, 0 20px 40px rgba(15, 23, 42, 0.12));
+  padding: var(--space-6, 1.5rem);
+}
+
+.admin-confirm-dialog__title {
+  font-size: var(--fs-18, 1.125rem);
+  font-weight: var(--fw-bold, 700);
+  margin: 0 0 var(--space-2, 0.5rem);
+}
+
+.admin-confirm-dialog__body {
+  font-size: var(--fs-14, 0.875rem);
+  color: var(--admin-text-secondary, #64748b);
+  line-height: var(--lh-relaxed, 1.6);
+  margin: 0 0 var(--space-5, 1.25rem);
+}
+
+.admin-confirm-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 0.75rem);
+  justify-content: flex-end;
+}
+
+.admin-confirm-dialog__error {
+  margin: 0.5rem 0 0;
+  font-size: var(--fs-13, 0.8125rem);
+  color: var(--color-danger, #b91c1c);
+}
+
+.btn--course-primary,
+.btn--course-secondary,
+.btn--course-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md, 8px);
+  font: inherit;
+  font-size: var(--fs-14, 0.875rem);
+  font-weight: var(--fw-semibold, 600);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn--course-primary {
+  background: var(--admin-primary, #4338ca);
+  color: #fff;
+}
+
+.btn--course-secondary {
+  background: #fff;
+  color: var(--color-ink-700, #334155);
+  border-color: var(--color-ink-200, #e2e8f0);
+}
+
+.btn--course-danger {
+  background: #fff;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.btn--course-primary:disabled,
+.btn--course-secondary:disabled,
+.btn--course-danger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .admin-confirm-dialog__note-label {

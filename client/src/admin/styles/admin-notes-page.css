@@ -1,0 +1,222 @@
+/* —— Admin Notes standalone page —— */
+
+.admin-page--notes {
+  display: grid;
+  gap: var(--space-6, 24px);
+}
+
+.admin-notes-page__hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4, 16px);
+}
+
+.admin-notes-page__title {
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+  color: var(--color-ink-900, #0b1220);
+}
+
+.admin-notes-page__subtitle {
+  margin: 0;
+  font-size: var(--fs-14, 14px);
+  line-height: 1.5;
+  color: var(--color-ink-500, #4b5563);
+  max-width: 42rem;
+}
+
+.admin-notes-page__stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.admin-notes-page__stat-course {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-18, 18px);
+}
+
+@media (max-width: 767px) {
+  .admin-notes-page__stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Step 1 — course picker (no course selected) */
+.admin-notes-page__picker {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-5, 20px);
+  padding: var(--space-6, 24px);
+  border: 1px solid var(--color-ink-100, #e5e7eb);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff 0%, var(--color-bg-soft, #f8fafc) 100%);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+.admin-notes-page__picker-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--color-primary, #4338ca);
+  color: #fff;
+  font-size: var(--fs-14, 14px);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.admin-notes-page__picker-body {
+  display: grid;
+  gap: var(--space-5, 20px);
+  min-width: 0;
+}
+
+.admin-notes-page__picker-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4, 16px);
+}
+
+.admin-notes-page__picker-icon {
+  font-size: 2rem !important;
+  color: var(--color-primary, #4338ca);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.admin-notes-page__picker-title {
+  margin: 0 0 6px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-ink-900, #0b1220);
+}
+
+.admin-notes-page__picker-lead {
+  margin: 0;
+  font-size: var(--fs-14, 14px);
+  line-height: 1.55;
+  color: var(--color-ink-500, #4b5563);
+  max-width: 40rem;
+}
+
+.admin-notes-page__picker-field {
+  display: grid;
+  gap: 8px;
+  max-width: 36rem;
+}
+
+.admin-notes-page__picker-label {
+  font-size: var(--fs-14, 14px);
+  font-weight: 600;
+  color: var(--color-ink-700, #374151);
+}
+
+.admin-notes-page__course-select {
+  width: 100%;
+  min-height: 44px;
+}
+
+/* Step 2+ workspace once course is selected */
+.admin-notes-page__workspace {
+  display: grid;
+  gap: var(--space-6, 24px);
+  animation: admin-notes-fade-in 0.24s ease;
+}
+
+@keyframes admin-notes-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-notes-page__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4, 16px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border: 1px solid var(--color-ink-100, #e5e7eb);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
+}
+
+.admin-notes-page__context-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-notes-page__context-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-500, #64748b);
+}
+
+.admin-notes-page__context-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-ink-900, #0b1220);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-notes-page__context-switch {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 260px);
+}
+
+.admin-notes-page__context-switch-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-600, #475569);
+}
+
+/* Standalone page provides the hero — hide duplicate panel header from course edit tab reuse */
+.admin-page--notes .course-notes-panel__header {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .admin-notes-page__picker {
+    grid-template-columns: 1fr;
+    padding: var(--space-5, 20px);
+  }
+
+  .admin-notes-page__picker-badge {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 12px;
+  }
+
+  .admin-notes-page__context {
+    align-items: stretch;
+  }
+
+  .admin-notes-page__context-switch {
+    width: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-notes-page__stats {
+    max-width: 520px;
+  }
+}

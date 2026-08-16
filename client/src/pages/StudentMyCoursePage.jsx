@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatSalesDateLong } from '../course/courseSalesPage';
 import { batchStatusLabel } from '../course/batchPresentation';
 import StudentDashboardSkeleton from '../student/components/dashboard/StudentDashboardSkeleton';
+import StudentNotesSection from '../student/components/notes/StudentNotesSection';
 import { useStudentMyCourse } from '../student/hooks/useStudentMyCourse';
 import '../student/styles/student-dashboard.css';
 
@@ -285,6 +286,10 @@ export default function StudentMyCoursePage() {
           </Link>
         </div>
       </section>
+
+      <article className="admin-card student-my-course__notes">
+        <StudentNotesSection courseId={course.id} title="Notes" showSubjectSummary />
+      </article>
     </section>
   );
 }

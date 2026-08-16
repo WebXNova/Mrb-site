@@ -9,6 +9,7 @@ import { MySqlQueryTimeoutError } from '../mysql/MySqlQueryTimeoutError.js';
 import { MySqlTransactionTimeoutError } from '../mysql/MySqlTransactionTimeoutError.js';
 import { isMysqlPoolQueueExhaustedError } from '../../config/mysqlPoolExhaustion.js';
 import { isMysqlQueryTimeoutError } from '../../config/mysqlTimeout.util.js';
+import { RateLimitRedisUnavailableError } from '../../services/slidingWindowRateLimit.service.js';
 import {
   BAD_REQUEST,
   CONFLICT,
@@ -95,6 +96,17 @@ export function normalizeError(err) {
 
   if (err instanceof MySqlTransactionTimeoutError) {
     return err;
+  }
+
+  if (err instanceof RateLimitRedisUnavailableError) {
+    return new AppError({
+      message: 'Payment submission temporarily unavailable, please try again shortly.',
+      errorCode: SERVICE_UNAVAILABLE,
+      httpStatus: 503,
+      isOperational: true,
+      metadata: { retryable: true, reason: 'rate_limit_redis_unavailable' },
+      cause: err,
+    });
   }
 
   if (isMysqlPoolQueueExhaustedError(err)) {

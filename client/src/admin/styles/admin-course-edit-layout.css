@@ -1,0 +1,1067 @@
+/**
+ * Course edit — premium SaaS admin layout (all tabs).
+ * Scoped under .course-edit-layout only. Reuses existing color tokens — no palette changes.
+ */
+
+.admin-shell .courses-page .course-edit-layout,
+.admin-shell .course-edit-layout {
+  /* Type scale */
+  --ce-font: 15px;
+  --ce-font-sm: 12px;
+  --ce-font-label: 13px;
+  --ce-font-body: 15px;
+  --ce-font-title: 24px;
+  --ce-font-section: 20px;
+  --ce-font-group: 15px;
+  --ce-lh-tight: 1.25;
+  --ce-lh-body: 1.55;
+  --ce-lh-label: 1.35;
+  --ce-ls-title: -0.025em;
+  --ce-ls-label: 0.01em;
+  --ce-ls-caps: 0.06em;
+
+  /* Layout scale */
+  --ce-input-h: 44px;
+  --ce-btn-h: 44px;
+  --ce-pad-x: 14px;
+  --ce-pad-y: 11px;
+  --ce-radius: 10px;
+  --ce-radius-sm: 8px;
+  --ce-radius-lg: 12px;
+  --ce-form-max: 880px;
+  --ce-gap: 20px;
+  --ce-section-gap: 28px;
+  --ce-card-pad: 24px;
+  --ce-stack-gap: 20px;
+
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  font-size: var(--ce-font-body);
+  line-height: var(--ce-lh-body);
+  color: var(--admin-text-primary);
+}
+
+/* ── Shell & header ─────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-shell {
+  min-width: 0;
+  border-radius: var(--ce-radius-lg);
+  overflow: hidden;
+}
+
+.admin-shell .course-edit-layout .course-edit-header {
+  padding: 24px 32px 20px;
+}
+
+.admin-shell .course-edit-layout .course-edit-header__back {
+  font-size: var(--ce-font-sm);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  margin-bottom: 12px;
+  min-height: 32px;
+  gap: 6px;
+}
+
+.admin-shell .course-edit-layout .course-edit-header__title {
+  font-family: var(--font-sans);
+  font-size: var(--ce-font-title);
+  font-weight: 700;
+  letter-spacing: var(--ce-ls-title);
+  line-height: var(--ce-lh-tight);
+}
+
+.admin-shell .course-edit-layout .course-edit-header__id {
+  font-size: var(--ce-font-sm);
+  letter-spacing: 0.02em;
+}
+
+.admin-shell .course-edit-layout .course-edit-header__meta {
+  margin-top: 10px;
+  gap: 8px;
+}
+
+.admin-shell .course-edit-layout .course-edit-header__main .course-health-badge {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  font-size: var(--ce-font-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Tab bar ────────────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-details-nav {
+  padding: 0 24px;
+  background: var(--color-bg-soft);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-shell .course-edit-layout .course-details-nav__list {
+  gap: 6px;
+  padding: 8px 0 0;
+}
+
+.admin-shell .course-edit-layout .course-details-nav__tab {
+  min-height: 44px;
+  padding: 10px 18px;
+  font-size: var(--ce-font-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  border-bottom: none;
+  border-radius: var(--ce-radius-sm) var(--ce-radius-sm) 0 0;
+  margin-bottom: 0;
+  color: var(--admin-text-secondary);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.admin-shell .course-edit-layout .course-details-nav__tab:hover {
+  color: var(--admin-text-primary);
+  background: color-mix(in srgb, var(--admin-surface) 70%, transparent);
+}
+
+.admin-shell .course-edit-layout .course-details-nav__tab--active {
+  color: var(--admin-secondary);
+  background: var(--admin-surface);
+  box-shadow: 0 -1px 0 var(--admin-border) inset;
+  position: relative;
+}
+
+.admin-shell .course-edit-layout .course-details-nav__tab--active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--admin-secondary);
+}
+
+.admin-shell .course-edit-layout .course-details-nav__badge {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* ── Body / page chrome ─────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-body {
+  padding: 28px 32px 36px;
+  background: var(--color-bg-soft);
+}
+
+.admin-shell .course-edit-layout .course-edit-section,
+.admin-shell .course-edit-layout .course-edit-body > .course-health-panel,
+.admin-shell .course-edit-layout .course-edit-form {
+  max-width: var(--ce-form-max);
+  width: 100%;
+}
+
+.admin-shell .course-edit-layout .course-edit-stack {
+  display: grid;
+  gap: var(--ce-stack-gap);
+}
+
+/* ── Section page headers ───────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-section__header {
+  margin-bottom: var(--ce-section-gap);
+  gap: 16px;
+  padding-bottom: 4px;
+}
+
+.admin-shell .course-edit-layout .course-edit-section__title,
+.admin-shell .course-edit-layout .course-health-panel__title {
+  font-family: var(--font-sans);
+  font-size: var(--ce-font-section);
+  font-weight: 700;
+  letter-spacing: var(--ce-ls-title);
+  line-height: var(--ce-lh-tight);
+  margin: 0;
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .course-edit-section__subtitle,
+.admin-shell .course-edit-layout .course-health-panel__subtitle {
+  margin: 8px 0 0;
+  font-size: var(--ce-font-label);
+  font-weight: 400;
+  line-height: var(--ce-lh-body);
+  letter-spacing: 0;
+  color: var(--admin-text-secondary);
+  max-width: 58ch;
+}
+
+/* ── Cards (field groups) ───────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-card {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--ce-radius-lg);
+  box-shadow: var(--admin-shadow-card);
+  padding: var(--ce-card-pad);
+}
+
+.admin-shell .course-edit-layout .course-edit-card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-shell .course-edit-layout .course-edit-card__head {
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--admin-border) 80%, transparent);
+}
+
+.admin-shell .course-edit-layout .course-edit-card__title,
+.admin-shell .course-edit-layout .course-edit-form__group-title {
+  font-family: var(--font-sans);
+  font-size: var(--ce-font-group);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: var(--ce-lh-tight);
+  margin: 0 0 16px;
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .course-edit-form__group {
+  margin-bottom: var(--ce-stack-gap);
+  padding: var(--ce-card-pad);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--ce-radius-lg);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell .course-edit-layout .course-edit-form__group:last-of-type {
+  margin-bottom: 0;
+}
+
+.admin-shell .course-edit-layout .course-edit-form__group-title {
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--admin-border) 75%, transparent);
+}
+
+/* ── Callouts (admission, alerts) ───────────────────────── */
+
+.admin-shell .course-edit-callout {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  border-radius: var(--ce-radius);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+
+.admin-shell .course-edit-callout--success {
+  border-color: color-mix(in srgb, var(--admin-success) 35%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-success) 8%, var(--admin-surface));
+}
+
+.admin-shell .course-edit-callout--warning {
+  border-color: color-mix(in srgb, var(--admin-warning) 40%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-warning) 10%, var(--admin-surface));
+}
+
+.admin-shell .course-edit-callout__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ce-radius-sm);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  background: color-mix(in srgb, currentColor 12%, var(--admin-surface));
+}
+
+.admin-shell .course-edit-callout--success .course-edit-callout__icon {
+  color: var(--admin-success);
+}
+
+.admin-shell .course-edit-callout--warning .course-edit-callout__icon {
+  color: var(--admin-warning);
+}
+
+.admin-shell .admin-stale-banner {
+  margin-bottom: 16px;
+}
+
+.admin-shell .course-edit-callout__title {
+  margin: 0 0 4px;
+  font-size: var(--ce-font-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: var(--ce-lh-label);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-callout__text {
+  margin: 0;
+  font-size: var(--ce-font-sm);
+  line-height: var(--ce-lh-body);
+  color: var(--admin-text-secondary);
+}
+
+/* ── Labels & helper text ───────────────────────────────── */
+
+.admin-shell .course-edit-layout .premium-field,
+.admin-shell .course-edit-layout .admin-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.admin-shell .course-edit-layout .premium-field__label-row {
+  align-items: baseline;
+  gap: 10px;
+}
+
+.admin-shell .course-edit-layout .premium-field__label,
+.admin-shell .course-edit-layout .admin-field > label:first-child {
+  font-size: var(--ce-font-label);
+  font-weight: 600;
+  letter-spacing: var(--ce-ls-label);
+  line-height: var(--ce-lh-label);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .premium-field__hint,
+.admin-shell .course-edit-layout .admin-field__hint {
+  font-size: var(--ce-font-sm);
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--admin-text-secondary);
+  margin: 0;
+}
+
+.admin-shell .course-edit-layout .premium-field__counter {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .premium-field__error,
+.admin-shell .course-edit-layout .admin-field__error {
+  font-size: var(--ce-font-sm);
+  line-height: 1.45;
+}
+
+/* ── Unified controls ───────────────────────────────────── */
+
+.admin-shell .course-edit-layout .premium-field__input,
+.admin-shell .course-edit-layout .premium-field__select,
+.admin-shell .course-edit-layout .premium-field__textarea,
+.admin-shell .course-edit-layout .admin-field input:not([type='checkbox']):not([type='radio']),
+.admin-shell .course-edit-layout .admin-field select,
+.admin-shell .course-edit-layout .admin-field textarea,
+.admin-shell .course-edit-layout input[type='text'],
+.admin-shell .course-edit-layout input[type='number'],
+.admin-shell .course-edit-layout input[type='date'],
+.admin-shell .course-edit-layout input[type='datetime-local'],
+.admin-shell .course-edit-layout select,
+.admin-shell .course-edit-layout textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  height: var(--ce-input-h);
+  min-height: var(--ce-input-h);
+  padding: var(--ce-pad-y) var(--ce-pad-x);
+  font-family: var(--font-sans);
+  font-size: var(--ce-font-body);
+  line-height: 1.4;
+  letter-spacing: 0;
+  border-radius: var(--ce-radius-sm);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-shell .course-edit-layout .premium-field__select,
+.admin-shell .course-edit-layout .admin-field select,
+.admin-shell .course-edit-layout select {
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+.admin-shell .course-edit-layout .premium-field__textarea,
+.admin-shell .course-edit-layout .admin-field textarea,
+.admin-shell .course-edit-layout textarea {
+  height: auto;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.admin-shell .course-edit-layout textarea#short_description,
+.admin-shell .course-edit-layout textarea#subj_panel_description {
+  min-height: 96px;
+}
+
+.admin-shell .course-edit-layout textarea#description {
+  min-height: 168px;
+}
+
+.admin-shell .course-edit-layout .premium-field__input:focus,
+.admin-shell .course-edit-layout .premium-field__select:focus,
+.admin-shell .course-edit-layout .premium-field__textarea:focus,
+.admin-shell .course-edit-layout .admin-field input:focus,
+.admin-shell .course-edit-layout .admin-field select:focus,
+.admin-shell .course-edit-layout .admin-field textarea:focus {
+  outline: none;
+  border-color: var(--admin-secondary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--admin-secondary) 14%, transparent);
+}
+
+.admin-shell .course-edit-layout .premium-field__input:disabled,
+.admin-shell .course-edit-layout .premium-field__select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: var(--color-bg-soft);
+}
+
+/* ── Toggles ────────────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-form__toggles {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-shell .course-edit-layout .admin-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  row-gap: 4px;
+  align-items: start;
+  padding: 14px 16px;
+  min-height: 0;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--ce-radius-sm);
+  background: var(--color-bg-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.admin-shell .course-edit-layout .admin-toggle:hover {
+  border-color: color-mix(in srgb, var(--admin-secondary) 30%, var(--admin-border));
+  background: var(--admin-surface);
+}
+
+.admin-shell .course-edit-layout .admin-toggle__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.admin-shell .course-edit-layout .admin-toggle__track {
+  grid-row: 1 / 3;
+  align-self: center;
+  width: 46px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.admin-shell .course-edit-layout .admin-toggle__thumb {
+  width: 20px;
+  height: 20px;
+  top: 3px;
+  left: 3px;
+}
+
+.admin-shell .course-edit-layout .admin-toggle__input:checked + .admin-toggle__track .admin-toggle__thumb {
+  transform: translateX(20px);
+}
+
+.admin-shell .course-edit-layout .admin-toggle__text {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: var(--ce-font-body);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: var(--ce-lh-label);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .admin-toggle .premium-field__hint {
+  grid-column: 2;
+  grid-row: 2;
+  display: block;
+  margin: 0;
+  font-size: var(--ce-font-sm);
+  line-height: 1.45;
+  color: var(--admin-text-secondary);
+}
+
+/* PremiumFormField wrapping a toggle — flatten extra grid */
+.admin-shell .course-edit-layout .premium-field:has(.admin-toggle) {
+  gap: 0;
+}
+
+.admin-shell .course-edit-layout .premium-field:has(.admin-toggle) .premium-field__label-row {
+  display: none;
+}
+
+/* ── Form grid ──────────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .premium-form-grid,
+.admin-shell .course-edit-layout .course-edit-body .admin-form-grid {
+  gap: var(--ce-gap) 18px;
+}
+
+@media (min-width: 768px) {
+  .admin-shell .course-edit-layout .premium-form-grid--2col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-shell .course-edit-layout .course-edit-body .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-shell .course-edit-layout .premium-form-grid__span-2 {
+  grid-column: 1 / -1;
+}
+
+/* ── Thumbnail ──────────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .thumbnail-dropzone {
+  padding: 28px 24px;
+  border-radius: var(--ce-radius);
+  border: 2px dashed var(--admin-border);
+  background: var(--color-bg-soft);
+}
+
+/* ── Save / action row ──────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-form__actions,
+.admin-shell .course-edit-layout .course-edit-body .admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: var(--ce-section-gap);
+  padding: 20px 0 0;
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-shell .course-edit-layout .course-edit-card .course-edit-form__actions {
+  margin-top: 0;
+  padding: 18px var(--ce-card-pad);
+  border-top: 1px solid var(--admin-border);
+  background: var(--color-bg-soft);
+  border-radius: 0 0 var(--ce-radius-lg) var(--ce-radius-lg);
+  margin-left: calc(var(--ce-card-pad) * -1);
+  margin-right: calc(var(--ce-card-pad) * -1);
+  margin-bottom: calc(var(--ce-card-pad) * -1);
+}
+
+.admin-shell .course-edit-layout .btn--course-primary,
+.admin-shell .course-edit-layout .btn--course-secondary,
+.admin-shell .course-edit-layout .btn--course-danger,
+.admin-shell .course-edit-layout .course-edit-form__actions .btn,
+.admin-shell .course-edit-layout .admin-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--ce-btn-h);
+  padding: 0 20px;
+  font-size: var(--ce-font-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: var(--ce-radius-sm);
+  line-height: 1;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.admin-shell .course-edit-layout .btn--course-secondary {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .btn--course-primary .admin-spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+.admin-shell .course-edit-layout .btn--course-secondary .admin-spinner {
+  border-color: rgba(17, 24, 39, 0.2);
+  border-top-color: var(--admin-text-primary);
+}
+
+/* ── Feedback messages ──────────────────────────────────── */
+
+.admin-shell .course-edit-layout .admin-error,
+.admin-shell .course-edit-layout .admin-success {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--ce-radius-sm);
+  font-size: var(--ce-font-sm);
+  line-height: 1.45;
+  border: 1px solid var(--admin-border);
+}
+
+.admin-shell .course-edit-layout .admin-error {
+  background: color-mix(in srgb, var(--admin-danger) 8%, var(--admin-surface));
+  border-color: color-mix(in srgb, var(--admin-danger) 25%, var(--admin-border));
+}
+
+.admin-shell .course-edit-layout .admin-success {
+  background: color-mix(in srgb, var(--admin-success) 8%, var(--admin-surface));
+  border-color: color-mix(in srgb, var(--admin-success) 25%, var(--admin-border));
+}
+
+/* ── Pricing preview ────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-pricing-preview {
+  margin-top: 0;
+  padding: 20px 22px;
+  border-radius: var(--ce-radius-lg);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-card);
+  display: grid;
+  gap: 12px;
+}
+
+.admin-shell .course-edit-layout .course-pricing-preview__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--admin-border) 80%, transparent);
+}
+
+.admin-shell .course-edit-layout .course-pricing-preview__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--ce-ls-caps);
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .course-pricing-preview__type {
+  font-size: var(--ce-font-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .course-pricing-preview__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 14px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: var(--ce-ls-title);
+  line-height: 1.2;
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .course-pricing-preview__original {
+  font-size: var(--ce-font-body);
+  font-weight: 500;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.admin-shell .course-edit-layout .course-pricing-preview__notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: var(--ce-font-sm);
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .course-edit-pricing-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ce-input-h);
+  padding: 16px 20px;
+  margin: 0;
+  font-size: var(--ce-font-label);
+  border-radius: var(--ce-radius);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+
+/* ── Batch summary ──────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-batch-summary {
+  padding: var(--ce-card-pad);
+  border-radius: var(--ce-radius-lg);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell .course-edit-layout .course-batch-summary__grid {
+  gap: 16px 20px;
+}
+
+.admin-shell .course-edit-layout .course-batch-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--ce-ls-caps);
+  color: var(--admin-text-secondary);
+  margin-bottom: 4px;
+}
+
+.admin-shell .course-edit-layout .course-batch-summary__value {
+  font-size: var(--ce-font-body);
+  font-weight: 500;
+  line-height: var(--ce-lh-label);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .course-batch-summary__actions {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--admin-border);
+  gap: 10px;
+}
+
+.admin-shell .course-edit-layout .course-edit-card--admission {
+  margin-bottom: var(--ce-stack-gap);
+}
+
+.admin-shell .course-edit-layout .course-edit-admission-actions {
+  margin-top: 16px;
+}
+
+.admin-shell .course-edit-layout .course-edit-section__loading {
+  padding: 20px 22px;
+  font-size: var(--ce-font-label);
+  color: var(--admin-text-secondary);
+  border-radius: var(--ce-radius);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+
+/* ── Subjects tab ───────────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-subjects .admin-page {
+  display: block;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  font-size: inherit;
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .admin-card {
+  padding: var(--ce-card-pad);
+  margin-bottom: var(--ce-stack-gap);
+  border-radius: var(--ce-radius-lg);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .admin-card:last-child {
+  margin-bottom: 0;
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .heading-4 {
+  font-family: var(--font-sans);
+  font-size: var(--ce-font-group);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: var(--ce-lh-tight);
+  margin: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--admin-border) 75%, transparent);
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects__table-head {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .admin-table-wrap,
+.admin-shell .course-edit-layout .course-edit-subjects__table-wrap {
+  margin-top: 18px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--ce-radius-sm);
+  overflow: hidden;
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .admin-table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--ce-ls-caps);
+  padding: 12px 16px;
+  background: var(--color-bg-soft);
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .admin-table td {
+  font-size: var(--ce-font-body);
+  padding: 14px 16px;
+  vertical-align: middle;
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects__filter {
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  font-size: var(--ce-font-sm);
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects__form {
+  margin-top: 18px;
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .admin-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-bg-soft) 60%, var(--admin-surface));
+}
+
+.admin-shell .course-edit-layout .course-edit-subjects .btn--sm {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: var(--ce-font-sm);
+  font-weight: 600;
+  border-radius: var(--ce-radius-sm);
+}
+
+/* ── Health tab & aside ─────────────────────────────────── */
+
+.admin-shell .course-edit-layout .course-edit-card--health {
+  padding: var(--ce-card-pad);
+}
+
+.admin-shell .course-edit-layout .course-health-panel__header {
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-shell .course-edit-layout .course-health-badge {
+  font-size: var(--ce-font-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-shell .course-edit-layout .course-health-badge--lg {
+  font-size: var(--ce-font-label);
+  padding: 10px 16px;
+}
+
+.admin-shell .course-edit-layout .course-health-panel__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.admin-shell .course-edit-layout .course-health-stat {
+  padding: 18px 16px;
+  border-radius: var(--ce-radius);
+  border: 1px solid var(--admin-border);
+  background: var(--color-bg-soft);
+  text-align: center;
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell .course-edit-layout .course-health-stat__value {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: var(--ce-ls-title);
+  line-height: 1.1;
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .course-health-stat__label {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--ce-ls-caps);
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .course-health-panel__list {
+  gap: 10px;
+}
+
+.admin-shell .course-edit-layout .course-health-item {
+  padding: 14px 16px;
+  border-radius: var(--ce-radius-sm);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  gap: 12px;
+}
+
+.admin-shell .course-edit-layout .course-health-item__icon {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: var(--ce-radius-sm);
+}
+
+.admin-shell .course-edit-layout .course-health-item__message {
+  font-size: var(--ce-font-body);
+  font-weight: 500;
+  line-height: var(--ce-lh-body);
+  margin: 0;
+}
+
+.admin-shell .course-edit-layout .course-health-item__code {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  margin: 4px 0 0;
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell .course-edit-layout .course-health-panel__empty {
+  margin: 0;
+  padding: 16px 18px;
+  font-size: var(--ce-font-label);
+  color: var(--admin-text-secondary);
+  border-radius: var(--ce-radius-sm);
+  border: 1px dashed var(--admin-border);
+  background: var(--color-bg-soft);
+  text-align: center;
+}
+
+/* Quick health aside */
+.admin-shell .course-edit-layout .course-edit-aside__card {
+  padding: 22px;
+  border-radius: var(--ce-radius-lg);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell .course-edit-layout .course-edit-aside__title {
+  font-size: var(--ce-font-group);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-panel__header {
+  margin-bottom: 16px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-panel__title {
+  display: none;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-panel__subtitle {
+  font-size: var(--ce-font-sm);
+  margin-top: 0;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-panel__summary {
+  margin-bottom: 16px;
+  gap: 10px;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-stat {
+  padding: 14px 10px;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-stat__value {
+  font-size: 22px;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-panel__list {
+  gap: 8px;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-item {
+  padding: 10px 12px;
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-item__message {
+  font-size: var(--ce-font-sm);
+}
+
+.admin-shell .course-edit-layout .course-edit-aside .course-health-item__code {
+  display: none;
+}
+
+.admin-shell .course-edit-layout .course-edit-loading {
+  font-size: var(--ce-font-body);
+  padding: 32px 0;
+  text-align: center;
+  color: var(--admin-text-secondary);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  .admin-shell .course-edit-layout .course-edit-body {
+    padding: 20px 16px 28px;
+  }
+
+  .admin-shell .course-edit-layout .course-edit-header {
+    padding: 18px 16px 16px;
+  }
+
+  .admin-shell .course-edit-layout .course-edit-card,
+  .admin-shell .course-edit-layout .course-edit-form__group {
+    padding: 18px;
+  }
+
+  .admin-shell .course-edit-layout .premium-form-grid--2col,
+  .admin-shell .course-edit-layout .course-edit-body .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .course-edit-layout .course-details-nav {
+    padding: 0 10px;
+  }
+
+  .admin-shell .course-edit-layout .course-details-nav__tab {
+    padding: 10px 14px;
+    font-size: var(--ce-font-sm);
+  }
+}
+
+@media (min-width: 1100px) {
+  .admin-shell .course-edit-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+    gap: 28px;
+    align-items: start;
+  }
+
+  .admin-shell .course-edit-layout .course-edit-aside__card {
+    top: calc(var(--admin-topbar-height, 56px) + 24px);
+  }
+}

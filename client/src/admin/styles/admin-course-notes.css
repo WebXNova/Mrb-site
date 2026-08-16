@@ -1,0 +1,700 @@
+/**
+ * Course notes tab — upload form, scoped cascade, grouped library.
+ */
+
+.admin-shell .course-notes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ce-section-gap, 28px);
+}
+
+.admin-shell .course-notes-panel__sections {
+  display: grid;
+  gap: var(--space-6, 24px);
+}
+
+.admin-shell .course-notes-panel--standalone .course-notes-panel__sections {
+  gap: 28px;
+}
+
+.admin-shell .course-notes-panel__subtitle {
+  margin: 6px 0 0;
+  max-width: 52rem;
+}
+
+/* ── Section headers (standalone page) ───────────────────── */
+
+.admin-shell .course-notes-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.admin-shell .course-notes-section-head__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--color-ink-900, #0f172a);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Upload card ─────────────────────────────────────────── */
+
+.admin-shell .course-notes-upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ce-gap, 20px);
+  padding: var(--ce-card-pad, 24px);
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--ce-radius-lg, 14px);
+  background: var(--admin-surface-raised, #fff);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
+}
+
+.admin-shell .course-notes-upload__intro,
+.admin-shell .course-notes-section-head + .course-notes-upload__body,
+.admin-shell .course-notes-section-head {
+  margin-bottom: 0;
+}
+
+.admin-shell .course-notes-upload__title {
+  margin: 0;
+  font-size: var(--ce-font-group, 15px);
+  font-weight: 600;
+  color: var(--admin-text-primary, var(--color-ink-900));
+}
+
+.admin-shell .course-notes-upload__lead {
+  margin: 4px 0 0;
+  font-size: var(--ce-font-sm, 13px);
+  color: var(--admin-text-secondary, var(--color-ink-500));
+  line-height: 1.5;
+}
+
+.admin-shell .course-notes-upload__body {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--ce-radius, 12px);
+  overflow: hidden;
+  background: #fff;
+}
+
+.admin-shell .course-notes-upload__block {
+  padding: 18px 20px;
+  border-top: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+}
+
+.admin-shell .course-notes-upload__block:first-child {
+  border-top: none;
+}
+
+.admin-shell .course-notes-upload__block-label {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-upload__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ce-gap, 20px);
+}
+
+/* ── Scope stepped cascade ─────────────────────────────────── */
+
+.admin-shell .course-notes-scope {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.admin-shell .course-notes-scope__head {
+  margin-bottom: 16px;
+}
+
+.admin-shell .course-notes-scope__label {
+  margin: 0;
+  font-size: var(--ce-font-label, 14px);
+  font-weight: 600;
+  color: var(--admin-text-primary, var(--color-ink-800));
+}
+
+.admin-shell .course-notes-scope__hint {
+  margin: 6px 0 0;
+  font-size: var(--ce-font-sm, 13px);
+  line-height: 1.5;
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-scope__trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 2px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: var(--ce-radius-sm, 8px);
+  background: var(--admin-surface-muted, var(--color-bg-soft));
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+}
+
+.admin-shell .course-notes-scope__trail-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--ce-font-sm, 13px);
+  font-weight: 600;
+  color: var(--admin-text-primary, var(--color-ink-800));
+}
+
+.admin-shell .course-notes-scope__trail-chevron {
+  font-size: 1rem !important;
+  color: var(--admin-text-secondary, var(--color-ink-400));
+}
+
+.admin-shell .course-notes-scope__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.admin-shell .course-notes-scope__step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.admin-shell .course-notes-scope__step-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-200));
+  background: var(--admin-surface-muted, #f8fafc);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--admin-text-secondary, var(--color-ink-600));
+  margin-top: 22px;
+}
+
+.admin-shell .course-notes-scope__step-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-shell .course-notes-scope__step-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-shell .course-notes-scope__step-name {
+  font-size: var(--ce-font-label, 13px);
+  font-weight: 600;
+  color: var(--admin-text-primary, var(--color-ink-800));
+}
+
+.admin-shell .course-notes-scope__step-default {
+  font-size: var(--ce-font-sm, 12px);
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-scope__step select {
+  width: 100%;
+  min-height: 42px;
+}
+
+.admin-shell .course-notes-scope__step--disabled {
+  opacity: 0.72;
+}
+
+.admin-shell .course-notes-scope__step--disabled .course-notes-scope__step-marker {
+  opacity: 0.65;
+}
+
+/* ── Dropzone ────────────────────────────────────────────── */
+
+.admin-shell .course-notes-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 168px;
+  padding: 24px 20px;
+  border: 2px dashed var(--admin-border-strong, var(--color-ink-200));
+  border-radius: var(--ce-radius, 12px);
+  background: var(--admin-surface-muted, var(--color-bg-soft));
+  color: var(--admin-text-secondary, var(--color-ink-500));
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast, 120ms ease),
+    background var(--transition-fast, 120ms ease),
+    box-shadow var(--transition-fast, 120ms ease);
+}
+
+.admin-shell .course-notes-dropzone--dragover,
+.admin-shell .course-notes-dropzone:hover:not(.course-notes-dropzone--has-file) {
+  border-color: var(--admin-accent, var(--color-primary));
+  background: color-mix(in srgb, var(--color-primary) 6%, white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.admin-shell .course-notes-dropzone--has-file {
+  cursor: default;
+  border-style: solid;
+  border-color: #86efac;
+  background: #f0fdf4;
+  min-height: auto;
+  padding: 20px;
+}
+
+.admin-shell .course-notes-dropzone__icon {
+  font-size: 2.25rem !important;
+  color: var(--admin-accent, var(--color-primary));
+}
+
+.admin-shell .course-notes-dropzone__hint {
+  margin: 0;
+  font-size: var(--ce-font-body, 15px);
+  text-align: center;
+  color: var(--admin-text-primary, var(--color-ink-800));
+}
+
+.admin-shell .course-notes-dropzone__types {
+  margin: 0;
+  font-size: var(--ce-font-sm, 12px);
+  text-align: center;
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-dropzone__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.admin-shell .course-notes-dropzone__preview-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 520px;
+  padding: 14px 16px;
+  border-radius: var(--ce-radius-sm, 10px);
+  background: #fff;
+  border: 1px solid #bbf7d0;
+}
+
+.admin-shell .course-notes-dropzone__thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--ce-radius-sm, 8px);
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+}
+
+.admin-shell .course-notes-dropzone__preview-copy {
+  min-width: 0;
+}
+
+.admin-shell .course-notes-dropzone__filename {
+  margin: 0;
+  font-size: var(--ce-font-body, 15px);
+  font-weight: 600;
+  color: var(--admin-text-primary, var(--color-ink-900));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-shell .course-notes-dropzone__filesize {
+  margin: 4px 0 0;
+  font-size: var(--ce-font-sm, 12px);
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-dropzone__ready {
+  margin: 4px 0 0;
+  font-size: var(--ce-font-sm, 12px);
+  font-weight: 600;
+  color: #166534;
+}
+
+.admin-shell .course-notes-dropzone__remove {
+  flex-shrink: 0;
+}
+
+/* ── Progress ────────────────────────────────────────────── */
+
+.admin-shell .course-notes-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-shell .course-notes-progress__track {
+  height: 8px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--admin-border-subtle, var(--color-ink-100));
+  overflow: hidden;
+}
+
+.admin-shell .course-notes-progress__bar {
+  height: 100%;
+  background: var(--admin-accent, var(--color-primary));
+  transition: width 0.15s ease;
+}
+
+.admin-shell .course-notes-progress__label {
+  font-size: var(--ce-font-sm, 12px);
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-upload__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+/* ── Library ─────────────────────────────────────────────── */
+
+.admin-shell .course-notes-library {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: var(--ce-card-pad, 24px);
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--ce-radius-lg, 14px);
+  background: var(--admin-surface-raised, #fff);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
+}
+
+.admin-shell .course-notes-library__title {
+  margin: 0;
+  font-size: var(--ce-font-group, 15px);
+  font-weight: 600;
+}
+
+.admin-shell .course-notes-library__subtitle {
+  margin: 4px 0 0;
+  font-size: var(--ce-font-sm, 13px);
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-list__toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-shell .course-notes-list__toolbar--filter {
+  padding-top: 4px;
+  border-top: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+}
+
+.admin-shell .course-notes-filter-wrap {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 240px);
+}
+
+.admin-shell .course-notes-filter {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-700, #334155);
+}
+
+.admin-shell .course-notes-filter__select {
+  min-width: 200px;
+  min-height: 40px;
+  border: 1px solid var(--color-ink-200, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.5rem 0.7rem;
+  background: #fff;
+  font: inherit;
+  font-weight: 500;
+}
+
+.admin-shell .course-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-shell .course-notes-list__empty {
+  margin: 0;
+  text-align: center;
+  border: 1px dashed var(--admin-border-subtle, var(--color-ink-200));
+  border-radius: var(--ce-radius, 12px);
+  background: var(--admin-surface-muted, var(--color-bg-soft));
+}
+
+.admin-shell .course-notes-list__empty-icon {
+  display: block;
+  margin: 0 auto 10px;
+  font-size: 2rem !important;
+  color: var(--color-ink-300, #cbd5e1);
+}
+
+/* ── Groups ──────────────────────────────────────────────── */
+
+.admin-shell .course-notes-group {
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--ce-radius, 10px);
+  background: var(--admin-surface-muted, var(--color-bg-soft));
+  overflow: hidden;
+}
+
+.admin-shell .course-notes-group--flat {
+  padding: 14px 16px 16px;
+}
+
+.admin-shell .course-notes-group--collapsible {
+  padding: 0;
+}
+
+.admin-shell .course-notes-group__heading {
+  margin: 0;
+  font-size: var(--ce-font-label, 13px);
+  font-weight: 600;
+  letter-spacing: var(--ce-ls-caps, 0.06em);
+  text-transform: uppercase;
+  color: var(--admin-text-secondary, var(--color-ink-500));
+}
+
+.admin-shell .course-notes-group__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.admin-shell .course-notes-group__summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-shell .course-notes-group__chevron {
+  flex-shrink: 0;
+  color: var(--admin-text-secondary, var(--color-ink-400));
+  transition: transform var(--transition-fast, 120ms ease);
+}
+
+.admin-shell .course-notes-group--collapsible[open] .course-notes-group__chevron {
+  transform: rotate(180deg);
+}
+
+.admin-shell .course-notes-group__count {
+  margin-left: auto;
+  font-size: var(--ce-font-sm, 12px);
+  font-weight: 600;
+  color: var(--admin-text-secondary, var(--color-ink-500));
+  background: var(--admin-surface-raised, #fff);
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--radius-full, 999px);
+  padding: 2px 9px;
+}
+
+.admin-shell .course-notes-group__items {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-shell .course-notes-group--flat .course-notes-group__items {
+  padding: 12px 0 0;
+}
+
+/* ── Note row ────────────────────────────────────────────── */
+
+.admin-shell .course-notes-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--ce-radius-sm, 8px);
+  background: var(--admin-surface-raised, #fff);
+}
+
+.admin-shell .course-notes-item--inactive {
+  opacity: 0.78;
+}
+
+.admin-shell .course-notes-item__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-shell .course-notes-item__title {
+  font-weight: 600;
+  font-size: var(--ce-font-body, 15px);
+  color: var(--admin-text-primary, var(--color-ink-900));
+}
+
+.admin-shell .course-notes-item__scope-tag {
+  display: inline-block;
+  margin: 6px 0 0;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: var(--ce-font-sm, 12px);
+  font-weight: 500;
+  color: var(--admin-text-secondary, var(--color-ink-600));
+  background: var(--admin-surface-muted, var(--color-bg-soft));
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-shell .course-notes-item__desc,
+.admin-shell .course-notes-item__meta {
+  margin: 6px 0 0;
+  font-size: var(--ce-font-sm, 13px);
+  color: var(--admin-text-secondary, var(--color-ink-500));
+  line-height: 1.45;
+}
+
+.admin-shell .course-notes-item__file-size {
+  font-weight: 600;
+  color: var(--admin-text-primary, var(--color-ink-700));
+}
+
+.admin-shell .course-notes-item__meta-sep {
+  margin: 0 4px;
+}
+
+.admin-shell .course-notes-item__actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.admin-shell .course-notes-panel .course-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.admin-shell .course-notes-panel .course-status-badge--active {
+  color: #166534;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.admin-shell .course-notes-panel .course-status-badge--inactive {
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.admin-shell .course-notes-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(100%, 420px);
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 1023px) {
+  .admin-shell .course-notes-upload__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-shell .course-notes-upload,
+  .admin-shell .course-notes-library {
+    padding: 18px 16px;
+  }
+
+  .admin-shell .course-notes-upload__block {
+    padding: 16px;
+  }
+
+  .admin-shell .course-notes-scope__step {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .admin-shell .course-notes-scope__step-marker {
+    margin-top: 0;
+    justify-self: start;
+  }
+
+  .admin-shell .course-notes-list__toolbar,
+  .admin-shell .course-notes-list__toolbar--filter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-shell .course-notes-filter-wrap,
+  .admin-shell .course-notes-filter__select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-shell .course-notes-item {
+    grid-template-columns: auto 1fr;
+  }
+
+  .admin-shell .course-notes-item__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .admin-shell .course-notes-dropzone__preview-card {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .admin-shell .course-notes-dropzone__remove {
+    align-self: stretch;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 374px) {
+  .admin-shell .course-notes-section-head {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

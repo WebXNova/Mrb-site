@@ -2,6 +2,8 @@
  * Authoritative enrollment CTA states — must match server enrollmentButtonState.js.
  * Frontend renders buttons from API buttonState only.
  */
+import { buildEnrollmentPaymentPath } from '../utils/enrollmentPaymentRoute.js';
+
 export const ENROLLMENT_BUTTON_STATE = Object.freeze({
   ENROLL_NOW: 'enroll_now',
   CONTINUE_LEARNING: 'continue_learning',
@@ -40,14 +42,10 @@ const DEFAULT_GUEST_STATE = Object.freeze({
 function buildPaymentResumeTarget(courseId, enrollmentState) {
   const id = String(courseId);
   if (enrollmentState?.enrollmentId) {
-    return {
-      pathname: '/enrollment/payment',
-      state: {
-        enrollmentId: enrollmentState.enrollmentId,
-        courseId: Number(id),
-        orderId: enrollmentState.orderId ?? null,
-      },
-    };
+    return buildEnrollmentPaymentPath({
+      orderId: enrollmentState.orderId ?? null,
+      courseId: Number(id),
+    });
   }
   return `/enroll/${encodeURIComponent(id)}`;
 }

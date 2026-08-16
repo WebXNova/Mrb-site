@@ -1,0 +1,968 @@
+/**
+ * Admin density — scoped UI normalization under .admin-shell only.
+ * Import last in AdminLayout so these overrides win the cascade.
+ * Does not modify public-site tokens in tokens.css / typography-scale.css.
+ */
+
+.admin-shell {
+  --admin-font-base: 13px;
+  --admin-font-sm: 11px;
+  --admin-font-md: 12px;
+  --admin-font-lg: 14px;
+  --admin-font-xl: 16px;
+  --admin-font-page: 18px;
+  --admin-font-stat: 22px;
+
+  --admin-space-1: 4px;
+  --admin-space-2: 8px;
+  --admin-space-3: 12px;
+  --admin-space-4: 16px;
+  --admin-space-5: 20px;
+  --admin-space-6: 24px;
+
+  --admin-sidebar-width: 228px;
+  --admin-topbar-height: 52px;
+  --admin-card-padding: 16px;
+  --admin-input-height: 36px;
+  --admin-btn-height: 36px;
+  --admin-btn-height-sm: 32px;
+  --admin-radius: 8px;
+  --admin-radius-lg: 10px;
+
+  font-size: var(--admin-font-base);
+  line-height: 1.5;
+  grid-template-columns: var(--admin-sidebar-width) 1fr;
+}
+
+.admin-shell .admin-content {
+  padding: var(--admin-space-4);
+}
+
+/* ---- Topbar ---- */
+.admin-shell .admin-topbar {
+  min-height: var(--admin-topbar-height);
+  padding: var(--admin-space-2) var(--admin-space-4);
+  margin-bottom: var(--admin-space-3);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .admin-topbar__title {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-xl);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.admin-shell .admin-topbar__subtitle {
+  font-size: var(--admin-font-md);
+}
+
+.admin-shell .admin-breadcrumbs {
+  font-size: var(--admin-font-sm);
+  margin-bottom: 2px;
+  gap: 0.25rem;
+}
+
+/* ---- Sidebar ---- */
+.admin-shell .admin-sidebar {
+  padding: var(--admin-space-3);
+}
+
+.admin-shell .admin-brand {
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-brand__logo {
+  width: 40px;
+  height: 40px;
+}
+
+.admin-shell .admin-brand__title {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-lg);
+  font-weight: 700;
+}
+
+.admin-shell .admin-brand__subtitle {
+  font-size: var(--admin-font-sm);
+  line-height: 1.4;
+}
+
+.admin-shell .admin-nav {
+  gap: var(--admin-space-1);
+}
+
+.admin-shell .admin-nav__item {
+  font-size: var(--admin-font-base);
+  font-weight: 500;
+  padding: var(--admin-space-2) var(--admin-space-3);
+  min-height: 36px;
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .admin-nav__item--active {
+  font-weight: 600;
+}
+
+.admin-shell .admin-sidebar-collapse-btn {
+  padding: var(--admin-space-2);
+  font-size: var(--admin-font-md);
+  border-radius: var(--admin-radius);
+}
+
+/* ---- Page layout ---- */
+.admin-shell .admin-page {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .admin-card,
+.admin-shell .admin-empty-state {
+  padding: var(--admin-card-padding);
+  border-radius: var(--admin-radius-lg);
+}
+
+@media (min-width: 768px) {
+  .admin-shell .admin-card,
+  .admin-shell .admin-empty-state {
+    padding: var(--admin-card-padding);
+  }
+}
+
+/* ---- Headings (override typography-scale display sizes) ---- */
+.admin-shell h1,
+.admin-shell .heading-lg {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+.admin-shell h2,
+.admin-shell .heading-md,
+.admin-shell .heading-2 {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.admin-shell h3,
+.admin-shell .heading-3,
+.admin-shell .heading-sm {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-lg);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.admin-shell .admin-courses-page-header__title {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.admin-shell .admin-courses-page-header__subtitle {
+  font-size: var(--admin-font-md);
+  margin-top: var(--admin-space-1);
+  line-height: 1.5;
+}
+
+.admin-shell .admin-test-page-header__title {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+}
+
+.admin-shell .admin-tests-list-head .heading-3 {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-lg);
+}
+
+.admin-shell .qa-monitor__title-block h1 {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+}
+
+.admin-shell .qa-monitor__title-block p {
+  font-size: var(--admin-font-base);
+}
+
+/* ---- Stat cards ---- */
+.admin-shell .admin-stat-card {
+  padding: var(--admin-space-3) var(--admin-space-4);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .admin-stat-card__label {
+  font-size: var(--admin-font-sm);
+  line-height: 1.3;
+}
+
+.admin-shell .admin-stat-card__value {
+  font-size: var(--admin-font-stat);
+  line-height: 1.15;
+}
+
+.admin-shell .admin-grid {
+  gap: var(--admin-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.admin-shell .admin-grid .admin-stat-card {
+  min-height: 4rem;
+}
+
+.admin-shell .admin-reg-stat__value {
+  font-size: var(--admin-font-stat);
+}
+
+.admin-shell .admin-reg-stat__label {
+  font-size: var(--admin-font-sm);
+}
+
+@media (min-width: 1200px) {
+  .admin-shell .admin-page--dashboard > .admin-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+/* ---- Tables ---- */
+.admin-shell .admin-table,
+.admin-shell table {
+  font-size: var(--admin-font-base);
+}
+
+.admin-shell .admin-table th {
+  font-size: var(--admin-font-sm);
+  font-weight: 600;
+  padding: 10px 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+}
+
+.admin-shell .admin-table td {
+  font-size: var(--admin-font-base);
+  padding: 10px 12px;
+  line-height: 1.45;
+}
+
+.admin-shell .admin-tests-table th {
+  font-size: var(--admin-font-sm);
+  padding: 10px 12px;
+}
+
+.admin-shell .admin-tests-table td {
+  font-size: var(--admin-font-base);
+  padding: 10px 12px;
+}
+
+.admin-shell .admin-teachers-table th {
+  font-size: var(--admin-font-sm);
+  padding: 10px 12px;
+}
+
+.admin-shell .admin-teachers-table td {
+  font-size: var(--admin-font-base);
+  padding: 10px 12px;
+}
+
+/* ---- Forms ---- */
+.admin-shell .admin-field {
+  gap: var(--admin-space-1);
+}
+
+.admin-shell .admin-field label,
+.admin-shell .admin-field__label-block {
+  font-size: var(--admin-font-md);
+  font-weight: 600;
+}
+
+.admin-shell .admin-field input,
+.admin-shell .admin-field select,
+.admin-shell .admin-field textarea {
+  font-size: var(--admin-font-base);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  border-radius: var(--admin-radius);
+  min-height: var(--admin-input-height);
+}
+
+.admin-shell .admin-field textarea {
+  min-height: 96px;
+}
+
+.admin-shell .admin-form-grid {
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .admin-field__hint,
+.admin-shell .admin-field__error {
+  font-size: var(--admin-font-sm);
+}
+
+.admin-shell .admin-section-head {
+  gap: var(--admin-space-1);
+  margin-bottom: var(--admin-space-3);
+}
+
+/* ---- Buttons ---- */
+.admin-shell .btn {
+  --btn-fs: var(--admin-font-base);
+  --btn-padding-y: var(--admin-space-2);
+  --btn-padding-x: 14px;
+  border-radius: var(--admin-radius);
+  min-height: var(--admin-btn-height);
+}
+
+.admin-shell .btn--sm {
+  --btn-fs: 12px;
+  --btn-padding-y: 6px;
+  --btn-padding-x: 12px;
+  min-height: var(--admin-btn-height-sm);
+}
+
+.admin-shell .btn--lg {
+  --btn-fs: var(--admin-font-base);
+  min-height: var(--admin-btn-height);
+}
+
+/* ---- Page-specific compact gaps (preserve structure) ---- */
+.admin-shell .admin-page--tests {
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .admin-page--tests .admin-card {
+  padding: var(--admin-card-padding);
+}
+
+.admin-shell .admin-page--tests .admin-stat-card {
+  padding: var(--admin-space-3) var(--admin-space-4);
+}
+
+.admin-shell .admin-page--tests .admin-stat-card__value {
+  font-size: var(--admin-font-stat);
+}
+
+.admin-shell .admin-page--courses {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .admin-page--courses .admin-courses__card {
+  padding: var(--admin-card-padding);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .course-data-grid__table th {
+  font-size: var(--admin-font-sm);
+  padding: 10px 12px;
+}
+
+.admin-shell .course-data-grid__table td {
+  font-size: var(--admin-font-base);
+  padding: 10px 12px;
+}
+
+.admin-shell .admin-page--courses .heading-3 {
+  font-size: var(--admin-font-lg);
+}
+
+.admin-shell .admin-test-page-header {
+  padding-bottom: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .admin-test-page-header__subtitle {
+  font-size: var(--admin-font-base);
+}
+
+.admin-shell .admin-confirm-dialog__panel {
+  padding: var(--admin-card-padding);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .admin-confirm-dialog__title {
+  font-size: var(--admin-font-xl);
+}
+
+.admin-shell .admin-confirm-dialog__body {
+  font-size: var(--admin-font-base);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-toggle-row {
+  padding: var(--admin-space-3);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .admin-toggle-row strong {
+  font-size: var(--admin-font-base);
+}
+
+.admin-shell .admin-toggle-row small {
+  font-size: var(--admin-font-sm);
+}
+
+/* ---- Mobile: preserve touch targets ---- */
+@media (max-width: 767px) {
+  .admin-shell .admin-content {
+    padding: var(--admin-space-3);
+  }
+
+  .admin-shell .admin-topbar {
+    padding: var(--admin-space-2) var(--admin-space-3);
+  }
+
+  .admin-shell .admin-page--dashboard > .admin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--admin-space-3);
+  }
+
+  .admin-shell .admin-touch-target,
+  .admin-shell .admin-nav-toggle {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-shell .admin-page--dashboard > .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =============================================================================
+   Phase 2 — cross-page visual standardization (scoped under .admin-shell)
+   ============================================================================= */
+
+/* Shared page headers */
+.admin-shell .admin-courses-page-header {
+  gap: var(--admin-space-3);
+  margin-bottom: 0;
+}
+
+.admin-shell .admin-courses-page-header--compact {
+  margin-bottom: var(--admin-space-3);
+  padding-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-tests-list-head {
+  gap: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-test-page-header {
+  padding-bottom: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-section-head .body-sm,
+.admin-shell .admin-section-head .admin-muted {
+  font-size: var(--admin-font-base);
+  line-height: 1.5;
+}
+
+.admin-shell .admin-stat-card__hint {
+  margin-top: var(--admin-space-1);
+  font-size: var(--admin-font-sm);
+}
+
+/* Dashboard activity card */
+.admin-shell .admin-page--dashboard .admin-card .heading-3 {
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-page--dashboard .admin-table-wrap {
+  margin-top: 0;
+}
+
+/* Courses / chapters / lectures workspace */
+.admin-shell .admin-courses-workspace {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .admin-courses-wizard-shell__header {
+  padding: var(--admin-space-4) var(--admin-space-4) 0;
+}
+
+.admin-shell .admin-courses-wizard-shell__title {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+}
+
+.admin-shell .admin-courses-wizard-shell__subtitle {
+  font-size: var(--admin-font-base);
+}
+
+.admin-shell .course-wizard-progress {
+  padding: var(--admin-space-4);
+}
+
+.admin-shell .course-wizard-progress__meta {
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-page--courses .admin-courses__stack {
+  gap: var(--admin-space-3);
+}
+
+/* Teachers */
+.admin-shell .admin-page--teachers {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .admin-teachers-toolbar {
+  gap: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-teachers-subject-filter__label {
+  font-size: var(--admin-font-sm);
+}
+
+.admin-shell .admin-teachers-subject-filter__select {
+  min-height: var(--admin-input-height);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  font-size: var(--admin-font-base);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .admin-teacher-mobile-card {
+  padding: var(--admin-card-padding);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .admin-teacher-mobile-card__name {
+  font-size: var(--admin-font-lg);
+}
+
+.admin-shell .admin-teacher-form {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .admin-teacher-form__section-title {
+  font-size: var(--admin-font-lg);
+}
+
+/* Tests toolbar, search, filters */
+.admin-shell .admin-tests-toolbar {
+  gap: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-search-field__input {
+  min-height: var(--admin-input-height);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  padding-right: 2.5rem;
+  font-size: var(--admin-font-base);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .admin-status-filters .admin-tag-chip {
+  min-height: var(--admin-btn-height-sm);
+  font-size: var(--admin-font-base);
+  padding: var(--admin-space-1) var(--admin-space-3);
+}
+
+/* Test import wizard */
+.admin-shell .admin-test-import-wizard {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .admin-test-import-wizard__title {
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+}
+
+.admin-shell .admin-test-import-wizard__subtitle {
+  font-size: var(--admin-font-base);
+}
+
+/* Q&A Monitoring */
+.admin-shell .qa-monitor {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .qa-monitor__header {
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .qa-profile {
+  padding: var(--admin-space-4);
+  gap: var(--admin-space-3);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .qa-profile__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--admin-radius-lg);
+  font-size: var(--admin-font-lg);
+}
+
+.admin-shell .qa-profile__main h2 {
+  font-size: var(--admin-font-xl);
+  font-family: var(--font-sans);
+}
+
+.admin-shell .qa-profile__email {
+  font-size: var(--admin-font-base);
+}
+
+.admin-shell .qa-stats {
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .qa-stat-card {
+  padding: var(--admin-space-3) var(--admin-space-4);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .qa-stat-card__label {
+  font-size: var(--admin-font-sm);
+}
+
+.admin-shell .qa-stat-card__value {
+  font-size: var(--admin-font-stat);
+  margin-top: var(--admin-space-1);
+}
+
+.admin-shell .qa-stat-card__value--sm {
+  font-size: var(--admin-font-lg);
+}
+
+.admin-shell .qa-filters {
+  top: calc(var(--admin-topbar-height) + var(--admin-space-2));
+  gap: var(--admin-space-2);
+  padding: var(--admin-space-3) var(--admin-space-4);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .qa-filters__search input,
+.admin-shell .qa-filters select,
+.admin-shell .qa-filters input[type='date'] {
+  min-height: var(--admin-input-height);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  font-size: var(--admin-font-base);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .qa-monitor__btn {
+  min-height: var(--admin-btn-height-sm);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  font-size: var(--admin-font-base);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .qa-monitor__badge {
+  font-size: var(--admin-font-sm);
+}
+
+/* Teacher Insights */
+.admin-shell .ti-page {
+  gap: var(--admin-space-4);
+}
+
+.admin-shell .ti-header h1 {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+}
+
+.admin-shell .ti-header p {
+  font-size: var(--admin-font-base);
+}
+
+.admin-shell .ti-card {
+  padding: var(--admin-card-padding);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .ti-grid-main,
+.admin-shell .ti-grid-2,
+.admin-shell .ti-grid-3 {
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .ti-select {
+  min-height: var(--admin-input-height);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  font-size: var(--admin-font-base);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .ti-section-title {
+  font-size: var(--admin-font-md);
+  font-weight: 600;
+}
+
+.admin-shell .ti-live {
+  font-size: var(--admin-font-sm);
+}
+
+.admin-shell .ti-card strong[style*='font-size'] {
+  font-size: var(--admin-font-stat) !important;
+}
+
+/* Remarks */
+.admin-shell .remarks-session {
+  padding: var(--admin-space-4);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .remarks-session__header {
+  gap: var(--admin-space-3);
+  padding-bottom: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .remarks-session__title {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page);
+  font-weight: 700;
+}
+
+.admin-shell .remarks-session__subtitle {
+  font-size: var(--admin-font-base);
+  font-style: normal;
+}
+
+.admin-shell .remarks-session__stats {
+  gap: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .remarks-session__stat {
+  padding: var(--admin-space-3) var(--admin-space-4);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .remarks-session__stat-value {
+  font-size: var(--admin-font-stat);
+  font-weight: 700;
+}
+
+.admin-shell .remarks-session__stat-label {
+  font-size: var(--admin-font-sm);
+}
+
+.admin-shell .remarks-session-modal__panel {
+  padding: var(--admin-space-4);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .remarks-session-modal__title {
+  font-size: var(--admin-font-xl);
+}
+
+/* Registrations */
+.admin-shell .admin-reg-page-head {
+  gap: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-reg-page-head .admin-muted {
+  font-size: var(--admin-font-base);
+  margin-top: var(--admin-space-1);
+}
+
+.admin-shell .admin-reg-stat-grid {
+  gap: var(--admin-space-3);
+  margin-top: var(--admin-space-3);
+}
+
+.admin-shell .admin-reg-stat {
+  padding: var(--admin-space-3) var(--admin-space-4);
+}
+
+.admin-shell .admin-registrations-filter-grid {
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .admin-reg-section-label,
+.admin-shell .admin-reg-filters-section__label {
+  font-size: var(--admin-font-sm);
+}
+
+/* Modals & dialogs */
+.admin-shell .admin-modal {
+  padding: var(--admin-space-4);
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .admin-review-modal__panel,
+.admin-shell .admin-chapter-dialog__panel {
+  border-radius: var(--admin-radius-lg);
+}
+
+.admin-shell .admin-review-modal__header {
+  padding: var(--admin-space-4);
+}
+
+/* Empty states & pagination */
+.admin-shell .admin-empty-state {
+  padding: var(--admin-space-5) var(--admin-space-4);
+}
+
+.admin-shell .admin-empty-state__title {
+  font-size: var(--admin-font-lg);
+  margin-bottom: var(--admin-space-2);
+}
+
+.admin-shell .admin-empty-state__text {
+  font-size: var(--admin-font-base);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-empty-state--compact {
+  padding: var(--admin-space-4);
+}
+
+.admin-shell .admin-pagination {
+  gap: var(--admin-space-3);
+  margin-top: var(--admin-space-3);
+  padding-top: var(--admin-space-3);
+}
+
+.admin-shell .admin-pagination__info {
+  font-size: var(--admin-font-sm);
+}
+
+/* Question bank & misc admin pages */
+.admin-shell .admin-question-bank__toolbar {
+  gap: var(--admin-space-3);
+  margin-bottom: var(--admin-space-3);
+}
+
+.admin-shell .admin-question-bank__bulk-bar {
+  padding: var(--admin-space-3) var(--admin-space-4);
+  margin-bottom: var(--admin-space-3);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .admin-question-bank__bulk-summary {
+  font-size: var(--admin-font-base);
+}
+
+.admin-shell .admin-tag-chip {
+  font-size: var(--admin-font-base);
+  padding: var(--admin-space-1) var(--admin-space-3);
+}
+
+.admin-shell .admin-status-pill {
+  font-size: var(--admin-font-sm);
+  padding: 2px var(--admin-space-2);
+}
+
+.admin-shell .admin-test-status {
+  font-size: var(--admin-font-sm);
+}
+
+.admin-shell .admin-test-analytics__stat .admin-stat-card__value {
+  font-size: var(--admin-font-stat);
+}
+
+.admin-shell .admin-collapsible__title {
+  font-size: var(--admin-font-lg);
+}
+
+/* Settings nested form spacing */
+.admin-shell .admin-settings-form.admin-page {
+  gap: var(--admin-space-3);
+}
+
+.admin-shell .admin-settings-toggles {
+  gap: var(--admin-space-3);
+}
+
+/* Course tabs / data grid (when present) */
+.admin-shell .admin-course-tabs__tab,
+.admin-shell .course-data-grid__tab {
+  min-height: var(--admin-btn-height-sm);
+  font-size: var(--admin-font-base);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  border-radius: var(--admin-radius);
+}
+
+.admin-shell .admin-test-status {
+  max-width: 100%;
+}
+
+.admin-shell .admin-tests-table td[data-label='Status'] {
+  padding-right: 10px;
+}
+
+.admin-shell .admin-tests-table .admin-tests-row-actions {
+  gap: 6px;
+}
+
+.admin-shell .admin-tests-table .admin-tests-row-actions .btn--sm {
+  min-height: 30px;
+}
+
+.admin-shell .admin-tests-table .admin-tests-link-actions .btn--sm {
+  min-height: 30px;
+  padding-inline: 8px;
+}
+
+/* Course edit / wizard remaining density alignment (layout polish) */
+.admin-shell .course-edit-header__title {
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page, 18px);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.admin-shell .admin-course-wizard__main {
+  padding: var(--admin-space-4, 16px);
+}
+
+.admin-shell .thumbnail-dropzone {
+  padding: var(--admin-space-4, 16px);
+}
+
+.admin-shell .course-details-nav__tab {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: var(--admin-font-base, 13px);
+}
+
+.admin-shell .admin-page--courses .admin-table th {
+  font-size: var(--admin-font-sm, 11px);
+  padding: 10px 12px;
+}
+
+.admin-shell .admin-page--courses .admin-table td {
+  font-size: var(--admin-font-base, 13px);
+  padding: 10px 12px;
+}
+
+.admin-shell .admin-test-import-wizard__dropzone {
+  padding: var(--admin-space-4, 16px);
+}
+
+.admin-shell .admin-page--quiz-builder [class*='__title'],
+.admin-shell .admin-page--quiz-builder h1 {
+  font-size: var(--admin-font-page, 18px) !important;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .admin-shell .admin-reg-page-head .heading-3 {
+    font-size: var(--admin-font-lg);
+  }
+
+  .admin-shell .qa-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-shell .ti-grid-main {
+    grid-template-columns: 1fr;
+  }
+}

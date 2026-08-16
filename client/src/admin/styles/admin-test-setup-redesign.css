@@ -1,0 +1,198 @@
+/* Test Setup page — premium layout aligned with Course Edit / Payment Accounts */
+
+.admin-page--test-setup .admin-card {
+  border: 1px solid var(--color-ink-100);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-page--test-setup .admin-test-step-label {
+  margin: 0 0 var(--space-4);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+}
+
+.admin-page--test-setup .admin-test-edit-body {
+  margin-top: var(--space-6);
+}
+
+.admin-test-form--unified {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.admin-test-form__intro {
+  margin: 0;
+  font-size: var(--fs-15);
+  line-height: 1.55;
+  color: var(--color-ink-600);
+  max-width: 62ch;
+}
+
+/* Wizard progress on setup */
+.admin-page--test-setup .admin-test-progress {
+  margin: var(--space-5) 0 var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-alt);
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 80%, transparent);
+}
+
+.admin-page--test-setup .admin-test-progress__status {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-14);
+  color: var(--color-ink-700);
+}
+
+.admin-page--test-setup .admin-test-progress__steps {
+  gap: var(--space-4);
+}
+
+.admin-page--test-setup .admin-test-progress__step {
+  font-size: var(--fs-14);
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-500);
+}
+
+.admin-page--test-setup .admin-test-progress__step--done {
+  color: var(--color-ink-800);
+}
+
+.admin-page--test-setup .admin-test-progress__icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: var(--fs-12);
+}
+
+/* Callouts */
+.admin-page--test-setup .admin-test-alert {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin: var(--space-5) 0 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-14);
+  line-height: 1.5;
+}
+
+.admin-page--test-setup .admin-test-alert--info {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-ink-100));
+  color: var(--color-ink-700);
+}
+
+.admin-page--test-setup .admin-test-progress__hint--warning {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: baseline;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, #f59e0b 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, #f59e0b 28%, var(--color-ink-100));
+  color: var(--color-ink-800);
+  font-size: var(--fs-13);
+}
+
+.admin-page--test-setup .admin-test-progress__hint--success {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, #22c55e 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, #22c55e 25%, var(--color-ink-100));
+  color: var(--color-ink-800);
+  font-size: var(--fs-13);
+}
+
+/* Unified form sections */
+.admin-test-form-section {
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 75%, transparent);
+}
+
+.admin-test-form-section .heading-4,
+.test-setup-section__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-18);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-900);
+  letter-spacing: var(--ls-tight);
+}
+
+.test-setup-section__head {
+  margin-bottom: var(--space-5);
+}
+
+.test-setup-section__lead {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-14);
+  line-height: 1.5;
+  color: var(--color-ink-500);
+  max-width: 58ch;
+}
+
+.test-setup-section--behavior {
+  background: var(--color-bg-alt);
+}
+
+.test-setup-toggles {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .test-setup-toggles {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+}
+
+.admin-page--test-setup .test-setup-toggles .admin-toggle {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-ink-100) 70%, transparent);
+}
+
+.test-setup-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .test-setup-fields {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .test-setup-fields .admin-field:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.admin-test-form__footer--unified {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-ink-100);
+}
+
+@media (max-width: 767px) {
+  .admin-test-form-section {
+    padding: var(--space-5);
+  }
+
+  .admin-test-form__footer--unified .btn {
+    flex: 1 1 100%;
+  }
+}

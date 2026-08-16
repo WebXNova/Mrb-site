@@ -35,10 +35,8 @@ export function normalizeResultPayload(payload) {
       inner.unanswered_answers ?? inner.unansweredAnswers ?? inner.skippedCount,
     timeTakenSeconds: inner.time_taken_seconds ?? inner.timeTakenSeconds,
     reviewItems: answers,
-    hasReview:
-      (inner.visibility?.showAnswersAfterSubmit !== false && Array.isArray(answers) && answers.length > 0) ||
-      (inner.visibility?.showAnswersAfterSubmit == null && Array.isArray(answers) && answers.length > 0),
-    answersWithheld: inner.visibility?.showAnswersAfterSubmit === false,
+    hasReview: Array.isArray(answers) && answers.length > 0,
+    answersWithheld: false,
   };
 }
 

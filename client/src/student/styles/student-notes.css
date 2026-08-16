@@ -1,0 +1,447 @@
+/* Student notes — cards, empty states, course dashboard browse */
+
+.student-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1rem);
+}
+
+.student-notes__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+}
+
+.student-notes__head-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.student-notes__count {
+  margin: 0;
+  font-size: var(--fs-13, 0.8125rem);
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+/* Loading */
+
+.student-notes__loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 0;
+  font-size: var(--fs-14, 0.875rem);
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes__spinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid color-mix(in srgb, var(--sp-text-muted, var(--color-ink-400)) 25%, transparent);
+  border-top-color: var(--sp-accent, var(--color-primary));
+  border-radius: 50%;
+  animation: student-notes-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+.student-notes__spinner--inline {
+  width: 1rem;
+  height: 1rem;
+}
+
+@keyframes student-notes-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Empty state — matches lecture playlist empty pattern */
+
+.student-notes__empty {
+  margin: 0;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  border: 1px dashed var(--sp-border, var(--color-ink-200));
+  border-radius: var(--radius-lg, 14px);
+  background: var(--sp-surface-muted, var(--color-bg-soft));
+  color: var(--sp-text-muted, var(--color-ink-600));
+}
+
+.student-notes__empty-icon {
+  font-size: 2rem !important;
+  color: var(--sp-text-muted, var(--color-ink-400));
+  margin-bottom: 0.5rem;
+}
+
+.student-notes__empty-title {
+  margin: 0;
+  font-size: var(--fs-15, 0.9375rem);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--sp-text-primary, var(--color-ink-800));
+}
+
+.student-notes__empty-hint {
+  margin: 0.35rem 0 0;
+  font-size: var(--fs-13, 0.8125rem);
+  color: var(--sp-text-muted, var(--color-ink-500));
+  line-height: 1.5;
+  max-width: 28rem;
+  margin-inline: auto;
+}
+
+/* Course dashboard layout */
+
+.student-notes__dashboard {
+  display: grid;
+  gap: var(--space-5, 1.25rem);
+}
+
+.student-notes__browse {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+}
+
+.student-notes__browse-label {
+  margin: 0;
+  font-size: var(--fs-12, 0.75rem);
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+/* Scope blocks */
+
+.student-notes__groups,
+.student-notes__block {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+}
+
+.student-notes__block--collapsible {
+  border: 1px solid var(--sp-border, var(--color-ink-100));
+  border-radius: var(--radius-md, 10px);
+  background: var(--sp-surface-muted, var(--color-bg-soft));
+  overflow: hidden;
+}
+
+.student-notes__block-title {
+  margin: 0;
+  font-size: var(--fs-13, 0.8125rem);
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes__block-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.student-notes__block-summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-notes__block-chevron {
+  flex-shrink: 0;
+  color: var(--sp-text-muted, var(--color-ink-400));
+  transition: transform var(--transition-fast, 120ms ease);
+}
+
+.student-notes__block--collapsible[open] .student-notes__block-chevron {
+  transform: rotate(180deg);
+}
+
+.student-notes__block-count {
+  margin-left: auto;
+  font-size: var(--fs-12, 0.75rem);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--sp-text-muted, var(--color-ink-500));
+  background: var(--sp-surface-card, #fff);
+  border: 1px solid var(--sp-border, var(--color-ink-100));
+  border-radius: var(--radius-full, 999px);
+  padding: 2px 9px;
+}
+
+.student-notes__block--collapsible .student-notes__cards {
+  padding: 0 0.75rem 0.75rem;
+}
+
+/* Note cards */
+
+.student-notes__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-3, 0.75rem);
+}
+
+.student-notes-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.65rem 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--sp-border, var(--color-ink-100));
+  border-radius: var(--radius-md, 10px);
+  background: var(--sp-surface-card, #fff);
+}
+
+.student-notes-card__icon {
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+.student-notes-card__body {
+  min-width: 0;
+}
+
+.student-notes-card__title {
+  margin: 0;
+  font-size: var(--fs-15, 0.9375rem);
+  font-weight: var(--fw-semibold, 600);
+  line-height: 1.35;
+  color: var(--sp-text-primary, var(--color-ink-900));
+}
+
+.student-notes-card__desc {
+  margin: 0.35rem 0 0;
+  font-size: var(--fs-13, 0.8125rem);
+  line-height: 1.45;
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes-card__meta {
+  margin: 0.4rem 0 0;
+  font-size: var(--fs-12, 0.75rem);
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes-card__size {
+  font-weight: var(--fw-semibold, 600);
+  color: var(--sp-text-primary, var(--color-ink-700));
+}
+
+.student-notes-card__sep {
+  margin: 0 0.25rem;
+}
+
+.student-notes-card__download {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.student-notes-card__download.btn--loading {
+  pointer-events: none;
+  opacity: 0.88;
+}
+
+/* Page wrappers */
+
+.student-my-course__notes {
+  margin-top: 0;
+}
+
+.student-lectures-page__notes,
+.student-lecture-player__notes {
+  margin-top: var(--space-4, 1rem);
+}
+
+/* Responsive */
+
+@media (max-width: 1023px) {
+  .student-notes__cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .student-notes__cards {
+    grid-template-columns: 1fr;
+  }
+
+  .student-notes-card {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .student-notes-card__icon {
+    grid-row: 1;
+  }
+
+  .student-notes-card__download {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1440px) {
+  .student-notes__cards {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+}
+
+/* Top-level Notes page */
+
+.student-notes-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 1.25rem);
+}
+
+.student-notes-page__header {
+  margin-bottom: 0;
+}
+
+.student-notes-page__title {
+  margin: 0;
+}
+
+.student-notes-page__lead {
+  margin: 0.35rem 0 0;
+  font-size: var(--fs-14, 0.875rem);
+  color: var(--sp-text-muted, var(--color-ink-500));
+  line-height: 1.5;
+  max-width: 40rem;
+}
+
+.student-notes-page__course-tabs {
+  margin-top: 0;
+}
+
+.student-notes-page__course-label {
+  margin: 0;
+  font-size: var(--fs-13, 0.8125rem);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes-page__search {
+  position: relative;
+  max-width: 28rem;
+}
+
+.student-notes-page__search-input {
+  width: 100%;
+}
+
+.student-notes-page__count {
+  margin: 0;
+  font-size: var(--fs-13, 0.8125rem);
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes-page__pick-course {
+  margin-top: 0.5rem;
+}
+
+/* Subject → chapter → lecture hierarchy */
+
+.student-notes-hierarchy {
+  display: grid;
+  gap: var(--space-4, 1rem);
+}
+
+.student-notes-hierarchy__block {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+}
+
+.student-notes-hierarchy__heading {
+  margin: 0;
+  font-size: var(--fs-12, 0.75rem);
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes-hierarchy__section {
+  border: 1px solid var(--sp-border, var(--color-ink-100));
+  border-radius: var(--radius-md, 10px);
+  background: var(--sp-surface-muted, var(--color-bg-soft));
+  overflow: hidden;
+}
+
+.student-notes-hierarchy__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.student-notes-hierarchy__summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-notes-hierarchy__chevron {
+  flex-shrink: 0;
+  color: var(--sp-text-muted, var(--color-ink-400));
+  transition: transform var(--transition-fast, 120ms ease);
+}
+
+.student-notes-hierarchy__section[open] > .student-notes-hierarchy__summary .student-notes-hierarchy__chevron {
+  transform: rotate(180deg);
+}
+
+.student-notes-hierarchy__title {
+  font-size: var(--fs-15, 0.9375rem);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--sp-text-primary, var(--color-ink-900));
+}
+
+.student-notes-hierarchy__count {
+  margin-left: auto;
+  font-size: var(--fs-12, 0.75rem);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--sp-text-muted, var(--color-ink-500));
+  background: var(--sp-surface-card, #fff);
+  border: 1px solid var(--sp-border, var(--color-ink-100));
+  border-radius: var(--radius-full, 999px);
+  padding: 2px 9px;
+}
+
+.student-notes-hierarchy__body {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+  padding: 0 0.75rem 0.75rem;
+}
+
+.student-notes-hierarchy__tier {
+  display: grid;
+  gap: var(--space-2, 0.5rem);
+}
+
+.student-notes-hierarchy__tier-label {
+  margin: 0;
+  font-size: var(--fs-12, 0.75rem);
+  font-weight: var(--fw-medium, 500);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sp-text-muted, var(--color-ink-500));
+}
+
+.student-notes-hierarchy__section .student-notes-hierarchy__section {
+  margin-left: 0.75rem;
+  background: var(--sp-surface-card, #fff);
+}
+
+@media (max-width: 767px) {
+  .student-notes-hierarchy__section .student-notes-hierarchy__section {
+    margin-left: 0;
+  }
+}

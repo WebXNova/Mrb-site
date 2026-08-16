@@ -66,6 +66,7 @@ import {
  * @property {number} passing_marks
  * @property {number} shuffle_questions
  * @property {number} shuffle_options
+ * @property {number} show_result_immediately
  * @property {Date|string|null} start_date
  * @property {Date|string|null} end_date
  */
@@ -121,6 +122,7 @@ const ATTEMPT_TEST_SELECT = `
          t.passing_marks,
          t.shuffle_questions,
          t.shuffle_options,
+         t.show_result_immediately,
          t.start_date,
          t.end_date
   FROM test_attempts a
@@ -178,6 +180,7 @@ function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
     passing_marks: Number(row.passing_marks ?? 0),
     shuffle_questions: Number(row.shuffle_questions ?? 0),
     shuffle_options: Number(row.shuffle_options ?? 0),
+    show_result_immediately: Number(row.show_result_immediately ?? 1),
     start_date: row.start_date ?? null,
     end_date: row.end_date ?? null,
   };

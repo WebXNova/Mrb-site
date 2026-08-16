@@ -45,7 +45,8 @@ function normalizePakistaniWhatsapp(value) {
   return `+${digits}`;
 }
 
-function mapEnrollmentBodyToDto(body, userEmail) {
+function mapEnrollmentBodyToDto(body, fallbackEmail) {
+  const email = parseBodyField(body?.email) || fallbackEmail;
   return {
     course_id: body.course_id ?? body.courseId,
     province_id: body.province_id ?? body.provinceId,
@@ -57,7 +58,7 @@ function mapEnrollmentBodyToDto(body, userEmail) {
     dateOfBirth: parseBodyField(body.dateOfBirth) || null,
     gender: parseBodyField(body.gender),
     whatsappNumber: normalizePakistaniWhatsapp(parseBodyField(body.whatsappNumber)),
-    email: userEmail,
+    email,
     hsscStatus: parseBodyField(body.hsscStatus),
     mdcatAttemptType: parseBodyField(body.mdcatAttemptType),
     confirmSwitch:
@@ -80,19 +81,15 @@ export const createEnrollment = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Authentication required');
   }
 
-  const userEmail = String(req.user?.email || parseBodyField(req.body?.email) || '').trim();
-  if (!userEmail) {
-    throw new ApiError(401, 'Authenticated email is required');
-  }
-
-  const bodyEmail = parseBodyField(req.body?.email);
-  if (bodyEmail && bodyEmail.toLowerCase() !== userEmail.toLowerCase()) {
-    throw new ApiError(400, 'Email must match the signed-in student account');
+  const accountEmail = String(req.user?.email || '').trim();
+  const enrollmentEmail = parseBodyField(req.body?.email) || accountEmail;
+  if (!enrollmentEmail) {
+    throw new ApiError(400, 'Email is required');
   }
 
   let dto;
   try {
-    dto = parseCreateEnrollmentDto(mapEnrollmentBodyToDto(req.body, userEmail));
+    dto = parseCreateEnrollmentDto(mapEnrollmentBodyToDto(req.body, accountEmail));
   } catch (error) {
     if (error?.name === 'ZodError') {
       throw new ApiError(422, 'Invalid enrollment payload', error.flatten());
@@ -120,7 +117,7 @@ export const createEnrollment = asyncHandler(async (req, res) => {
       dateOfBirth: dto.dateOfBirth || null,
       gender: dto.gender,
       whatsappNumber: dto.whatsappNumber,
-      email: userEmail,
+      email: dto.email,
       provinceId: location.province.id,
       districtId: location.district.id,
       cityId: location.city.id,
@@ -206,6 +203,9 @@ async function enrichEnrollmentsWithAdmission(rows) {
       enrollmentSource: row.enrollmentSource ?? null,
       orderId: row.orderId,
       orderStatus: row.orderStatus,
+      manualPaymentStatus: row.manualPaymentStatus ?? null,
+      createdAt: row.createdAt ?? null,
+      orderPaidAt: row.orderPaidAt ?? null,
       admission_status: admissionStatus,
       start_date: normalizeDateOnly(course?.start_date),
       end_date: normalizeDateOnly(course?.end_date),

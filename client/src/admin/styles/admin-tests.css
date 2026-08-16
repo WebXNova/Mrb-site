@@ -1,29 +1,6 @@
 /* Tests admin — polished layout, status badges, responsive table & forms */
 
-/* Compact scale for admin tests area (less “zoomed in” feel) */
-.admin-shell {
-  font-size: 14px;
-}
-
-.admin-shell .admin-content {
-  padding: var(--space-4) clamp(var(--space-4), 2vw, var(--space-6));
-}
-
-.admin-shell .admin-topbar {
-  padding: var(--space-3) var(--space-5);
-  margin-bottom: var(--space-4);
-}
-
-.admin-shell .admin-topbar__title {
-  font-size: 1.125rem;
-}
-
-.admin-shell .admin-topbar__subtitle {
-  font-size: 0.8125rem;
-}
-
 .admin-page--tests {
-  gap: var(--space-3);
   max-width: 1440px;
   font-size: inherit;
 }
@@ -125,25 +102,20 @@
 }
 
 .admin-page--tests .admin-stat-card__value {
-  font-size: 1.375rem;
+  font-size: var(--admin-font-stat, 1.375rem);
 }
 
 .admin-page--tests .heading-3 {
-  font-size: 1.0625rem;
+  font-size: var(--admin-font-lg, 0.875rem);
 }
 
 .admin-test-page-header__title {
-  font-size: 1.25rem;
+  font-size: var(--admin-font-page, 1.125rem);
 }
 
 .admin-test-page-header {
   padding-bottom: var(--space-3);
   margin-bottom: var(--space-3);
-}
-
-.admin-tests-workflow {
-  border-left: 3px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
-  background: linear-gradient(135deg, #fafbff 0%, #fff 100%);
 }
 
 .admin-tests-workflow .admin-workflow-list {
@@ -173,8 +145,8 @@
 }
 
 .admin-test-page-header__title {
-  font-family: var(--font-display);
-  font-size: clamp(var(--fs-22), 3vw, var(--fs-28));
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page, 1.125rem);
   font-weight: var(--fw-bold);
   letter-spacing: var(--ls-tight);
   color: var(--color-ink-900);
@@ -262,8 +234,8 @@
 
 .admin-tests-list-head .heading-3 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-22);
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-lg, 0.875rem);
   letter-spacing: var(--ls-tight);
 }
 
@@ -279,7 +251,7 @@
 .admin-tests-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 900px;
+  min-width: 960px;
   table-layout: fixed;
 }
 
@@ -290,7 +262,7 @@
   letter-spacing: 0.04em;
   color: var(--color-ink-500);
   background: var(--color-bg-soft);
-  padding: var(--space-3) var(--space-3);
+  padding: 10px 12px;
   border-bottom: 1px solid var(--color-ink-100);
   white-space: nowrap;
   text-align: left;
@@ -298,26 +270,25 @@
 }
 
 .admin-tests-table td {
-  padding: var(--space-3) var(--space-3);
+  padding: 10px 12px;
   border-bottom: 1px solid var(--color-ink-100);
   font-size: 0.8125rem;
   color: var(--color-ink-700);
   vertical-align: middle;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
 }
 
-.admin-tests-table th:nth-child(1) { width: 20%; }
-.admin-tests-table th:nth-child(2) { width: 15%; }
-.admin-tests-table th:nth-child(3) { width: 10%; }
-.admin-tests-table th:nth-child(4) { width: 10%; }
-.admin-tests-table th:nth-child(5) { width: 8%; }
-.admin-tests-table th:nth-child(6) { width: 15%; }
-.admin-tests-table th:nth-child(7) { width: 22%; }
+/* Title | Course | Category | Status | Duration | Public link | Actions — widths in Tests list page section */
 
 .admin-tests-table td[data-label='Actions'] {
   overflow: visible;
   position: relative;
+  white-space: normal;
+}
+
+.admin-tests-table td[data-label='Category'],
+.admin-tests-table td[data-label='Duration'],
+.admin-tests-table td[data-label='Status'] {
+  white-space: nowrap;
 }
 
 .admin-tests-table tbody tr:hover {
@@ -328,25 +299,24 @@
   border-bottom: none;
 }
 
-.admin-tests-table__title {
+.admin-tests-table__title,
+.admin-tests-table__course {
   font-weight: var(--fw-semibold);
   color: var(--color-ink-900);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
-.admin-tests-table td[data-label='Title'] {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 0;
+.admin-tests-table__course {
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-700);
 }
 
+.admin-tests-table td[data-label='Title'],
 .admin-tests-table td[data-label='Course'] {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   max-width: 0;
 }
 
@@ -358,9 +328,10 @@
 
 .admin-tests-link-actions {
   display: inline-flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 4px;
   align-items: center;
+  max-width: 100%;
 }
 
 .admin-tests-link-actions a {
@@ -442,16 +413,10 @@
 
 .admin-tests-row-actions .btn--sm {
   --btn-padding-x: 0.55rem;
-  --btn-padding-y: 0.25rem;
-  --btn-fs: 0.7rem;
+  --btn-padding-y: 0.3rem;
+  --btn-fs: 0.75rem;
   white-space: nowrap;
-}
-
-.admin-tests-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
+  min-height: 30px;
 }
 
 .btn--danger {
@@ -506,14 +471,6 @@
   margin: var(--space-1) 0;
 }
 
-.admin-tests-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-/* Wizard progress */
 .admin-test-progress {
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-ink-100);
@@ -1043,6 +1000,308 @@
 .admin-publish-list-modal__warning {
   margin-top: var(--space-3);
   margin-bottom: 0;
+}
+
+/* ============================================================
+   Tests list page — information hierarchy & layout (scoped)
+   ============================================================ */
+
+.admin-page--tests {
+  gap: 20px;
+}
+
+.admin-page--tests .admin-card {
+  padding: 16px;
+}
+
+/* Page header action hierarchy */
+.admin-tests-page-header__actions {
+  gap: 8px;
+}
+
+.admin-tests-page-header__actions .btn--course-primary {
+  order: 1;
+}
+
+.admin-tests-page-header__actions .btn--secondary {
+  order: 2;
+}
+
+.admin-tests-page-header__history {
+  order: 3;
+  font-weight: var(--fw-medium);
+}
+
+.admin-tests-page-header__actions .btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Overview block: summary + analytics + workflow */
+.admin-tests-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Simple summary cards — not dashboard KPI style */
+.admin-tests-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-tests-summary-card {
+  padding: 16px;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.admin-tests-summary-card__label {
+  margin: 0 0 6px;
+  font-size: var(--admin-font-sm, 0.6875rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-500);
+  line-height: 1.3;
+}
+
+.admin-tests-summary-card__value {
+  margin: 0;
+  font-size: var(--admin-font-stat, 1.375rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--color-ink-900);
+}
+
+@media (max-width: 768px) {
+  .admin-tests-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-tests-summary-grid .admin-tests-summary-card:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-tests-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-tests-summary-grid .admin-tests-summary-card:last-child {
+    grid-column: auto;
+  }
+}
+
+/* Compact workflow panel — secondary to analytics */
+.admin-page--tests .admin-tests-workflow {
+  padding: 12px 16px;
+  border-left: none;
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-ink-100);
+}
+
+.admin-page--tests .admin-tests-workflow .admin-collapsible__trigger {
+  margin-bottom: 0;
+  min-height: 36px;
+}
+
+.admin-page--tests .admin-tests-workflow .admin-collapsible__title {
+  font-size: var(--admin-font-base, 0.8125rem);
+  font-weight: 600;
+}
+
+.admin-page--tests .admin-tests-workflow .admin-collapsible__body:not([hidden]) {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-ink-100);
+}
+
+.admin-page--tests .admin-tests-workflow .admin-workflow-list {
+  gap: 0.5rem;
+  font-size: var(--admin-font-base, 0.8125rem);
+}
+
+/* Primary workspace — test list */
+.admin-tests-workspace {
+  border-top: 2px solid var(--color-ink-100);
+}
+
+.admin-tests-workspace__head {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-ink-100);
+}
+
+.admin-tests-workspace__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-lg, 0.875rem);
+  font-weight: 700;
+  letter-spacing: var(--ls-tight);
+  color: var(--color-ink-900);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.admin-tests-workspace__lead {
+  margin: 4px 0 0;
+  font-size: var(--admin-font-base, 0.8125rem);
+  color: var(--color-ink-500);
+}
+
+/* Filter toolbar */
+.admin-tests-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-tests-filters__row--scope {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.admin-tests-filters__row--toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.admin-tests-filters__row--toolbar .admin-search-field {
+  flex: 1 1 14rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-tests-status-filters {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-tests-status-chip {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: var(--admin-font-md, 0.75rem);
+  font-weight: var(--fw-medium);
+  border-radius: var(--radius-md);
+}
+
+.admin-tests-status-chip:not(.admin-tag-chip--active) {
+  background: transparent;
+  border-color: var(--color-ink-200);
+  color: var(--color-ink-600);
+}
+
+.admin-tests-filters__import {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+@media (max-width: 1024px) {
+  .admin-tests-filters__row--scope {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-tests-filters__row--scope {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-tests-filters__row--toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-tests-status-filters {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .admin-tests-filters__import {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-tests-page-header__actions {
+    width: 100%;
+  }
+
+  .admin-tests-page-header__actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .admin-tests-page-header__history {
+    flex: 1 1 100%;
+  }
+}
+
+/* Table action groups */
+.admin-tests-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-tests-row-actions__group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-tests-row-actions__group--primary .btn--primary {
+  min-width: 4.5rem;
+}
+
+.admin-tests-table th:nth-child(1),
+.admin-tests-table td:nth-child(1) { width: 20%; }
+.admin-tests-table th:nth-child(2),
+.admin-tests-table td:nth-child(2) { width: 18%; }
+.admin-tests-table th:nth-child(3),
+.admin-tests-table td:nth-child(3) { width: 8%; }
+.admin-tests-table th:nth-child(4),
+.admin-tests-table td:nth-child(4) { width: 12%; }
+.admin-tests-table th:nth-child(5),
+.admin-tests-table td:nth-child(5) { width: 7%; }
+.admin-tests-table th:nth-child(6),
+.admin-tests-table td:nth-child(6) { width: 10%; }
+.admin-tests-table th:nth-child(7),
+.admin-tests-table td:nth-child(7) { width: 25%; }
+
+.admin-tests-table {
+  min-width: 980px;
+}
+
+.admin-test-status {
+  padding: 0.22rem 0.55rem;
+  font-size: 0.625rem;
+  max-width: 100%;
+}
+
+.admin-tests-table td[data-label='Status'] {
+  padding-right: 8px;
+}
+
+.admin-tests-table-wrap {
+  margin-top: 0;
+}
+
+.admin-page--tests .admin-test-analytics {
+  padding: 16px;
+  background: var(--color-bg-alt);
+  border-color: var(--color-ink-100);
 }
 
 .admin-test-readiness {

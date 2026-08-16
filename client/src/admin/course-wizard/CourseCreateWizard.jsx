@@ -28,6 +28,7 @@ import {
   flattenZodError,
 } from './courseWizardStepsValidation.js';
 import { toDateInputValue } from './courseScheduleValidation.js';
+import '../styles/admin-courses-dashboard.css';
 
 const LEGACY_DRAFT_KEY = 'mrb_admin_course_create_wizard_v1';
 const WIZARD_LAST_STEP = 4;

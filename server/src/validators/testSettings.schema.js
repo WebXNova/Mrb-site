@@ -6,8 +6,6 @@ export const TEST_SETTINGS_ALLOWED_KEYS = Object.freeze([
   'shuffle_options',
   'show_explanations',
   'show_result_immediately',
-  'show_answers_after_submit',
-  'allow_retake',
   'access_mode',
   'start_date',
   'end_date',
@@ -36,8 +34,6 @@ export const testSettingsBodySchema = z
     shuffle_options: strictBoolean,
     show_explanations: strictBoolean,
     show_result_immediately: strictBoolean,
-    show_answers_after_submit: strictBoolean,
-    allow_retake: strictBoolean,
     access_mode: z.enum(TEST_ACCESS_MODES),
     start_date: nullableIsoDateSchema.optional(),
     end_date: nullableIsoDateSchema.optional(),
@@ -62,10 +58,10 @@ export const testSettingsBodySchema = z
     if (data.start_date != null && data.end_date != null) {
       const startMs = new Date(data.start_date).getTime();
       const endMs = new Date(data.end_date).getTime();
-      if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs <= startMs) {
+      if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs < startMs) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'end_date must be after start_date',
+          message: 'end_date must be on or after start_date',
           path: ['end_date'],
         });
       }

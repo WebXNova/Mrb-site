@@ -44,8 +44,15 @@ export function useSubmitAttempt({ slug, attemptId, refreshSession }) {
     setSubmitError('');
 
     try {
-      await submitWithTimeout(slug, attemptId);
-      navigate(`/tests/${slug}/result`, { replace: true });
+      const response = await submitWithTimeout(slug, attemptId);
+      const payload = response?.data ?? response;
+      const resultAvailable = payload?.resultAvailable !== false;
+      clearAttemptSession(slug);
+      if (resultAvailable) {
+        navigate(`/tests/${slug}/result`, { replace: true });
+      } else {
+        navigate(`/tests/${slug}/submitted`, { replace: true });
+      }
       return { ok: true };
     } catch (err) {
       if (isAttemptTokenError(err)) {

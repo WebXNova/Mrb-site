@@ -8,6 +8,7 @@
     "temp",
     "client"
   ],
-  "delay": "800",
+  "delay": 1500,
+  "signal": "SIGTERM",
   "restartable": "rs"
 }

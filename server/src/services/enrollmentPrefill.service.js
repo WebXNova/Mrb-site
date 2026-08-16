@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HSSC_STATUS_VALUES } from '../dtos/enrollment.dto.js';
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
 import { getEnrollmentById } from './safepayEnrollment.service.js';
@@ -26,7 +27,7 @@ const FIELD_VALIDATORS = {
   district_id: z.coerce.number().int().positive(),
   city_id: z.coerce.number().int().positive(),
   board_id: z.coerce.number().int().positive(),
-  hsscStatus: z.enum(['Inter Class', 'First Year Class', 'Matric Class']),
+  hsscStatus: z.enum(HSSC_STATUS_VALUES),
   mdcatAttemptType: z.enum(['Fresher', 'Improver']),
 };
 

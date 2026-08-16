@@ -279,11 +279,11 @@ export async function activateEnrollmentInTransaction(connection, options) {
   }
   if (orderId != null) {
     setParts.unshift('order_id = ?');
-    updateParams.push(orderId);
+    updateParams.unshift(orderId);
   }
   if (options.enrollmentSource != null) {
     setParts.unshift('enrollment_source = ?');
-    updateParams.push(options.enrollmentSource);
+    updateParams.unshift(options.enrollmentSource);
   }
   updateParams.push(enrollmentId, userId);
 

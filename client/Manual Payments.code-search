@@ -1,0 +1,28 @@
+# Query: Manual Payments
+# ContextLines: 1
+
+5 results - 4 files
+
+Mrb-site\client\src\admin\config\adminNavConfig.js:
+  30      { to: adminRoute('registrations'), label: 'Registrations', Icon: HowToRegOutlinedIcon },
+  31:     { to: adminRoute('manual-payments'), label: 'New Admissions', Icon: PaymentsOutlinedIcon },
+  32      { to: adminRoute('logs'), label: 'Logs', Icon: HistoryOutlinedIcon },
+
+  69      registrations: 'Registrations',
+  70:     'manual-payments': 'Manual Payments',
+  71      logs: 'Logs',
+
+Mrb-site\client\src\admin\pages\AdminManualPaymentsPage.jsx:
+  239          <div>
+  240:           <h2 className="heading-3 mp-title">Manual Payments</h2>
+  241            <p className="mp-subtitle">Review JazzCash and EasyPaisa proofs. Approving grants course access.</p>
+
+Mrb-site\server\src\sql\schema.sql:
+  1853  -- =====================================================
+  1854: -- MANUAL PAYMENTS (JazzCash / EasyPaisa student proofs)
+  1855  -- Unique TRX is enforced for APPROVED rows only (generated column).
+
+Mrb-site\server\tests\manual-payments.service.test.examples.mjs:
+  1  /**
+  2:  * Manual payments — fraud checks, student serializer leak, rate limit.
+  3   * Run: node tests/manual-payments.service.test.examples.mjs

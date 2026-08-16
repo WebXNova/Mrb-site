@@ -79,8 +79,10 @@ function assertSafeBasename(base) {
 
 /**
  * @param {string} originalName
+ * @param {{ allowedFinalExtensions?: Set<string> | null }} [options]
  */
-export function normalizeUploadExtension(originalName) {
+export function normalizeUploadExtension(originalName, options = {}) {
+  const allowedFinal = options.allowedFinalExtensions ?? null;
   const raw = String(originalName || '');
   if (raw.includes('..') || /[\\/]/.test(raw)) {
     return { ok: false, reason: 'invalid_filename', ext: null };
@@ -95,6 +97,12 @@ export function normalizeUploadExtension(originalName) {
   const ext = path.extname(base).toLowerCase();
   if (!ext) {
     return { ok: false, reason: 'missing_extension', ext: null };
+  }
+  if (allowedFinal) {
+    if (!allowedFinal.has(ext)) {
+      return { ok: false, reason: 'unsupported_extension', ext };
+    }
+    return { ok: true, ext };
   }
   if (BLOCKED_EXTENSIONS.has(ext)) {
     return { ok: false, reason: 'blocked_extension', ext };

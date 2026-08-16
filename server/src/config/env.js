@@ -234,6 +234,16 @@ if (
 const safepayDebug = parseBoolean(process.env.SAFEPAY_DEBUG, false);
 const safepayWebhookCrashDebug = parseBoolean(process.env.SAFEPAY_WEBHOOK_CRASH_DEBUG, false);
 
+/** Active checkout gateway — Safepay session creation runs only when value is `safepay`. */
+function parseActivePaymentGateway(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw || raw === 'manual') return 'manual';
+  if (raw === 'safepay') return 'safepay';
+  throw new Error('[payments] ACTIVE_PAYMENT_GATEWAY must be "safepay" or "manual"');
+}
+
+const activePaymentGateway = parseActivePaymentGateway(process.env.ACTIVE_PAYMENT_GATEWAY);
+
 /** Lowercase hostname labels after '@' (comma-separated BLOCKED_EMAIL_DOMAINS); empty unless configured. */
 const blockedEmailDomains = parseCsv(process.env.BLOCKED_EMAIL_DOMAINS)
   .map((d) => String(d || '').trim().toLowerCase())
@@ -246,6 +256,8 @@ export const env = {
   nodeEnv,
   port: Number(process.env.PORT || 4000),
   clientUrl,
+  /** @type {'safepay'|'manual'} */
+  activePaymentGateway,
 
   mysql: {
     host: required('MYSQL_HOST', '127.0.0.1'),

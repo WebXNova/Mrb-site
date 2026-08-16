@@ -45,7 +45,7 @@ function expectThrow(fn, ErrorType, message) {
 console.log('testResultVisibility.service — G-RT-07\n');
 
 assert(isShowResultImmediatelyEnabled(1) && !isShowResultImmediatelyEnabled(0), 'show_result_immediately flags');
-assert(isShowAnswersAfterSubmitEnabled(1) && !isShowAnswersAfterSubmitEnabled(0), 'show_answers_after_submit flags');
+assert(isShowAnswersAfterSubmitEnabled(0) && isShowAnswersAfterSubmitEnabled(1), 'show_answers_after_submit deprecated — always enabled');
 
 expectThrow(
   () => assertStudentResultVisible({ show_result_immediately: 0 }, { attemptId: 9 }),
@@ -94,7 +94,10 @@ try {
     ],
     { show_answers_after_submit: 0, show_explanations: 1 }
   );
-  assert(details === null, 'grading details omitted when answers withheld');
+  assert(
+    details?.length === 1 && details[0].correctOptionText === 'B',
+    'answer review always returned (show_answers_after_submit deprecated)'
+  );
 }
 
 {

@@ -26,8 +26,7 @@ import {
 } from '../utils/adminListFilterQuery.js';
 import { getAuthSnapshot } from '../../auth/authStateMachine';
 import AdminTestResultsAnalyticsPanel from '../components/AdminTestResultsAnalyticsPanel';
-import '../styles/admin-courses-dashboard.css';
-import '../styles/admin-test-results-analytics.css';
+import '../styles/admin-tests-page-redesign.css';
 
 const PAGE_SIZE = 10;
 
@@ -355,132 +354,148 @@ function AdminTestsPageContent() {
   }
 
   return (
-    <section className="admin-page admin-page--tests">
-      <header className="admin-courses-page-header">
-        <div>
-          <h1 className="admin-courses-page-header__title">Test management</h1>
-          <p className="admin-courses-page-header__subtitle">
-            Create, publish, and maintain assessments. Use the list below to find tests or start a new one with the
-            guided builder.
+    <section className="admin-page admin-page--tests tests-page">
+      <header className="tests-page__header">
+        <div className="tests-page__header-main">
+          <h1 className="tests-page__title">Tests</h1>
+          <p className="tests-page__description">
+            Create and manage assessments. Review overview metrics, then work from the test library below.
           </p>
         </div>
-        <div className="admin-courses-page-header__actions">
-          <Link className="btn btn--secondary admin-touch-target" to={adminRoute('tests/transfer')}>
-            Export / import history
+        <div className="tests-page__header-actions">
+          <Link className="tests-page__btn tests-page__btn--primary" to={adminRoute('tests/new')}>
+            <AddIcon fontSize="inherit" aria-hidden />
+            New test
           </Link>
-          <Link className="btn btn--secondary admin-touch-target" to={adminRoute('tests/import')}>
-            <FileUploadIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
+          <Link className="tests-page__btn tests-page__btn--secondary" to={adminRoute('tests/import')}>
+            <FileUploadIcon fontSize="inherit" aria-hidden />
             Import test
           </Link>
-          <Link className="btn--course-primary admin-touch-target" to={adminRoute('tests/new')}>
-            <AddIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
-            New test
+          <Link className="tests-page__btn tests-page__btn--tertiary" to={adminRoute('tests/transfer')}>
+            Export / import history
           </Link>
         </div>
       </header>
 
-      <section className="admin-grid" aria-busy={isLoading}>
-        {isLoading ? (
-          <>
-            <div className="admin-skeleton admin-skeleton-card" />
-            <div className="admin-skeleton admin-skeleton-card" />
-            <div className="admin-skeleton admin-skeleton-card" />
-          </>
-        ) : (
-          <>
-            <article className="admin-stat-card">
-              <p className="admin-stat-card__label">Total Tests</p>
-              <p className="admin-stat-card__value">{statsTests.length}</p>
-            </article>
-            <article className="admin-stat-card">
-              <p className="admin-stat-card__label">Published</p>
-              <p className="admin-stat-card__value">{publishedCount}</p>
-            </article>
-            <article className="admin-stat-card">
-              <p className="admin-stat-card__label">Drafts</p>
-              <p className="admin-stat-card__value">{draftsCount}</p>
-            </article>
-          </>
-        )}
-      </section>
+      <div className="tests-page__overview">
+        <section className="tests-metrics-strip" aria-busy={isLoading} aria-label="Test overview">
+          {isLoading ? (
+            <>
+              <div className="admin-skeleton admin-skeleton-card" />
+              <div className="admin-skeleton admin-skeleton-card" />
+              <div className="admin-skeleton admin-skeleton-card" />
+            </>
+          ) : (
+            <>
+              <article className="tests-metric">
+                <p className="tests-metric__label">Total tests</p>
+                <p className="tests-metric__value">{statsTests.length}</p>
+              </article>
+              <article className="tests-metric">
+                <p className="tests-metric__label">Published</p>
+                <p className="tests-metric__value">{publishedCount}</p>
+              </article>
+              <article className="tests-metric">
+                <p className="tests-metric__label">Drafts</p>
+                <p className="tests-metric__value">{draftsCount}</p>
+              </article>
+            </>
+          )}
+        </section>
 
-      <AdminSectionErrorBoundary title="Test results analytics could not load">
-        <AdminTestResultsAnalyticsPanel tests={statsTests} />
-      </AdminSectionErrorBoundary>
+        <AdminSectionErrorBoundary title="Test results analytics could not load">
+          <AdminTestResultsAnalyticsPanel tests={statsTests} />
+        </AdminSectionErrorBoundary>
 
-      <AdminCollapsibleCard
-        title="Test builder workflow"
-        className="admin-card admin-tests-workflow"
-        expanded={workflowExpanded}
-        onToggle={() => setWorkflowExpanded((v) => !v)}
-      >
-        <ol className="admin-workflow-list">
-          <li>
-            <strong>Create:</strong> <Link to={adminRoute('tests/new')}>New test</Link> — basic info, then rules, settings, and
-            questions.
-          </li>
-          <li>
-            <strong>Maintain:</strong> Use <strong>Edit</strong>, <strong>Questions</strong>, or <strong>More</strong> on
-            each row.
-          </li>
-          <li>
-            <strong>Publish:</strong> When all steps show complete, use <strong>Publish test</strong> on the
-            Questions/Settings page or <strong>More → Publish</strong> here. Public access mode alone does not
-            publish.
-          </li>
-        </ol>
-      </AdminCollapsibleCard>
+        <AdminCollapsibleCard
+          title="Test builder workflow"
+          className="tests-page__workflow"
+          expanded={workflowExpanded}
+          onToggle={() => setWorkflowExpanded((v) => !v)}
+        >
+          <ol className="admin-workflow-list">
+            <li>
+              <strong>Create:</strong> <Link to={adminRoute('tests/new')}>New test</Link> — basic info, then rules, settings, and
+              questions.
+            </li>
+            <li>
+              <strong>Maintain:</strong> Use <strong>Edit</strong>, <strong>Questions</strong>, or <strong>More</strong> on
+              each row.
+            </li>
+            <li>
+              <strong>Publish:</strong> When all steps show complete, use <strong>Publish test</strong> on the
+              Questions/Settings page or <strong>More → Publish</strong> here. Public access mode alone does not
+              publish.
+            </li>
+          </ol>
+        </AdminCollapsibleCard>
+      </div>
 
-      <section className="admin-card">
-        <div className="admin-tests-list-head">
-          <h2 className="heading-3">All tests</h2>
-        </div>
+      <section className="tests-page__management">
+        <header className="tests-page__section-head">
+          <h2 className="tests-page__section-title">All tests</h2>
+          <p className="tests-page__section-lead">Search, filter, and manage your test library.</p>
+        </header>
 
-        <div className="admin-form-grid" style={{ marginBottom: '1rem' }}>
-          <AdminHierarchySelectors cascade={filterCascade} depth={2} idPrefix={{ course: 'testsCourse', subject: 'testsSubject' }} />
-          <div className="admin-field">
-            <label htmlFor="testsDateFrom">Start date</label>
-            <input
-              id="testsDateFrom"
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
+        <div className="tests-filters">
+          <div className="tests-filters__block">
+            <p className="tests-filters__block-label">Filters</p>
+            <div className="tests-filters__primary-grid">
+              <AdminHierarchySelectors cascade={filterCascade} depth={2} idPrefix={{ course: 'testsCourse', subject: 'testsSubject' }} />
+              <div className="admin-field">
+                <label htmlFor="testsDateFrom">Start date</label>
+                <input
+                  id="testsDateFrom"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </div>
+              <div className="admin-field">
+                <label htmlFor="testsDateTo">End date</label>
+                <input id="testsDateTo" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
+            </div>
           </div>
-          <div className="admin-field">
-            <label htmlFor="testsDateTo">End date</label>
-            <input id="testsDateTo" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          </div>
-        </div>
 
-        <div className="admin-tests-toolbar">
-          <AdminSearchField
-            id="tests-search"
-            label="Search tests"
-            placeholder="Search tests…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onClear={() => setSearchQuery('')}
-          />
+          <div className="tests-filters__toolbar">
+            <div className="tests-filters__block tests-filters__search">
+              <p className="tests-filters__block-label">Search</p>
+              <AdminSearchField
+                id="tests-search"
+                label="Search tests"
+                placeholder="Search tests…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onClear={() => setSearchQuery('')}
+              />
+            </div>
 
-          <Link className="btn btn--secondary admin-touch-target" to={adminRoute('tests/import')}>
-            <FileUploadIcon fontSize="small" style={{ marginRight: 6, verticalAlign: -3 }} aria-hidden />
-            Import test
-          </Link>
+            <div className="tests-filters__block tests-filters__status">
+              <p className="tests-filters__block-label">Status</p>
+              <div className="tests-filters__status-chips" role="tablist" aria-label="Filter tests by status">
+                {TEST_STATUS_FILTERS.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={statusFilter === filter.key}
+                    className={`tests-status-chip ${statusFilter === filter.key ? 'tests-status-chip--active' : ''}`}
+                    onClick={() => setStatusFilter(filter.key)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <div className="admin-status-filters" role="tablist" aria-label="Filter tests by status">
-            {TEST_STATUS_FILTERS.map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                role="tab"
-                aria-selected={statusFilter === filter.key}
-                className={`admin-tag-chip ${statusFilter === filter.key ? 'admin-tag-chip--active' : ''}`}
-                onClick={() => setStatusFilter(filter.key)}
-              >
-                {filter.label}
-              </button>
-            ))}
+            <div className="tests-filters__block tests-filters__actions">
+              <p className="tests-filters__block-label">Actions</p>
+              <Link className="tests-page__btn tests-page__btn--secondary" to={adminRoute('tests/import')}>
+                <FileUploadIcon fontSize="inherit" aria-hidden />
+                Import test
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -496,7 +511,7 @@ function AdminTestsPageContent() {
           <div className="admin-empty-state">
             <p className="admin-empty-state__title">No tests match your search</p>
             <p className="admin-empty-state__text">Try a different keyword or clear filters.</p>
-            <button type="button" className="btn btn--secondary admin-touch-target" onClick={clearAllFilters}>
+            <button type="button" className="tests-page__btn tests-page__btn--secondary" onClick={clearAllFilters}>
               Clear filters
             </button>
           </div>
@@ -504,16 +519,16 @@ function AdminTestsPageContent() {
           <div className="admin-empty-state">
             <p className="admin-empty-state__title">No tests available</p>
             <p className="admin-empty-state__text">Create your first test to get started.</p>
-            <Link className="btn btn--primary admin-touch-target" to={adminRoute('tests/new')}>
+            <Link className="tests-page__btn tests-page__btn--primary" to={adminRoute('tests/new')}>
               Create test
             </Link>
           </div>
         ) : (
           <>
-            <div className="admin-tests-table-wrap admin-tests-table-desktop">
-              <div className="admin-tests-table-scroll">
-                <table className="admin-tests-table">
-                  <thead className="admin-tests-table__head--sticky">
+            <div className="tests-table-shell admin-tests-table-desktop">
+              <div className="tests-table-scroll">
+                <table className="tests-table">
+                  <thead className="tests-table__head--sticky">
                     <tr>
                       <th scope="col">Title</th>
                       <th scope="col">Course</th>
@@ -527,11 +542,20 @@ function AdminTestsPageContent() {
                   <tbody>
                     {paginatedTests.map((test) => (
                       <tr key={test.id}>
-                        <td data-label="Title">
-                          <div className="admin-tests-table__title">{test.title}</div>
+                        <td data-label="Title" title={test.title}>
+                          <span className="tests-table__title">{test.title}</span>
                         </td>
-                        <td data-label="Course">
-                          {test.courseId ? courseTitleById.get(Number(test.courseId)) || `Course #${test.courseId}` : '—'}
+                        <td
+                          data-label="Course"
+                          title={
+                            test.courseId
+                              ? courseTitleById.get(Number(test.courseId)) || `Course #${test.courseId}`
+                              : undefined
+                          }
+                        >
+                          <span className="tests-table__course">
+                            {test.courseId ? courseTitleById.get(Number(test.courseId)) || `Course #${test.courseId}` : '—'}
+                          </span>
                         </td>
                         <td data-label="Category">{test.category || 'MDCAT'}</td>
                         <td data-label="Status">
@@ -542,16 +566,16 @@ function AdminTestsPageContent() {
                         </td>
                         <td data-label="Public link">
                           {test.publicLink ? (
-                            <div className="admin-tests-link-actions">
-                              <a href={test.publicLink} target="_blank" rel="noreferrer" className="btn btn--ghost btn--sm admin-touch-target">
+                            <div className="tests-link-actions">
+                              <a href={test.publicLink} target="_blank" rel="noreferrer" className="tests-link-actions__btn">
                                 Open
                               </a>
-                              <button className="btn btn--ghost btn--sm admin-touch-target" type="button" onClick={() => copyPublicLink(test.publicLink)}>
+                              <button type="button" className="tests-link-actions__btn" onClick={() => copyPublicLink(test.publicLink)}>
                                 Copy
                               </button>
                             </div>
                           ) : (
-                            '—'
+                            <span className="tests-table__muted">—</span>
                           )}
                         </td>
                         <td data-label="Actions">
@@ -599,7 +623,7 @@ function AdminTestsPageContent() {
                 <div className="admin-pagination__controls">
                   <button
                     type="button"
-                    className="btn btn--secondary btn--sm admin-touch-target"
+                    className="tests-page__btn tests-page__btn--secondary"
                     disabled={currentPage <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
@@ -607,7 +631,7 @@ function AdminTestsPageContent() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn--secondary btn--sm admin-touch-target"
+                    className="tests-page__btn tests-page__btn--secondary"
                     disabled={currentPage >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >

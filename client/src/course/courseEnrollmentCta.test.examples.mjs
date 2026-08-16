@@ -73,7 +73,7 @@ test('payment_pending → Payment Pending', () => {
     { courseId: 9 }
   );
   assert.equal(cta.label, 'Payment Pending');
-  assert.equal(cta.to.pathname, '/enrollment/payment');
+  assert.equal(cta.to, '/enrollment/payment?order_id=34&course_id=9');
 });
 
 test('admissions_closed → Enrollment Closed (disabled)', () => {

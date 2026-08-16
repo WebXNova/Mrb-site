@@ -4,6 +4,8 @@ import { ApiError } from '../utils/apiError.js';
 import { getOrCreateEnrollment } from './enrollmentIntegrity.service.js';
 import { activateEnrollment, revokeEnrollment } from './enrollmentLifecycle.service.js';
 import { resolveHierarchyCourseScope } from '../utils/parseAdminListFilters.js';
+import { computeAccessStale } from '../utils/courseStaleAdvisory.js';
+import { normalizeDateOnly } from '../models/course.model.js';
 
 function normalizePositiveInt(value, label) {
   const n = Number(value);
@@ -27,6 +29,8 @@ function normalizeStatus(status) {
 
 function toEnrollment(row) {
   if (!row) return null;
+  const courseEndDate = normalizeDateOnly(row.course_end_date);
+  const accessStatus = row.access_status ?? 'inactive';
   return {
     id: row.id,
     userId: row.user_id,
@@ -43,6 +47,18 @@ function toEnrollment(row) {
     orderAmount: row.order_amount ?? null,
     orderCurrency: row.order_currency || null,
     orderPaidAt: row.order_paid_at || null,
+    /** Latest manual payment submission status — only set for manual gateway orders. */
+    manualPaymentStatus: row.manual_payment_status ?? null,
+    manualPaymentCouponCode: row.manual_payment_coupon_code ?? null,
+    manualPaymentDiscountApplied:
+      row.manual_payment_discount_applied == null ? null : Number(row.manual_payment_discount_applied),
+    manualPaymentOriginalAmount:
+      row.manual_payment_original_amount == null ? null : Number(row.manual_payment_original_amount),
+    manualPaymentCouponDiscountType:
+      row.manual_payment_coupon_discount_type === 'flat'
+      || row.manual_payment_coupon_discount_type === 'percentage'
+        ? row.manual_payment_coupon_discount_type
+        : null,
     applicantFullName: row.applicant_full_name,
     fatherName: row.father_name,
     dateOfBirth: row.date_of_birth,
@@ -64,7 +80,13 @@ function toEnrollment(row) {
     hsscStatus: row.hssc_status,
     mdcatAttemptType: row.mdcat_attempt_type,
     status: row.status,
-    accessStatus: row.access_status ?? 'inactive',
+    accessStatus,
+    courseEndDate,
+    /** Admin-only advisory — active access after course end_date */
+    access_stale: computeAccessStale({
+      access_status: accessStatus,
+      course_end_date: courseEndDate,
+    }),
     enrollmentSource: row.enrollment_source ?? null,
     adminNote: row.admin_note,
     reviewedBy: row.reviewed_by,
@@ -86,6 +108,7 @@ function selectEnrollmentSql(whereSql = '1 = 1') {
       e.course_id,
       c.title AS course_title,
       c.slug AS course_slug,
+      c.end_date AS course_end_date,
       e.order_id,
       o.status AS order_status,
       o.gateway AS order_gateway,
@@ -93,6 +116,11 @@ function selectEnrollmentSql(whereSql = '1 = 1') {
       o.amount AS order_amount,
       o.currency AS order_currency,
       o.paid_at AS order_paid_at,
+      CASE WHEN o.gateway = 'manual' THEN mp_latest.status ELSE NULL END AS manual_payment_status,
+      mp_latest.coupon_code AS manual_payment_coupon_code,
+      mp_latest.discount_applied AS manual_payment_discount_applied,
+      mp_latest.original_amount AS manual_payment_original_amount,
+      mp_latest.coupon_discount_type AS manual_payment_coupon_discount_type,
       e.applicant_full_name,
       e.father_name,
       e.date_of_birth,
@@ -125,6 +153,22 @@ function selectEnrollmentSql(whereSql = '1 = 1') {
     INNER JOIN users u ON u.id = e.user_id
     INNER JOIN courses c ON c.id = e.course_id
     LEFT JOIN orders o ON o.id = e.order_id
+    LEFT JOIN (
+      SELECT
+        mp.order_id,
+        mp.status,
+        mp.discount_applied,
+        mp.original_amount,
+        cp.code AS coupon_code,
+        cp.discount_type AS coupon_discount_type
+      FROM manual_payments mp
+      LEFT JOIN coupons cp ON cp.id = mp.coupon_id
+      INNER JOIN (
+        SELECT order_id, MAX(id) AS latest_id
+        FROM manual_payments
+        GROUP BY order_id
+      ) mp_pick ON mp_pick.latest_id = mp.id
+    ) mp_latest ON mp_latest.order_id = o.id
     LEFT JOIN provinces p ON p.id = e.province_id
     LEFT JOIN districts ds ON ds.id = e.district_id
     LEFT JOIN cities ct ON ct.id = e.city_id

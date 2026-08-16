@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import StudentLectureFilters from '../student/components/lectures/StudentLectureFilters';
 import StudentLecturePlaylist from '../student/components/lectures/StudentLecturePlaylist';
+import StudentNotesSection from '../student/components/notes/StudentNotesSection';
 import { useStudentLectures } from '../student/hooks/useStudentLectures';
 import {
   extractLectureFilterOptions,
@@ -41,6 +42,30 @@ export default function StudentLecturesPage() {
     () => filterStudentLectures(lectures, { courseId, subjectId, chapterId, search }),
     [lectures, courseId, subjectId, chapterId, search]
   );
+
+  const notesContext = useMemo(() => {
+    if (courseId === 'all') return null;
+    const cid = Number(courseId);
+    if (!Number.isInteger(cid) || cid <= 0) return null;
+    if (chapterId !== 'all') {
+      return {
+        courseId: cid,
+        chapterId: Number(chapterId),
+        title: 'Chapter notes',
+      };
+    }
+    if (subjectId !== 'all') {
+      return {
+        courseId: cid,
+        subjectId: Number(subjectId),
+        title: 'Subject notes',
+      };
+    }
+    return {
+      courseId: cid,
+      title: 'Course notes',
+    };
+  }, [courseId, subjectId, chapterId]);
 
   function handleSubjectChange(value) {
     setSubjectId(value);
@@ -90,6 +115,17 @@ export default function StudentLecturesPage() {
           />
 
           <StudentLecturePlaylist lectures={filteredLectures} />
+
+          {notesContext ? (
+            <article className="admin-card student-lectures-page__notes">
+              <StudentNotesSection
+                courseId={notesContext.courseId}
+                subjectId={notesContext.subjectId}
+                chapterId={notesContext.chapterId}
+                title={notesContext.title}
+              />
+            </article>
+          ) : null}
         </>
       ) : null}
     </section>

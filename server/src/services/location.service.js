@@ -65,6 +65,16 @@ export async function listCitiesByDistrictId(districtId) {
   return rows.map(toLocation);
 }
 
+export async function listAllCities() {
+  const [rows] = await mysqlPool.query(
+    `SELECT id, name, slug
+     FROM cities
+     WHERE is_active = TRUE
+     ORDER BY sort_order ASC, name ASC, id ASC`
+  );
+  return rows.map(toLocation);
+}
+
 export async function listIntermediateBoards() {
   const [rows] = await mysqlPool.query(
     `SELECT id, name, slug
@@ -91,14 +101,9 @@ export async function resolveEnrollmentLocationSelection({ provinceId, districtI
     throw new ApiError(400, 'Selected district is invalid or does not belong to the selected province');
   }
 
-  const city = await findActiveLocationById(
-    'cities',
-    normalizeId(cityId, 'city_id'),
-    'AND district_id = ?',
-    [district.id]
-  );
+  const city = await findActiveLocationById('cities', normalizeId(cityId, 'city_id'));
   if (!city) {
-    throw new ApiError(400, 'Selected city is invalid or does not belong to the selected district');
+    throw new ApiError(400, 'Selected city is invalid or inactive');
   }
 
   return { province, district, city };

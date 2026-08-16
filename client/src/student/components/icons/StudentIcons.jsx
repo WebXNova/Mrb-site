@@ -184,6 +184,15 @@ export function IconLightbulb(props) {
   );
 }
 
+export function IconFileText(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+    </IconBase>
+  );
+}
+
 export function IconMenu(props) {
   return (
     <IconBase {...props}>
@@ -212,6 +221,7 @@ const ICON_MAP = {
   trending: IconTrending,
   lightbulb: IconLightbulb,
   menu: IconMenu,
+  'file-text': IconFileText,
 };
 
 export default function StudentIcon({ name, size = 20, className = '', strokeWidth = 1.75 }) {

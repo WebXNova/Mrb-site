@@ -15,11 +15,7 @@ export default function AdminToggleSwitch({ id, name, checked, onChange, label, 
       </span>
       <span>
         <span className="admin-toggle__text">{label}</span>
-        {hint ? (
-          <span className="premium-field__hint" style={{ display: 'block', marginTop: '0.15rem' }}>
-            {hint}
-          </span>
-        ) : null}
+        {hint ? <span className="premium-field__hint admin-toggle__hint">{hint}</span> : null}
       </span>
     </label>
   );

@@ -14,8 +14,8 @@
 }
 
 .admin-courses-page-header__title {
-  font-family: var(--font-display);
-  font-size: var(--fs-28);
+  font-family: var(--font-sans);
+  font-size: var(--admin-font-page, 1.125rem);
   font-weight: var(--fw-bold);
   letter-spacing: var(--ls-tight);
   color: var(--admin-text-primary);

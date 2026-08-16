@@ -21,6 +21,7 @@ import { getEmailQueue } from './config/queue.js';
 import contactRoutes from './routes/contact.routes.js';
 import enrollmentRoutes, { adminEnrollmentRouter } from './routes/enrollment.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
+import studentNoteDownloadRoutes from './routes/studentNoteDownload.routes.js';
 import locationsRoutes from './routes/locations.routes.js';
 import questionsRoutes from './routes/questions.routes.js';
 import { paymentsWebhookRouter, paymentsApiRouter } from './routes/payments.routes.js';
@@ -201,6 +202,7 @@ app.use('/api/email', emailProviderRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/courses', coursesRoutes);
+app.use('/api/notes', studentNoteDownloadRoutes);
 app.use('/api/locations', locationsRoutes);
 app.use('/api/payments', paymentsApiRouter);
 

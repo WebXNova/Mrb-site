@@ -69,8 +69,14 @@ function buildProtectionGridRules() {
     { pattern: /^\/api\/locations\//i, policy: 'public', label: 'locations' },
     { pattern: /^\/api\/auth\//i, policy: 'public', label: 'auth' },
     { pattern: /^\/api\/courses\/public/i, policy: 'public', label: 'courses_public_catalog' },
+    { pattern: /^\/api\/courses\/categories$/i, policy: 'public', label: 'courses_public_categories' },
     { pattern: /^\/api\/courses\/\d+\/batches$/i, policy: 'public', label: 'course_batches_public' },
     { pattern: /^\/api\/courses\/\d+\/subjects$/i, policy: 'public', label: 'course_subjects_public' },
+    { pattern: /^\/api\/courses\/\d+\/lectures\/\d+\/notes$/i, policy: 'identity_only', label: 'student_course_lecture_notes' },
+    { pattern: /^\/api\/courses\/\d+\/chapters\/\d+\/notes$/i, policy: 'identity_only', label: 'student_course_chapter_notes' },
+    { pattern: /^\/api\/courses\/\d+\/subjects\/\d+\/notes$/i, policy: 'identity_only', label: 'student_course_subject_notes' },
+    { pattern: /^\/api\/courses\/\d+\/notes$/i, policy: 'identity_only', label: 'student_course_notes' },
+    { pattern: /^\/api\/notes\/\d+\/download$/i, policy: 'identity_only', label: 'student_note_download' },
     { pattern: /^\/api\/courses\/\d+$/i, policy: 'public', label: 'course_public_detail' },
   ];
 
@@ -90,6 +96,7 @@ function buildProtectionGridRules() {
   rules.push(
     { pattern: /^\/api\/enrollments(?:\/|$)/i, policy: 'identity_only', label: 'enrollments' },
     { pattern: /^\/api\/payments\/create-session$/i, policy: 'identity_only', label: 'payments_create_session' },
+    { pattern: /^\/api\/payments\/manual(?:\/|$)/i, policy: 'identity_only', label: 'payments_manual' },
     { pattern: /^\/api\/uploads\/courses\//i, policy: 'course_covers_public', label: 'uploads_courses' },
     { pattern: /^\/api\/uploads\/course-covers\//i, policy: 'course_covers_public', label: 'uploads_course_covers' },
     { pattern: /^\/api\/uploads\/question-bank\//i, policy: 'question_bank_media', label: 'uploads_question_bank' },

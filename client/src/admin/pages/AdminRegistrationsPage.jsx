@@ -26,6 +26,10 @@ import {
   formatEnrollmentDateShort,
   formatEnrollmentField,
 } from '../utils/enrollmentFieldRegistry.js';
+import { AccessStaleIndicator } from '../components/courses/AdmissionStaleWarning';
+import ManualPaymentCouponBadge, { ManualPaymentCouponDetail } from '../components/ManualPaymentCouponBadge';
+import { submissionUsedCoupon } from '../utils/manualPaymentCouponDisplay';
+import { computeAccessStale } from '../utils/courseStaleAdvisory';
 
 const PAYMENT_FILTER_OPTIONS = [
   { value: 'all', label: 'Any payment' },
@@ -83,11 +87,14 @@ function StatusBadge({ status }) {
   );
 }
 
-function AccessBadge({ accessStatus }) {
+function AccessBadge({ accessStatus, accessStale = false, courseEndDate = null }) {
   const normalized = String(accessStatus || 'inactive').toLowerCase();
   return (
-    <span className={`admin-access-badge admin-access-badge--${normalized}`}>
-      {normalized.charAt(0).toUpperCase() + normalized.slice(1)}
+    <span className="admin-access-badge-row">
+      <span className={`admin-access-badge admin-access-badge--${normalized}`}>
+        {normalized.charAt(0).toUpperCase() + normalized.slice(1)}
+      </span>
+      {accessStale ? <AccessStaleIndicator endDate={courseEndDate} /> : null}
     </span>
   );
 }
@@ -232,11 +239,20 @@ function RegistrationMobileCard({
         </div>
         <div>
           <dt>Amount</dt>
-          <dd>{formatEnrollmentOrderAmount(item.orderAmount, item.orderCurrency)}</dd>
+          <dd>
+            {formatEnrollmentOrderAmount(item.orderAmount, item.orderCurrency)}
+            <ManualPaymentCouponBadge submission={item} />
+          </dd>
         </div>
         <div>
           <dt>Access</dt>
-          <dd><AccessBadge accessStatus={item.accessStatus} /></dd>
+          <dd>
+            <AccessBadge
+              accessStatus={item.accessStatus}
+              accessStale={computeAccessStale(item)}
+              courseEndDate={item.courseEndDate}
+            />
+          </dd>
         </div>
         <div>
           <dt>Account</dt>
@@ -798,7 +814,7 @@ export default function AdminRegistrationsPage() {
 
   if (!initialized) {
     return (
-      <section className="admin-page">
+      <section className="admin-page admin-page--registrations">
         <section className="admin-card admin-registrations-loading">
           <p className="admin-muted admin-registrations-loading__text">Loading registrations…</p>
         </section>
@@ -811,14 +827,13 @@ export default function AdminRegistrationsPage() {
     String(item.orderStatus || '').toLowerCase() === 'paid';
 
   return (
-    <section className="admin-page">
+    <section className="admin-page admin-page--registrations">
       {error ? <p className="admin-error">{error}</p> : null}
       {success ? <p className="admin-success">{success}</p> : null}
 
       <section className="admin-card">
         <div className="admin-actions admin-reg-page-head">
           <div>
-            <h2 className="heading-3">Registrations</h2>
             <p className="admin-muted">
               Payment verification comes from Safepay. Approve paid enrollments, reject with a reason, or suspend students who
               violate policy.
@@ -1141,12 +1156,19 @@ export default function AdminRegistrationsPage() {
                       <td className="admin-reg-col--submitted">{formatEnrollmentDate(item.submittedAt)}</td>
                       <td className="admin-reg-col--order">{item.orderId ?? '-'}</td>
                       <td className="admin-reg-col--payment">{formatEnrollmentOrderStatus(item.orderStatus, item.orderId)}</td>
-                      <td className="admin-reg-col--amount">{formatEnrollmentOrderAmount(item.orderAmount, item.orderCurrency)}</td>
+                      <td className="admin-reg-col--amount">
+                        {formatEnrollmentOrderAmount(item.orderAmount, item.orderCurrency)}
+                        <ManualPaymentCouponBadge submission={item} />
+                      </td>
                       <td className="admin-reg-col--status">
                         <StatusBadge status={item.status} />
                       </td>
                       <td className="admin-reg-col--access">
-                        <AccessBadge accessStatus={item.accessStatus} />
+                        <AccessBadge
+                          accessStatus={item.accessStatus}
+                          accessStale={computeAccessStale(item)}
+                          courseEndDate={item.courseEndDate}
+                        />
                       </td>
                       <td className="admin-reg-col--account">
                         <AccountBadge accountStatus={item.userAccountStatus} />
@@ -1354,6 +1376,13 @@ export default function AdminRegistrationsPage() {
               </div>
             </div>
           ))}
+
+          {submissionUsedCoupon(selected) ? (
+            <div className="admin-enrollment-section">
+              <h4 className="admin-enrollment-section__title">Payment coupon</h4>
+              <ManualPaymentCouponDetail submission={selected} />
+            </div>
+          ) : null}
 
           <div className="admin-enrollment-section">
             <h4 className="admin-enrollment-section__title">Admin note</h4>

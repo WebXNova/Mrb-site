@@ -11,6 +11,7 @@ import { extractCourseAdmission, isAdmissionOpen } from '../course/courseAdmissi
 import { useEnrollment } from '../hooks/useEnrollment';
 import { useEnrollmentPrefill } from '../hooks/useEnrollmentPrefill';
 import { getUserFacingErrorMessage } from '../utils/errorHandler';
+import { buildEnrollmentPaymentPath } from '../utils/enrollmentPaymentRoute.js';
 import './EnrollmentPage.css';
 
 const INITIAL_FORM = {
@@ -258,14 +259,20 @@ export default function EnrollmentPage() {
         return;
       }
 
-      navigate('/enrollment/payment', {
-        replace: true,
-        state: {
-          enrollmentId: enrollment?.id ?? null,
+      navigate(
+        buildEnrollmentPaymentPath({
           orderId: payload?.order_id ?? enrollment?.orderId ?? null,
           courseId,
-        },
-      });
+        }),
+        {
+          replace: true,
+          state: {
+            enrollmentId: enrollment?.id ?? null,
+            orderId: payload?.order_id ?? enrollment?.orderId ?? null,
+            courseId,
+          },
+        }
+      );
     } catch (error) {
       setSubmitError(getUserFacingErrorMessage(error, 'Failed to submit enrollment.'));
     } finally {

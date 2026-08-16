@@ -6,6 +6,7 @@ import {
 import { formatSalesDateLong } from '../course/courseSalesPage';
 import StudentIcon from '../student/components/icons/StudentIcons';
 import { useStudentMyCourses } from '../student/hooks/useStudentMyCourses';
+import { buildEnrollmentPaymentPath } from '../utils/enrollmentPaymentRoute.js';
 import '../student/styles/student-settings.css';
 
 function formatDateTime(value) {
@@ -52,6 +53,48 @@ function paymentTone(orderStatus) {
   return 'sp-badge--soft-navy';
 }
 
+function manualPaymentTone(manualPaymentStatus) {
+  if (manualPaymentStatus === 'rejected') return 'sp-badge--burgundy';
+  if (manualPaymentStatus === 'pending_review') return 'sp-badge--soft-gold';
+  return 'sp-badge--soft-navy';
+}
+
+function PaymentStatusBadge({ enrollment }) {
+  const manualStatus = enrollment.manualPaymentStatus;
+
+  if (manualStatus === 'pending_review') {
+    return (
+      <span className={`sp-badge ${manualPaymentTone(manualStatus)}`}>Payment under review</span>
+    );
+  }
+
+  if (manualStatus === 'rejected') {
+    return (
+      <span className={`sp-badge ${manualPaymentTone(manualStatus)}`}>
+        Payment rejected — action needed
+      </span>
+    );
+  }
+
+  if (enrollment.orderStatus) {
+    return (
+      <span className={`sp-badge ${paymentTone(enrollment.orderStatus)}`}>
+        Payment {titleCase(enrollment.orderStatus)}
+      </span>
+    );
+  }
+
+  return null;
+}
+
+function paymentActionPath(enrollment) {
+  if (!enrollment.orderId) return null;
+  return buildEnrollmentPaymentPath({
+    orderId: enrollment.orderId,
+    courseId: enrollment.courseId,
+  });
+}
+
 function SummaryStat({ label, value, hint }) {
   return (
     <article className="sp-my-courses-stat sp-card">
@@ -66,6 +109,13 @@ function CourseEnrollmentCard({ enrollment, delay }) {
   const title = enrollment.courseTitle || 'Untitled course';
   const hasActiveAccess = String(enrollment.accessStatus || '').toLowerCase() === 'active';
   const admissionsOpen = isAdmissionOpen(enrollment);
+  const manualStatus = enrollment.manualPaymentStatus;
+  const paymentPath = paymentActionPath(enrollment);
+  const showManualPaymentAction =
+    !hasActiveAccess &&
+    enrollment.orderStatus !== 'paid' &&
+    (manualStatus === 'pending_review' || manualStatus === 'rejected') &&
+    paymentPath;
 
   return (
     <article className={`sp-my-courses-card sp-card sp-card--interactive sp-animate-in sp-animate-in--${delay}`}>
@@ -86,11 +136,7 @@ function CourseEnrollmentCard({ enrollment, delay }) {
 
         <div className="sp-my-courses-card__badges">
           <span className={`sp-badge sp-badge--burgundy`}>{titleCase(enrollment.status)}</span>
-          {enrollment.orderStatus ? (
-            <span className={`sp-badge ${paymentTone(enrollment.orderStatus)}`}>
-              Payment {titleCase(enrollment.orderStatus)}
-            </span>
-          ) : null}
+          <PaymentStatusBadge enrollment={enrollment} />
           {enrollment.admission_status ? (
             <span className={`sp-badge ${admissionsOpen ? 'sp-badge--soft-sage' : 'sp-badge--soft-gold'}`}>
               Admissions {admissionBadgeLabel(enrollment.admission_status)}
@@ -136,9 +182,20 @@ function CourseEnrollmentCard({ enrollment, delay }) {
             Open lectures
           </Link>
           {!hasActiveAccess && enrollment.orderStatus !== 'paid' ? (
-            <Link to="/courses" className="sp-btn sp-btn--ghost sp-btn--sm">
-              Complete enrollment
-            </Link>
+            showManualPaymentAction ? (
+              <Link
+                to={paymentPath}
+                className={`sp-btn sp-btn--sm ${
+                  manualStatus === 'rejected' ? 'sp-btn--primary' : 'sp-btn--secondary'
+                }`}
+              >
+                {manualStatus === 'rejected' ? 'Resubmit payment' : 'View payment status'}
+              </Link>
+            ) : (
+              <Link to="/courses" className="sp-btn sp-btn--ghost sp-btn--sm">
+                Complete enrollment
+              </Link>
+            )
           ) : null}
         </div>
       </div>

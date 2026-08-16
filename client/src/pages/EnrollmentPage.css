@@ -130,7 +130,8 @@
 }
 
 .enrollment-field input,
-.enrollment-field select {
+.enrollment-field select,
+.enrollment-city-combobox__control input {
   width: 100%;
   max-width: 100%;
   min-height: 48px;
@@ -142,11 +143,68 @@
   touch-action: manipulation;
 }
 
+.enrollment-city-combobox {
+  position: relative;
+}
+
+.enrollment-city-combobox__control input:focus {
+  outline: none;
+  border-color: var(--color-ink-900);
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.enrollment-city-combobox__list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: min(16rem, 45vh);
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.12);
+}
+
+.enrollment-city-combobox__option {
+  min-height: 44px;
+  padding: 0.65rem 0.8rem;
+  font-size: var(--fs-15);
+  line-height: 1.35;
+  color: var(--color-ink-700);
+  cursor: pointer;
+}
+
+.enrollment-city-combobox__option--active,
+.enrollment-city-combobox__option:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, white);
+}
+
+.enrollment-city-combobox__option--selected {
+  font-weight: var(--fw-semibold);
+}
+
+.enrollment-city-combobox__empty {
+  padding: 0.75rem 0.8rem;
+  font-size: var(--fs-14);
+  color: var(--color-ink-500);
+}
+
 @media (max-width: 767.98px) {
   .enrollment-field input,
-  .enrollment-field select {
+  .enrollment-field select,
+  .enrollment-city-combobox__control input {
     min-height: 48px;
     font-size: 16px;
+  }
+
+  .enrollment-city-combobox__option {
+    min-height: 48px;
   }
 }
 
@@ -229,6 +287,249 @@
   background: color-mix(in srgb, var(--color-primary) 8%, white);
   border: 1px solid color-mix(in srgb, var(--color-primary) 20%, white);
   color: var(--color-ink-700);
+}
+
+.enrollment-payment-next__notice p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.enrollment-payment-next__amount-original {
+  text-decoration: line-through;
+  color: var(--color-ink-500);
+  margin-right: 0.35rem;
+}
+
+.enrollment-payment-next__amount-discounted {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.enrollment-payment-next__coupon-applied {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--color-success);
+}
+
+.enrollment-payment-next__coupon-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.enrollment-payment-next__coupon-row input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.enrollment-payment-next__coupon-error {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+}
+
+.enrollment-payment-preview {
+  display: block;
+  width: min(100%, 280px);
+  max-height: 180px;
+  object-fit: contain;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-soft);
+}
+
+/* Manual payment submission summary (post-submit receipt view) */
+.mp-submission-summary {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.mp-submission-summary__banner {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+}
+
+.mp-submission-summary__banner--review {
+  background: rgb(59 130 246 / 10%);
+  border: 1px solid rgb(59 130 246 / 28%);
+}
+
+.mp-submission-summary__banner--approved {
+  background: rgb(16 185 129 / 10%);
+  border: 1px solid rgb(16 185 129 / 28%);
+}
+
+.mp-submission-summary__banner--rejected {
+  background: rgb(245 158 11 / 10%);
+  border: 1px solid rgb(245 158 11 / 30%);
+}
+
+.mp-submission-summary__banner-title {
+  margin: 0;
+  font-size: var(--fs-16);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-900);
+}
+
+.mp-submission-summary__banner-text {
+  margin: 0;
+  color: var(--color-ink-600);
+  line-height: 1.55;
+}
+
+.mp-submission-summary__grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .mp-submission-summary__grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.mp-submission-summary__panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+}
+
+.mp-submission-summary__panel-head {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.mp-submission-summary__panel-lead {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+}
+
+.mp-submission-summary__details {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.mp-submission-summary__row {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.mp-submission-summary__row dt {
+  margin: 0;
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-500);
+}
+
+.mp-submission-summary__row dd {
+  margin: 0;
+  font-size: var(--fs-14);
+  color: var(--color-ink-800);
+  line-height: 1.45;
+}
+
+.mp-submission-summary__mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+.mp-submission-summary__method {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-800);
+}
+
+.mp-submission-summary__fallback {
+  margin: 0;
+  color: var(--color-ink-600);
+  line-height: 1.5;
+}
+
+.mp-submission-summary__screenshot {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.mp-submission-summary__thumb-btn {
+  display: block;
+  width: min(100%, 320px);
+  padding: 0;
+  border: 1px solid var(--color-ink-100);
+  border-radius: var(--radius-md);
+  background: #fff;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.mp-submission-summary__thumb-btn img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  background: var(--color-bg-soft);
+}
+
+.mp-submission-summary__thumb-hint {
+  margin: 0;
+  font-size: var(--fs-12);
+  color: var(--color-ink-500);
+}
+
+.mp-submission-summary__lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgb(15 23 42 / 72%);
+  cursor: zoom-out;
+}
+
+.mp-submission-summary__lightbox img {
+  max-width: min(96vw, 960px);
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.enrollment-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--enrollment-option-min-h, 48px);
+  padding: var(--enrollment-option-pad-block, 0.5rem) var(--enrollment-option-pad-inline, 0.75rem);
+  border: 1px solid var(--color-ink-200);
+  border-radius: var(--enrollment-option-radius, var(--radius-md));
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.enrollment-option.is-selected {
+  border-color: var(--color-ink-900);
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.enrollment-option img {
+  width: 72px;
+  height: 28px;
+  object-fit: contain;
 }
 
 @keyframes enrollmentSpin {
@@ -567,6 +868,24 @@
   .enrollment-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-4);
+  }
+
+  .enrollment-grid--locations {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .enrollment-grid--locations .enrollment-city-combobox {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .enrollment-grid--locations {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .enrollment-grid--locations .enrollment-city-combobox {
+    grid-column: auto;
   }
 }
 

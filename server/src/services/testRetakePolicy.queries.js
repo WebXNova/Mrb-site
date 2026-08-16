@@ -4,16 +4,16 @@
  * Requires tests alias `t`. Placeholders: studentId, studentId.
  */
 
-/** Append to tests `t` WHERE — blocks new row when allow_retake=0 and any prior attempt exists. */
+/** Append to tests `t` WHERE — blocks new row when max_attempts cap is reached. */
 export const TEST_RETAKE_CREATE_WHERE_SQL = `
   AND (
-    t.allow_retake = 1
-    OR NOT EXISTS (
-      SELECT 1
+    t.max_attempts IS NULL OR t.max_attempts <= 0
+    OR (
+      SELECT COUNT(*)
       FROM test_attempts a_retake
       WHERE a_retake.test_id = t.id
         AND (a_retake.student_id = ? OR a_retake.user_id = ?)
-    )
+    ) < t.max_attempts
   )`;
 
 /** Params: testId, studentId, studentId */

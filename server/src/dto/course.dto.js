@@ -12,6 +12,7 @@ import { toCoursePricingPublicDto } from './coursePricing.dto.js';
 import { toCourseResponse } from '../dtos/course.dto.js';
 import { env } from '../config/env.js';
 import { parseCatalogMediaUploadPath, signCatalogMediaUrl } from '../services/catalogMediaSign.service.js';
+import { computeAdmissionStale } from '../utils/courseStaleAdvisory.js';
 
 const LEVEL_ALLOWED = ['beginner', 'intermediate', 'advanced'];
 
@@ -157,14 +158,26 @@ export function toCoursePublicApi(n) {
  * Canonical admin course JSON (includes is_active, created_by).
  * @param {ReturnType<typeof normalizeCourseRow>|null} n
  */
-export function toCourseAdminApi(n) {
+/**
+ * @param {ReturnType<typeof normalizeCourseRow>|null} n
+ * @param {{ categories?: Array<{ id: number, name: string, isActive?: boolean }> }} [extras]
+ */
+export function toCourseAdminApi(n, extras = {}) {
   if (!n) return null;
   const pub = toCoursePublicApi(n);
   if (!pub) return null;
+  const categories = Array.isArray(extras.categories) ? extras.categories : [];
   return {
     ...pub,
     is_active: n.is_active,
     created_by: n.created_by != null && Number.isFinite(Number(n.created_by)) ? Number(n.created_by) : null,
+    categories,
+    category_ids: categories.map((c) => Number(c.id)),
+    /** Admin-only advisory — admissions still OPEN after course end_date */
+    admission_stale: computeAdmissionStale({
+      admission_status: n.admission_status,
+      end_date: n.end_date,
+    }),
   };
 }
 

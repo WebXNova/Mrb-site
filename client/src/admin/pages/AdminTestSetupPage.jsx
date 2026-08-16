@@ -148,8 +148,8 @@ function UnifiedTestSetupForm({
   return (
     <form className="admin-test-form admin-test-form--unified" onSubmit={onSubmit} noValidate>
       <p className="admin-test-form__intro">
-        Set title, course, rules, and access in one place. Defaults are applied when you create a test — adjust
-        only if you need to.
+        Configure title, rules, exam behavior, and access in one place. Defaults apply on create — adjust only
+        what you need.
       </p>
 
       <BasicInfoForm

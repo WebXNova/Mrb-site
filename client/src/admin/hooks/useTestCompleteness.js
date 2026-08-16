@@ -60,7 +60,6 @@ export function formatMissingFields(missingFields = []) {
     title: 'test title (Setup → General)',
     course_id: 'course (Setup → General)',
     test_type: 'test type (Setup → General)',
-    category: 'category (Setup → General)',
     subject_id: 'subject (Setup → General)',
     subject_ids: 'subjects (Setup → General)',
     duration_minutes: 'duration (Setup → Rules & scoring)',

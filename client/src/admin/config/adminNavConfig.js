@@ -10,24 +10,46 @@ import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { adminRoute } from '../../config/adminPaths';
 
 export function getAdminNavItems() {
   return [
     { to: adminRoute(), label: 'Dashboard', end: true, Icon: DashboardOutlinedIcon },
+    { to: adminRoute('manual-payments'), label: 'New Admissions', Icon: PaymentsOutlinedIcon },
+    { to: adminRoute('registrations'), label: 'Registrations', Icon: HowToRegOutlinedIcon },
+    { to: adminRoute('tests'), label: 'Tests', Icon: AssignmentOutlinedIcon },
+    { to: adminRoute('lectures'), label: 'Lectures', Icon: PlayCircleOutlineOutlinedIcon },
     { to: adminRoute('courses'), label: 'Courses', Icon: SchoolOutlinedIcon },
     { to: adminRoute('chapters'), label: 'Chapters', Icon: MenuBookOutlinedIcon },
-    { to: adminRoute('lectures'), label: 'Lectures', Icon: PlayCircleOutlineOutlinedIcon },
-    { to: adminRoute('tests'), label: 'Tests', Icon: AssignmentOutlinedIcon },
+    { to: adminRoute('notes'), label: 'Notes', Icon: DescriptionOutlinedIcon },
+    {
+      to: adminRoute('settings/course-categories'),
+      label: 'Course Categories',
+      Icon: CategoryOutlinedIcon,
+    },
+    {
+      to: adminRoute('settings/coupons'),
+      label: 'Coupons',
+      Icon: LocalOfferOutlinedIcon,
+    },
+    { to: adminRoute('qa-monitoring'), label: 'Q&A Monitoring', Icon: QuestionAnswerOutlinedIcon },
     { to: adminRoute('users'), label: 'Users', Icon: PeopleOutlinedIcon },
     { to: adminRoute('teachers'), label: 'Teachers', Icon: BadgeOutlinedIcon },
-    { to: adminRoute('qa-monitoring'), label: 'Q&A Monitoring', Icon: QuestionAnswerOutlinedIcon },
     { to: adminRoute('teacher-insights'), label: 'Teacher Insights', Icon: InsightsOutlinedIcon },
     { to: adminRoute('remarks'), label: 'Remarks', Icon: RateReviewOutlinedIcon },
-    { to: adminRoute('registrations'), label: 'Registrations', Icon: HowToRegOutlinedIcon },
+    {
+      to: adminRoute('settings/payment-accounts'),
+      label: 'Payment Accounts',
+      Icon: AccountBalanceWalletOutlinedIcon,
+    },
     { to: adminRoute('logs'), label: 'Logs', Icon: HistoryOutlinedIcon },
-    { to: adminRoute('settings'), label: 'Settings', Icon: SettingsOutlinedIcon },
+    { to: adminRoute('settings'), label: 'Settings', Icon: SettingsOutlinedIcon, end: true },
   ];
 }
 
@@ -59,8 +81,13 @@ export function buildAdminBreadcrumbs(pathname) {
     'teacher-insights': 'Teacher Insights',
     remarks: 'Remarks',
     registrations: 'Registrations',
+    'manual-payments': 'New Admissions',
     logs: 'Logs',
+    notes: 'Notes',
     settings: 'Settings',
+    'payment-accounts': 'Payment Accounts',
+    'course-categories': 'Course Categories',
+    coupons: 'Coupons',
     questions: 'Questions',
     edit: 'Edit',
     subjects: 'Subjects',

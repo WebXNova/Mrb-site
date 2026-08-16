@@ -135,8 +135,7 @@ export default function AdminTeacherInsightsPage() {
     >
       <header className="ti-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-            <h1>Teacher Insights</h1>
+          <div className="ti-header__lead">
             <span className="ti-badge">Intelligence · Read-only</span>
           </div>
           <p>
@@ -144,7 +143,7 @@ export default function AdminTeacherInsightsPage() {
             Monitor only; never interfere with teacher–student communication.
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+        <div className="ti-header__actions">
           <select
             className="ti-select"
             value={selectedTeacherId}

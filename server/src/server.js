@@ -8,7 +8,8 @@ import { fileURLToPath } from 'url';
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { verifyMySqlConnection, mysqlPool, getMysqlPoolConfig } from './config/mysql.js';
-import { checkPortInUse } from './utils/checkPortInUse.js';
+import { checkPortInUse, waitForPortAvailable } from './utils/checkPortInUse.js';
+import { releaseDevPortListeners } from './utils/releaseDevPort.js';
 import { connectRedis, disconnectRedis, isRedisReady } from './config/redis.js';
 import { validateTeacherThreadSecretAtStartup } from './security/teacherThreadSecret.js';
 import { validateEmailWebhookConfigAtStartup } from './security/emailWebhookConfig.js';
@@ -20,10 +21,19 @@ import { seedLocationTables } from './services/locationSeed.service.js';
 import { ensureEnrollmentAccessSchema } from './db/ensureEnrollmentAccessSchema.js';
 import { ensureEnrollmentSourceSchema } from './db/ensureEnrollmentSourceSchema.js';
 import { ensureEnrollmentSwitchConfirmedSchema } from './db/ensureEnrollmentSwitchConfirmedSchema.js';
+import { ensureEnrollmentHsscStatusSchema } from './db/ensureEnrollmentHsscStatusSchema.js';
 import { ensureCourseFieldMappingsSchema } from './db/ensureCourseFieldMappingsSchema.js';
 import { ensureRemoveDivisionAndEnrollmentBatchSchema } from './db/ensureRemoveDivisionAndEnrollmentBatchSchema.js';
 import { runRequiredStartupMigrations } from './db/runRequiredStartupMigrations.js';
 import { ensureProcessedWebhooksSchema, ensureProcessedWebhooksRetentionIndex } from './db/ensureProcessedWebhooksSchema.js';
+import { ensurePaymentAccountsSchema } from './db/ensurePaymentAccountsSchema.js';
+import { ensureCourseCategoriesSchema } from './db/ensureCourseCategoriesSchema.js';
+import { ensureCourseCategoryMetadataSchema } from './db/ensureCourseCategoryMetadataSchema.js';
+import { ensureCourseCategoryClassLevelBachelorSchema } from './db/ensureCourseCategoryClassLevelBachelorSchema.js';
+import { ensureManualPaymentsSchema } from './db/ensureManualPaymentsSchema.js';
+import { ensureCourseNotesSchema } from './db/ensureCourseNotesSchema.js';
+import { ensureCouponsSchema } from './db/ensureCouponsSchema.js';
+import { ensureSuperAdminBootstrap } from './db/ensureSuperAdminBootstrap.js';
 import { ensureTestsCourseSchema } from './db/ensureTestsCourseSchema.js';
 import { ensureTestsApplicationSchema } from './db/ensureTestsApplicationSchema.js';
 import { ensurePerformanceIndexesSchema } from './db/ensurePerformanceIndexesSchema.js';
@@ -144,12 +154,32 @@ async function startServer() {
 
   validateEmailWebhookConfigAtStartup();
 
-  const isInUse = await checkPortInUse(env.port);
-  if (isInUse) {
-    console.error(`Port ${env.port} already in use. Stop other process first.`);
-    console.error(`Find PID: netstat -ano | findstr :${env.port}`);
-    console.error('Stop it with: taskkill /PID <pid> /F');
-    process.exit(1);
+  const isDev = !isProductionNodeEnv(env.nodeEnv);
+  if (await checkPortInUse(env.port)) {
+    if (isDev) {
+      console.warn(
+        `Port ${env.port} is busy (common during nodemon restart). Waiting for it to become free…`
+      );
+      let available = await waitForPortAvailable(env.port, { maxAttempts: 8, delayMs: 400 });
+      if (!available) {
+        console.warn(
+          `[dev] Port ${env.port} still busy — stopping stale listener so this dev server can start…`
+        );
+        await releaseDevPortListeners(env.port);
+        available = await waitForPortAvailable(env.port, { maxAttempts: 12, delayMs: 400 });
+      }
+      if (!available) {
+        console.error(`Port ${env.port} still in use after cleanup. Stop the other process manually.`);
+        console.error(`Find PID: netstat -ano | findstr :${env.port}`);
+        console.error('Stop it with: taskkill /PID <pid> /F');
+        process.exit(1);
+      }
+    } else {
+      console.error(`Port ${env.port} already in use. Stop other process first.`);
+      console.error(`Find PID: netstat -ano | findstr :${env.port}`);
+      console.error('Stop it with: taskkill /PID <pid> /F');
+      process.exit(1);
+    }
   }
 
   console.log('MySQL boot config:', {
@@ -184,10 +214,19 @@ async function startServer() {
   await ensureEnrollmentAccessSchema(mysqlPool);
   await ensureEnrollmentSourceSchema(mysqlPool);
   await ensureEnrollmentSwitchConfirmedSchema(mysqlPool);
+  await ensureEnrollmentHsscStatusSchema(mysqlPool);
   await ensureCourseFieldMappingsSchema(mysqlPool);
   await runRequiredStartupMigrations(mysqlPool);
   await ensureProcessedWebhooksSchema(mysqlPool);
   await ensureProcessedWebhooksRetentionIndex(mysqlPool);
+  await ensurePaymentAccountsSchema(mysqlPool);
+  await ensureCourseCategoriesSchema(mysqlPool);
+  await ensureCourseCategoryMetadataSchema(mysqlPool);
+  await ensureCourseCategoryClassLevelBachelorSchema(mysqlPool);
+  await ensureManualPaymentsSchema(mysqlPool);
+  await ensureCourseNotesSchema(mysqlPool);
+  await ensureCouponsSchema(mysqlPool);
+  await ensureSuperAdminBootstrap(mysqlPool);
   await ensureTestsCourseSchema(mysqlPool);
   await ensureTestsApplicationSchema(mysqlPool);
   await ensurePerformanceIndexesSchema(mysqlPool);

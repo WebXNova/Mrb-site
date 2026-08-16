@@ -13,7 +13,7 @@ export default function AdminConfirmDialog({
 
   return (
     <div className="admin-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-confirm-title">
-      <div className="admin-confirm-dialog__panel">
+      <div className="admin-confirm-dialog__panel" onClick={(e) => e.stopPropagation()}>
         <h2 id="admin-confirm-title" className="admin-confirm-dialog__title">
           {title}
         </h2>
@@ -31,8 +31,16 @@ export default function AdminConfirmDialog({
             className={danger ? 'btn--course-danger' : 'btn--course-primary'}
             onClick={onConfirm}
             disabled={busy}
+            aria-busy={busy || undefined}
           >
-            {busy ? 'Please wait…' : confirmLabel}
+            {busy ? (
+              <>
+                <span className="admin-spinner admin-spinner--sm" aria-hidden="true" />
+                Please wait…
+              </>
+            ) : (
+              confirmLabel
+            )}
           </button>
         </div>
       </div>

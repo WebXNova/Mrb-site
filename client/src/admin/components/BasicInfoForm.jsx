@@ -80,26 +80,6 @@ export default function BasicInfoForm({
         </div>
 
         <div className="admin-field">
-          <label htmlFor="category">Category</label>
-          <select
-            id="category"
-            name="category"
-            value={form.category}
-            onChange={onChange}
-            required
-            disabled={disabled || createOptions.categories.length <= 1}
-            aria-invalid={Boolean(fieldErrors.category)}
-          >
-            {createOptions.categories.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
-          {fieldErrors.category ? <div className="admin-field__error">{fieldErrors.category}</div> : null}
-        </div>
-
-        <div className="admin-field">
           <label htmlFor="test_type">Test Type</label>
           <select
             id="test_type"

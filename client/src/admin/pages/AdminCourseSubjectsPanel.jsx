@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
+import { useAdminToast } from '../context/AdminToastContext';
+import AdminLoadingButton from '../components/AdminLoadingButton';
 
 const emptyForm = { title: '', description: '' };
 
@@ -8,6 +10,7 @@ const emptyForm = { title: '', description: '' };
  * in the main admin courses page.
  */
 export default function AdminCourseSubjectsPanel({ token, courseId, embedded = false, onSubjectsChange }) {
+  const toast = useAdminToast();
   const courseIdValid = Number.isFinite(Number(courseId)) && Number(courseId) > 0;
   const numericCourseId = Number(courseId);
 
@@ -39,7 +42,7 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
     } finally {
       setLoading(false);
     }
-  }, [token, numericCourseId, courseIdValid]);
+  }, [token, numericCourseId, courseIdValid, onSubjectsChange]);
 
   useEffect(() => {
     if (!courseIdValid) return;
@@ -86,16 +89,22 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
     if (!courseIdValid) return;
     const title = form.title.trim();
     if (!title) {
-      setError('Title is required.');
+      const message = 'Title is required.';
+      setError(message);
+      toast.error(message);
       return;
     }
     if (title.length > 180) {
-      setError('Title must be at most 180 characters.');
+      const message = 'Title must be at most 180 characters.';
+      setError(message);
+      toast.error(message);
       return;
     }
     const desc = form.description.trim();
     if (desc.length > 8000) {
-      setError('Description must be at most 8000 characters.');
+      const message = 'Description must be at most 8000 characters.';
+      setError(message);
+      toast.error(message);
       return;
     }
     setSaving(true);
@@ -109,15 +118,19 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
       if (editingId) {
         await adminApi.updateSubject(token, numericCourseId, editingId, payload);
         setSuccess('Row updated.');
+        toast.success('Subject updated.');
       } else {
         await adminApi.createSubject(token, numericCourseId, payload);
         setSuccess('Row added.');
+        toast.success('Subject added.');
       }
       setForm(emptyForm);
       setEditingId(null);
       await loadSubjects();
     } catch (err) {
-      setError(err.message || 'Failed to save');
+      const message = err.message || 'Failed to save';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -131,9 +144,12 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
     try {
       await adminApi.deleteSubject(token, numericCourseId, row.id);
       setSuccess('Row deactivated.');
+      toast.success('Subject deactivated.');
       await loadSubjects();
     } catch (err) {
-      setError(err.message || 'Failed to deactivate');
+      const message = err.message || 'Failed to deactivate';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusyRowId(null);
     }
@@ -146,9 +162,12 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
     try {
       await adminApi.updateSubject(token, numericCourseId, row.id, { isActive: true });
       setSuccess('Row reactivated.');
+      toast.success('Subject restored.');
       await loadSubjects();
     } catch (err) {
-      setError(err.message || 'Failed to reactivate');
+      const message = err.message || 'Failed to reactivate';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusyRowId(null);
     }
@@ -185,7 +204,10 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
       const updated = Array.isArray(response?.data) ? response.data : optimistic;
       setAllSubjects(updated);
       onSubjectsChange?.(updated);
-    } catch {
+    } catch (err) {
+      const message = err?.message || 'Failed to reorder subjects';
+      setError(message);
+      toast.error(message);
       await loadSubjects();
     } finally {
       setReordering(false);
@@ -232,7 +254,7 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
 
       <section className="admin-card">
         <h3 className="heading-4">{editingId ? 'Edit row' : 'Add row'}</h3>
-        <form className="admin-page" onSubmit={onSubmit} style={{ marginTop: '1rem' }}>
+        <form className="admin-page course-edit-subjects__form" onSubmit={onSubmit}>
           <div className="admin-form-grid">
             <div className="admin-field">
               <label htmlFor="subj_panel_title">Title</label>
@@ -262,9 +284,14 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
           {success ? <p className="admin-success">{success}</p> : null}
 
           <div className="admin-actions">
-            <button className="btn btn--primary" type="submit" disabled={saving}>
-              {saving ? 'Saving…' : editingId ? 'Update' : 'Add'}
-            </button>
+            <AdminLoadingButton
+              className="btn btn--primary"
+              type="submit"
+              isLoading={saving}
+              loadingLabel="Saving…"
+            >
+              {editingId ? 'Update' : 'Add'}
+            </AdminLoadingButton>
             {editingId ? (
               <button className="btn btn--secondary" type="button" onClick={startCreate} disabled={saving}>
                 Cancel edit
@@ -275,12 +302,9 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
       </section>
 
       <section className="admin-card">
-        <div className="admin-row-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="course-edit-subjects__table-head admin-row-actions">
           <h3 className="heading-4">Subjects</h3>
-          <label
-            className="admin-field"
-            style={{ flexDirection: 'row', gap: '0.5rem', alignItems: 'center', margin: 0 }}
-          >
+          <label className="admin-field course-edit-subjects__filter">
             <input
               type="checkbox"
               checked={includeInactive}
@@ -290,7 +314,7 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
           </label>
         </div>
 
-        <div className="admin-table-wrap" style={{ marginTop: '1rem' }}>
+        <div className="course-edit-subjects__table-wrap admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>

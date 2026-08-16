@@ -27,7 +27,7 @@ const sampleEnrollment = {
   cityId: 3,
   boardId: 4,
   gender: 'male',
-  hsscStatus: 'Inter Class',
+  hsscStatus: '9th',
   mdcatAttemptType: 'Fresher',
 };
 

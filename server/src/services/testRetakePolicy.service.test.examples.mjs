@@ -49,39 +49,39 @@ assert(
 
 {
   const r = evaluateRetakePolicy(
-    { allow_retake: 0, max_attempts: 3 },
+    { max_attempts: 3 },
     { totalAttempts: 0, hasActiveAttempt: false }
   );
-  assert(r.canCreateNew === true && r.allowRetake === false, 'no attempts — first start allowed');
+  assert(r.canCreateNew === true && r.maxAttempts === 3, 'no attempts — first start allowed');
 }
 
 {
   const r = evaluateRetakePolicy(
-    { allow_retake: 0, max_attempts: 3 },
+    { max_attempts: 1 },
     { totalAttempts: 1, hasActiveAttempt: false }
   );
-  assert(r.canCreateNew === false && r.denyCode === 'RETAKE_NOT_ALLOWED', 'submitted/expired blocks retake when disabled');
+  assert(r.canCreateNew === false && r.denyCode === 'MAX_ATTEMPTS_REACHED', 'max_attempts=1 blocks second attempt');
 }
 
 {
   const r = evaluateRetakePolicy(
-    { allow_retake: 0, max_attempts: 3 },
+    { max_attempts: 3 },
     { totalAttempts: 1, hasActiveAttempt: true }
   );
-  assert(r.canResumeActive === true && r.canCreateNew === false, 'in_progress resume allowed (abandoned attempt)');
+  assert(r.canResumeActive === true && r.canCreateNew === false, 'in_progress resume allowed');
 }
 
 {
   const r = evaluateRetakePolicy(
-    { allow_retake: 1, max_attempts: 2 },
+    { max_attempts: 2 },
     { totalAttempts: 1, hasActiveAttempt: false }
   );
-  assert(r.canCreateNew === true, 'retake enabled — second attempt allowed under max');
+  assert(r.canCreateNew === true, 'second attempt allowed under max_attempts=2');
 }
 
 {
   const r = evaluateRetakePolicy(
-    { allow_retake: 1, max_attempts: 2 },
+    { max_attempts: 2 },
     { totalAttempts: 2, hasActiveAttempt: false }
   );
   assert(r.canCreateNew === false && r.denyCode === 'MAX_ATTEMPTS_REACHED', 'max_attempts caps retakes');
@@ -89,7 +89,7 @@ assert(
 
 {
   const r = evaluateRetakePolicy(
-    { allow_retake: 1, max_attempts: 0 },
+    { max_attempts: 0 },
     { totalAttempts: 99, hasActiveAttempt: false }
   );
   assert(r.canCreateNew === true && r.maxAttempts === null, 'unlimited max_attempts when <= 0');
@@ -98,23 +98,23 @@ assert(
 expectThrow(
   () =>
     assertCanCreateNewTestAttempt(
-      { id: 1, allow_retake: 0, max_attempts: 5 },
+      { id: 1, max_attempts: 1 },
       { totalAttempts: 1, hasActiveAttempt: false }
     ),
   ApiError,
-  'assertCanCreateNewTestAttempt throws RETAKE_NOT_ALLOWED'
+  'assertCanCreateNewTestAttempt throws when max attempts reached'
 );
 
 try {
   assertCanCreateNewTestAttempt(
-    { id: 1, allow_retake: 1, max_attempts: 3 },
+    { id: 1, max_attempts: 3 },
     { totalAttempts: 1, hasActiveAttempt: false }
   );
   passed += 1;
-  console.log('  ✓ assertCanCreateNewTestAttempt allows when retake enabled');
+  console.log('  ✓ assertCanCreateNewTestAttempt allows when under max');
 } catch {
   failed += 1;
-  console.error('  ✗ assertCanCreateNewTestAttempt allows when retake enabled');
+  console.error('  ✗ assertCanCreateNewTestAttempt allows when under max');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

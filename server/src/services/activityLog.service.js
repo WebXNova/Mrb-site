@@ -11,6 +11,16 @@ function parseMetadata(value) {
   }
 }
 
+/** activity_logs.role ENUM — users.role may include super_admin. */
+const ACTIVITY_LOG_ROLES = new Set(['admin', 'student', 'teacher', 'system']);
+
+export function normalizeActivityLogRole(role) {
+  const normalized = String(role || 'system').trim().toLowerCase();
+  if (ACTIVITY_LOG_ROLES.has(normalized)) return normalized;
+  if (normalized === 'super_admin') return 'admin';
+  return 'system';
+}
+
 function toActivityLog(row) {
   return {
     id: row.id,
@@ -36,10 +46,11 @@ export async function insertActivityLogRecord({
   metadata = {},
 }) {
   const safeMetadata = sanitizeMetadata(metadata || {});
+  const safeRole = normalizeActivityLogRole(role);
   await mysqlPool.query(
     `INSERT INTO activity_logs (user_id, role, action, entity_type, entity_id, metadata_json)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [userId, role, action, entityType, entityId, JSON.stringify(safeMetadata)]
+    [userId, safeRole, action, entityType, entityId, JSON.stringify(safeMetadata)]
   );
 }
 

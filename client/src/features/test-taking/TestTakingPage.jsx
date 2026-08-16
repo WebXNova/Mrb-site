@@ -218,15 +218,17 @@ function TestTakingContent() {
             disabled={autosaveDisabled}
           />
 
-          <NavigationBar
-            canGoPrevious={canGoPrevious}
-            canGoNext={canGoNext}
-            onPrevious={goPrevious}
-            onNext={goNext}
-            onSubmit={handleOpenSubmitModal}
-            isSubmitting={isSubmitting}
-            disabled={uiLocked}
-          />
+          <div className="tt-nav-wrap">
+            <NavigationBar
+              canGoPrevious={canGoPrevious}
+              canGoNext={canGoNext}
+              onPrevious={goPrevious}
+              onNext={goNext}
+              onSubmit={handleOpenSubmitModal}
+              isSubmitting={isSubmitting}
+              disabled={uiLocked}
+            />
+          </div>
         </main>
 
         <QuestionPalette {...paletteProps} className="tt-exam__sidebar" />

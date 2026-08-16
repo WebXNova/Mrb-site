@@ -1,25 +1,79 @@
-import { useEffect, useState } from 'react';
-import { catalogApi } from '../api/catalogApi';
-import { mapCatalogCourseToCardProps } from '../course/coursePresentation';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  buildCatalogCategoryFilterState,
+  fetchPublicCatalogCourses,
+  fetchPublicCourseCategories,
+} from '../course/publicCatalogQueries';
 
 /**
- * Shared hook for public catalog courses (search bar + search page).
+ * Loads active public categories once (for filter bars, nav, landing pages).
  */
-export function usePublicCatalogCourses() {
-  const [courses, setCourses] = useState([]);
+export function usePublicCourseCategories() {
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
       setLoading(true);
       try {
-        const res = await catalogApi.listCourses();
-        const rows = Array.isArray(res?.data) ? res.data : [];
+        const rows = await fetchPublicCourseCategories();
         if (!cancelled) {
-          setCourses(rows.map(mapCatalogCourseToCardProps).filter(Boolean));
+          setCategories(rows);
+          setError('');
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCategories([]);
+          setError(e?.message || 'Failed to load categories');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { categories, loading, error };
+}
+
+/**
+ * Loads public catalog courses; re-fetches when category filter changes (server-side filter for scale).
+ * @param {{ categoryId?: number|null }} options
+ */
+export function usePublicCatalogCourses(options = {}) {
+  const categoryId = options.categoryId ?? null;
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const filter = buildCatalogCategoryFilterState(categoryId);
+      const rows = await fetchPublicCatalogCourses(filter);
+      setCourses(rows);
+      setError('');
+    } catch (e) {
+      setCourses([]);
+      setError(e?.message || 'Failed to load courses');
+    } finally {
+      setLoading(false);
+    }
+  }, [categoryId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const filter = buildCatalogCategoryFilterState(categoryId);
+        const rows = await fetchPublicCatalogCourses(filter);
+        if (!cancelled) {
+          setCourses(rows);
           setError('');
         }
       } catch (e) {
@@ -31,11 +85,10 @@ export function usePublicCatalogCourses() {
         if (!cancelled) setLoading(false);
       }
     })();
-
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [categoryId]);
 
-  return { courses, loading, error };
+  return { courses, loading, error, reload };
 }

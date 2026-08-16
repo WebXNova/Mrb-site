@@ -121,6 +121,16 @@ import {
   qaMonitoringReadBurstLimit,
   qaMonitoringReadIpLimit,
 } from '../middleware/qaMonitoringRateLimit.js';
+import paymentAccountsRoutes from './paymentAccounts.routes.js';
+import manualPaymentReviewRoutes from './manualPaymentReview.routes.js';
+import courseCategoriesRoutes from './courseCategories.routes.js';
+import couponsRoutes from './coupons.routes.js';
+import courseNotesRoutes from './courseNotes.routes.js';
+import notesRoutes from './notes.routes.js';
+import {
+  getCourseCategoryAssignments,
+  putCourseCategoryAssignments,
+} from '../controllers/courseCategoryMap.controller.js';
 
 const router = Router();
 
@@ -165,6 +175,8 @@ router.post(
   postCourseImage
 );
 router.put('/courses/:courseId', requireEditableCourse, putCourse);
+router.get('/courses/:courseId/categories', getCourseCategoryAssignments);
+router.put('/courses/:courseId/categories', requireEditableCourse, putCourseCategoryAssignments);
 router.delete('/courses/:courseId', removeCourse);
 
 // Course lifecycle management
@@ -293,5 +305,12 @@ router.get('/remarks', getAdminContactRemarks);
 router.put('/remarks/:remarkId/read', putAdminContactRemarkRead);
 router.post('/remarks/:remarkId/post', postAdminContactRemarkPublish);
 router.post('/remarks/:remarkId/unpost', postAdminContactRemarkUnpublish);
+
+router.use('/payment-accounts', paymentAccountsRoutes);
+router.use('/course-categories', courseCategoriesRoutes);
+router.use('/coupons', couponsRoutes);
+router.use('/payment-submissions', manualPaymentReviewRoutes);
+router.use('/courses/:courseId/notes', courseNotesRoutes);
+router.use('/notes', notesRoutes);
 
 export default router;

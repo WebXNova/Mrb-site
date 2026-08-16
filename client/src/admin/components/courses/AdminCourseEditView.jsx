@@ -8,10 +8,18 @@ import CourseHealthPanel from './CourseHealthPanel';
 import CourseStatusBadge from './CourseStatusBadge';
 import CourseLevelBadge from './CourseLevelBadge';
 import AdminCourseBatchPanel from './AdminCourseBatchPanel';
+import AdminCourseNotesPanel from './AdminCourseNotesPanel';
 import PremiumFormField from './PremiumFormField';
 import AdminToggleSwitch from './AdminToggleSwitch';
+import AdminLoadingButton from '../AdminLoadingButton';
 import ThumbnailDropzone from './ThumbnailDropzone';
-import { evaluateCourseHealth } from '../../utils/courseHealth.utils';
+import CourseCategoryAssignmentField from './CourseCategoryAssignmentField';
+import { evaluateCourseHealth, buildUnsavedHealthNotes } from '../../utils/courseHealth.utils';
+import { parseSavedBool } from '../../utils/parseSavedBool';
+import '../../styles/admin-courses-dashboard.css';
+import '../../styles/admin-course-edit-layout.css';
+import '../../styles/admin-course-categories.css';
+import '../../styles/admin-course-notes.css';
 
 const LEVEL_OPTIONS = [
   { value: 'beginner', label: 'Beginner' },
@@ -47,18 +55,41 @@ const initialPricingForm = {
   public_purchase_visible: true,
 };
 
+function courseRowToForm(course) {
+  if (!course) return { ...initialForm };
+  return {
+    title: course.title ?? '',
+    description: course.description ?? '',
+    short_description: course.short_description ?? '',
+    level: LEVEL_OPTIONS.some((l) => l.value === course.level) ? course.level : 'beginner',
+    thumbnail_url: course.thumbnail_url ?? '',
+    is_active: !!course.is_active,
+    start_date: course.start_date ?? null,
+    end_date: course.end_date ?? null,
+    admission_status: course.admission_status ?? 'CLOSED',
+  };
+}
+
 function pricingRowToForm(row) {
-  if (!row) return initialPricingForm;
+  if (!row) return { ...initialPricingForm };
+  const rawType = row.type ?? row.pricing_type ?? 'one_time';
+  const rawCurrency = row.currency ?? row.currency_code ?? 'PKR';
   const amount = Number.isFinite(Number(row.price_amount)) ? Number(row.price_amount) : 0;
   const original = row.original_price_amount;
   return {
-    pricing_type: PRICING_TYPES.some((t) => t.value === row.type) ? row.type : 'one_time',
+    pricing_type: PRICING_TYPES.some((t) => t.value === rawType) ? rawType : 'one_time',
     price_amount: String(amount),
     original_price_amount: original == null ? '' : String(original),
-    currency_code: SUPPORTED_CURRENCIES.includes(row.currency) ? row.currency : 'PKR',
-    is_active: row.is_active === undefined ? true : Boolean(row.is_active),
-    enrollment_visible: row.enrollment_visible !== false,
-    public_purchase_visible: row.public_purchase_visible !== false,
+    currency_code: SUPPORTED_CURRENCIES.includes(rawCurrency) ? rawCurrency : 'PKR',
+    is_active: parseSavedBool(row.is_active ?? row.isActive, true),
+    enrollment_visible: parseSavedBool(
+      row.enrollment_visible ?? row.enrollmentVisible,
+      true
+    ),
+    public_purchase_visible: parseSavedBool(
+      row.public_purchase_visible ?? row.publicPurchaseVisible,
+      true
+    ),
   };
 }
 
@@ -104,36 +135,38 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
   const [success, setSuccess] = useState('');
   const [pricingError, setPricingError] = useState('');
   const [pricingSuccess, setPricingSuccess] = useState('');
+  const [healthSnapshot, setHealthSnapshot] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [allCategories, setAllCategories] = useState([]);
+  const [categoryIds, setCategoryIds] = useState([]);
+  const [categoriesError, setCategoriesError] = useState('');
 
   const loadMeta = useCallback(async () => {
     setLoading(true);
+    setPricingLoading(true);
     try {
-      const [coursesRes, pricingRes, subjectsRes, batchesRes] = await Promise.all([
+      const [coursesRes, pricingRes, subjectsRes, batchesRes, categoriesRes, assignmentsRes] = await Promise.all([
         adminApi.courses(token),
         adminApi.coursePricing(token, courseId).catch(() => ({ data: null })),
         adminApi.subjects(token, courseId, { includeInactive: true }).catch(() => ({ data: [] })),
         adminApi.courseBatches(token, courseId).catch(() => ({ data: [] })),
+        adminApi.courseCategories(token).catch(() => ({ data: { categories: [] } })),
+        adminApi.courseCategoryAssignments(token, courseId).catch(() => ({ data: { categories: [] } })),
       ]);
       const course = (coursesRes?.data || []).find((c) => Number(c.id) === Number(courseId));
       if (!course) {
         setError('Course not found.');
         return;
       }
-      setForm({
-        title: course.title ?? '',
-        description: course.description ?? '',
-        short_description: course.short_description ?? '',
-        level: LEVEL_OPTIONS.some((l) => l.value === course.level) ? course.level : 'beginner',
-        thumbnail_url: course.thumbnail_url ?? '',
-        is_active: !!course.is_active,
-        start_date: course.start_date ?? null,
-        end_date: course.end_date ?? null,
-        admission_status: course.admission_status ?? 'CLOSED',
-      });
+      setForm(courseRowToForm(course));
       setPricingForm(pricingRowToForm(pricingRes?.data));
       const subjects = Array.isArray(subjectsRes?.data) ? subjectsRes.data : [];
-      setActiveSubjectCount(subjects.filter((s) => s.isActive !== false).length);
+      setActiveSubjectCount(subjects.filter((s) => Boolean(s.isActive)).length);
       setBatches(Array.isArray(batchesRes?.data) ? batchesRes.data : []);
+      setAllCategories(categoriesRes?.data?.categories ?? []);
+      const assigned = assignmentsRes?.data?.categories ?? course.categories ?? [];
+      setCategoryIds(assigned.map((c) => Number(c.id)));
+      setCategoriesError('');
       setError('');
     } catch (err) {
       setError(err.message || 'Failed to load course');
@@ -146,6 +179,51 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
   useEffect(() => {
     loadMeta();
   }, [loadMeta]);
+
+  const loadHealthSnapshot = useCallback(async () => {
+    setHealthLoading(true);
+    try {
+      const [coursesRes, pricingRes, subjectsRes, batchesRes] = await Promise.all([
+        adminApi.courses(token),
+        adminApi.coursePricing(token, courseId).catch(() => ({ data: null })),
+        adminApi.subjects(token, courseId, { includeInactive: true }).catch(() => ({ data: [] })),
+        adminApi.courseBatches(token, courseId).catch(() => ({ data: [] })),
+      ]);
+      const course = (coursesRes?.data || []).find((c) => Number(c.id) === Number(courseId));
+      if (!course) {
+        toast.error('Could not refresh health data — course not found.');
+        return;
+      }
+      const subjects = Array.isArray(subjectsRes?.data) ? subjectsRes.data : [];
+      const batchRows = Array.isArray(batchesRes?.data) ? batchesRes.data : [];
+      const savedPricing = pricingRowToForm(pricingRes?.data);
+      const subjectCount = subjects.filter((s) => Boolean(s.isActive)).length;
+
+      setHealthSnapshot({
+        course: courseRowToForm(course),
+        pricing: { ...savedPricing, price_amount: Number(savedPricing.price_amount) },
+        batches: batchRows,
+        activeSubjectCount: subjectCount,
+      });
+      setActiveSubjectCount(subjectCount);
+      setBatches(batchRows);
+    } catch (err) {
+      toast.error(err.message || 'Failed to refresh health data');
+    } finally {
+      setHealthLoading(false);
+    }
+  }, [token, courseId, toast]);
+
+  useEffect(() => {
+    if (activeTab === 'health') {
+      loadHealthSnapshot();
+    }
+  }, [activeTab, loadHealthSnapshot]);
+
+  const healthUnsavedNotes = useMemo(
+    () => buildUnsavedHealthNotes(healthSnapshot, { form, pricingForm }),
+    [healthSnapshot, form, pricingForm]
+  );
 
   const healthReport = useMemo(
     () =>
@@ -163,8 +241,13 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
     for (const check of healthReport.checks) {
       if (check.field === 'pricing' || check.field?.startsWith('pricing.')) byField.pricing += 1;
       else if (check.field === 'subjects') byField.subjects += 1;
-      else if (check.field === 'batches') byField.batch += 1;
-      else byField.general += 1;
+      else if (
+        check.field === 'batches' ||
+        check.field?.startsWith('batches.') ||
+        check.field === 'admission_status'
+      ) {
+        byField.batch += 1;
+      } else byField.general += 1;
     }
     if (healthReport.status !== 'healthy') byField.health = healthReport.checks.length;
     return byField;
@@ -173,6 +256,14 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
   function onChange(event) {
     const { name, value, type, checked } = event.target;
     setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  }
+
+  function onCategoryToggle(categoryId) {
+    const id = Number(categoryId);
+    setCategoryIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return [...prev, id];
+    });
   }
 
   function onPricingChange(event) {
@@ -219,6 +310,7 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
         thumbnail_url: form.thumbnail_url?.trim() || null,
         is_active: !!form.is_active,
       });
+      await adminApi.updateCourseCategoryAssignments(token, courseId, categoryIds);
       setSuccess('Course updated.');
       toast.success('Course updated.');
       onUpdated?.();
@@ -259,13 +351,40 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
       toast.success('Pricing saved.');
       onUpdated?.();
     } catch (err) {
-      setPricingError(err.message || 'Failed to save pricing');
+      const message = err.message || 'Failed to save pricing';
+      setPricingError(message);
+      toast.error(message);
     } finally {
       setPricingSaving(false);
     }
   }
 
   const pricingErrors = getPricingFieldErrors(pricingForm);
+  const pricingStudentPreview = useMemo(() => {
+    const typeLabel =
+      PRICING_TYPES.find((t) => t.value === pricingForm.pricing_type)?.label ?? pricingForm.pricing_type;
+    const amount = Number(pricingForm.price_amount || 0);
+    const originalRaw = pricingForm.original_price_amount;
+    const original = originalRaw === '' || originalRaw == null ? null : Number(originalRaw);
+    const showOriginal = original != null && Number.isFinite(original) && original > amount;
+    const currency = pricingForm.currency_code || 'PKR';
+
+    let priceLine;
+    if (pricingForm.pricing_type === 'free') {
+      priceLine = 'Free';
+    } else if (pricingForm.pricing_type === 'subscription') {
+      priceLine = `${currency} ${amount.toLocaleString('en-PK')} / subscription`;
+    } else {
+      priceLine = `${currency} ${amount.toLocaleString('en-PK')}`;
+    }
+
+    const visibilityNotes = [];
+    if (!pricingForm.is_active) visibilityNotes.push('Inactive — not published to catalog');
+    if (!pricingForm.enrollment_visible) visibilityNotes.push('Hidden from enrollment flows');
+    if (!pricingForm.public_purchase_visible) visibilityNotes.push('Hidden from public purchase');
+
+    return { typeLabel, priceLine, showOriginal, original, currency, visibilityNotes };
+  }, [pricingForm]);
   const titleLen = form.title.length;
   const descLen = form.description.length;
   const shortLen = (form.short_description || '').length;
@@ -316,7 +435,7 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
 
         <div className="course-edit-body">
           {activeTab === 'general' && (
-            <form className="course-edit-section" onSubmit={onGeneralSubmit}>
+            <form className="course-edit-section course-edit-section--general" onSubmit={onGeneralSubmit}>
               <header className="course-edit-section__header">
                 <div>
                   <h2 className="course-edit-section__title">General information</h2>
@@ -325,7 +444,9 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                   </p>
                 </div>
               </header>
-              <div className="premium-form-grid premium-form-grid--2col">
+              <div className="course-edit-stack">
+                <div className="course-edit-card">
+                  <div className="premium-form-grid premium-form-grid--2col">
                 <PremiumFormField
                   id="title"
                   label="Course title"
@@ -351,6 +472,21 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                       </option>
                     ))}
                   </select>
+                </PremiumFormField>
+                <PremiumFormField
+                  id="categories"
+                  label="Categories"
+                  hint="Tag this course for catalog browsing. Inactive categories stay locked if already assigned."
+                  className="premium-form-grid__span-2"
+                >
+                  <CourseCategoryAssignmentField
+                    allCategories={allCategories}
+                    selectedIds={categoryIds}
+                    onToggle={onCategoryToggle}
+                    isLoading={loading}
+                    loadError={categoriesError}
+                    disabled={savingGeneral}
+                  />
                 </PremiumFormField>
                 <PremiumFormField id="visibility" label="Catalog visibility">
                   <AdminToggleSwitch
@@ -414,6 +550,8 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                     }}
                   />
                 </PremiumFormField>
+                  </div>
+                </div>
               </div>
 
               {error ? <p className="admin-error">{error}</p> : null}
@@ -427,7 +565,7 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
           )}
 
           {activeTab === 'pricing' && (
-            <form className="course-edit-section" onSubmit={onPricingSubmit}>
+            <form className="course-edit-section course-edit-section--pricing" onSubmit={onPricingSubmit}>
               <header className="course-edit-section__header">
                 <div>
                   <h2 className="course-edit-section__title">Pricing</h2>
@@ -437,10 +575,14 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                 </div>
               </header>
               {pricingLoading ? (
-                <p>Loading pricing…</p>
+                <p className="course-edit-pricing-loading" aria-live="polite">
+                  <span className="admin-spinner admin-spinner--sm" aria-hidden />
+                  Loading pricing…
+                </p>
               ) : (
-                <>
-                  <div className="premium-form-grid premium-form-grid--2col">
+                <div className="course-edit-stack">
+                  <div className="course-edit-card">
+                    <div className="premium-form-grid premium-form-grid--2col course-edit-pricing-grid">
                     <PremiumFormField id="pricing_type" label="Pricing type" required>
                       <select
                         id="pricing_type"
@@ -506,7 +648,7 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                       <AdminToggleSwitch
                         id="pricing_active"
                         name="is_active"
-                        checked={pricingForm.is_active}
+                        checked={!!pricingForm.is_active}
                         onChange={onPricingChange}
                         label="Active pricing"
                         hint="Publish this price to the catalog now."
@@ -514,45 +656,66 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                       <AdminToggleSwitch
                         id="enrollment_visible"
                         name="enrollment_visible"
-                        checked={pricingForm.enrollment_visible}
+                        checked={!!pricingForm.enrollment_visible}
                         onChange={onPricingChange}
                         label="Enrollment visibility"
                       />
                       <AdminToggleSwitch
                         id="public_purchase_visible"
                         name="public_purchase_visible"
-                        checked={pricingForm.public_purchase_visible}
+                        checked={!!pricingForm.public_purchase_visible}
                         onChange={onPricingChange}
                         label="Public purchase visibility"
                       />
                     </div>
                   </div>
-                  <div className="course-pricing-preview">
-                    <span className="course-pricing-preview__label">Student preview</span>
-                    <span className="course-pricing-preview__value">
-                      {pricingForm.pricing_type === 'free'
-                        ? 'Free'
-                        : `${pricingForm.currency_code} ${Number(pricingForm.price_amount || 0).toLocaleString('en-PK')}`}
-                    </span>
                   </div>
-                  {pricingError ? <p className="admin-error">{pricingError}</p> : null}
+                  <div className="course-pricing-preview" aria-live="polite">
+                    <div className="course-pricing-preview__header">
+                      <span className="course-pricing-preview__label">Student preview</span>
+                      <span className="course-pricing-preview__type">{pricingStudentPreview.typeLabel}</span>
+                    </div>
+                    <div className="course-pricing-preview__value">
+                      <span>{pricingStudentPreview.priceLine}</span>
+                      {pricingStudentPreview.showOriginal ? (
+                        <span className="course-pricing-preview__original">
+                          {pricingStudentPreview.currency}{' '}
+                          {pricingStudentPreview.original.toLocaleString('en-PK')}
+                        </span>
+                      ) : null}
+                    </div>
+                    {pricingStudentPreview.visibilityNotes.length > 0 ? (
+                      <ul className="course-pricing-preview__notes">
+                        {pricingStudentPreview.visibilityNotes.map((note) => (
+                          <li key={note}>{note}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  {pricingError ? (
+                    <p className="admin-error" role="alert">
+                      {pricingError}
+                    </p>
+                  ) : null}
                   {pricingSuccess ? <p className="admin-success">{pricingSuccess}</p> : null}
                   <div className="course-edit-form__actions">
-                    <button
+                    <AdminLoadingButton
                       className="btn--course-primary"
                       type="submit"
-                      disabled={pricingSaving || Object.keys(pricingErrors).length > 0}
+                      isLoading={pricingSaving}
+                      loadingLabel="Saving…"
+                      disabled={Object.keys(pricingErrors).length > 0}
                     >
-                      {pricingSaving ? 'Saving…' : 'Save pricing'}
-                    </button>
+                      Save pricing
+                    </AdminLoadingButton>
                   </div>
-                </>
+                </div>
               )}
             </form>
           )}
 
           {activeTab === 'subjects' && (
-            <div className="course-edit-section">
+            <div className="course-edit-section course-edit-section--subjects">
               <header className="course-edit-section__header">
                 <div>
                   <h2 className="course-edit-section__title">Subjects</h2>
@@ -561,15 +724,17 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                   </p>
                 </div>
               </header>
-              <AdminCourseSubjectsPanel
+              <div className="course-edit-subjects">
+                <AdminCourseSubjectsPanel
                 key={courseId}
                 token={token}
                 courseId={courseId}
                 embedded
                 onSubjectsChange={(rows) => {
-                  setActiveSubjectCount(rows.filter((s) => s.isActive !== false).length);
+                  setActiveSubjectCount(rows.filter((s) => Boolean(s.isActive)).length);
                 }}
-              />
+                />
+              </div>
             </div>
           )}
 
@@ -579,6 +744,7 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
               courseId={courseId}
               onBatchesChange={setBatches}
               admissionStatus={form.admission_status}
+              courseEndDate={form.end_date}
               onAdmissionUpdated={(patch) => {
                 setForm((prev) => ({ ...prev, ...patch }));
                 onUpdated?.();
@@ -586,13 +752,28 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
             />
           )}
 
+          {activeTab === 'notes' && (
+            <div className="course-edit-card">
+              <AdminCourseNotesPanel token={token} courseId={courseId} />
+            </div>
+          )}
+
           {activeTab === 'health' && (
-            <CourseHealthPanel
-              course={form}
-              pricing={{ ...pricingForm, price_amount: Number(pricingForm.price_amount) }}
-              batches={batches}
-              activeSubjectCount={activeSubjectCount}
-            />
+            <div className="course-edit-card course-edit-card--health">
+              <CourseHealthPanel
+              course={healthSnapshot?.course ?? form}
+              pricing={
+                healthSnapshot?.pricing ?? {
+                  ...pricingForm,
+                  price_amount: Number(pricingForm.price_amount),
+                }
+              }
+              batches={healthSnapshot?.batches ?? batches}
+              activeSubjectCount={healthSnapshot?.activeSubjectCount ?? activeSubjectCount}
+              loading={healthLoading}
+              unsavedNotes={healthUnsavedNotes}
+              />
+            </div>
           )}
         </div>
       </section>

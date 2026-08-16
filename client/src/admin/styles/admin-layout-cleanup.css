@@ -1,0 +1,396 @@
+/**
+ * Admin layout cleanup — shared table, action, toolbar, overflow, and alignment fixes.
+ * Scoped under .admin-shell. Import after density.css. No logic changes.
+ */
+
+/* ---- Page overflow: contain within shell, allow table-internal scroll ---- */
+.admin-shell,
+.admin-shell .admin-content,
+.admin-shell .admin-page {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-shell .admin-page {
+  overflow-x: clip;
+}
+
+/* ---- Page headers: title left, actions right ---- */
+.admin-shell .admin-courses-page-header,
+.admin-shell .admin-test-page-header,
+.admin-shell .admin-reg-page-head,
+.admin-shell .qa-monitor__header,
+.admin-shell .ti-header,
+.admin-shell .remarks-session__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-shell .admin-courses-page-header > div:first-child,
+.admin-shell .admin-test-page-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.admin-shell .admin-courses-page-header__actions,
+.admin-shell .admin-test-page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.admin-shell .admin-courses-page-header__title,
+.admin-shell .admin-test-page-header__title {
+  overflow-wrap: anywhere;
+}
+
+/* ---- Shared action groups ---- */
+.admin-shell .admin-row-actions,
+.admin-shell .admin-tests-row-actions,
+.admin-shell .admin-tests-link-actions,
+.admin-shell .admin-teacher-row-actions,
+.admin-shell .admin-reg-actions,
+.admin-shell .admin-qa-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-shell .admin-row-actions .btn,
+.admin-shell .admin-tests-row-actions .btn,
+.admin-shell .admin-tests-link-actions .btn,
+.admin-shell .admin-teacher-row-actions .btn,
+.admin-shell .admin-reg-actions .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.admin-shell .admin-row-actions .btn--sm,
+.admin-shell .admin-tests-row-actions .btn--sm,
+.admin-shell .admin-tests-link-actions .btn--sm,
+.admin-shell .admin-teacher-row-actions .btn--sm {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  border-radius: 8px;
+}
+
+/* Icon + text alignment in buttons/links */
+.admin-shell .btn svg,
+.admin-shell .admin-courses-page-header__actions .btn svg,
+.admin-shell a.btn svg {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.admin-shell .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ---- Global table hygiene ---- */
+.admin-shell .admin-table-wrap,
+.admin-shell .admin-tests-table-wrap,
+.admin-shell .admin-tests-table-scroll,
+.admin-shell .admin-teachers-table-wrap,
+.admin-shell .course-data-grid__table-wrap,
+.admin-shell .admin-table-wrap--registrations {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-shell .admin-table,
+.admin-shell .admin-tests-table,
+.admin-shell .admin-teachers-table,
+.admin-shell .course-data-grid__table,
+.admin-shell .admin-table--registrations {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-shell .admin-table th,
+.admin-shell .admin-table td,
+.admin-shell .admin-tests-table th,
+.admin-shell .admin-tests-table td,
+.admin-shell .admin-teachers-table th,
+.admin-shell .admin-teachers-table td,
+.admin-shell .course-data-grid__table th,
+.admin-shell .course-data-grid__table td {
+  vertical-align: middle;
+}
+
+/* Truncation utility for long text cells */
+.admin-shell .admin-cell-truncate,
+.admin-shell .admin-tests-table__title,
+.admin-shell .admin-tests-table__course {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-shell .admin-cell-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Status / badges stay single-line */
+.admin-shell .admin-test-status,
+.admin-shell .admin-teacher-status,
+.admin-shell .admin-status-pill,
+.admin-shell .admin-access-badge,
+.admin-shell .admin-account-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+/* ---- Toolbars / filters ---- */
+.admin-shell .admin-tests-toolbar,
+.admin-shell .admin-teachers-toolbar,
+.admin-shell .admin-tests-list-head,
+.admin-shell .qa-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-shell .admin-tests-toolbar {
+  display: grid;
+}
+
+.admin-shell .admin-search-field,
+.admin-shell .admin-search-field__control {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.admin-shell .admin-search-field__input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-shell .admin-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* ---- Forms ---- */
+.admin-shell .admin-field,
+.admin-shell .premium-field {
+  min-width: 0;
+}
+
+.admin-shell .admin-form-grid > *,
+.admin-shell .admin-field input,
+.admin-shell .admin-field select,
+.admin-shell .admin-field textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-shell .admin-field__error,
+.admin-shell .admin-field__hint {
+  overflow-wrap: anywhere;
+}
+
+/* ---- Cards ---- */
+.admin-shell .admin-card,
+.admin-shell .admin-stat-card,
+.admin-shell .admin-empty-state {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.admin-shell .admin-grid,
+.admin-shell .admin-reg-stat-grid,
+.admin-shell .qa-stats {
+  min-width: 0;
+}
+
+.admin-shell .admin-stat-card {
+  align-self: stretch;
+}
+
+/* Prevent unnecessary stretch making cards huge */
+.admin-shell .admin-grid .admin-stat-card {
+  height: auto;
+}
+
+/* ---- Empty / alerts / modals ---- */
+.admin-shell .admin-empty-state,
+.admin-shell .admin-test-alert--warning,
+.admin-shell .admin-test-alert--info {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.admin-shell .admin-empty-state__actions,
+.admin-shell .admin-confirm-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-shell .admin-confirm-dialog__panel,
+.admin-shell .admin-modal {
+  max-width: min(100%, 32rem);
+  box-sizing: border-box;
+}
+
+/* ---- Pagination ---- */
+.admin-shell .admin-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: 100%;
+}
+
+.admin-shell .admin-pagination__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Dashboard / generic tables ---- */
+.admin-shell .admin-table {
+  table-layout: auto;
+}
+
+.admin-shell .admin-page--dashboard .admin-table {
+  min-width: 520px;
+}
+
+.admin-shell .admin-page .admin-table td,
+.admin-shell .admin-page .admin-table th {
+  max-width: 18rem;
+}
+
+.admin-shell .admin-page .admin-table td {
+  overflow-wrap: anywhere;
+}
+
+/* Users / logs: keep actions tidy */
+.admin-shell .admin-page .admin-table .admin-row-actions {
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 900px) {
+  .admin-shell .admin-page .admin-table .admin-row-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---- Teachers table ---- */
+.admin-shell .admin-teachers-table {
+  min-width: 720px;
+  table-layout: fixed;
+}
+
+.admin-shell .admin-teachers-table th:nth-child(1),
+.admin-shell .admin-teachers-table td:nth-child(1) {
+  width: 18%;
+}
+
+.admin-shell .admin-teachers-table th:nth-child(2),
+.admin-shell .admin-teachers-table td:nth-child(2) {
+  width: 20%;
+}
+
+.admin-shell .admin-teachers-table td:nth-child(1),
+.admin-shell .admin-teachers-table td:nth-child(2),
+.admin-shell .admin-teachers-table td:nth-child(3) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+.admin-shell .admin-teachers-table td:last-child {
+  overflow: visible;
+}
+
+/* ---- Course data grid ---- */
+.admin-shell .course-data-grid__table {
+  min-width: 720px;
+  table-layout: fixed;
+}
+
+.admin-shell .course-data-grid__table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+.admin-shell .course-data-grid__table td:last-child {
+  overflow: visible;
+  white-space: normal;
+  max-width: none;
+}
+
+/* ---- Registrations ---- */
+.admin-shell .admin-table--registrations {
+  table-layout: auto;
+}
+
+.admin-shell .admin-table-wrap--registrations {
+  overflow-x: auto;
+}
+
+.admin-shell .admin-reg-col--student,
+.admin-shell .admin-reg-col--course,
+.admin-shell .admin-reg-col--email {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Responsive headers / toolbars ---- */
+@media (max-width: 767px) {
+  .admin-shell .admin-courses-page-header__actions,
+  .admin-shell .admin-test-page-header__actions {
+    width: 100%;
+  }
+
+  .admin-shell .admin-courses-page-header__actions .btn,
+  .admin-shell .admin-test-page-header__actions .btn,
+  .admin-shell .admin-courses-page-header__actions a.btn--course-primary {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .admin-shell .admin-page {
+    overflow-x: clip;
+  }
+}

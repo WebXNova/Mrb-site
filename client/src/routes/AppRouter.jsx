@@ -34,6 +34,7 @@ const StudentPortalPage = lazy(() => import('../pages/StudentPortalPage'));
 const StudentMyCoursePage = lazy(() => import('../pages/StudentMyCoursePage'));
 const StudentTestsPage = lazy(() => import('../pages/StudentTestsPage'));
 const StudentLecturesPage = lazy(() => import('../pages/StudentLecturesPage'));
+const StudentNotesPage = lazy(() => import('../pages/StudentNotesPage'));
 const StudentResultsPage = lazy(() => import('../pages/StudentResultsPage'));
 const StudentQuestionsPage = lazy(() => import('../pages/StudentQuestionsPage'));
 const StudentQuestionDetailPage = lazy(() => import('../pages/StudentQuestionDetailPage'));
@@ -48,6 +49,7 @@ const StudentLayout = lazy(() => import('../student/components/StudentLayout'));
 const PublicTestPage = lazy(() => import('../pages/PublicTestPage'));
 const TestAttemptPage = lazy(() => import('../pages/TestAttemptPage'));
 const TestResultPage = lazy(() => import('../pages/TestResultPage'));
+const TestSubmittedPage = lazy(() => import('../features/test-taking/TestSubmittedPage'));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
 const SearchPage = lazy(() => import('../pages/SearchPage'));
 const PrivacyPage = lazy(() => import('../pages/PrivacyPage'));
@@ -81,6 +83,11 @@ const AdminTestRulesPage = lazy(() => import('../admin/pages/AdminTestRulesPage'
 const AdminTestSettingsPage = lazy(() => import('../admin/pages/AdminTestSettingsPage'));
 const QuizBuilderPage = lazy(() => import('../features/quiz-builder/pages/QuizBuilderPage'));
 const AdminSettingsPage = lazy(() => import('../admin/pages/AdminSettingsPage'));
+const AdminPaymentAccountsPage = lazy(() => import('../admin/pages/AdminPaymentAccountsPage'));
+const AdminCourseCategoriesPage = lazy(() => import('../admin/pages/AdminCourseCategoriesPage'));
+const AdminCouponsPage = lazy(() => import('../admin/pages/AdminCouponsPage'));
+const AdminManualPaymentsPage = lazy(() => import('../admin/pages/AdminManualPaymentsPage'));
+const AdminNotesPage = lazy(() => import('../admin/pages/AdminNotesPage'));
 const AdminRemarksPage = lazy(() => import('../admin/pages/AdminRemarksPage'));
 const AdminQaMonitoringPage = lazy(() => import('../admin/pages/AdminQaMonitoringPage'));
 const AdminTeacherInsightsPage = lazy(() => import('../admin/pages/AdminTeacherInsightsPage'));
@@ -344,6 +351,7 @@ export default function AppRouter({ authStatus }) {
             <Route path="my-course" element={<StudentMyCoursePage />} />
             <Route path="tests" element={<StudentTestsPage />} />
             <Route path="tests/history" element={<StudentTestHistoryPage />} />
+            <Route path="notes" element={<StudentNotesPage />} />
             <Route path="lectures" element={<StudentLecturesPage />} />
             <Route path="lectures/:id" element={<StudentLecturePlayerPage />} />
             <Route path="results" element={<StudentResultsPage />} />
@@ -360,6 +368,14 @@ export default function AppRouter({ authStatus }) {
             element={
               <RequireStudent authStatus={authStatus}>
                 <TestAttemptPage />
+              </RequireStudent>
+            }
+          />
+          <Route
+            path="/tests/:slug/submitted"
+            element={
+              <RequireStudent authStatus={authStatus}>
+                <TestSubmittedPage />
               </RequireStudent>
             }
           />
@@ -442,8 +458,13 @@ export default function AppRouter({ authStatus }) {
             <Route path="teacher-insights" element={<AdminTeacherInsightsPage />} />
             <Route path="remarks" element={<AdminRemarksPage />} />
             <Route path="registrations" element={<AdminRegistrationsPage />} />
+            <Route path="manual-payments" element={<AdminManualPaymentsPage />} />
             <Route path="logs" element={<AdminLogsPage />} />
+            <Route path="notes" element={<AdminNotesPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
+            <Route path="settings/payment-accounts" element={<AdminPaymentAccountsPage />} />
+            <Route path="settings/course-categories" element={<AdminCourseCategoriesPage />} />
+            <Route path="settings/coupons" element={<AdminCouponsPage />} />
           </Route>
           <Route path="/admin" element={<NotFoundPage />} />
           <Route path="/admin/*" element={<NotFoundPage />} />

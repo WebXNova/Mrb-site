@@ -23,40 +23,41 @@ export default function TestRowActionsMenu({
   const exportBusy = busyAction === `export-csv-${test.id}`;
   const resultsBusy = busyAction === `results-${test.id}-xlsx`;
 
+  const questionsLabel =
+    busyAction === 'questions' ? 'Loading…' : 'Questions';
+
   return (
-    <div className="admin-tests-row-actions" aria-busy={publishingThisTest || exportBusy || resultsBusy || undefined}>
+    <div className="tests-row-actions" aria-busy={publishingThisTest || exportBusy || resultsBusy || undefined}>
       {published ? (
-        <Link
-          className="btn btn--primary btn--sm admin-touch-target"
-          to={adminRoute(`tests/${test.id}/edit`)}
-        >
+        <Link className="tests-row-actions__primary" to={adminRoute(`tests/${test.id}/edit`)}>
           Edit
         </Link>
+      ) : (
+        <Link className="tests-row-actions__primary" to={adminRoute(`tests/${test.id}/setup`)}>
+          Setup
+        </Link>
+      )}
+
+      {published ? (
+        <Link
+          className="tests-row-actions__link"
+          to={adminRoute(`tests/${test.id}/setup`)}
+          title="View setup"
+        >
+          Setup
+        </Link>
       ) : null}
+
       <Link
-        className="btn btn--secondary btn--sm admin-touch-target"
-        to={adminRoute(`tests/${test.id}/setup`)}
-      >
-        {published ? 'View setup' : 'Setup'}
-      </Link>
-      <Link
-        className={`btn btn--sm admin-touch-target${published ? ' btn--secondary' : ' btn--primary'}`}
+        className="tests-row-actions__link"
         to={adminRoute(`tests/${test.id}/questions`)}
+        title={published ? 'View questions' : 'Questions'}
         aria-busy={busyAction === 'questions' || undefined}
       >
-        {busyAction === 'questions' ? 'Loading…' : published ? 'View questions' : 'Questions'}
+        {questionsLabel}
       </Link>
-      <button
-        type="button"
-        className="btn btn--secondary btn--sm admin-touch-target"
-        disabled={exportBusy}
-        aria-busy={exportBusy || undefined}
-        onClick={() => onExportTest(test.id)}
-      >
-        {exportBusy ? 'Exporting…' : '📥 Export CSV'}
-      </button>
 
-      <AdminActionMenu triggerLabel="More" triggerClassName="btn btn--secondary btn--sm admin-touch-target">
+      <AdminActionMenu triggerLabel="More" triggerClassName="tests-row-actions__more">
         {({ close }) => (
           <>
             <AdminActionMenuItem as={Link} to={adminRoute(`tests/${test.id}/details`)} onClick={close}>
@@ -85,6 +86,17 @@ export default function TestRowActionsMenu({
               }}
             >
               Duplicate
+            </AdminActionMenuItem>
+            <AdminActionMenuItem
+              disabled={exportBusy}
+              aria-busy={exportBusy || undefined}
+              onClick={() => {
+                if (exportBusy) return;
+                close();
+                onExportTest(test.id);
+              }}
+            >
+              {exportBusy ? 'Exporting…' : 'Export CSV'}
             </AdminActionMenuItem>
             <AdminActionMenuItem
               onClick={() => {

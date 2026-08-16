@@ -1,5 +1,6 @@
 import { request } from './requestClient.js';
 import { enrollmentApi } from './enrollmentApi.js';
+import { studentAuthenticatedDownload } from './studentDownload.js';
 import { recordingExtensionFromBlobType } from '../utils/qaQuestionValidation.js';
 
 function studentRequest(path, options = {}) {
@@ -36,6 +37,14 @@ export const studentApi = {
   studentEnrollmentStatus: () => studentRequest('/student/enrollment-status'),
   dashboard: () => studentRequest('/student/dashboard'),
   myCourse: () => studentRequest('/student/my-course'),
+  courseNotes: (courseId) => studentRequest(`/courses/${encodeURIComponent(courseId)}/notes`),
+  subjectNotes: (courseId, subjectId) =>
+    studentRequest(`/courses/${encodeURIComponent(courseId)}/subjects/${encodeURIComponent(subjectId)}/notes`),
+  chapterNotes: (courseId, chapterId) =>
+    studentRequest(`/courses/${encodeURIComponent(courseId)}/chapters/${encodeURIComponent(chapterId)}/notes`),
+  lectureNotes: (courseId, lectureId) =>
+    studentRequest(`/courses/${encodeURIComponent(courseId)}/lectures/${encodeURIComponent(lectureId)}/notes`),
+  downloadCourseNote: (noteId) => studentAuthenticatedDownload(`/notes/${encodeURIComponent(noteId)}/download`),
   courseProgress: (courseId) => studentRequest(`/student/progress/${encodeURIComponent(courseId)}`),
   completeLecture: (lectureId) =>
     studentRequest(`/student/lectures/${encodeURIComponent(lectureId)}/complete`, { method: 'POST' }),

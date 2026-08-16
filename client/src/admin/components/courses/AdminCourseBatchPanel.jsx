@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '../../../api/adminApi';
+import { useAdminToast } from '../../context/AdminToastContext';
 import {
   BATCH_STATUSES,
   BATCH_TIMEZONES,
@@ -11,8 +12,12 @@ import {
 } from '../../../course/batchPresentation';
 import AdminToggleSwitch from './AdminToggleSwitch';
 import PremiumFormField from './PremiumFormField';
+import AdminLoadingButton from '../AdminLoadingButton';
 import CourseAdmissionStatusField from '../../course-wizard/CourseAdmissionStatusField';
+import AdmissionStaleWarning from './AdmissionStaleWarning';
+import { computeAdmissionStale } from '../../utils/courseStaleAdvisory';
 import { toDateInputValue } from '../../course-wizard/courseScheduleValidation';
+import { parseSavedBool } from '../../utils/parseSavedBool';
 
 const emptyForm = {
   title: '',
@@ -29,13 +34,36 @@ const emptyForm = {
   recordings_enabled: true,
 };
 
+/** Placeholder for create — server generates the real batch code. */
+const CREATE_CODE_PLACEHOLDER = 'AUTO';
+
+function batchRowToForm(row) {
+  if (!row) return { ...emptyForm };
+  return {
+    title: row.title || '',
+    code: row.code || '',
+    start_date: row.start_date || '',
+    end_date: row.end_date || '',
+    total_seats: Number(row.total_seats ?? 0) || 1,
+    instructor_name: row.instructor_name || '',
+    schedule_label: row.schedule_label || '',
+    timezone: row.timezone || 'Asia/Karachi',
+    status: row.status || 'draft',
+    is_active: parseSavedBool(row.is_active ?? row.isActive, true),
+    show_publicly: parseSavedBool(row.show_publicly ?? row.showPublicly, true),
+    recordings_enabled: parseSavedBool(row.recordings_enabled ?? row.recordingsEnabled, true),
+  };
+}
+
 export default function AdminCourseBatchPanel({
   token,
   courseId,
   onBatchesChange,
   admissionStatus = 'CLOSED',
+  courseEndDate = null,
   onAdmissionUpdated,
 }) {
+  const toast = useAdminToast();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,6 +74,11 @@ export default function AdminCourseBatchPanel({
   const [savingAdmission, setSavingAdmission] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [admission, setAdmission] = useState(admissionStatus || 'CLOSED');
+  const admissionStale = computeAdmissionStale({
+    admission_status: admission,
+    end_date: editingId ? toDateInputValue(form.end_date) || null : courseEndDate,
+  });
+  const staleEndDate = editingId ? toDateInputValue(form.end_date) || null : courseEndDate;
 
   useEffect(() => {
     setAdmission(admissionStatus || 'CLOSED');
@@ -58,8 +91,11 @@ export default function AdminCourseBatchPanel({
       const rows = Array.isArray(res?.data) ? res.data : [];
       setBatches(rows);
       onBatchesChange?.(rows);
+      return rows;
     } catch (e) {
-      setError(e?.message || 'Failed to load batches');
+      const message = e?.message || 'Failed to load batches';
+      setError(message);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -86,22 +122,20 @@ export default function AdminCourseBatchPanel({
 
   function startEdit(row) {
     setEditingId(row.id);
-    setForm({
-      title: row.title || '',
-      code: row.code || '',
-      start_date: row.start_date || '',
-      end_date: row.end_date || '',
-      total_seats: Number(row.total_seats ?? 0) || 1,
-      instructor_name: row.instructor_name || '',
-      schedule_label: row.schedule_label || '',
-      timezone: row.timezone || 'Asia/Karachi',
-      status: row.status || 'draft',
-      is_active: !!row.is_active,
-      show_publicly: row.show_publicly !== false,
-      recordings_enabled: row.recordings_enabled !== false,
-    });
+    setForm(batchRowToForm(row));
     setError('');
     setSuccess('');
+  }
+
+  function hydrateFormFromSavedRow(savedRow, rows) {
+    const match =
+      savedRow ||
+      (editingId ? rows.find((b) => Number(b.id) === Number(editingId)) : rows[rows.length - 1]) ||
+      rows[0];
+    if (match) {
+      setEditingId(match.id);
+      setForm(batchRowToForm(match));
+    }
   }
 
   async function saveAdmissionStatus(courseDates = {}) {
@@ -118,8 +152,11 @@ export default function AdminCourseBatchPanel({
         ...courseDates,
       });
       setSuccess('Admission settings saved.');
+      toast.success('Admission settings saved.');
     } catch (err) {
-      setError(err?.message || 'Failed to save admission status');
+      const message = err?.message || 'Failed to save admission status';
+      setError(message);
+      toast.error(message);
     } finally {
       setSavingAdmission(false);
     }
@@ -133,7 +170,7 @@ export default function AdminCourseBatchPanel({
     try {
       const payload = {
         title: form.title.trim(),
-        code: form.code.trim(),
+        code: editingId ? form.code.trim() : CREATE_CODE_PLACEHOLDER,
         start_date: form.start_date.trim(),
         end_date: form.end_date.trim(),
         total_seats: Number(form.total_seats),
@@ -145,10 +182,13 @@ export default function AdminCourseBatchPanel({
         instructor_name: form.instructor_name.trim() ? form.instructor_name.trim() : null,
         schedule_label: form.schedule_label.trim() ? form.schedule_label.trim() : null,
       };
+      let savedRow = null;
       if (editingId) {
-        await adminApi.updateCourseBatch(token, editingId, payload);
+        const response = await adminApi.updateCourseBatch(token, editingId, payload);
+        savedRow = response?.data ?? null;
       } else {
-        await adminApi.createCourseBatch(token, courseId, payload);
+        const response = await adminApi.createCourseBatch(token, courseId, payload);
+        savedRow = response?.data ?? null;
       }
       await adminApi.updateCourse(token, courseId, {
         admission_status: admission,
@@ -160,10 +200,15 @@ export default function AdminCourseBatchPanel({
         start_date: toDateInputValue(form.start_date) || null,
         end_date: toDateInputValue(form.end_date) || null,
       });
-      setSuccess(editingId ? 'Batch and admission settings saved.' : 'Batch created.');
-      await loadBatches();
+      const successMessage = editingId ? 'Batch and admission settings saved.' : 'Batch created.';
+      setSuccess(successMessage);
+      toast.success(successMessage);
+      const rows = await loadBatches();
+      hydrateFormFromSavedRow(savedRow, rows);
     } catch (err) {
-      setError(err?.message || 'Save failed');
+      const message = err?.message || 'Save failed';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -176,11 +221,14 @@ export default function AdminCourseBatchPanel({
     try {
       await adminApi.archiveCourseBatch(token, row.id);
       setSuccess('Batch archived.');
+      toast.success('Batch archived.');
       setEditingId(null);
       setForm(emptyForm);
       await loadBatches();
     } catch (e) {
-      setError(e?.message || 'Archive failed');
+      const message = e?.message || 'Archive failed';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusyId(null);
     }
@@ -192,9 +240,12 @@ export default function AdminCourseBatchPanel({
     try {
       await adminApi.reactivateCourseBatch(token, row.id);
       setSuccess('Batch reactivated.');
+      toast.success('Batch reactivated.');
       await loadBatches();
     } catch (e) {
-      setError(e?.message || 'Reactivate failed');
+      const message = e?.message || 'Reactivate failed';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusyId(null);
     }
@@ -202,6 +253,7 @@ export default function AdminCourseBatchPanel({
 
   const hasBatch = batches.length > 0;
   const currentBatch = batches[0] || null;
+  const isCreating = !editingId;
 
   return (
     <div className="course-edit-section">
@@ -224,22 +276,25 @@ export default function AdminCourseBatchPanel({
         <p className="course-edit-section__loading">Loading batch…</p>
       ) : (
         <>
-          <div style={{ marginBottom: '1.25rem' }}>
+          <div className="course-edit-card course-edit-card--admission">
+            {admissionStale ? <AdmissionStaleWarning endDate={staleEndDate} /> : null}
             <CourseAdmissionStatusField
               idPrefix="edit_batch"
               admissionStatus={admission}
               onChange={(e) => setAdmission(e.target.value)}
             />
             {hasBatch && !editingId ? (
-              <button
-                type="button"
-                className="btn--course-secondary"
-                style={{ marginTop: '0.75rem' }}
-                disabled={savingAdmission}
-                onClick={() => saveAdmissionStatus()}
-              >
-                {savingAdmission ? 'Saving…' : 'Save admission status'}
-              </button>
+              <div className="course-edit-admission-actions">
+                <AdminLoadingButton
+                  type="button"
+                  className="btn--course-secondary"
+                  isLoading={savingAdmission}
+                  loadingLabel="Saving…"
+                  onClick={() => saveAdmissionStatus()}
+                >
+                  Save admission status
+                </AdminLoadingButton>
+              </div>
             ) : null}
           </div>
 
@@ -277,6 +332,18 @@ export default function AdminCourseBatchPanel({
                   <span className="course-batch-summary__label">Active</span>
                   <span className="course-batch-summary__value">{currentBatch.is_active ? 'Yes' : 'No'}</span>
                 </div>
+                <div className="course-batch-summary__item">
+                  <span className="course-batch-summary__label">Show publicly</span>
+                  <span className="course-batch-summary__value">
+                    {parseSavedBool(currentBatch.show_publicly, true) ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div className="course-batch-summary__item">
+                  <span className="course-batch-summary__label">Recordings enabled</span>
+                  <span className="course-batch-summary__value">
+                    {parseSavedBool(currentBatch.recordings_enabled, true) ? 'Yes' : 'No'}
+                  </span>
+                </div>
               </div>
               <div className="course-batch-summary__actions">
                 <button
@@ -288,30 +355,32 @@ export default function AdminCourseBatchPanel({
                   Edit rules
                 </button>
                 {currentBatch.status !== 'archived' ? (
-                  <button
+                  <AdminLoadingButton
                     type="button"
                     className="btn--course-danger"
+                    isLoading={busyId === currentBatch.id}
+                    loadingLabel="Archiving…"
                     onClick={() => onArchive(currentBatch)}
-                    disabled={busyId === currentBatch.id}
                   >
                     Archive
-                  </button>
+                  </AdminLoadingButton>
                 ) : (
-                  <button
+                  <AdminLoadingButton
                     type="button"
                     className="btn--course-secondary"
+                    isLoading={busyId === currentBatch.id}
+                    loadingLabel="Reactivating…"
                     onClick={() => onReactivate(currentBatch)}
-                    disabled={busyId === currentBatch.id}
                   >
                     Reactivate
-                  </button>
+                  </AdminLoadingButton>
                 )}
               </div>
             </div>
           ) : null}
 
           {(!hasBatch || editingId) && (
-            <form className="course-edit-form" onSubmit={onSubmit}>
+            <form className="course-edit-form course-edit-stack" onSubmit={onSubmit}>
               <div className="course-edit-form__group">
                 <h3 className="course-edit-form__group-title">Identity</h3>
                 <div className="premium-form-grid premium-form-grid--2col">
@@ -327,16 +396,22 @@ export default function AdminCourseBatchPanel({
                       placeholder="e.g. Spring 2026 cohort"
                     />
                   </PremiumFormField>
-                  <PremiumFormField id="batch_code" label="Batch code" required hint="Unique identifier for this cohort.">
+                  <PremiumFormField
+                    id="batch_code"
+                    label="Batch code"
+                    required={!isCreating}
+                    hint={isCreating ? 'Code is auto-generated on save.' : 'Unique identifier for this cohort.'}
+                  >
                     <input
                       id="batch_code"
                       className="premium-field__input"
                       name="code"
-                      value={form.code}
+                      value={isCreating ? '' : form.code}
                       onChange={onChange}
                       maxLength={120}
-                      required
-                      placeholder="e.g. ICS-SPRING-26"
+                      required={!isCreating}
+                      disabled={isCreating}
+                      placeholder={isCreating ? 'Auto-generated' : 'e.g. ICS-SPRING-26'}
                     />
                   </PremiumFormField>
                   <PremiumFormField id="batch_instructor" label="Instructor name">
@@ -441,7 +516,7 @@ export default function AdminCourseBatchPanel({
                     <AdminToggleSwitch
                       id="batch_active"
                       name="is_active"
-                      checked={form.is_active}
+                      checked={!!form.is_active}
                       onChange={onChange}
                       label="Active batch"
                       hint="Inactive batches are hidden from delivery flows."
@@ -449,14 +524,14 @@ export default function AdminCourseBatchPanel({
                     <AdminToggleSwitch
                       id="batch_show_public"
                       name="show_publicly"
-                      checked={form.show_publicly}
+                      checked={!!form.show_publicly}
                       onChange={onChange}
                       label="Show publicly"
                     />
                     <AdminToggleSwitch
                       id="batch_recordings"
                       name="recordings_enabled"
-                      checked={form.recordings_enabled}
+                      checked={!!form.recordings_enabled}
                       onChange={onChange}
                       label="Recordings enabled"
                     />
@@ -468,9 +543,14 @@ export default function AdminCourseBatchPanel({
               {success ? <p className="admin-success">{success}</p> : null}
 
               <div className="course-edit-form__actions">
-                <button className="btn--course-primary" type="submit" disabled={saving}>
-                  {saving ? 'Saving…' : editingId ? 'Save batch rules' : 'Create batch'}
-                </button>
+                <AdminLoadingButton
+                  className="btn--course-primary"
+                  type="submit"
+                  isLoading={saving}
+                  loadingLabel="Saving…"
+                >
+                  {editingId ? 'Save batch rules' : 'Create batch'}
+                </AdminLoadingButton>
                 {editingId && hasBatch ? (
                   <button type="button" className="btn--course-secondary" onClick={startCreate} disabled={saving}>
                     Cancel

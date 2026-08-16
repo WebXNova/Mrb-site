@@ -58,7 +58,6 @@ export function getMissingFieldItems(missingFields = [], context = {}) {
       case 'title':
       case 'course_id':
       case 'test_type':
-      case 'category':
       case 'subject_id':
       case 'subject_ids':
       case 'basic_info':

@@ -12,6 +12,9 @@ const pakistaniWhatsappSchema = z
   .string()
   .regex(/^\+923[0-9]{9}$/, 'Enter a valid Pakistan WhatsApp number');
 
+/** Allowed values for Intermediate / HSSC Status on enrollment forms. */
+export const HSSC_STATUS_VALUES = ['9th', '10th', '11th', '12th', 'Bachelor'];
+
 /** POST /api/enrollments — student registration payload. */
 export const CreateEnrollmentDto = z.object({
   course_id: z.coerce.number().int().positive(),
@@ -29,7 +32,7 @@ export const CreateEnrollmentDto = z.object({
   district_id: z.coerce.number().int().positive(),
   city_id: z.coerce.number().int().positive(),
   board_id: z.coerce.number().int().positive().optional().nullable(),
-  hsscStatus: z.enum(['Inter Class', 'First Year Class', 'Matric Class']),
+  hsscStatus: z.enum(HSSC_STATUS_VALUES),
   mdcatAttemptType: z.enum(['Fresher', 'Improver']),
   confirmSwitch: z.boolean().default(false),
 });

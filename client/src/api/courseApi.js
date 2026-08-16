@@ -1,26 +1,27 @@
 import { http } from './http';
 import {
+  fetchPublicCatalogCourses,
+  fetchPublicCourseCategories,
+} from '../course/publicCatalogQueries';
+import {
   mapCatalogCourseToCardProps,
   mapCatalogCourseToDetailProps,
 } from '../course/coursePresentation';
-
-function normalizeCourseList(rows) {
-  if (!Array.isArray(rows)) return [];
-  return rows.map(mapCatalogCourseToCardProps).filter(Boolean);
-}
 
 /**
  * Public course catalog — responses include admission_status, enrollment_message, dates.
  */
 export const courseApi = {
   /** GET /api/courses/public */
-  listPublic: async () => {
-    const response = await http.get('/courses/public', { authScope: null });
-    const rows = Array.isArray(response?.data) ? response.data : [];
-    return {
-      ...response,
-      data: normalizeCourseList(rows),
-    };
+  listPublic: async (filters = {}) => {
+    const data = await fetchPublicCatalogCourses(filters);
+    return { data };
+  },
+
+  /** GET /api/courses/categories */
+  listCategories: async () => {
+    const categories = await fetchPublicCourseCategories();
+    return { data: { categories } };
   },
 
   /** GET /api/courses/:id */
@@ -43,8 +44,9 @@ export const courseApi = {
 
 /** @deprecated Use courseApi — kept for existing imports */
 export const catalogApi = {
-  listCourses: () => courseApi.listPublic(),
+  listCourses: (filters) => courseApi.listPublic(filters),
   getCourse: (courseId) => courseApi.getById(courseId),
   listCourseBatches: (courseId) => courseApi.listBatches(courseId),
   listCourseSubjects: (courseId) => courseApi.listSubjects(courseId),
+  listCategories: () => courseApi.listCategories(),
 };

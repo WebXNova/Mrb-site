@@ -25,6 +25,9 @@ function QuestionPanel({
     <article className="tt-question" aria-labelledby="tt-question-heading">
       <div className="tt-question__meta">
         <span className="tt-question__badge">Q{questionNumber}</span>
+        <span className="tt-question__meta-text">
+          Question {questionNumber} of {totalQuestions}
+        </span>
         <div className="tt-question__progress" aria-hidden="true">
           <div className="tt-question__progress-bar" style={{ width: `${progressPct}%` }} />
         </div>

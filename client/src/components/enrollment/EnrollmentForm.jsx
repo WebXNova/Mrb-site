@@ -3,7 +3,7 @@ import Button from '../ui/Button';
 import { locationsApi } from '../../api/locationsApi.js';
 import LocationSelector from './LocationSelector.jsx';
 
-const HSSC_OPTIONS = ['Inter Class', 'First Year Class', 'Matric Class'];
+const HSSC_OPTIONS = ['9th', '10th', '11th', '12th', 'Bachelor'];
 const ATTEMPT_TYPES = ['Fresher', 'Improver'];
 
 function Field({

@@ -1,0 +1,59 @@
+.ts-shell {
+  padding: var(--space-8) var(--space-4) var(--space-12);
+  min-height: 50vh;
+  min-height: 50dvh;
+  display: grid;
+  place-items: center;
+}
+
+.ts-card {
+  width: min(100%, 36rem);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-100);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+@media (min-width: 480px) {
+  .ts-shell {
+    padding: var(--space-10) var(--space-4) var(--space-16);
+  }
+
+  .ts-card {
+    padding: var(--space-8);
+  }
+}
+
+.ts-eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--color-primary-700);
+}
+
+.ts-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-26);
+  font-weight: var(--fw-bold);
+  color: var(--color-ink-900);
+  letter-spacing: var(--ls-tight);
+}
+
+.ts-lead {
+  margin: 0 0 var(--space-6);
+  font-size: var(--fs-16);
+  line-height: var(--lh-relaxed);
+  color: var(--color-ink-600);
+}
+
+.ts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+}

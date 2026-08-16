@@ -64,6 +64,21 @@ export function mapCatalogCourseToCardProps(course) {
   };
 }
 
+function extractCourseCategories(course) {
+  const raw = course?.categories;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((c) => c && typeof c === 'object')
+    .map((c) => ({
+      id: Number(c.id),
+      name: String(c.name ?? ''),
+      class_level: c.class_level ?? c.classLevel ?? 'not_applicable',
+      department: c.department ?? 'not_applicable',
+      board: c.board ?? 'not_applicable',
+    }))
+    .filter((c) => Number.isFinite(c.id) && c.id > 0);
+}
+
 /** @param {Record<string, unknown>} course from `/api/courses/:id` */
 export function mapCatalogCourseToDetailProps(course) {
   const base = mapCatalogCourseToCardProps(course);
@@ -78,6 +93,7 @@ export function mapCatalogCourseToDetailProps(course) {
     ...base,
     summary: truncateSummary(summarySource, 2000),
     description,
+    categories: extractCourseCategories(course),
   };
 }
 

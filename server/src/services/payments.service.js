@@ -228,6 +228,23 @@ export async function createPaymentSession({ userId, enrollmentId, courseId }) {
     connection.release();
   }
 
+  if (env.activePaymentGateway !== 'safepay') {
+    await mysqlPool.query(
+      `UPDATE orders
+       SET gateway = 'manual', updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'pending'`,
+      [orderId]
+    );
+    return {
+      orderId,
+      enrollmentId: eid,
+      courseId: cid,
+      amount,
+      currency: 'PKR',
+      status: 'manual_pending_setup',
+    };
+  }
+
   let session;
   try {
     session = await createSafepayHostedCheckoutSession({

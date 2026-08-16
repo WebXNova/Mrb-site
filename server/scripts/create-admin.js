@@ -54,7 +54,7 @@ async function createAdmin() {
          full_name = VALUES(full_name),
          role = VALUES(role),
          status = VALUES(status)`,
-      [email, username, hash, 'System Admin', 'admin', 'active']
+      [email, username, hash, 'System Admin', 'super_admin', 'active']
     );
 
     console.log(`Admin user created/updated successfully: ${email}`);

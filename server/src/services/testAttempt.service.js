@@ -68,6 +68,7 @@ import { INSERT_TEST_RESULT_SQL } from './testResult.queries.js';
 import { derivePassStatus } from '../result/passStatus.js';
 import {
   assertStudentResultVisible,
+  isShowResultImmediatelyEnabled,
   sanitizeGradingDetailItems,
 } from './testResultVisibility.service.js';
 import {
@@ -125,6 +126,7 @@ function buildSlugSubmitSuccess(ctx, resultId, meta = {}) {
     attemptId: ctx.attempt.id,
     resultId: Number(resultId),
     recovered: Boolean(meta.recovered),
+    resultAvailable: isShowResultImmediatelyEnabled(ctx.test?.show_result_immediately),
   };
 }
 

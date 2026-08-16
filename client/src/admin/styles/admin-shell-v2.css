@@ -1,7 +1,7 @@
 /* Admin shell v2 — enterprise SaaS layout on existing brand tokens */
 
 :root {
-  --admin-sidebar-width: 260px;
+  --admin-sidebar-width: 228px;
   --admin-sidebar-collapsed-width: 72px;
   --admin-topbar-height: 64px;
   --admin-primary: var(--color-ink-900);
@@ -270,23 +270,30 @@
 
 .admin-profile-menu {
   position: relative;
+  flex-shrink: 0;
 }
 
 .admin-profile-menu__trigger {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 0.35rem 0.5rem 0.35rem 0.35rem;
-  border-radius: var(--admin-radius-card);
-  border: 1px solid var(--admin-border);
-  background: var(--admin-surface);
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
   cursor: pointer;
-  max-width: 220px;
+}
+
+.admin-profile-menu__trigger:focus-visible {
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 3px;
 }
 
 .admin-profile-menu__avatar {
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 999px;
   background: var(--admin-primary);
   color: #fff;
@@ -298,43 +305,59 @@
   flex-shrink: 0;
 }
 
-.admin-profile-menu__meta {
-  text-align: left;
-  min-width: 0;
-  display: none;
-}
-
-@media (min-width: 768px) {
-  .admin-profile-menu__meta {
-    display: block;
-  }
-}
-
-.admin-profile-menu__name {
-  font-size: var(--fs-13);
-  font-weight: var(--fw-semibold);
-  color: var(--admin-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.admin-profile-menu__role {
-  font-size: var(--fs-12);
-  color: var(--admin-text-secondary);
+.admin-profile-menu__avatar--lg {
+  width: 3.25rem;
+  height: 3.25rem;
+  font-size: var(--fs-16);
 }
 
 .admin-profile-menu__panel {
   position: absolute;
   right: 0;
-  top: calc(100% + 6px);
-  min-width: 200px;
+  top: calc(100% + 8px);
+  width: min(17.5rem, calc(100vw - 1.5rem));
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-card);
   box-shadow: var(--admin-shadow-card);
-  padding: var(--space-2);
+  padding: var(--space-4);
   z-index: var(--z-dropdown);
+}
+
+.admin-profile-menu__header {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  text-align: center;
+  padding-bottom: var(--space-2);
+}
+
+.admin-profile-menu__name {
+  margin: 0;
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+  color: var(--admin-text-primary);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.admin-profile-menu__email {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--admin-text-secondary);
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.admin-profile-menu__divider {
+  height: 1px;
+  background: var(--admin-border);
+  margin: var(--space-2) 0;
+}
+
+.admin-profile-menu__items {
+  display: grid;
+  gap: var(--space-1);
 }
 
 .admin-profile-menu__item {

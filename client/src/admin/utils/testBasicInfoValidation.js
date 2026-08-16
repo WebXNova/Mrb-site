@@ -29,7 +29,6 @@ export function validateTestBasicInfoForm(form, options = {}) {
     isLoadingSubjects = false,
     subjectsError = '',
     allowedTestTypes = [],
-    allowedCategories = [],
   } = options;
   const errors = {};
   const allowedSubjectIds = new Set(
@@ -37,7 +36,6 @@ export function validateTestBasicInfoForm(form, options = {}) {
   );
   const testTypeValues =
     allowedTestTypes.length > 0 ? allowedTestTypes : ['subject_wise', 'mixed_subject'];
-  const categoryValues = allowedCategories.length > 0 ? allowedCategories : ['MDCAT'];
 
   const courseId = Number(form.course_id);
   if (!Number.isInteger(courseId) || courseId <= 0) {
@@ -54,11 +52,6 @@ export function validateTestBasicInfoForm(form, options = {}) {
   const description = String(form.description ?? '').replace(/\s+/g, ' ').trim();
   if (description.length > 500) {
     errors.description = 'Description must not exceed 500 characters.';
-  }
-
-  const category = String(form.category ?? '').trim();
-  if (!category || !categoryValues.includes(category)) {
-    errors.category = 'Select a valid category.';
   }
 
   if (!testTypeValues.includes(form.test_type)) {

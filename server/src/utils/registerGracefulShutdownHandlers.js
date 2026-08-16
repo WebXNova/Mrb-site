@@ -11,6 +11,37 @@ import { stopEmailQueueWorker } from '../services/emailQueueWorker.service.js';
 
 let shuttingDown = false;
 
+function isDevRuntime() {
+  return String(process.env.NODE_ENV || 'development') !== 'production';
+}
+
+function closeHttpServerFast(server) {
+  return new Promise((resolve) => {
+    if (!server) {
+      resolve(undefined);
+      return;
+    }
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve(undefined);
+    };
+
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
+
+    server.close(() => {
+      console.log('[shutdown] HTTP server closed');
+      finish();
+    });
+
+    setTimeout(finish, 1200);
+  });
+}
+
 /**
  * @param {() => import('http').Server | null} getHttpServer
  */
@@ -25,13 +56,12 @@ export function registerGracefulShutdownHandlers(getHttpServer) {
     stopIdempotencyCleanupScheduler();
 
     const server = getHttpServer();
-    if (server) {
-      await new Promise((resolve) => {
-        server.close(() => {
-          console.log('[shutdown] HTTP server closed');
-          resolve(undefined);
-        });
-      });
+    await closeHttpServerFast(server);
+
+    if (isDevRuntime()) {
+      // Nodemon restart: release the port immediately; pool/redis teardown is unnecessary locally.
+      process.exit(0);
+      return;
     }
 
     await stopEmailQueueWorker();

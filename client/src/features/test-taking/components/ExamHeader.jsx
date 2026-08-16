@@ -15,6 +15,9 @@ export default function ExamHeader({
   onOpenPalette,
   showPaletteToggle,
 }) {
+  const progressPct =
+    totalQuestions > 0 ? Math.round(((currentIndex + 1) / totalQuestions) * 100) : 0;
+
   return (
     <header className="tt-header">
       <div className="tt-header__primary">
@@ -26,9 +29,7 @@ export default function ExamHeader({
             <span className="tt-header__divider" aria-hidden="true">
               ·
             </span>
-            <span>
-              {answeredCount} answered
-            </span>
+            <span>{answeredCount} answered</span>
           </p>
         </div>
 
@@ -56,6 +57,17 @@ export default function ExamHeader({
             </button>
           ) : null}
         </div>
+      </div>
+
+      <div
+        className="tt-header__track"
+        role="progressbar"
+        aria-valuenow={progressPct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Exam progress: question ${currentIndex + 1} of ${totalQuestions}`}
+      >
+        <div className="tt-header__track-fill" style={{ width: `${progressPct}%` }} />
       </div>
     </header>
   );

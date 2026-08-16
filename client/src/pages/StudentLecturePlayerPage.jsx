@@ -10,6 +10,7 @@ import {
   findLectureNeighbors,
 } from '../student/utils/groupStudentLectures';
 import { getLectureEmbedUrl } from '../student/utils/lectureEmbedUrl';
+import StudentNotesSection from '../student/components/notes/StudentNotesSection';
 
 export default function StudentLecturePlayerPage() {
   const { id } = useParams();
@@ -209,6 +210,16 @@ export default function StudentLecturePlayerPage() {
             )}
           </div>
           {completeError ? <p className="admin-error" style={{ marginTop: '0.75rem' }}>{completeError}</p> : null}
+
+          <div className="student-lecture-player__notes">
+            <StudentNotesSection
+              courseId={lecture.courseId}
+              subjectId={lecture.subjectId}
+              chapterId={lecture.chapterId}
+              lectureId={lecture.id}
+              title="Notes for this lecture"
+            />
+          </div>
         </article>
       </div>
 

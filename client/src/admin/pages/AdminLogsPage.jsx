@@ -15,10 +15,10 @@ export default function AdminLogsPage() {
   }, [token]);
 
   return (
-    <section className="admin-card">
-      <h2 className="heading-3">Activity Logs</h2>
-      {error ? <p className="admin-error">{error}</p> : null}
-      <div className="admin-table-wrap" style={{ marginTop: '1rem' }}>
+    <section className="admin-page">
+      <section className="admin-card">
+        {error ? <p className="admin-error">{error}</p> : null}
+        <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
             <tr>
@@ -47,7 +47,8 @@ export default function AdminLogsPage() {
             )}
           </tbody>
         </table>
-      </div>
+        </div>
+      </section>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { locationsApi } from '../../api/locationsApi.js';
+import SearchableCityCombobox from './SearchableCityCombobox.jsx';
 
 const EMPTY_SELECTION = {
   province_id: '',
@@ -129,6 +130,26 @@ export default function LocationSelector({
 
   useEffect(() => {
     let cancelled = false;
+    (async () => {
+      setLoading((prev) => ({ ...prev, cities: true }));
+      setLoadError('');
+      try {
+        const response = await locationsApi.allCities();
+        if (cancelled) return;
+        setCities(response?.data || []);
+      } catch (error) {
+        if (!cancelled) setLoadError(error.message || 'Failed to load cities');
+      } finally {
+        if (!cancelled) setLoading((prev) => ({ ...prev, cities: false }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     if (!selection.province_id) {
       setDistricts([]);
       return undefined;
@@ -151,30 +172,6 @@ export default function LocationSelector({
     };
   }, [selection.province_id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!selection.district_id) {
-      setCities([]);
-      return undefined;
-    }
-    (async () => {
-      setLoading((prev) => ({ ...prev, cities: true }));
-      setLoadError('');
-      try {
-        const response = await locationsApi.cities(selection.district_id);
-        if (cancelled) return;
-        setCities(response?.data || []);
-      } catch (error) {
-        if (!cancelled) setLoadError(error.message || 'Failed to load cities');
-      } finally {
-        if (!cancelled) setLoading((prev) => ({ ...prev, cities: false }));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selection.district_id]);
-
   const provincePlaceholder = useMemo(() => (loading.provinces ? 'Loading provinces...' : 'Select province'), [loading.provinces]);
 
   function handleProvinceChange(event) {
@@ -182,10 +179,9 @@ export default function LocationSelector({
     emitChange({
       province_id,
       district_id: '',
-      city_id: '',
+      city_id: selection.city_id,
     });
     setDistricts([]);
-    setCities([]);
   }
 
   function handleDistrictChange(event) {
@@ -193,15 +189,13 @@ export default function LocationSelector({
     emitChange({
       ...selection,
       district_id,
-      city_id: '',
     });
-    setCities([]);
   }
 
-  function handleCityChange(event) {
+  function handleCityChange(city_id) {
     emitChange({
       ...selection,
-      city_id: event.target.value,
+      city_id,
     });
   }
 
@@ -235,13 +229,13 @@ export default function LocationSelector({
         fieldName="district_id"
       />
 
-      <SelectField
+      <SearchableCityCombobox
         label="City"
         value={selection.city_id}
         onChange={handleCityChange}
-        disabled={!selection.district_id || loading.cities}
         loading={loading.cities}
-        placeholder={!selection.district_id ? 'Select District first' : 'Select city'}
+        disabled={loading.cities}
+        placeholder="Search or select city"
         options={cities}
         error={errors.city_id}
         prefilled={isPrefilled('city_id')}

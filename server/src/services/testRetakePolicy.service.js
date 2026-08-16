@@ -1,7 +1,8 @@
 /**
- * G-RT-04 — Authoritative test retake policy (`allow_retake` + `max_attempts`).
+ * G-RT-04 — Authoritative test retake policy (`max_attempts` from Rules).
  *
- * Terminal attempt statuses consume the student's attempt slot when retake is disabled.
+ * Terminal attempt statuses consume the student's attempt slot.
+ * The deprecated `allow_retake` column is no longer read — use max attempts in Setup → Rules.
  */
 
 import { ApiError } from '../utils/apiError.js';
@@ -18,21 +19,12 @@ export const TERMINAL_ATTEMPT_STATUSES = Object.freeze(['submitted', 'expired'])
 
 /**
  * @typedef {object} RetakePolicyEvaluation
- * @property {boolean} allowRetake
  * @property {number|null} maxAttempts
  * @property {boolean} canResumeActive
  * @property {boolean} canCreateNew
  * @property {string|null} denyReason
  * @property {string|null} denyCode
  */
-
-/**
- * @param {unknown} value
- * @returns {boolean}
- */
-export function isAllowRetakeEnabled(value) {
-  return Boolean(Number(value ?? 0));
-}
 
 /**
  * @param {unknown} value
@@ -49,23 +41,20 @@ export function normalizeMaxAttempts(value) {
  *
  * Business rules:
  * - Active `in_progress` attempt → resume always allowed; no concurrent new attempt.
- * - `allow_retake = false` → at most one attempt row per student/test (any status); only resume if in progress.
- * - `allow_retake = true` → new attempts allowed until `max_attempts` exhausted (all statuses count).
- * - Terminal states: `submitted` (pass/fail), `expired` (timer/auto), abandoned = still `in_progress` until expiry.
+ * - `max_attempts` caps total attempt rows per student/test (all statuses count).
+ * - `max_attempts <= 0` or unset → unlimited attempts.
  *
  * @param {Record<string, unknown>|null|undefined} testRow
  * @param {AttemptAggregateStats} stats
  * @returns {RetakePolicyEvaluation}
  */
 export function evaluateRetakePolicy(testRow, stats) {
-  const allowRetake = isAllowRetakeEnabled(testRow?.allow_retake);
   const maxAttempts = normalizeMaxAttempts(testRow?.max_attempts);
   const totalAttempts = Math.max(0, Number(stats.totalAttempts ?? 0));
   const hasActiveAttempt = Boolean(stats.hasActiveAttempt);
 
   if (hasActiveAttempt) {
     return {
-      allowRetake,
       maxAttempts,
       canResumeActive: true,
       canCreateNew: false,
@@ -74,20 +63,8 @@ export function evaluateRetakePolicy(testRow, stats) {
     };
   }
 
-  if (!allowRetake && totalAttempts > 0) {
-    return {
-      allowRetake,
-      maxAttempts,
-      canResumeActive: false,
-      canCreateNew: false,
-      denyReason: 'Retakes are not allowed for this test.',
-      denyCode: 'RETAKE_NOT_ALLOWED',
-    };
-  }
-
   if (maxAttempts != null && totalAttempts >= maxAttempts) {
     return {
-      allowRetake,
       maxAttempts,
       canResumeActive: false,
       canCreateNew: false,
@@ -97,7 +74,6 @@ export function evaluateRetakePolicy(testRow, stats) {
   }
 
   return {
-    allowRetake,
     maxAttempts,
     canResumeActive: false,
     canCreateNew: true,
@@ -130,7 +106,6 @@ export function assertCanCreateNewTestAttempt(testRow, stats, options = {}) {
   throw new ApiError(403, message, {
     code,
     testId,
-    allowRetake: evaluation.allowRetake,
     maxAttempts: evaluation.maxAttempts,
     totalAttempts: Math.max(0, Number(stats.totalAttempts ?? 0)),
     context: options.context ?? 'testRetakePolicy.assertCanCreateNewTestAttempt',

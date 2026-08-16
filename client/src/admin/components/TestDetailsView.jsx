@@ -92,8 +92,6 @@ export default function TestDetailsView({
         <DetailRow label="Shuffle options" value={formatBool(settings?.shuffle_options)} />
         <DetailRow label="Show explanations" value={formatBool(settings?.show_explanations)} />
         <DetailRow label="Show result immediately" value={formatBool(settings?.show_result_immediately)} />
-        <DetailRow label="Show answers after submit" value={formatBool(settings?.show_answers_after_submit)} />
-        <DetailRow label="Allow retake" value={formatBool(settings?.allow_retake)} />
         <DetailRow label="Start date" value={formatDate(settings?.start_date)} />
         <DetailRow label="End date" value={formatDate(settings?.end_date)} />
       </DetailSection>

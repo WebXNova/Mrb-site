@@ -79,6 +79,9 @@ export function shouldAttachCsrf(path, method = 'GET') {
   if (p === '/enrollments' || p === '/enrollments/draft') return true;
   /** Payment checkout session creation */
   if (p === '/payments/create-session') return true;
+  /** Manual JazzCash / EasyPaisa payment proof */
+  if (/^\/payments\/manual\/[^/]+\/submit$/.test(p)) return true;
+  if (p === '/payments/manual/validate-coupon') return true;
   /** Slug test runtime autosave + submit */
   if (isSlugTestWritePath(p)) return true;
   /** Student Q&A mutations */

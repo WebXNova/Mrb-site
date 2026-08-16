@@ -1,9 +1,7 @@
 /**
- * G-RT-07 — Authoritative student result visibility (`show_result_immediately`,
- * `show_answers_after_submit`, `show_explanations`).
+ * G-RT-07 — Authoritative student result visibility (`show_result_immediately`, `show_explanations`).
  *
- * All student-facing result reads must pass through these guards before returning
- * scores or answer review data.
+ * `show_answers_after_submit` is deprecated — answer review is shown whenever results are visible.
  */
 
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
@@ -25,11 +23,11 @@ export function isShowResultImmediatelyEnabled(value) {
 }
 
 /**
- * @param {unknown} value
+ * Deprecated column — answer review always shown when results are visible.
  * @returns {boolean}
  */
-export function isShowAnswersAfterSubmitEnabled(value) {
-  return Boolean(Number(value ?? 0));
+export function isShowAnswersAfterSubmitEnabled(_value) {
+  return true;
 }
 
 /**

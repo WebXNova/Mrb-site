@@ -731,6 +731,7 @@ CREATE TABLE IF NOT EXISTS orders (
   gateway_order_ref VARCHAR(120) NULL,
   amount INT NOT NULL,
   currency VARCHAR(10) NOT NULL DEFAULT 'PKR',
+  reference_code VARCHAR(32) NULL,
   status ENUM('pending', 'paid', 'failed', 'cancelled', 'refunded') NOT NULL DEFAULT 'pending',
   cancellation_reason VARCHAR(64) NULL,
   cancelled_at TIMESTAMP NULL,
@@ -747,6 +748,7 @@ CREATE TABLE IF NOT EXISTS orders (
   CONSTRAINT fk_orders_course FOREIGN KEY (course_id) REFERENCES courses(id),
   UNIQUE KEY uq_orders_gateway_order_ref (gateway_order_ref),
   UNIQUE KEY uq_orders_one_pending_per_enrollment (pending_enrollment_id),
+  UNIQUE KEY uq_orders_reference_code (reference_code),
   KEY idx_orders_user (user_id),
   KEY idx_orders_course (course_id),
   KEY idx_orders_enrollment (enrollment_id),
@@ -786,7 +788,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
   district_id BIGINT UNSIGNED NOT NULL,
   city_id BIGINT UNSIGNED NOT NULL,
   board_id BIGINT UNSIGNED NULL,
-  hssc_status ENUM('Inter Class', 'First Year Class', 'Matric Class') NOT NULL,
+  hssc_status ENUM('9th', '10th', '11th', '12th', 'Bachelor') NOT NULL,
   mdcat_attempt_type ENUM('Fresher', 'Improver') NOT NULL,
   status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
   access_status ENUM('active', 'inactive', 'revoked') NOT NULL DEFAULT 'inactive',
@@ -1811,5 +1813,145 @@ SET @sql_tqd_add_deleted_by := IF(
 PREPARE stmt_tqd_add_deleted_by FROM @sql_tqd_add_deleted_by;
 EXECUTE stmt_tqd_add_deleted_by;
 DEALLOCATE PREPARE stmt_tqd_add_deleted_by;
+
+-- =====================================================
+-- PAYMENT ACCOUNTS (JazzCash / EasyPaisa manual routing)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS payment_accounts (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  method ENUM('jazzcash', 'easypaisa') NOT NULL,
+  account_number VARCHAR(20) NOT NULL,
+  account_title VARCHAR(120) NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by BIGINT NOT NULL,
+  updated_by BIGINT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payment_accounts_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+  CONSTRAINT fk_payment_accounts_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+  KEY idx_payment_accounts_method (method),
+  KEY idx_payment_accounts_is_active (is_active),
+  KEY idx_payment_accounts_method_active (method, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payment_account_audit_log (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  payment_account_id BIGINT UNSIGNED NOT NULL,
+  action ENUM('created', 'updated', 'activated', 'deactivated') NOT NULL,
+  changed_by BIGINT NOT NULL,
+  old_value JSON NULL,
+  new_value JSON NOT NULL,
+  ip_address VARCHAR(64) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payment_account_audit_account FOREIGN KEY (payment_account_id) REFERENCES payment_accounts(id),
+  CONSTRAINT fk_payment_account_audit_changed_by FOREIGN KEY (changed_by) REFERENCES users(id),
+  KEY idx_payment_account_audit_account (payment_account_id),
+  KEY idx_payment_account_audit_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- COURSE CATEGORIES (admin-managed catalog grouping)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS course_categories (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(80) NOT NULL,
+  description VARCHAR(512) NULL,
+  class_level ENUM('9th','10th','11th','12th','bachelor','o_level','a_level','entry_test','not_applicable') NOT NULL DEFAULT 'not_applicable',
+  department ENUM('pre_medical','pre_engineering','commerce','computer_science','arts_humanities','general','entry_test_prep','ics','not_applicable') NOT NULL DEFAULT 'not_applicable',
+  board ENUM('sindh_board','federal_board','punjab_board','kpk_board','balochistan_board','ajk_board','cambridge_o_level','cambridge_a_level','not_applicable') NOT NULL DEFAULT 'not_applicable',
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  display_order INT NOT NULL DEFAULT 0,
+  created_by BIGINT NOT NULL,
+  updated_by BIGINT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_course_categories_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+  CONSTRAINT fk_course_categories_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_course_categories_name (name),
+  KEY idx_course_categories_is_active (is_active),
+  KEY idx_course_categories_display_order (display_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS course_category_map (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  course_id BIGINT NOT NULL,
+  category_id BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_course_category_map_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_course_category_map_category FOREIGN KEY (category_id) REFERENCES course_categories(id),
+  UNIQUE KEY uq_course_category_map (course_id, category_id),
+  KEY idx_course_category_map_category (category_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- MANUAL PAYMENTS (JazzCash / EasyPaisa student proofs)
+-- Unique TRX is enforced for APPROVED rows only (generated column).
+-- Pending duplicates are allowed so admin can compare fraud attempts.
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS manual_payments (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  order_id BIGINT UNSIGNED NOT NULL,
+  enrollment_id BIGINT UNSIGNED NOT NULL,
+  student_id BIGINT NOT NULL,
+  payment_method ENUM('jazzcash', 'easypaisa') NOT NULL,
+  sender_phone_number VARCHAR(20) NOT NULL,
+  sender_account_title VARCHAR(120) NOT NULL,
+  transaction_id VARCHAR(64) NOT NULL,
+  amount_claimed INT NOT NULL,
+  screenshot_url VARCHAR(500) NOT NULL,
+  screenshot_file_hash CHAR(64) NULL,
+  payment_account_id BIGINT UNSIGNED NULL,
+  status ENUM('pending_review', 'approved', 'rejected') NOT NULL DEFAULT 'pending_review',
+  admin_note TEXT NULL,
+  reviewed_by BIGINT NULL,
+  reviewed_at TIMESTAMP NULL,
+  risk_flags JSON NULL,
+  risk_level ENUM('low', 'needs_review') NOT NULL DEFAULT 'low',
+  approved_transaction_id VARCHAR(64)
+    GENERATED ALWAYS AS (IF(status = 'approved', transaction_id, NULL)) STORED,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_manual_payments_order FOREIGN KEY (order_id) REFERENCES orders(id),
+  CONSTRAINT fk_manual_payments_enrollment FOREIGN KEY (enrollment_id) REFERENCES enrollments(id),
+  CONSTRAINT fk_manual_payments_student FOREIGN KEY (student_id) REFERENCES users(id),
+  CONSTRAINT fk_manual_payments_account FOREIGN KEY (payment_account_id) REFERENCES payment_accounts(id) ON DELETE SET NULL,
+  CONSTRAINT fk_manual_payments_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_manual_payments_approved_transaction_id (approved_transaction_id),
+  KEY idx_manual_payments_order_id (order_id),
+  KEY idx_manual_payments_status (status),
+  KEY idx_manual_payments_transaction_id (transaction_id),
+  KEY idx_manual_payments_screenshot_hash (screenshot_file_hash),
+  KEY idx_manual_payments_student_created (student_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS notes (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  course_id BIGINT NOT NULL,
+  subject_id BIGINT NULL,
+  chapter_id BIGINT UNSIGNED NULL,
+  lecture_id BIGINT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT NULL,
+  file_url VARCHAR(512) NOT NULL,
+  file_type ENUM('pdf', 'image', 'docx') NOT NULL,
+  file_size INT UNSIGNED NOT NULL,
+  uploaded_by BIGINT NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_notes_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_notes_subject FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+  CONSTRAINT fk_notes_chapter FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE SET NULL,
+  CONSTRAINT fk_notes_lecture FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE SET NULL,
+  CONSTRAINT fk_notes_uploaded_by FOREIGN KEY (uploaded_by) REFERENCES users(id),
+  KEY idx_notes_course_id (course_id),
+  KEY idx_notes_subject_id (subject_id),
+  KEY idx_notes_chapter_id (chapter_id),
+  KEY idx_notes_lecture_id (lecture_id),
+  KEY idx_notes_course_active (course_id, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

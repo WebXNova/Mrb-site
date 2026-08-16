@@ -4,6 +4,8 @@ import PageLayout from '../components/layout/PageLayout';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import CourseEnrollmentCtaButton from '../components/course/CourseEnrollmentCtaButton';
+import CourseCategoryChips from '../components/course/CourseCategoryChips';
+import CourseAudiencePanel from '../components/course/CourseAudiencePanel';
 import EnrollmentCountdown from '../components/course/EnrollmentCountdown';
 import { catalogApi } from '../api/catalogApi';
 import { buildPricingDisplay, mapCatalogCourseToDetailProps } from '../course/coursePresentation';
@@ -20,8 +22,6 @@ import {
   isAdmissionOpen,
 } from '../course/courseAdmissionPresentation';
 import {
-  buildCohortHighlights,
-  buildEnrollmentPitch,
   buildStartHeadline,
   buildTrustBadges,
   computeDiscountPercent,
@@ -31,9 +31,14 @@ import {
   formatTimezoneLabel,
   pickFeaturedBatch,
   resolveActiveCountdown,
-  shouldShowSeatUrgency,
 } from '../course/courseSalesPage';
 import './CourseDetailPage.css';
+
+function levelBadgeLabel(level) {
+  const raw = String(level || 'beginner').trim().toLowerCase();
+  if (!raw) return 'Beginner';
+  return `${raw.charAt(0).toUpperCase()}${raw.slice(1)} difficulty`;
+}
 
 function levelBadgeTone(level) {
   const l = String(level || 'beginner').toLowerCase();
@@ -46,7 +51,7 @@ function instructorInitial(name) {
   return t ? t.charAt(0).toUpperCase() : '?';
 }
 
-function PricingCard({ pricingDisplay, courseId, batch, enrollPitch, courseAdmission }) {
+function PricingCard({ pricingDisplay, courseId, courseAdmission }) {
   if (!pricingDisplay) return null;
   const discountPct =
     !pricingDisplay.isFree && pricingDisplay.original
@@ -65,7 +70,9 @@ function PricingCard({ pricingDisplay, courseId, batch, enrollPitch, courseAdmis
         </div>
       ) : (
         <div className="sales-pricing__row">
-          <span className="sales-pricing__current">{formatSalesAmount(pricingDisplay.amount, pricingDisplay.currency)}</span>
+          <span className="sales-pricing__current">
+            {formatSalesAmount(pricingDisplay.amount, pricingDisplay.currency)}
+          </span>
           {pricingDisplay.original ? (
             <span className="sales-pricing__original">
               {formatSalesAmount(pricingDisplay.original, pricingDisplay.currency)}
@@ -73,17 +80,6 @@ function PricingCard({ pricingDisplay, courseId, batch, enrollPitch, courseAdmis
           ) : null}
         </div>
       )}
-      {batch?.start_date ? (
-        <p className="sales-pricing__cohort-line">
-          <strong>Starts:</strong> {formatSalesDateLong(batch.start_date)}
-        </p>
-      ) : null}
-      {batch && Number(batch.total_seats) > 0 ? (
-        <p className="sales-pricing__cohort-line sales-pricing__cohort-line--seats">
-          <strong>{batch.seats_remaining}</strong> of {batch.total_seats} seats remaining
-        </p>
-      ) : null}
-      {enrollPitch ? <p className="sales-pricing__pitch">{enrollPitch}</p> : null}
       <div className="sales-pricing__actions">
         <CourseEnrollmentCtaButton
           courseId={courseId}
@@ -92,29 +88,24 @@ function PricingCard({ pricingDisplay, courseId, batch, enrollPitch, courseAdmis
           fullWidth
           courseAdmission={courseAdmission}
         />
-        <Button as={Link} to="/courses" variant="secondary" size="md" fullWidth>
-          Browse other courses
-        </Button>
       </div>
     </div>
   );
 }
 
-function CohortHighlightGrid({ items }) {
-  if (!items.length) return null;
+function TrustChipRow({ badges }) {
+  if (!badges.length) return null;
   return (
-    <div className="sales-highlights" role="list">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className={`sales-highlights__item${item.accent ? ' sales-highlights__item--accent' : ''}`}
-          role="listitem"
-        >
-          <span className="sales-highlights__label">{item.label}</span>
-          <span className="sales-highlights__value">{item.value}</span>
-        </div>
+    <ul className="sales-trust-chips" aria-label="Course highlights">
+      {badges.map((badge) => (
+        <li key={badge.id} className="sales-trust-chip">
+          <span className="sales-trust-chip__icon" aria-hidden="true">
+            ✓
+          </span>
+          <span className="sales-trust-chip__label">{badge.label}</span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -150,6 +141,97 @@ function CohortTimeline({ batch, course }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function ScheduleMeta({ batch, course, admissionsOpen }) {
+  if (!batch) return null;
+  const total = Number(batch.total_seats ?? 0);
+  const remaining = Number(batch.seats_remaining ?? 0);
+
+  return (
+    <dl className="sales-schedule-meta">
+      {batch.instructor_name ? (
+        <div className="sales-schedule-meta__item">
+          <dt>Instructor</dt>
+          <dd className="sales-schedule-meta__instructor">
+            <span className="sales-schedule-meta__avatar" aria-hidden="true">
+              {instructorInitial(batch.instructor_name)}
+            </span>
+            {batch.instructor_name}
+          </dd>
+        </div>
+      ) : null}
+      {batch.schedule_label ? (
+        <div className="sales-schedule-meta__item">
+          <dt>Schedule</dt>
+          <dd>{batch.schedule_label}</dd>
+        </div>
+      ) : null}
+      {batch.timezone ? (
+        <div className="sales-schedule-meta__item">
+          <dt>Timezone</dt>
+          <dd>{formatTimezoneLabel(batch.timezone)}</dd>
+        </div>
+      ) : null}
+      {total > 0 ? (
+        <div className="sales-schedule-meta__item">
+          <dt>Seats</dt>
+          <dd>
+            {remaining} of {total} available
+          </dd>
+        </div>
+      ) : null}
+      <div className="sales-schedule-meta__item">
+        <dt>Admissions</dt>
+        <dd>
+          {admissionBadgeLabel(course.admission_status)}
+          {course.enrollment_message ? ` — ${course.enrollment_message}` : ''}
+        </dd>
+      </div>
+      {!admissionsOpen && course.enrollment_message ? (
+        <div className="sales-schedule-meta__item sales-schedule-meta__item--full">
+          <dt>Status</dt>
+          <dd>{course.enrollment_message}</dd>
+        </div>
+      ) : null}
+    </dl>
+  );
+}
+
+function CurriculumAccordion({ subjects }) {
+  if (!subjects.length) return null;
+  return (
+    <ol className="sales-curriculum-accordion">
+      {subjects.map((subject, index) => (
+        <li key={subject.id} className="sales-curriculum-accordion__item">
+          <details className="sales-curriculum-accordion__details" open={subjects.length === 1}>
+            <summary className="sales-curriculum-accordion__summary">
+              <span className="sales-curriculum-accordion__index" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span className="sales-curriculum-accordion__icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+              </span>
+              <span className="sales-curriculum-accordion__title">{subject.title}</span>
+              <span className="sales-curriculum-accordion__chevron" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </summary>
+            {subject.description ? (
+              <div className="sales-curriculum-accordion__body">
+                <p>{subject.description}</p>
+              </div>
+            ) : null}
+          </details>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -211,23 +293,8 @@ export default function CourseDetailPage() {
     [featuredBatch, subjects.length, pricingDisplay]
   );
 
-  const cohortHighlights = useMemo(() => buildCohortHighlights(featuredBatch), [featuredBatch]);
   const startHeadline = useMemo(() => buildStartHeadline(featuredBatch), [featuredBatch]);
-  const enrollPitch = useMemo(
-    () => buildEnrollmentPitch(featuredBatch, pricingDisplay),
-    [featuredBatch, pricingDisplay]
-  );
-  const discountPct = useMemo(
-    () =>
-      pricingDisplay && !pricingDisplay.isFree && pricingDisplay.original
-        ? computeDiscountPercent(pricingDisplay.original, pricingDisplay.amount)
-        : null,
-    [pricingDisplay]
-  );
-
   const activeCountdown = useMemo(() => resolveActiveCountdown(featuredBatch), [featuredBatch]);
-  const seatsRemaining = featuredBatch != null ? Number(featuredBatch.seats_remaining ?? 0) : null;
-  const showSeatsUrgency = shouldShowSeatUrgency(featuredBatch);
   const admissionsOpen = course ? isAdmissionOpen(course) : false;
   const courseAdmission = course
     ? {
@@ -310,9 +377,6 @@ export default function CourseDetailPage() {
                     {course.end_date
                       ? ` — apply by ${formatSalesDateLong(course.end_date)}`
                       : ''}
-                    {featuredBatch?.start_date
-                      ? ` · Classes start ${formatSalesDateLong(featuredBatch.start_date)}`
-                      : ''}
                   </>
                 ) : (
                   <>
@@ -348,60 +412,27 @@ export default function CourseDetailPage() {
 
             <div className="sales-hero__grid">
               <div className="sales-hero__copy">
-                <div className="sales-hero__badges">
-                  <Badge tone={levelBadgeTone(course.level)} size="lg">
-                    {course.level}
-                  </Badge>
-                  <Badge tone={admissionBadgeTone(course.admission_status)} size="lg">
-                    {admissionBadgeLabel(course.admission_status)}
-                  </Badge>
-                  {featuredBatch ? (
-                    <span className={batchStatusBadgeClass(featuredBatch.status)}>
-                      {batchStatusLabel(featuredBatch.status)}
-                    </span>
-                  ) : null}
+                <div className="sales-hero__meta">
+                  <CourseCategoryChips categories={course.categories} />
+                  <div className="sales-hero__badges">
+                    <Badge tone={levelBadgeTone(course.level)} size="lg">
+                      {levelBadgeLabel(course.level)}
+                    </Badge>
+                    <Badge tone={admissionBadgeTone(course.admission_status)} size="lg">
+                      {admissionBadgeLabel(course.admission_status)}
+                    </Badge>
+                    {featuredBatch ? (
+                      <span className={batchStatusBadgeClass(featuredBatch.status)}>
+                        {batchStatusLabel(featuredBatch.status)}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 <h1 className="sales-hero__title">{course.title}</h1>
-                {startHeadline ? <p className="sales-hero__start-line">{startHeadline}</p> : null}
                 <p className="sales-hero__lead">{course.summary}</p>
 
-                {cohortHighlights.length > 0 ? (
-                  <CohortHighlightGrid items={cohortHighlights.slice(0, 4)} />
-                ) : null}
-
-                {(showSeatsUrgency || discountPct != null) && (
-                  <div className="sales-urgency">
-                    {discountPct != null ? (
-                      <p className="sales-urgency__offer">
-                        Limited offer — <strong>{discountPct}% off</strong> the standard price
-                      </p>
-                    ) : null}
-                    {showSeatsUrgency ? (
-                      <p className="sales-urgency__seats" role="status">
-                        Hurry — only <strong>{seatsRemaining}</strong> seat
-                        {seatsRemaining === 1 ? '' : 's'} left in this cohort
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-
-                <p className="sales-hero__pitch">{enrollPitch}</p>
-
-                {!admissionsOpen && course.enrollment_message ? (
-                  <p className="sales-hero__admission-note" role="status">
-                    {course.enrollment_message}
-                  </p>
-                ) : null}
-
-                <div className="sales-hero__cta sales-hero__cta--desktop">
-                  <CourseEnrollmentCtaButton
-                    courseId={routeId}
-                    labelContext="hero"
-                    size="lg"
-                    courseAdmission={courseAdmission}
-                  />
-                </div>
+                <TrustChipRow badges={trustBadges} />
               </div>
 
               <aside className="sales-hero__aside">
@@ -424,8 +455,6 @@ export default function CourseDetailPage() {
                 <PricingCard
                   pricingDisplay={pricingDisplay}
                   courseId={routeId}
-                  batch={featuredBatch}
-                  enrollPitch={null}
                   courseAdmission={courseAdmission}
                 />
               </aside>
@@ -433,147 +462,40 @@ export default function CourseDetailPage() {
           </div>
         </section>
 
+        <CourseAudiencePanel
+          categories={course.categories}
+          course={course}
+          admissionsOpen={admissionsOpen}
+        />
+
+        {/* Schedule — single consolidated section */}
         {featuredBatch ? (
-          <section className="sales-spotlight" aria-label="Key dates">
+          <section className="sales-schedule" aria-label="Schedule and cohort">
             <div className="container">
-              <div className="sales-spotlight__grid">
-                <div className="sales-spotlight__intro">
-                  <h2 className="sales-spotlight__title">Your cohort at a glance</h2>
-                  <p className="sales-spotlight__text">{enrollPitch}</p>
-                  {featuredBatch.instructor_name ? (
-                    <p className="sales-spotlight__instructor">
-                      Taught by <strong>{featuredBatch.instructor_name}</strong>
-                      {featuredBatch.schedule_label ? ` · ${featuredBatch.schedule_label}` : ''}
-                    </p>
+              <div className="sales-schedule__header">
+                <div>
+                  <h2 className="sales-section__title">Schedule &amp; cohort</h2>
+                  {startHeadline ? (
+                    <p className="sales-schedule__subtitle">{startHeadline}</p>
                   ) : null}
                 </div>
-                <CohortTimeline batch={featuredBatch} course={course} />
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {/* Trust badges */}
-        {trustBadges.length > 0 ? (
-          <section className="sales-trust" aria-label="Course benefits">
-            <div className="container">
-              <ul className="sales-trust__list">
-                {trustBadges.map((badge) => (
-                  <li key={badge.id} className="sales-trust__item">
-                    <span className="sales-trust__icon" aria-hidden="true">
-                      ✓
+                {featuredBatch.title ? (
+                  <div className="sales-schedule__cohort-label">
+                    <span className={batchStatusBadgeClass(featuredBatch.status)}>
+                      {batchStatusLabel(featuredBatch.status)}
                     </span>
-                    <div>
-                      <strong>{badge.label}</strong>
-                      {badge.detail ? <span>{badge.detail}</span> : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        ) : null}
-
-        {/* About */}
-        {course.description ? (
-          <section className="sales-section">
-            <div className="container container-narrow">
-              <h2 className="sales-section__title">About this course</h2>
-              <div className="sales-prose">{course.description}</div>
-            </div>
-          </section>
-        ) : null}
-
-        {/* Subjects */}
-        {subjects.length > 0 ? (
-          <section className="sales-section sales-section--muted">
-            <div className="container">
-              <h2 className="sales-section__title">What you&apos;ll study</h2>
-              <p className="sales-section__subtitle">
-                {subjects.length} structured unit{subjects.length === 1 ? '' : 's'} in this program
-              </p>
-              <ol className="sales-curriculum">
-                {subjects.map((subject, index) => (
-                  <li key={subject.id} className="sales-curriculum__item">
-                    <span className="sales-curriculum__index">{index + 1}</span>
-                    <div>
-                      <h3 className="sales-curriculum__title">{subject.title}</h3>
-                      {subject.description ? (
-                        <p className="sales-curriculum__summary">{subject.description}</p>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </section>
-        ) : null}
-
-        {/* Batch details */}
-        {featuredBatch ? (
-          <section className="sales-section">
-            <div className="container container-narrow">
-              <h2 className="sales-section__title">Cohort details</h2>
-              <div className="sales-batch">
-                <div className="sales-batch__head">
-                  <h3 className="sales-batch__title">{featuredBatch.title}</h3>
-                  <span className={batchStatusBadgeClass(featuredBatch.status)}>
-                    {batchStatusLabel(featuredBatch.status)}
-                  </span>
-                </div>
-                <dl className="sales-batch__facts">
-                  <div>
-                    <dt>Course dates</dt>
-                    <dd>
-                      {formatSalesDate(featuredBatch.start_date)} → {formatSalesDate(featuredBatch.end_date)}
-                    </dd>
+                    <span className="sales-schedule__cohort-name">{featuredBatch.title}</span>
                   </div>
-                  {featuredBatch.instructor_name ? (
-                    <div>
-                      <dt>Instructor</dt>
-                      <dd className="sales-batch__instructor">
-                        <span className="sales-batch__avatar" aria-hidden="true">
-                          {instructorInitial(featuredBatch.instructor_name)}
-                        </span>
-                        {featuredBatch.instructor_name}
-                      </dd>
-                    </div>
-                  ) : null}
-                  {featuredBatch.schedule_label ? (
-                    <div>
-                      <dt>Schedule</dt>
-                      <dd>{featuredBatch.schedule_label}</dd>
-                    </div>
-                  ) : null}
-                  {featuredBatch.timezone ? (
-                    <div>
-                      <dt>Timezone</dt>
-                      <dd>{formatTimezoneLabel(featuredBatch.timezone)}</dd>
-                    </div>
-                  ) : null}
-                  <div>
-                    <dt>Admissions</dt>
-                    <dd>
-                      {admissionBadgeLabel(course.admission_status)}
-                      {course.enrollment_message ? ` — ${course.enrollment_message}` : ''}
-                    </dd>
-                  </div>
-                  {(course.start_date || course.end_date) && (
-                    <div>
-                      <dt>Course duration</dt>
-                      <dd>
-                        {formatSalesDate(course.start_date) || '—'} →{' '}
-                        {formatSalesDate(course.end_date) || '—'}
-                      </dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt>Seats</dt>
-                    <dd>
-                      {featuredBatch.seats_remaining} of {featuredBatch.total_seats} available
-                    </dd>
-                  </div>
-                </dl>
+                ) : null}
+              </div>
+
+              <div className="sales-schedule__grid">
+                <CohortTimeline batch={featuredBatch} course={course} />
+                <ScheduleMeta
+                  batch={featuredBatch}
+                  course={course}
+                  admissionsOpen={admissionsOpen}
+                />
               </div>
 
               {batches.length > 1 ? (
@@ -596,8 +518,31 @@ export default function CourseDetailPage() {
           </section>
         ) : null}
 
+        {/* About */}
+        {course.description ? (
+          <section className="sales-section">
+            <div className="container container-narrow">
+              <h2 className="sales-section__title">About this course</h2>
+              <div className="sales-prose">{course.description}</div>
+            </div>
+          </section>
+        ) : null}
+
+        {/* Curriculum */}
+        {subjects.length > 0 ? (
+          <section className="sales-section sales-section--muted">
+            <div className="container container-narrow">
+              <h2 className="sales-section__title">What you&apos;ll study</h2>
+              <p className="sales-section__subtitle">
+                {subjects.length} structured unit{subjects.length === 1 ? '' : 's'} in this program
+              </p>
+              <CurriculumAccordion subjects={subjects} />
+            </div>
+          </section>
+        ) : null}
+
         {/* How it works */}
-        <section className="sales-section sales-section--muted">
+        <section className="sales-section">
           <div className="container container-narrow">
             <h2 className="sales-section__title">How this course works</h2>
             <ol className="how-list">
@@ -642,7 +587,11 @@ export default function CourseDetailPage() {
                     ? `Start ${formatSalesDate(featuredBatch.start_date)} — enroll today`
                     : `Ready to start ${course.title}?`}
                 </h2>
-                <p className="sales-cta__text">{enrollPitch}</p>
+                <p className="sales-cta__text">
+                  {admissionsOpen
+                    ? 'Secure your seat and begin learning with structured support from MRB Classes.'
+                    : 'Browse our catalog or check back when enrollment opens.'}
+                </p>
               </div>
               <div className="sales-cta__aside">
                 {pricingDisplay && !pricingDisplay.isFree ? (

@@ -7,19 +7,18 @@ import {
   ensureHistoryChartsRegistered,
 } from '../../features/test-history/utils/chartSetup';
 import { isTestPublishedStatus } from '../utils/testBasicInfoValidation';
-import '../styles/admin-test-results-analytics.css';
 
 ensureHistoryChartsRegistered();
 
-function StatCard({ label, value, suffix = '' }) {
+function AnalyticsMetric({ label, value, suffix = '' }) {
   return (
-    <article className="admin-stat-card admin-test-analytics__stat">
-      <p className="admin-stat-card__label">{label}</p>
-      <p className="admin-stat-card__value">
+    <div className="tests-analytics__metric">
+      <span className="tests-analytics__metric-label">{label}</span>
+      <span className="tests-analytics__metric-value">
         {value}
         {suffix}
-      </p>
-    </article>
+      </span>
+    </div>
   );
 }
 
@@ -71,8 +70,8 @@ export default function AdminTestResultsAnalyticsPanel({ tests = [] }) {
           label: 'Attempts',
           data: [analytics.passed ?? 0, analytics.failed ?? 0, analytics.pending ?? 0],
           backgroundColor: ['#10B981', '#EF4444', '#F59E0B'],
-          borderRadius: 8,
-          maxBarThickness: 56,
+          borderRadius: 6,
+          maxBarThickness: 40,
         },
       ],
     };
@@ -137,13 +136,13 @@ export default function AdminTestResultsAnalyticsPanel({ tests = [] }) {
       },
       scales: {
         x: {
-          ticks: { color: '#64748B' },
+          ticks: { color: '#64748B', font: { size: 11 } },
           grid: { display: false },
         },
         y: {
           beginAtZero: true,
-          ticks: { color: '#64748B', precision: 0 },
-          grid: { color: 'rgba(148, 163, 184, 0.2)' },
+          ticks: { color: '#64748B', precision: 0, font: { size: 11 } },
+          grid: { color: 'rgba(148, 163, 184, 0.15)' },
         },
       },
     }),
@@ -159,10 +158,11 @@ export default function AdminTestResultsAnalyticsPanel({ tests = [] }) {
         legend: {
           position: 'right',
           labels: {
-            color: '#475569',
-            boxWidth: 12,
-            boxHeight: 12,
-            padding: 12,
+            color: '#64748B',
+            boxWidth: 10,
+            boxHeight: 10,
+            padding: 10,
+            font: { size: 11 },
           },
         },
         tooltip: {
@@ -177,23 +177,20 @@ export default function AdminTestResultsAnalyticsPanel({ tests = [] }) {
 
   if (publishedTests.length === 0) {
     return (
-      <section className="admin-card admin-test-analytics">
-        <h2 className="heading-3">Test results analytics</h2>
-        <p className="admin-test-analytics__empty">Publish a test to view attempt statistics and charts.</p>
+      <section className="tests-analytics">
+        <header className="tests-analytics__header">
+          <h2 className="tests-analytics__title">Test results analytics</h2>
+        </header>
+        <p className="tests-analytics__empty">Publish a test to view attempt statistics and charts.</p>
       </section>
     );
   }
 
   return (
-    <section className="admin-card admin-test-analytics" aria-busy={loading}>
-      <div className="admin-test-analytics__head">
-        <div>
-          <h2 className="heading-3">Test results analytics</h2>
-          <p className="admin-test-analytics__lead">
-            Live pass/fail/pending breakdown and average score for exported test results.
-          </p>
-        </div>
-        <div className="admin-field admin-test-analytics__select">
+    <section className="tests-analytics" aria-busy={loading}>
+      <header className="tests-analytics__header">
+        <h2 className="tests-analytics__title">Test results analytics</h2>
+        <div className="tests-analytics__select">
           <label htmlFor="adminTestAnalyticsSelect">Select test</label>
           <select
             id="adminTestAnalyticsSelect"
@@ -207,45 +204,45 @@ export default function AdminTestResultsAnalyticsPanel({ tests = [] }) {
             ))}
           </select>
         </div>
-      </div>
+      </header>
 
       {error ? <p className="admin-error">{error}</p> : null}
 
       {loading && !analytics ? (
-        <p className="admin-test-analytics__empty">Loading analytics…</p>
+        <p className="tests-analytics__empty">Loading analytics…</p>
       ) : analytics ? (
         <>
-          <div className="admin-grid admin-test-analytics__stats">
-            <StatCard label="Total attempts" value={analytics.totalAttempts ?? 0} />
-            <StatCard label="Passed" value={analytics.passed ?? 0} />
-            <StatCard label="Failed" value={analytics.failed ?? 0} />
-            <StatCard label="Pending" value={analytics.pending ?? 0} />
-            <StatCard
+          <div className="tests-analytics__metrics">
+            <AnalyticsMetric label="Total attempts" value={analytics.totalAttempts ?? 0} />
+            <AnalyticsMetric label="Passed" value={analytics.passed ?? 0} />
+            <AnalyticsMetric label="Failed" value={analytics.failed ?? 0} />
+            <AnalyticsMetric label="Pending" value={analytics.pending ?? 0} />
+            <AnalyticsMetric
               label="Average score"
               value={analytics.averagePercentage == null ? '—' : analytics.averagePercentage}
               suffix={analytics.averagePercentage == null ? '' : '%'}
             />
-            <StatCard
+            <AnalyticsMetric
               label="Pass rate"
               value={analytics.passRate == null ? '—' : analytics.passRate}
               suffix={analytics.passRate == null ? '' : '%'}
             />
           </div>
 
-          <div className="admin-test-analytics__charts">
-            <div className="admin-test-analytics__chart-card">
-              <h3 className="heading-4">Pass / fail / pending breakdown</h3>
-              <div className="admin-test-analytics__canvas admin-test-analytics__canvas--bar">
+          <div className="tests-analytics__charts">
+            <div className="tests-analytics__chart">
+              <h3 className="tests-analytics__chart-title">Pass / fail / pending breakdown</h3>
+              <div className="tests-analytics__canvas">
                 {barData ? <Bar data={barData} options={chartOptions} /> : null}
               </div>
             </div>
-            <div className="admin-test-analytics__chart-card">
-              <h3 className="heading-4">Result distribution</h3>
-              <div className="admin-test-analytics__canvas admin-test-analytics__canvas--donut">
+            <div className="tests-analytics__chart">
+              <h3 className="tests-analytics__chart-title">Result distribution</h3>
+              <div className="tests-analytics__canvas">
                 {hasDoughnutData && doughnutChartData ? (
                   <Doughnut data={doughnutChartData} options={doughnutOptions} plugins={doughnutPlugins} />
                 ) : (
-                  <p className="admin-test-analytics__empty">No graded attempts to chart yet.</p>
+                  <p className="tests-analytics__empty">No graded attempts to chart yet.</p>
                 )}
               </div>
             </div>

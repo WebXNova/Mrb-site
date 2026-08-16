@@ -57,15 +57,15 @@ assertMatch(
 );
 
 assertMatch(
-  'listing query loads allow_retake',
-  read('src/services/studentTestListing.queries.js'),
-  /allow_retake/
+  'INSERT SQL max_attempts retake guard',
+  read('src/services/testRetakePolicy.queries.js'),
+  /max_attempts/
 );
 
 assertMatch(
-  'client retake UI message',
+  'client max attempts UI message',
   read('../client/src/features/test-instructions/components/AttemptInfoCard.jsx'),
-  /RETAKE_NOT_ALLOWED/
+  /MAX_ATTEMPTS_REACHED/
 );
 
 console.log('\nAll G-RT-04 retake policy checks passed.');

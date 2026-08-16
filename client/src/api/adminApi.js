@@ -375,6 +375,110 @@ export const adminApi = {
     http.get(ap('enrollments/summary'), { token, authScope: 'admin' }),
   updateEnrollmentStatus: (token, enrollmentId, payload) =>
     http.put(ap(`enrollments/${enrollmentId}/status`), payload, { token, authScope: 'admin' }),
+
+  paymentAccounts: (token) => http.get(ap('payment-accounts'), { token, authScope: 'admin' }),
+  paymentAccountAuditLog: (token, accountId) =>
+    http.get(ap(`payment-accounts/${accountId}/audit-log`), { token, authScope: 'admin' }),
+  createPaymentAccount: (token, payload) =>
+    http.post(ap('payment-accounts'), payload, { token, authScope: 'admin' }),
+  updatePaymentAccount: (token, accountId, payload) =>
+    http.put(ap(`payment-accounts/${accountId}`), payload, { token, authScope: 'admin' }),
+  activatePaymentAccount: (token, accountId) =>
+    http.put(ap(`payment-accounts/${accountId}/activate`), {}, { token, authScope: 'admin' }),
+  deactivatePaymentAccount: (token, accountId) =>
+    http.put(ap(`payment-accounts/${accountId}/deactivate`), {}, { token, authScope: 'admin' }),
+
+  courseCategories: (token) => http.get(ap('course-categories'), { token, authScope: 'admin' }),
+  createCourseCategory: (token, payload) =>
+    http.post(ap('course-categories'), payload, { token, authScope: 'admin' }),
+  updateCourseCategory: (token, categoryId, payload) =>
+    http.put(ap(`course-categories/${categoryId}`), payload, { token, authScope: 'admin' }),
+  activateCourseCategory: (token, categoryId) =>
+    http.put(ap(`course-categories/${categoryId}/activate`), {}, { token, authScope: 'admin' }),
+  deactivateCourseCategory: (token, categoryId) =>
+    http.put(ap(`course-categories/${categoryId}/deactivate`), {}, { token, authScope: 'admin' }),
+  reorderCourseCategories: (token, orderedCategoryIds) =>
+    http.put(ap('course-categories/reorder'), { ordered_category_ids: orderedCategoryIds }, {
+      token,
+      authScope: 'admin',
+    }),
+
+  coupons: (token) => http.get(ap('coupons'), { token, authScope: 'admin' }),
+  createCoupon: (token, payload) =>
+    http.post(ap('coupons'), payload, { token, authScope: 'admin' }),
+  updateCoupon: (token, couponId, payload) =>
+    http.put(ap(`coupons/${couponId}`), payload, { token, authScope: 'admin' }),
+  activateCoupon: (token, couponId) =>
+    http.put(ap(`coupons/${couponId}/activate`), {}, { token, authScope: 'admin' }),
+  deactivateCoupon: (token, couponId) =>
+    http.put(ap(`coupons/${couponId}/deactivate`), {}, { token, authScope: 'admin' }),
+
+  courseCategoryAssignments: (token, courseId) =>
+    http.get(ap(`courses/${courseId}/categories`), { token, authScope: 'admin' }),
+  updateCourseCategoryAssignments: (token, courseId, categoryIds) =>
+    http.put(ap(`courses/${courseId}/categories`), { category_ids: categoryIds }, {
+      token,
+      authScope: 'admin',
+    }),
+
+  courseNotes: (token, courseId, filters = {}) => {
+    const sp = new URLSearchParams();
+    if (filters.subject_id) sp.set('subject_id', String(filters.subject_id));
+    if (filters.chapter_id) sp.set('chapter_id', String(filters.chapter_id));
+    if (filters.lecture_id) sp.set('lecture_id', String(filters.lecture_id));
+    const qs = sp.toString();
+    return http.get(ap(`courses/${courseId}/notes${qs ? `?${qs}` : ''}`), {
+      token,
+      authScope: 'admin',
+    });
+  },
+  uploadCourseNote: (token, courseId, formData, options = {}) =>
+    uploadAdminMultipart(ap(`courses/${courseId}/notes`), formData, options),
+  updateCourseNote: (token, noteId, payload) =>
+    http.put(ap(`notes/${noteId}`), payload, { token, authScope: 'admin' }),
+  activateCourseNote: (token, noteId) =>
+    http.put(ap(`notes/${noteId}/activate`), {}, { token, authScope: 'admin' }),
+  deactivateCourseNote: (token, noteId) =>
+    http.put(ap(`notes/${noteId}/deactivate`), {}, { token, authScope: 'admin' }),
+  courseNoteFileUrl: (noteId) => `${getApiBaseUrl()}${ap(`notes/${noteId}/file`)}`,
+
+  paymentSubmissions: (token, filters = {}) => {
+    const sp = new URLSearchParams();
+    if (filters.status) sp.set('status', String(filters.status));
+    if (filters.riskLevel && filters.riskLevel !== 'all') sp.set('risk_level', String(filters.riskLevel));
+    if (filters.courseId && filters.courseId !== 'all') sp.set('course_id', String(filters.courseId));
+    if (filters.dateFrom) sp.set('dateFrom', String(filters.dateFrom));
+    if (filters.dateTo) sp.set('dateTo', String(filters.dateTo));
+    if (filters.search) sp.set('search', String(filters.search));
+    if (filters.limit != null) sp.set('limit', String(filters.limit));
+    if (filters.offset != null) sp.set('offset', String(filters.offset));
+    const qs = sp.toString();
+    return http.get(ap(`payment-submissions${qs ? `?${qs}` : ''}`), { token, authScope: 'admin' });
+  },
+  paymentSubmission: (token, submissionId) =>
+    http.get(ap(`payment-submissions/${encodeURIComponent(String(submissionId))}`), {
+      token,
+      authScope: 'admin',
+    }),
+  paymentSubmissionScreenshot: async (_token, submissionId) => {
+    const { blob } = await adminAuthenticatedDownload(
+      `payment-submissions/${encodeURIComponent(String(submissionId))}/screenshot`,
+      { method: 'GET', accept: 'image/*' }
+    );
+    return blob;
+  },
+  approvePaymentSubmission: (token, submissionId) =>
+    http.put(ap(`payment-submissions/${encodeURIComponent(String(submissionId))}/approve`), {}, {
+      token,
+      authScope: 'admin',
+    }),
+  rejectPaymentSubmission: (token, submissionId, adminNote) =>
+    http.put(
+      ap(`payment-submissions/${encodeURIComponent(String(submissionId))}/reject`),
+      { admin_note: adminNote },
+      { token, authScope: 'admin' }
+    ),
+
   suspendEnrollmentStudent: (token, enrollmentId, payload) =>
     http.post(ap(`enrollments/${enrollmentId}/suspend-student`), payload, {
       token,
@@ -483,6 +587,83 @@ export const testsApi = {
       retryOnUnauthorized: true,
     }),
 };
+
+const CSRF_COOKIE_NAME = 'csrf_token';
+const CSRF_HEADER_NAME = 'x-csrf-token';
+
+function readUploadCookie(name) {
+  if (typeof document === 'undefined') return '';
+  const prefix = `${encodeURIComponent(name)}=`;
+  const parts = document.cookie ? document.cookie.split('; ') : [];
+  for (const part of parts) {
+    if (part.startsWith(prefix)) {
+      return decodeURIComponent(part.slice(prefix.length));
+    }
+  }
+  return '';
+}
+
+/**
+ * Multipart admin upload with optional progress (notes, images, etc.).
+ * @param {string} relativePath
+ * @param {FormData} formData
+ * @param {{ onProgress?: (pct: number) => void, signal?: AbortSignal }} [options]
+ */
+function uploadAdminMultipart(relativePath, formData, options = {}) {
+  const { onProgress, signal } = options;
+  const url = `${getApiBaseUrl()}${relativePath}`;
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    const csrf = readUploadCookie(CSRF_COOKIE_NAME);
+    if (csrf) xhr.setRequestHeader(CSRF_HEADER_NAME, csrf);
+
+    if (signal) {
+      if (signal.aborted) {
+        reject(new Error('Upload cancelled'));
+        return;
+      }
+      signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    }
+
+    if (typeof onProgress === 'function') {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      let data = {};
+      const raw = xhr.responseText || '';
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+        return;
+      }
+      reject(
+        new Error(
+          inferApiFailureMessage(data, {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            rawText: raw,
+          }) || 'Upload failed'
+        )
+      );
+    };
+
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.onabort = () => reject(new Error('Upload cancelled'));
+    xhr.send(formData);
+  });
+}
 
 /**
  * @deprecated LEGACY runtime — disabled server-side (410). Use studentApi.resultDetail
