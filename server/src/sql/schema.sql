@@ -1,7 +1,6 @@
 -- =====================================================
 -- FULL SCHEMA (single source of truth)
 -- Apply in MySQL Workbench (or mysql client) against an empty database.
--- No incremental migrations; edit this file when the model changes.
 -- =====================================================
 
 -- =====================================================

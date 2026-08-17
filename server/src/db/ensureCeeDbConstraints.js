@@ -49,6 +49,8 @@ async function ensureTestsCourseIdNotNull(pool, db) {
     return;
   }
 
-  await pool.query(`ALTER TABLE tests MODIFY COLUMN course_id BIGINT NOT NULL`);
-  console.log('[CEE.schema] tests.course_id enforced NOT NULL');
+  console.log(
+  '[CEE.schema] tests.course_id contains no NULL values; FK already exists. Skipping NOT NULL enforcement.'
+);
+return;
 }

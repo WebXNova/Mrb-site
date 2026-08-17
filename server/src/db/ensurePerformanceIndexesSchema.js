@@ -9,8 +9,8 @@ export const PERFORMANCE_INDEX_DEFINITIONS = Object.freeze([
   Object.freeze({
     table: 'test_attempts',
     name: 'idx_test_attempts_test_student_status',
-    columns: 'test_id, student_id, status',
-    ddl: 'ALTER TABLE test_attempts ADD KEY idx_test_attempts_test_student_status (test_id, student_id, status)',
+    columns: 'test_id, user_id, status',
+    ddl: 'ALTER TABLE test_attempts ADD KEY idx_test_attempts_test_student_status (test_id, user_id, status)',
   }),
   Object.freeze({
     table: 'test_attempts',
@@ -21,8 +21,8 @@ export const PERFORMANCE_INDEX_DEFINITIONS = Object.freeze([
   Object.freeze({
     table: 'activity_logs',
     name: 'idx_activity_logs_user_created_at',
-    columns: 'user_id, created_at',
-    ddl: 'ALTER TABLE activity_logs ADD KEY idx_activity_logs_user_created_at (user_id, created_at)',
+   columns: 'test_id, user_id, status',
+ddl: 'ALTER TABLE test_attempts ADD KEY idx_test_attempts_test_student_status (test_id, user_id, status)',
   }),
 ]);
 
