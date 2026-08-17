@@ -408,20 +408,19 @@ export default function CourseDataGrid({
                             <AdminActionMenuItem as={Link} to={adminRoute(`courses/${course.id}/batches`)}>
                               Batches
                             </AdminActionMenuItem>
+                            <AdminActionMenuItem onClick={() => onActivate(course.id)}>Activate</AdminActionMenuItem>
                             <AdminActionMenuItem onClick={() => onArchive(course.id)}>Archive</AdminActionMenuItem>
                             <AdminActionMenuItem className="admin-action-menu__item--danger" onClick={() => onPurge(course)}>
                               Purge
                             </AdminActionMenuItem>
                           </AdminActionMenu>
                         </div>
-<<<<<<< HEAD
                       </td>
                     </tr>
                   ))
                 : null}
             </tbody>
           </table>
-=======
                       ) : null}
                     </td>
                     <td>—</td>
@@ -444,6 +443,7 @@ export default function CourseDataGrid({
                           Batches
                         </AdminActionMenuItem>
                         <AdminActionMenuItem onClick={() => onActivate(course.id)}>Activate</AdminActionMenuItem>
+                            <AdminActionMenuItem onClick={() => onActivate(course.id)}>Activate</AdminActionMenuItem>
                         <AdminActionMenuItem onClick={() => onArchive(course.id)}>Archive</AdminActionMenuItem>
                         <AdminActionMenuItem className="admin-action-menu__item--danger" onClick={() => onPurge(course)}>
                           Purge
@@ -455,7 +455,6 @@ export default function CourseDataGrid({
               : null}
           </tbody>
         </table>
->>>>>>> 70f14ae3536626efa1defbcb9876c5e979287448
       </div>
 
       {!loading && filtered.length > 0 ? (
