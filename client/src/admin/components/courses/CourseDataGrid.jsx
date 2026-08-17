@@ -421,40 +421,6 @@ export default function CourseDataGrid({
                 : null}
             </tbody>
           </table>
-                      ) : null}
-                    </td>
-                    <td>—</td>
-                    <td>
-                      <CourseLevelBadge level={course.level} />
-                    </td>
-                    <td>{formatPricingCell(course.pricing)}</td>
-                    <td>—</td>
-                    <td>
-                      <CourseStatusBadge active={course.is_active} />
-                    </td>
-                    <td>{formatDate(course.updated_at)}</td>
-                    <td>
-                      <AdminActionMenu triggerLabel="Actions" align="right" triggerClassName="btn--course-secondary">
-                        <AdminActionMenuItem onClick={() => onEdit(course)}>Edit</AdminActionMenuItem>
-                        <AdminActionMenuItem as={Link} to={adminRoute(`courses/${course.id}/subjects`)}>
-                          Subjects
-                        </AdminActionMenuItem>
-                        <AdminActionMenuItem as={Link} to={adminRoute(`courses/${course.id}/batches`)}>
-                          Batches
-                        </AdminActionMenuItem>
-                        <AdminActionMenuItem onClick={() => onActivate(course.id)}>Activate</AdminActionMenuItem>
-                            <AdminActionMenuItem onClick={() => onActivate(course.id)}>Activate</AdminActionMenuItem>
-                        <AdminActionMenuItem onClick={() => onArchive(course.id)}>Archive</AdminActionMenuItem>
-                        <AdminActionMenuItem className="admin-action-menu__item--danger" onClick={() => onPurge(course)}>
-                          Purge
-                        </AdminActionMenuItem>
-                      </AdminActionMenu>
-                    </td>
-                  </tr>
-                ))
-              : null}
-          </tbody>
-        </table>
       </div>
 
       {!loading && filtered.length > 0 ? (
