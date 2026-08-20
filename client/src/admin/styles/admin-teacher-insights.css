@@ -1,22 +1,22 @@
 /* Teacher Insights — enterprise intelligence dashboard */
 
 .ti-page {
-  --ti-bg: #f8fafc;
-  --ti-surface: #ffffff;
-  --ti-surface-elevated: #ffffff;
-  --ti-border: rgba(15, 23, 42, 0.08);
-  --ti-ink: #0f172a;
-  --ti-muted: #64748b;
-  --ti-accent: #6366f1;
-  --ti-accent-soft: rgba(99, 102, 241, 0.1);
-  --ti-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --ti-bg: var(--admin-bg);
+  --ti-surface: var(--admin-surface);
+  --ti-surface-elevated: var(--admin-surface-nested);
+  --ti-border: var(--admin-border);
+  --ti-ink: var(--admin-text-primary);
+  --ti-muted: var(--admin-text-secondary);
+  --ti-accent: var(--admin-secondary);
+  --ti-accent-soft: var(--admin-secondary-muted);
+  --ti-shadow: var(--admin-shadow-card);
   --ti-radius: 14px;
-  --ti-excellent: #059669;
-  --ti-good: #2563eb;
-  --ti-average: #d97706;
-  --ti-attention: #dc2626;
-  --ti-alert-bg: #fffbeb;
-  --ti-alert-border: #fde68a;
+  --ti-excellent: var(--admin-success);
+  --ti-good: var(--admin-info);
+  --ti-average: var(--admin-warning);
+  --ti-attention: var(--admin-danger);
+  --ti-alert-bg: var(--badge-warning-bg);
+  --ti-alert-border: var(--badge-warning-border);
 
   display: flex;
   flex-direction: column;
@@ -24,50 +24,6 @@
   max-width: 1320px;
   margin: 0 auto;
   color: var(--ti-ink);
-}
-
-@media (prefers-color-scheme: dark) {
-  .ti-page {
-    --ti-bg: #0b1120;
-    --ti-surface: #111827;
-    --ti-surface-elevated: #1e293b;
-    --ti-border: rgba(148, 163, 184, 0.12);
-    --ti-ink: #f1f5f9;
-    --ti-muted: #94a3b8;
-    --ti-accent: #818cf8;
-    --ti-accent-soft: rgba(129, 140, 248, 0.15);
-    --ti-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.35);
-    --ti-alert-bg: rgba(217, 119, 6, 0.12);
-    --ti-alert-border: rgba(217, 119, 6, 0.35);
-  }
-}
-
-.ti-page[data-theme='light'] {
-  --ti-bg: #f8fafc;
-  --ti-surface: #ffffff;
-  --ti-surface-elevated: #ffffff;
-  --ti-border: rgba(15, 23, 42, 0.08);
-  --ti-ink: #0f172a;
-  --ti-muted: #64748b;
-  --ti-accent: #6366f1;
-  --ti-accent-soft: rgba(99, 102, 241, 0.1);
-  --ti-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
-  --ti-alert-bg: #fffbeb;
-  --ti-alert-border: #fde68a;
-}
-
-.ti-page[data-theme='dark'] {
-  --ti-bg: #0b1120;
-  --ti-surface: #111827;
-  --ti-surface-elevated: #1e293b;
-  --ti-border: rgba(148, 163, 184, 0.12);
-  --ti-ink: #f1f5f9;
-  --ti-muted: #94a3b8;
-  --ti-accent: #818cf8;
-  --ti-accent-soft: rgba(129, 140, 248, 0.15);
-  --ti-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --ti-alert-bg: rgba(217, 119, 6, 0.12);
-  --ti-alert-border: rgba(217, 119, 6, 0.35);
 }
 
 .ti-header {

@@ -47,15 +47,15 @@
 
   --cp-radius: 8px;
   --cp-radius-lg: 10px;
-  --cp-border: 1px solid #e8ecf1;
-  --cp-border-strong: 1px solid #dde3ea;
-  --cp-surface: #ffffff;
-  --cp-surface-muted: #f8fafc;
-  --cp-surface-subtle: #f1f5f9;
-  --cp-ink: #0f172a;
-  --cp-ink-secondary: #64748b;
-  --cp-ink-muted: #94a3b8;
-  --cp-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --cp-border: 1px solid var(--admin-border);
+  --cp-border-strong: 1px solid var(--admin-border-strong);
+  --cp-surface: var(--admin-surface);
+  --cp-surface-muted: var(--admin-bg-subtle);
+  --cp-surface-subtle: var(--admin-surface-nested);
+  --cp-ink: var(--admin-text-primary);
+  --cp-ink-secondary: var(--admin-text-secondary);
+  --cp-ink-muted: var(--admin-text-muted);
+  --cp-shadow-sm: var(--admin-shadow-card);
 
   display: flex;
   flex-direction: column;
@@ -561,15 +561,15 @@
 }
 
 .courses-page .course-status-badge--active {
-  color: #166534;
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  color: var(--badge-published-text);
+  background: var(--badge-published-bg);
+  border-color: var(--badge-published-border);
 }
 
 .courses-page .course-status-badge--inactive {
-  color: #64748b;
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  color: var(--badge-neutral-text);
+  background: var(--badge-neutral-bg);
+  border-color: var(--badge-neutral-border);
 }
 
 .courses-page .course-level-badge,

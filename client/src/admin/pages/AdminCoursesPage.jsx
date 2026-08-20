@@ -219,7 +219,6 @@ export default function AdminCoursesPage() {
       ) : null}
 
       {!showCreateWizard && !editingId ? (
-<<<<<<< HEAD
         <>
           <section className="courses-metrics-strip" aria-busy={coursesLoading} aria-label="Course overview">
             {coursesLoading ? (
@@ -263,17 +262,6 @@ export default function AdminCoursesPage() {
             />
           </section>
         </>
-=======
-        <CourseDataGrid
-          courses={courses}
-          loading={coursesLoading}
-          onEdit={onEdit}
-          onArchive={onArchive}
-          onActivate={onActivate}
-          onPurge={onPurge}
-          onBulkArchive={onBulkArchive}
-        />
->>>>>>> 70f14ae3536626efa1defbcb9876c5e979287448
       ) : null}
 
       <AdminConfirmDialog

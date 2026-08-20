@@ -192,33 +192,33 @@
 }
 
 .admin-test-status--published {
-  color: #166534;
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  color: var(--badge-published-text);
+  background: var(--badge-published-bg);
+  border-color: var(--badge-published-border);
 }
 
 .admin-test-status--ready {
-  color: #1e40af;
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  color: var(--badge-info-text);
+  background: var(--badge-info-bg);
+  border-color: var(--badge-info-border);
 }
 
 .admin-test-status--draft {
-  color: #5b21b6;
-  background: #f5f3ff;
-  border-color: #ddd6fe;
+  color: var(--badge-draft-text);
+  background: var(--badge-draft-bg);
+  border-color: var(--badge-draft-border);
 }
 
 .admin-test-status--incomplete {
-  color: #92400e;
-  background: #fffbeb;
-  border-color: #fde68a;
+  color: var(--badge-warning-text);
+  background: var(--badge-warning-bg);
+  border-color: var(--badge-warning-border);
 }
 
 .admin-test-status--default {
-  color: var(--color-ink-600);
-  background: var(--color-bg-soft);
-  border-color: var(--color-ink-200);
+  color: var(--badge-neutral-text);
+  background: var(--badge-neutral-bg);
+  border-color: var(--badge-neutral-border);
   text-transform: capitalize;
 }
 

@@ -55,7 +55,7 @@
   padding: var(--ce-card-pad, 24px);
   border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
   border-radius: var(--ce-radius-lg, 14px);
-  background: var(--admin-surface-raised, #fff);
+  background: var(--admin-surface-raised);
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
 }
 
@@ -85,7 +85,7 @@
   border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
   border-radius: var(--ce-radius, 12px);
   overflow: hidden;
-  background: #fff;
+  background: var(--admin-input-bg);
 }
 
 .admin-shell .course-notes-upload__block {
@@ -302,7 +302,7 @@
   max-width: 520px;
   padding: 14px 16px;
   border-radius: var(--ce-radius-sm, 10px);
-  background: #fff;
+  background: var(--admin-input-bg);
   border: 1px solid #bbf7d0;
 }
 
@@ -385,7 +385,7 @@
   padding: var(--ce-card-pad, 24px);
   border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
   border-radius: var(--ce-radius-lg, 14px);
-  background: var(--admin-surface-raised, #fff);
+  background: var(--admin-surface-raised);
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
 }
 
@@ -432,7 +432,7 @@
   border: 1px solid var(--color-ink-200, #e2e8f0);
   border-radius: var(--radius-md, 8px);
   padding: 0.5rem 0.7rem;
-  background: #fff;
+  background: var(--admin-input-bg);
   font: inherit;
   font-weight: 500;
 }
@@ -513,7 +513,7 @@
   font-size: var(--ce-font-sm, 12px);
   font-weight: 600;
   color: var(--admin-text-secondary, var(--color-ink-500));
-  background: var(--admin-surface-raised, #fff);
+  background: var(--admin-surface-raised);
   border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
   border-radius: var(--radius-full, 999px);
   padding: 2px 9px;
@@ -542,7 +542,7 @@
   padding: 14px 16px;
   border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
   border-radius: var(--ce-radius-sm, 8px);
-  background: var(--admin-surface-raised, #fff);
+  background: var(--admin-surface-raised);
 }
 
 .admin-shell .course-notes-item--inactive {

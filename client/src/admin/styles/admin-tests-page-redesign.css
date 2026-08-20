@@ -45,15 +45,15 @@
 
   --tp-radius: 8px;
   --tp-radius-lg: 10px;
-  --tp-border: 1px solid #e8ecf1;
-  --tp-border-strong: 1px solid #dde3ea;
-  --tp-surface: #ffffff;
-  --tp-surface-muted: #f8fafc;
-  --tp-surface-subtle: #f1f5f9;
-  --tp-ink: #0f172a;
-  --tp-ink-secondary: #64748b;
-  --tp-ink-muted: #94a3b8;
-  --tp-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --tp-border: 1px solid var(--admin-border);
+  --tp-border-strong: 1px solid var(--admin-border-strong);
+  --tp-surface: var(--admin-surface);
+  --tp-surface-muted: var(--admin-bg-subtle);
+  --tp-surface-subtle: var(--admin-surface-nested);
+  --tp-ink: var(--admin-text-primary);
+  --tp-ink-secondary: var(--admin-text-secondary);
+  --tp-ink-muted: var(--admin-text-muted);
+  --tp-shadow-sm: var(--admin-shadow-card);
 
   display: flex;
   flex-direction: column;

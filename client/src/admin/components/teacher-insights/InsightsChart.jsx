@@ -47,7 +47,7 @@ export default function InsightsChart({
   subtitle,
   data = [],
   height = 120,
-  color = '#6366f1',
+  color = 'var(--admin-chart-series-1, #818cf8)',
   formatValue = (v) => String(v),
   variant = 'area',
 }) {

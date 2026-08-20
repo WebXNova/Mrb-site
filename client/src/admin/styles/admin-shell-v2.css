@@ -1,26 +1,9 @@
-/* Admin shell v2 — enterprise SaaS layout on existing brand tokens */
+/* Admin shell v2 — enterprise SaaS layout on admin theme tokens */
 
-:root {
+.admin-shell {
   --admin-sidebar-width: 228px;
   --admin-sidebar-collapsed-width: 72px;
   --admin-topbar-height: 64px;
-  --admin-primary: var(--color-ink-900);
-  --admin-primary-hover: var(--color-ink-800);
-  --admin-secondary: var(--color-primary);
-  --admin-secondary-hover: var(--color-primary-600);
-  --admin-success: var(--color-success);
-  --admin-warning: var(--color-accent);
-  --admin-danger: var(--color-danger);
-  --admin-surface: var(--color-surface);
-  --admin-background: var(--color-bg-alt);
-  --admin-border: var(--color-ink-100);
-  --admin-text-primary: var(--color-ink-900);
-  --admin-text-secondary: var(--color-ink-500);
-  --admin-radius-card: 12px;
-  --admin-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
-}
-
-.admin-shell {
   grid-template-columns: var(--admin-sidebar-width) 1fr;
 }
 
@@ -72,7 +55,7 @@
 .admin-sidebar__footer {
   margin-top: auto;
   padding-top: var(--space-4);
-  border-top: 1px solid var(--color-ink-100);
+  border-top: 1px solid var(--admin-border);
   flex-shrink: 0;
 }
 
@@ -84,18 +67,18 @@
   gap: var(--space-2);
   padding: var(--space-3);
   border-radius: var(--admin-radius-card);
-  border: 1px solid var(--color-ink-800);
-  background: var(--color-ink-900);
-  color: #fff;
+  border: 1px solid var(--admin-border-strong);
+  background: var(--admin-surface-nested);
+  color: var(--admin-text-primary);
   font-size: var(--fs-13);
   font-weight: var(--fw-semibold);
   cursor: pointer;
 }
 
 .admin-sidebar-collapse-btn:hover {
-  background: var(--color-ink-800);
-  color: #fff;
-  border-color: var(--color-ink-700);
+  background: var(--admin-nav-hover);
+  color: var(--admin-text-primary);
+  border-color: var(--admin-border-strong);
 }
 
 .admin-shell--sidebar-collapsed .admin-brand__text,
@@ -135,7 +118,7 @@
   width: 3px;
   height: 60%;
   border-radius: 0 4px 4px 0;
-  background: var(--color-primary);
+  background: var(--admin-secondary);
 }
 
 .admin-nav__icon {
@@ -212,9 +195,9 @@
 
 .admin-topbar-search__input:focus {
   outline: none;
-  border-color: var(--admin-primary);
-  box-shadow: 0 0 0 3px rgba(11, 18, 32, 0.08);
-  background: #fff;
+  border-color: var(--admin-secondary);
+  box-shadow: var(--admin-focus-ring);
+  background: var(--admin-input-bg);
 }
 
 .admin-topbar-search__icon {
@@ -265,7 +248,7 @@
 }
 
 .admin-topbar-icon-btn:hover {
-  background: var(--color-bg-soft);
+  background: var(--admin-nav-hover);
 }
 
 .admin-profile-menu {
@@ -287,7 +270,7 @@
 }
 
 .admin-profile-menu__trigger:focus-visible {
-  outline: 2px solid var(--admin-primary);
+  outline: 2px solid var(--admin-secondary);
   outline-offset: 3px;
 }
 
@@ -295,7 +278,7 @@
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 999px;
-  background: var(--admin-primary);
+  background: var(--admin-brand);
   color: #fff;
   display: inline-flex;
   align-items: center;

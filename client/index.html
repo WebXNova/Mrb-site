@@ -34,6 +34,18 @@
       gtag('js', new Date());
     </script>
     <title>MRB Classes</title>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('mrb-admin-theme');
+          if (theme === 'dark') {
+            document.documentElement.setAttribute('data-admin-theme-boot', 'dark');
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

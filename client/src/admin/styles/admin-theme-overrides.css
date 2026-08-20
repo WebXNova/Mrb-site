@@ -1,0 +1,570 @@
+/**
+ * Admin dark-mode component overrides — consumes admin-theme.css tokens.
+ * Scoped to `.admin-shell[data-admin-theme="dark"]` only.
+ */
+
+/* ─── Shell surfaces ─── */
+.admin-shell[data-admin-theme='dark'] {
+  background:
+    radial-gradient(ellipse 35% 25% at 100% 0%, rgba(129, 140, 248, 0.06), transparent 72%),
+    var(--admin-bg);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-sidebar {
+  background: var(--admin-surface-raised);
+  color: var(--admin-text-primary);
+  border-right-color: var(--admin-border);
+  box-shadow: 1px 0 0 var(--admin-border-subtle);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-topbar,
+.admin-shell[data-admin-theme='dark'] .admin-card,
+.admin-shell[data-admin-theme='dark'] .admin-empty-state,
+.admin-shell[data-admin-theme='dark'] .admin-stat-card {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-sidebar__footer {
+  border-top-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-brand__title {
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-brand__subtitle {
+  color: var(--admin-text-secondary);
+}
+
+/* ─── Navigation ─── */
+.admin-shell[data-admin-theme='dark'] .admin-nav__item {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-nav__item:hover {
+  background: var(--admin-nav-hover);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-nav__item--active {
+  background: var(--admin-nav-active-bg);
+  border-color: rgba(129, 140, 248, 0.25);
+  color: var(--admin-nav-active-text);
+  font-weight: var(--fw-semibold);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-nav__item--active::before {
+  background: var(--admin-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-nav__icon {
+  color: inherit;
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-nav::-webkit-scrollbar-thumb {
+  background: var(--admin-border-strong);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-nav {
+  scrollbar-color: var(--admin-border-strong) transparent;
+}
+
+/* ─── Topbar ─── */
+.admin-shell[data-admin-theme='dark'] .admin-topbar__title {
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-topbar__subtitle,
+.admin-shell[data-admin-theme='dark'] .admin-breadcrumbs,
+.admin-shell[data-admin-theme='dark'] .admin-breadcrumbs__link {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-breadcrumbs__link:hover {
+  color: var(--admin-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-topbar-icon-btn {
+  background: var(--admin-surface-nested);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-topbar-icon-btn:hover {
+  background: var(--admin-nav-hover);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-topbar-search__input {
+  background: var(--admin-input-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-topbar-search__input:focus {
+  border-color: var(--admin-secondary);
+  box-shadow: var(--admin-focus-ring);
+  background: var(--admin-input-bg);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-profile-menu__panel {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  box-shadow: var(--admin-shadow-dropdown);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-profile-menu__item:hover {
+  background: var(--admin-nav-hover);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-profile-menu__avatar {
+  background: var(--admin-brand);
+  color: var(--admin-text-inverse);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-sidebar-collapse-btn {
+  background: var(--admin-surface-nested);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-sidebar-collapse-btn:hover {
+  background: var(--admin-nav-hover);
+  border-color: var(--admin-border-strong);
+  color: var(--admin-text-primary);
+}
+
+/* ─── Forms ─── */
+.admin-shell[data-admin-theme='dark'] .admin-field label {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-field input,
+.admin-shell[data-admin-theme='dark'] .admin-field textarea,
+.admin-shell[data-admin-theme='dark'] .admin-field select,
+.admin-shell[data-admin-theme='dark'] .admin-table input,
+.admin-shell[data-admin-theme='dark'] .admin-table select,
+.admin-shell[data-admin-theme='dark'] .admin-table textarea {
+  background: var(--admin-input-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-field input::placeholder,
+.admin-shell[data-admin-theme='dark'] .admin-field textarea::placeholder {
+  color: var(--admin-text-muted);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-field input:focus,
+.admin-shell[data-admin-theme='dark'] .admin-field textarea:focus,
+.admin-shell[data-admin-theme='dark'] .admin-field select:focus {
+  border-color: var(--admin-secondary);
+  box-shadow: var(--admin-focus-ring);
+  outline: none;
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-field input:disabled,
+.admin-shell[data-admin-theme='dark'] .admin-field select:disabled,
+.admin-shell[data-admin-theme='dark'] .admin-field textarea:disabled {
+  opacity: 0.55;
+  background: var(--admin-surface-inset);
+}
+
+/* ─── Buttons (admin-scoped; Button.css is shared) ─── */
+.admin-shell[data-admin-theme='dark'] .btn {
+  --btn-shadow: none;
+}
+
+.admin-shell[data-admin-theme='dark'] .btn--primary,
+.admin-shell[data-admin-theme='dark'] .btn--accent {
+  --btn-bg: var(--admin-brand);
+  --btn-bg-hover: var(--admin-brand-hover);
+  --btn-color: #ffffff;
+  --btn-border: transparent;
+}
+
+.admin-shell[data-admin-theme='dark'] .btn--secondary {
+  --btn-bg: var(--admin-surface-nested);
+  --btn-bg-hover: var(--admin-nav-hover);
+  --btn-color: var(--admin-text-primary);
+  --btn-border: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .btn--outline {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--admin-nav-hover);
+  --btn-color: var(--admin-text-primary);
+  --btn-border: var(--admin-border-strong);
+}
+
+.admin-shell[data-admin-theme='dark'] .btn--ghost {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--admin-nav-hover);
+  --btn-color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .btn--link {
+  --btn-color: var(--admin-secondary);
+}
+
+/* ─── Tables ─── */
+.admin-shell[data-admin-theme='dark'] .admin-table-wrap {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-table {
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-table thead th {
+  background: var(--admin-surface-inset);
+  color: var(--admin-text-secondary);
+  border-bottom-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-table tbody td {
+  border-bottom-color: var(--admin-border-subtle);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-table tbody tr:hover {
+  background: var(--admin-row-hover);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-table tbody tr:nth-child(even) {
+  background: var(--admin-row-stripe);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-table tbody tr:nth-child(even):hover {
+  background: var(--admin-row-hover);
+}
+
+/* ─── Status badges (shared pills) ─── */
+.admin-shell[data-admin-theme='dark'] .admin-status-pill--neutral {
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-text);
+  border-color: var(--badge-neutral-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-status-pill--pending {
+  background: var(--badge-warning-bg);
+  color: var(--badge-warning-text);
+  border-color: var(--badge-warning-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-status-pill--approved {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+  border-color: var(--badge-success-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-status-pill--rejected {
+  background: var(--badge-danger-bg);
+  color: var(--badge-danger-text);
+  border-color: var(--badge-danger-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-tag-chip {
+  background: var(--admin-surface-nested);
+  border-color: var(--admin-border);
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-tag-chip--active {
+  background: var(--admin-secondary-muted);
+  border-color: rgba(129, 140, 248, 0.35);
+  color: var(--admin-nav-active-text);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-import-row {
+  background: var(--admin-surface-nested);
+  border-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-import-row--invalid {
+  background: var(--badge-danger-bg);
+  border-color: var(--badge-danger-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .mp-coupon-chip,
+.admin-shell[data-admin-theme='dark'] .mp-coupon-detail {
+  background: var(--admin-secondary-muted);
+  border-color: rgba(129, 140, 248, 0.3);
+  color: var(--admin-text-secondary);
+}
+
+/* ─── Modals / dialogs ─── */
+.admin-shell[data-admin-theme='dark'] .admin-modal-backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-modal,
+.admin-shell[data-admin-theme='dark'] .admin-confirm-dialog {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  box-shadow: var(--admin-shadow-modal);
+  color: var(--admin-text-primary);
+}
+
+/* ─── Rich editors ─── */
+.admin-shell[data-admin-theme='dark'] .admin-rich-editor .ql-toolbar,
+.admin-shell[data-admin-theme='dark'] .admin-rich-editor .ql-container {
+  background: var(--admin-input-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-rich-editor .ql-stroke {
+  stroke: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-rich-editor .ql-fill {
+  fill: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-rich-editor .ql-picker-label {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-ckeditor .ck.ck-editor__main > .ck-editor__editable {
+  background: var(--admin-input-bg);
+  color: var(--admin-text-primary);
+  border-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-ckeditor .ck.ck-toolbar {
+  background: var(--admin-surface-nested);
+  border-color: var(--admin-border);
+}
+
+/* ─── Stat cards / dashboard ─── */
+.admin-shell[data-admin-theme='dark'] .admin-stat-card__label {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-stat-card__value {
+  color: var(--admin-text-primary);
+}
+
+/* ─── Links ─── */
+.admin-shell[data-admin-theme='dark'] a:not([class]) {
+  color: var(--admin-secondary);
+}
+
+/* ─── MUI icons inherit text color ─── */
+.admin-shell[data-admin-theme='dark'] .MuiSvgIcon-root {
+  color: inherit;
+}
+
+/* ─── Page redesign tokens (courses, tests) ─── */
+.admin-shell[data-admin-theme='dark'] .courses-page,
+.admin-shell[data-admin-theme='dark'] .tests-page {
+  --cp-bg: var(--admin-bg);
+  --cp-surface: var(--admin-surface);
+  --cp-surface-2: var(--admin-surface-nested);
+  --cp-border: var(--admin-border);
+  --cp-ink: var(--admin-text-primary);
+  --cp-muted: var(--admin-text-secondary);
+  --cp-shadow: var(--admin-shadow-card);
+  --tp-bg: var(--admin-bg);
+  --tp-surface: var(--admin-surface);
+  --tp-surface-2: var(--admin-surface-nested);
+  --tp-border: var(--admin-border);
+  --tp-ink: var(--admin-text-primary);
+  --tp-muted: var(--admin-text-secondary);
+  --tp-shadow: var(--admin-shadow-card);
+}
+
+/* ─── Teacher Insights — inherit shell theme (remove local dark) ─── */
+.admin-shell[data-admin-theme='dark'] .ti-page {
+  --ti-bg: var(--admin-bg);
+  --ti-surface: var(--admin-surface);
+  --ti-surface-elevated: var(--admin-surface-nested);
+  --ti-border: var(--admin-border);
+  --ti-ink: var(--admin-text-primary);
+  --ti-muted: var(--admin-text-secondary);
+  --ti-accent: var(--admin-secondary);
+  --ti-accent-soft: var(--admin-secondary-muted);
+  --ti-shadow: var(--admin-shadow-card);
+  --ti-excellent: var(--admin-success);
+  --ti-good: var(--admin-info);
+  --ti-average: var(--admin-warning);
+  --ti-attention: var(--admin-danger);
+  --ti-alert-bg: var(--badge-warning-bg);
+  --ti-alert-border: var(--badge-warning-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='light'] .ti-page,
+.admin-shell:not([data-admin-theme='dark']) .ti-page {
+  --ti-bg: var(--admin-bg);
+  --ti-surface: var(--admin-surface);
+  --ti-surface-elevated: var(--admin-surface-raised);
+  --ti-border: var(--admin-border);
+  --ti-ink: var(--admin-text-primary);
+  --ti-muted: var(--admin-text-secondary);
+}
+
+/* ─── Manual payments, payment accounts, categories, notes, coupons ─── */
+.admin-shell[data-admin-theme='dark'] .mp-filter select,
+.admin-shell[data-admin-theme='dark'] .mp-toolbar input,
+.admin-shell[data-admin-theme='dark'] .pa-field input,
+.admin-shell[data-admin-theme='dark'] .pa-field select,
+.admin-shell[data-admin-theme='dark'] .cc-field input,
+.admin-shell[data-admin-theme='dark'] .cc-field select,
+.admin-shell[data-admin-theme='dark'] .admin-notes-toolbar input,
+.admin-shell[data-admin-theme='dark'] .admin-notes-toolbar select,
+.admin-shell[data-admin-theme='dark'] .coupon-field input,
+.admin-shell[data-admin-theme='dark'] .coupon-field select {
+  background: var(--admin-input-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .mp-subtitle,
+.admin-shell[data-admin-theme='dark'] .mp-loading,
+.admin-shell[data-admin-theme='dark'] .mp-empty,
+.admin-shell[data-admin-theme='dark'] .mp-filter {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .mp-row:hover {
+  background: var(--admin-row-hover);
+}
+
+.admin-shell[data-admin-theme='dark'] .mp-detail-panel,
+.admin-shell[data-admin-theme='dark'] .mp-card,
+.admin-shell[data-admin-theme='dark'] .pa-card,
+.admin-shell[data-admin-theme='dark'] .cc-card,
+.admin-shell[data-admin-theme='dark'] .admin-notes-card {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+
+/* ─── Course edit layout ─── */
+.admin-shell[data-admin-theme='dark'] .course-edit-layout {
+  --ce-bg: var(--admin-bg);
+  --ce-surface: var(--admin-surface);
+  --ce-border: var(--admin-border);
+}
+
+/* ─── Nav toggle (mobile) ─── */
+.admin-shell[data-admin-theme='dark'] .admin-nav-toggle__bar {
+  background: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-sidebar-overlay {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* ─── Toast ─── */
+.admin-shell[data-admin-theme='dark'] .admin-toast {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+  box-shadow: var(--admin-shadow-dropdown);
+}
+
+/* ─── Select option dropdown (native) ─── */
+.admin-shell[data-admin-theme='dark'] .btn--course-primary,
+.admin-shell[data-admin-theme='dark'] .courses-row-actions__primary,
+.admin-shell[data-admin-theme='dark'] .tests-page .tests-row-actions__primary {
+  background: var(--admin-brand);
+  border-color: var(--admin-brand);
+  color: #fff;
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-confirm-dialog {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-confirm-dialog__note-label {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-reg-pagination {
+  border-top-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-reg-pagination__jump input {
+  background: var(--admin-input-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-action-menu__panel,
+.admin-shell[data-admin-theme='dark'] .courses-page .admin-action-menu__panel,
+.admin-shell[data-admin-theme='dark'] .tests-page .admin-action-menu__panel {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  box-shadow: var(--admin-shadow-dropdown);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-action-menu__item:hover,
+.admin-shell[data-admin-theme='dark'] .courses-page .admin-action-menu__item:hover,
+.admin-shell[data-admin-theme='dark'] .tests-page .admin-action-menu__item:hover {
+  background: var(--admin-nav-hover);
+}
+
+.admin-shell[data-admin-theme='dark'] .ti-select {
+  background: var(--admin-input-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .ti-card,
+.admin-shell[data-admin-theme='dark'] .ti-chart,
+.admin-shell[data-admin-theme='dark'] .ti-panel {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell[data-admin-theme='dark'] .ti-insight-item:hover {
+  border-color: rgba(129, 140, 248, 0.35);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-payment-accounts__card,
+.admin-shell[data-admin-theme='dark'] .admin-payment-accounts__form-panel,
+.admin-shell[data-admin-theme='dark'] .admin-course-categories__summary-card,
+.admin-shell[data-admin-theme='dark'] .admin-course-categories__editor {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-course-categories__title {
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] .admin-course-categories__subtitle {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] input,
+.admin-shell[data-admin-theme='dark'] select,
+.admin-shell[data-admin-theme='dark'] textarea {
+  color-scheme: dark;
+}
+
+.admin-shell[data-admin-theme='dark'] .courses-metric,
+.admin-shell[data-admin-theme='dark'] .courses-page__management,
+.admin-shell[data-admin-theme='dark'] .courses-table-wrap {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+
+.admin-shell[data-admin-theme='dark'] .courses-metric__label {
+  color: var(--admin-text-secondary);
+}
+
+.admin-shell[data-admin-theme='dark'] .courses-metric__value {
+  color: var(--admin-text-primary);
+}
+
+.admin-shell[data-admin-theme='dark'] option {
+  background: var(--admin-surface);
+  color: var(--admin-text-primary);
+}

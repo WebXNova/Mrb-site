@@ -54,10 +54,11 @@
 .mp-filter select {
   min-width: 180px;
   min-height: 40px;
-  border: 1px solid var(--color-ink-200, #e2e8f0);
+  border: 1px solid var(--admin-border);
   border-radius: var(--radius-md, 8px);
   padding: 0.5rem 0.7rem;
-  background: #fff;
+  background: var(--admin-input-bg);
+  color: var(--admin-text-primary);
   font: inherit;
   font-weight: 500;
 }
@@ -98,7 +99,7 @@
   width: 56px;
   height: 22px;
   object-fit: contain;
-  background: #fff;
+  background: var(--admin-surface);
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 6px;
   padding: 2px 4px;
@@ -122,19 +123,19 @@
 }
 
 .mp-risk--review {
-  background: #fff7ed;
-  color: #c2410c;
-  border: 1px solid #fdba74;
+  background: var(--badge-warning-bg);
+  color: var(--badge-warning-text);
+  border: 1px solid var(--badge-warning-border);
 }
 
 .mp-risk--low {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+  border: 1px solid var(--badge-success-border);
 }
 
 .mp-amount-mismatch {
-  color: #c2410c;
+  color: var(--admin-warning);
   font-weight: 600;
 }
 
@@ -155,8 +156,8 @@
 .mp-drawer {
   width: min(480px, 100%);
   height: 100%;
-  background: #fff;
-  box-shadow: -12px 0 40px rgba(15, 23, 42, 0.12);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-modal);
   display: flex;
   flex-direction: column;
   overflow: auto;
@@ -170,7 +171,7 @@
   border-bottom: 1px solid var(--color-ink-100, #eef2f6);
   position: sticky;
   top: 0;
-  background: #fff;
+  background: var(--admin-surface);
   z-index: 1;
 }
 
@@ -191,7 +192,7 @@
   width: 36px;
   height: 36px;
   border: 1px solid var(--color-ink-100, #eef2f6);
-  background: #fff;
+  background: var(--admin-surface);
   border-radius: 8px;
   cursor: pointer;
 }
@@ -295,7 +296,7 @@
   position: sticky;
   bottom: 0;
   padding-top: 8px;
-  background: #fff;
+  background: var(--admin-surface);
 }
 
 .mp-processed {

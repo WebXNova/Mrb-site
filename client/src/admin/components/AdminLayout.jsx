@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import { adminApi } from '../../api/adminApi';
 import { clearAdminAuth, broadcastRoleLogout, getStoredUser } from '../../auth/session';
 import { AdminToastProvider } from '../context/AdminToastContext';
@@ -11,6 +13,7 @@ import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { getAdminNavItems, buildAdminBreadcrumbs } from '../config/adminNavConfig';
 import { MRB_LOGO_WORDMARK_SRC } from '../../components/brand/MrbEmblemImage';
 import '../../styles/global.css';
+import '../styles/admin-theme.css';
 import '../styles/admin.css';
 import '../styles/admin-tests.css';
 import '../styles/admin-responsive.css';
@@ -18,10 +21,13 @@ import '../styles/admin-shell-v2.css';
 import '../styles/admin-density.css';
 import '../styles/admin-layout-cleanup.css';
 import '../styles/admin-course-edit-layout.css';
+import '../styles/admin-theme-overrides.css';
+import { AdminThemeProvider, useAdminTheme } from '../context/AdminThemeContext';
 import AdminToastContainer from './AdminToastContainer';
 import AdminBreadcrumbs from './AdminBreadcrumbs';
 
 function AdminShell() {
+  const { theme, toggleTheme, isDark } = useAdminTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const adminUser = getStoredUser('admin_user');
@@ -93,6 +99,7 @@ function AdminShell() {
       className={`admin-shell${mobileNavOpen ? ' admin-shell--nav-open' : ''}${
         sidebarCollapsed && !isMobileNav ? ' admin-shell--sidebar-collapsed' : ''
       }`}
+      data-admin-theme={theme}
     >
       {isMobileNav && mobileNavOpen ? (
         <button
@@ -171,6 +178,19 @@ function AdminShell() {
           </div>
 
           <div className="admin-topbar__actions">
+            <button
+              type="button"
+              className="admin-topbar-icon-btn"
+              onClick={toggleTheme}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={isDark ? 'Light mode' : 'Dark mode'}
+            >
+              {isDark ? (
+                <LightModeOutlinedIcon fontSize="small" />
+              ) : (
+                <DarkModeOutlinedIcon fontSize="small" />
+              )}
+            </button>
             <div className="admin-profile-menu" ref={profileRef}>
               <button
                 type="button"
@@ -231,8 +251,10 @@ function AdminShell() {
 
 export default function AdminLayout() {
   return (
-    <AdminToastProvider>
-      <AdminShell />
-    </AdminToastProvider>
+    <AdminThemeProvider>
+      <AdminToastProvider>
+        <AdminShell />
+      </AdminToastProvider>
+    </AdminThemeProvider>
   );
 }

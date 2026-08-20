@@ -1,0 +1,235 @@
+/**
+ * Admin panel theme tokens — light (default) and dark (opt-in).
+ * Scoped to `.admin-shell` only — does not affect student/public site.
+ */
+
+/* ─── Light theme (preserve existing appearance) ─── */
+.admin-shell {
+  color-scheme: light;
+
+  --admin-bg: #f7f8fb;
+  --admin-bg-subtle: #f1f3f9;
+  --admin-surface-raised: #ffffff;
+  --admin-surface: #ffffff;
+  --admin-surface-nested: #f9fafb;
+  --admin-surface-inset: #f3f4f6;
+  --admin-input-bg: #ffffff;
+
+  --admin-text-primary: #0b1220;
+  --admin-text-secondary: #4b5563;
+  --admin-text-muted: #6b7280;
+  --admin-text-inverse: #ffffff;
+
+  --admin-border: #e5e7eb;
+  --admin-border-subtle: #f3f4f6;
+  --admin-border-strong: #d1d5db;
+
+  --admin-brand: #dc2626;
+  --admin-brand-hover: #b91c1c;
+  --admin-brand-muted: #fef2f2;
+
+  --admin-secondary: #4f46e5;
+  --admin-secondary-hover: #4338ca;
+  --admin-secondary-muted: #eef2ff;
+
+  --admin-success: #10b981;
+  --admin-warning: #f59e0b;
+  --admin-danger: #ef4444;
+  --admin-info: #0ea5e9;
+
+  --badge-success-bg: #ecfdf5;
+  --badge-success-text: #166534;
+  --badge-success-border: #a7f3d0;
+
+  --badge-warning-bg: #fffbeb;
+  --badge-warning-text: #92400e;
+  --badge-warning-border: #fde68a;
+
+  --badge-danger-bg: #fef2f2;
+  --badge-danger-text: #991b1b;
+  --badge-danger-border: #fecaca;
+
+  --badge-info-bg: #eff6ff;
+  --badge-info-text: #1e40af;
+  --badge-info-border: #bfdbfe;
+
+  --badge-neutral-bg: #f1f5f9;
+  --badge-neutral-text: #64748b;
+  --badge-neutral-border: #e2e8f0;
+
+  --badge-published-bg: #ecfdf5;
+  --badge-published-text: #166534;
+  --badge-published-border: #a7f3d0;
+
+  --badge-draft-bg: #f5f3ff;
+  --badge-draft-text: #5b21b6;
+  --badge-draft-border: #ddd6fe;
+
+  --admin-focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.25);
+  --admin-focus-ring-brand: 0 0 0 3px rgba(220, 38, 38, 0.25);
+
+  --admin-nav-hover: rgba(15, 23, 42, 0.04);
+  --admin-nav-active-bg: #eef2ff;
+  --admin-nav-active-text: #0b1220;
+
+  --admin-row-hover: rgba(15, 23, 42, 0.03);
+  --admin-row-stripe: #f9fafb;
+
+  --admin-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --admin-shadow-dropdown: 0 8px 24px rgba(15, 23, 42, 0.1), 0 0 0 1px #e5e7eb;
+  --admin-shadow-modal: 0 24px 48px rgba(15, 23, 42, 0.14), 0 0 0 1px #d1d5db;
+
+  --admin-chart-grid: #e5e7eb;
+  --admin-chart-axis: #6b7280;
+  --admin-chart-series-1: #4f46e5;
+  --admin-chart-series-2: #10b981;
+  --admin-chart-series-3: #f59e0b;
+  --admin-chart-series-4: #dc2626;
+
+  /* Legacy aliases used across admin-shell-v2.css */
+  --admin-primary: var(--color-ink-900);
+  --admin-primary-hover: var(--color-ink-800);
+  --admin-background: var(--admin-bg);
+  --admin-radius-card: 12px;
+
+  /* Page-scoped aliases (courses, tests, insights) */
+  --admin-page-bg: var(--admin-bg);
+  --admin-page-surface: var(--admin-surface);
+  --admin-page-border: var(--admin-border);
+  --admin-page-ink: var(--admin-text-primary);
+  --admin-page-muted: var(--admin-text-secondary);
+}
+
+/* ─── Dark theme (approved palette) ─── */
+.admin-shell[data-admin-theme='dark'] {
+  color-scheme: dark;
+
+  --admin-bg: #0f1115;
+  --admin-bg-subtle: #12141a;
+  --admin-surface-raised: #16181d;
+  --admin-surface: #1e2128;
+  --admin-surface-nested: #252932;
+  --admin-surface-inset: #12141a;
+  --admin-input-bg: #2c3039;
+
+  --admin-text-primary: #e8e9ec;
+  --admin-text-secondary: #9ca3af;
+  --admin-text-muted: #6b7280;
+  --admin-text-inverse: #0f1115;
+
+  --admin-border: #2a2d35;
+  --admin-border-subtle: #23262e;
+  --admin-border-strong: #363b46;
+
+  --admin-brand: #e84558;
+  --admin-brand-hover: #c93d4f;
+  --admin-brand-muted: rgba(232, 69, 88, 0.14);
+
+  --admin-secondary: #818cf8;
+  --admin-secondary-hover: #6366f1;
+  --admin-secondary-muted: rgba(129, 140, 248, 0.14);
+
+  --admin-success: #34d399;
+  --admin-warning: #fbbf24;
+  --admin-danger: #f87171;
+  --admin-info: #38bdf8;
+
+  --badge-success-bg: #0f2a22;
+  --badge-success-text: #6ee7b7;
+  --badge-success-border: #14532d;
+
+  --badge-warning-bg: #2a2210;
+  --badge-warning-text: #fcd34d;
+  --badge-warning-border: #854d0e;
+
+  --badge-danger-bg: #2a1414;
+  --badge-danger-text: #fca5a5;
+  --badge-danger-border: #7f1d1d;
+
+  --badge-info-bg: #0f1f2e;
+  --badge-info-text: #7dd3fc;
+  --badge-info-border: #1e4976;
+
+  --badge-neutral-bg: #252932;
+  --badge-neutral-text: #9ca3af;
+  --badge-neutral-border: #363b46;
+
+  --badge-published-bg: #0f2a22;
+  --badge-published-text: #86efac;
+  --badge-published-border: #166534;
+
+  --badge-draft-bg: #1f1630;
+  --badge-draft-text: #c4b5fd;
+  --badge-draft-border: #5b21b6;
+
+  --admin-focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.35);
+  --admin-focus-ring-brand: 0 0 0 3px rgba(232, 69, 88, 0.35);
+
+  --admin-nav-hover: rgba(255, 255, 255, 0.05);
+  --admin-nav-active-bg: rgba(129, 140, 248, 0.14);
+  --admin-nav-active-text: #c7d2fe;
+
+  --admin-row-hover: rgba(255, 255, 255, 0.03);
+  --admin-row-stripe: #1a1d24;
+
+  --admin-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 16px rgba(0, 0, 0, 0.45);
+  --admin-shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px #2a2d35;
+  --admin-shadow-modal: 0 24px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px #363b46;
+
+  --admin-chart-grid: #2a2d35;
+  --admin-chart-axis: #6b7280;
+  --admin-chart-series-1: #818cf8;
+  --admin-chart-series-2: #34d399;
+  --admin-chart-series-3: #fbbf24;
+  --admin-chart-series-4: #e84558;
+
+  --admin-primary: var(--admin-text-primary);
+  --admin-primary-hover: #ffffff;
+  --admin-background: var(--admin-bg);
+
+  --admin-page-bg: var(--admin-bg);
+  --admin-page-surface: var(--admin-surface);
+  --admin-page-border: var(--admin-border);
+  --admin-page-ink: var(--admin-text-primary);
+  --admin-page-muted: var(--admin-text-secondary);
+
+  /* Remap global tokens inside admin shell only */
+  --color-bg: var(--admin-bg);
+  --color-bg-alt: var(--admin-bg);
+  --color-bg-soft: var(--admin-bg-subtle);
+  --color-surface: var(--admin-surface);
+  --color-surface-elevated: var(--admin-surface-raised);
+
+  --color-ink-900: var(--admin-text-primary);
+  --color-ink-800: #d1d5db;
+  --color-ink-700: var(--admin-text-secondary);
+  --color-ink-600: var(--admin-text-secondary);
+  --color-ink-500: var(--admin-text-muted);
+  --color-ink-400: var(--admin-text-muted);
+  --color-ink-300: #4b5563;
+  --color-ink-200: var(--admin-border);
+  --color-ink-100: var(--admin-border-subtle);
+  --color-ink-50: var(--admin-surface-nested);
+
+  --color-primary: var(--admin-secondary);
+  --color-primary-600: var(--admin-secondary-hover);
+  --color-primary-700: #a5b4fc;
+  --color-primary-50: var(--admin-secondary-muted);
+  --color-primary-100: rgba(129, 140, 248, 0.22);
+
+  --color-success: var(--admin-success);
+  --color-accent: var(--admin-warning);
+  --color-danger: var(--admin-danger);
+  --color-info: var(--admin-info);
+
+  --shadow-xs: var(--admin-shadow-card);
+  --shadow-sm: var(--admin-shadow-card);
+  --shadow-md: var(--admin-shadow-dropdown);
+  --shadow-lg: var(--admin-shadow-modal);
+}
+
+/* Anti-flicker boot: page background before React mounts admin shell */
+html[data-admin-theme-boot='dark'] {
+  background-color: #0f1115;
+  color-scheme: dark;
+}

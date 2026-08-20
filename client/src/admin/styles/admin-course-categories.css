@@ -50,7 +50,7 @@
   padding: var(--space-4, 16px) var(--space-5, 20px);
   border-radius: 12px;
   border: 1px solid var(--color-ink-100, #e5e7eb);
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -78,7 +78,7 @@
 .admin-course-categories__panel {
   border: 1px solid var(--color-ink-100, #e5e7eb);
   border-radius: 14px;
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
@@ -117,7 +117,7 @@
   align-items: start;
   padding: var(--space-4, 16px) var(--space-5, 20px);
   border-bottom: 1px solid var(--color-ink-100, #e5e7eb);
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
   transition:
     transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 0.22s ease,
@@ -161,7 +161,7 @@
 }
 
 .admin-course-categories__drag:hover:not(:disabled) {
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
   border-color: var(--color-ink-200, #d1d5db);
   color: var(--color-ink-700, #1f2937);
 }
@@ -337,7 +337,7 @@
   overflow: auto;
   padding: var(--space-6, 24px);
   border-radius: 18px;
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
   animation: admin-category-slide-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -396,7 +396,7 @@
 .admin-course-categories__form .admin-field select {
   width: 100%;
   color: var(--color-ink-900, #0b1220);
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
   border: 1px solid var(--color-ink-200, #d1d5db);
   border-radius: 10px;
   padding: 10px 12px;
@@ -561,7 +561,7 @@
   min-height: 42px;
   border: 1px solid var(--color-ink-200, #d1d5db);
   border-radius: 10px;
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
   color: var(--color-ink-500, #4b5563);
 }
 
@@ -592,7 +592,7 @@
   overflow: auto;
   border: 1px solid var(--color-ink-100, #e5e7eb);
   border-radius: 12px;
-  background: var(--color-surface, #fff);
+  background: var(--color-surface, var(--admin-surface));
 }
 
 .course-category-select__option {

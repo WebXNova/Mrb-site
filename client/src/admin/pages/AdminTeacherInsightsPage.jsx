@@ -31,24 +31,9 @@ export default function AdminTeacherInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [feedLoading, setFeedLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === 'undefined') return 'light';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
 
   const selectedTeacherId = teacherIdParam ? String(teacherIdParam) : '';
   const isTeacherMode = dashboard?.mode === 'teacher';
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e) => {
-      if (!document.documentElement.dataset.tiThemeOverride) {
-        setTheme(e.matches ? 'dark' : 'light');
-      }
-    };
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   useEffect(() => {
     adminApi
@@ -119,16 +104,9 @@ export default function AdminTeacherInsightsPage() {
   const teacher = dashboard?.teacher ?? null;
   const metrics = dashboard?.metrics ?? null;
 
-  function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    document.documentElement.dataset.tiThemeOverride = '1';
-  }
-
   return (
     <motion.div
       className="ti-page admin-page"
-      data-theme={theme}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35 }}
@@ -157,9 +135,6 @@ export default function AdminTeacherInsightsPage() {
               </option>
             ))}
           </select>
-          <button type="button" className="ti-select" onClick={toggleTheme} style={{ cursor: 'pointer' }}>
-            {theme === 'dark' ? '☀ Light' : '☾ Dark'}
-          </button>
           <span className="ti-live">
             <span className="ti-live__dot" />
             Updated {new Date(lastRefresh).toLocaleTimeString()}
