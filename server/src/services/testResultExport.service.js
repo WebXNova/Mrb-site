@@ -184,7 +184,7 @@ export function sanitizeFilename(name) {
 export function getExportFilename(testTitle, ext) {
   const ts = new Date().toISOString().replace(/[:-]/g, '').replace(/T/, '_').replace(/\..+$/, '');
   const safe = sanitizeFilename(testTitle);
-  return `${safe}_${ts}.${ext}`;
+  return `MRB_Classes_Result_${safe}_${ts}.${ext}`;
 }
 
 export async function streamCsvToResponse(res, testId) {
@@ -225,47 +225,37 @@ export async function buildXlsxBuffer(testId) {
   if (!test) return null;
 
   const totalQuestions = await getTotalQuestionCount(testId);
-  const headers = getFullHeaders(totalQuestions);
 
-  const { default: XLSX } = await import('xlsx');
-  const wsData = [headers.map((h) => String(h))];
-  const wb = XLSX.utils.book_new();
-
+  const allStudents = [];
   let offset = 0;
-  let rowCount = 0;
 
   while (true) {
     const students = await loadStudentPage(testId, PAGE_SIZE, offset);
     if (students.length === 0) break;
-
-    const attemptIds = students.map((s) => s.attempt_id);
-    const answerRows = await loadAnswersForAttempts(testId, attemptIds);
-    const answerMap = pivotAnswers(answerRows);
-
-    for (const student of students) {
-      const row = buildRow(student, answerMap, totalQuestions);
-      wsData.push(row.map((v) => String(v)));
-      rowCount++;
-    }
-
+    allStudents.push(...students);
     offset += PAGE_SIZE;
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  if (allStudents.length === 0) return null;
 
-  const colCount = headers.length;
-  for (let c = 0; c < colCount; c++) {
-    const addr = XLSX.utils.encode_col(c);
-    for (let r = 0; r <= rowCount; r++) {
-      const cellRef = addr + (r + 1);
-      if (ws[cellRef]) {
-        ws[cellRef].t = 's';
-        ws[cellRef].z = '@';
-      }
-    }
+  const allAttemptIds = allStudents.map((s) => s.attempt_id);
+  const batchSize = 500;
+  const fullAnswerMap = new Map();
+
+  for (let i = 0; i < allAttemptIds.length; i += batchSize) {
+    const batch = allAttemptIds.slice(i, i + batchSize);
+    const answerRows = await loadAnswersForAttempts(testId, batch);
+    const batchMap = pivotAnswers(answerRows);
+    for (const [k, v] of batchMap) fullAnswerMap.set(k, v);
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Results');
-  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  return { buffer, totalRows: rowCount };
+  const { buildProfessionalXlsx } = await import('./professionalResultExport.service.js');
+
+  return buildProfessionalXlsx({
+    testTitle: test.title || 'Test',
+    testId,
+    students: allStudents,
+    answersByAttempt: fullAnswerMap,
+    maxQuestions: totalQuestions,
+  });
 }

@@ -14,11 +14,52 @@ export function normalizeAttemptQuestion(raw) {
     }))
     .filter((option) => option.id != null);
 
+  const sectionId = raw.sectionId ?? raw.section_id ?? null;
+  const tipHtml = raw.tipHtml ?? raw.tip_html ?? null;
+
   return {
     id: String(id),
     questionText,
     questionImageUrl: raw.questionImageUrl ?? raw.question_image_url ?? null,
+    sectionId: sectionId == null ? null : String(sectionId),
+    tipHtml: tipHtml && String(tipHtml).trim() ? String(tipHtml) : null,
     options,
+  };
+}
+
+/** @param {Record<string, unknown>|null|undefined} section */
+export function normalizeAttemptSection(section) {
+  if (!section || typeof section !== 'object') return null;
+  const id = section.id ?? section.sectionId ?? section.section_id;
+  if (id == null) return null;
+  return {
+    id: Number(id),
+    subjectLabel: String(section.subjectLabel ?? section.subject_label ?? ''),
+    dividerContentHtml:
+      section.dividerContentHtml ?? section.divider_content_html ?? null,
+    displayOrder: Number(section.displayOrder ?? section.display_order ?? 0),
+  };
+}
+
+/** @param {unknown[]} sections */
+export function normalizeAttemptSections(sections) {
+  if (!Array.isArray(sections)) return [];
+  return sections.map(normalizeAttemptSection).filter(Boolean);
+}
+
+/** @param {Record<string, unknown>|null|undefined} test */
+export function normalizeTestDisplaySettings(test) {
+  if (!test || typeof test !== 'object') {
+    return { layoutMode: 'vertical', displayMode: 'one_per_page' };
+  }
+
+  const layoutRaw = test.layoutMode ?? test.layout_mode ?? 'vertical';
+  const displayRaw = test.displayMode ?? test.display_mode ?? 'one_per_page';
+
+  return {
+    layoutMode: layoutRaw === 'horizontal' ? 'horizontal' : 'vertical',
+    // Legacy tests without display_mode in payload keep paginated UX (production default).
+    displayMode: displayRaw === 'all' ? 'all' : 'one_per_page',
   };
 }
 

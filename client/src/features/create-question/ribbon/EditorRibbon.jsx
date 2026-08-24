@@ -40,10 +40,15 @@ export default function EditorRibbon({ useRibbonHook = useEditorRibbon }) {
   }
 
   function isEnabled(id) {
-    if (!editorActive) return false;
+    if (disabled || !editorActive) return false;
+    if (id === 'indent' || id === 'outdent') {
+      return queryCommand(id).isEnabled;
+    }
     const def = toggleState[id];
-    if (def) return def.isEnabled !== false;
-    return queryCommand(id).isEnabled;
+    if (def && def.isEnabled === false && (id === 'indent' || id === 'outdent')) {
+      return false;
+    }
+    return true;
   }
 
   return (
@@ -86,10 +91,10 @@ export default function EditorRibbon({ useRibbonHook = useEditorRibbon }) {
           <RibbonButton label="Numbered list" shortcut="Ctrl+Shift+O" pressed={isPressed('numberedList')} disabled={disabled || !isEnabled('numberedList')} onClick={() => executeCommand('numberedList')}>
             <Icon name="number" />
           </RibbonButton>
-          <RibbonButton label="Decrease indent" disabled={disabled || !editorActive} onClick={() => executeCommand('outdent')}>
+          <RibbonButton label="Decrease indent" disabled={disabled || !isEnabled('outdent')} onClick={() => executeCommand('outdent')}>
             <Icon name="outdent" />
           </RibbonButton>
-          <RibbonButton label="Increase indent" disabled={disabled || !editorActive} onClick={() => executeCommand('indent')}>
+          <RibbonButton label="Increase indent" disabled={disabled || !isEnabled('indent')} onClick={() => executeCommand('indent')}>
             <Icon name="indent" />
           </RibbonButton>
         </RibbonGroup>
@@ -103,7 +108,7 @@ export default function EditorRibbon({ useRibbonHook = useEditorRibbon }) {
           </RibbonButton>
           <RibbonButton
             label="Insert image — upload or paste URL"
-            disabled={disabled}
+            disabled={disabled || !editorActive}
             onClick={() => executeCommand('insertImage')}
           >
             <Icon name="image" />

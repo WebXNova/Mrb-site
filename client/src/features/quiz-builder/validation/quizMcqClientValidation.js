@@ -1,4 +1,5 @@
 import { validateQuestionImageUrl } from '../../../admin/utils/questionImageUrlValidation.js';
+import { isQuizQuestion } from '../utils/quizDraftItems.js';
 import {
   QUIZ_MCQ_MAX_EXPLANATION_LENGTH,
   QUIZ_MCQ_MAX_OPTIONS,
@@ -171,16 +172,17 @@ export function validateQuizMcqQuestionClient(question, index = 0) {
  * @param {import('../types/quizBuilder.types.js').QuizQuestion} question
  */
 export function isPersistableQuizQuestion(question) {
+  if (!isQuizQuestion(question)) return false;
   return validateQuizMcqQuestionClient(question, 0).valid;
 }
 
 /**
- * Questions complete enough to persist to the server (excludes empty placeholders).
- * @param {import('../types/quizBuilder.types.js').QuizQuestion[]} questions
+ * Questions complete enough to persist to the server (excludes empty placeholders and sections).
+ * @param {import('../types/quizBuilder.types.js').QuizDraftItem[]} questions
  */
 export function filterPersistableQuizDraftQuestions(questions) {
   if (!Array.isArray(questions)) return [];
-  return questions.filter((question) => isPersistableQuizQuestion(question));
+  return questions.filter((item) => isQuizQuestion(item) && isPersistableQuizQuestion(item));
 }
 
 /**
@@ -203,7 +205,8 @@ export function validateQuizDraftQuestionsClient(questions) {
 
   /** @type {QuizMcqClientIssue[]} */
   const issues = [];
-  persistable.forEach((question, index) => {
+  persistable.forEach((question) => {
+    const index = questions.indexOf(question);
     const result = validateQuizMcqQuestionClient(question, index);
     issues.push(...result.issues);
   });

@@ -20,6 +20,7 @@ export default function QuizBuilderReadinessPanel({
   }
 
   const missing = completeness.missing_fields || [];
+  const publishWarnings = completeness.publish_warnings || [];
   const needsSync = missing.includes('quiz_draft');
   const showSaveNow =
     Boolean(onSaveNow) &&
@@ -31,9 +32,29 @@ export default function QuizBuilderReadinessPanel({
         <p className="admin-test-readiness__title">Ready to publish</p>
         <p className="admin-test-readiness__text">
           Questions are saved.{' '}
-          <Link to={adminRoute(`tests/${testId}/details`)}>Continue to Publish →</Link>
+          <Link to={adminRoute(`tests/${testId}/publish`)}>Continue to Publish →</Link>
         </p>
+        {publishWarnings.length ? (
+          <ul className="admin-test-readiness__list">
+            {publishWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        ) : null}
       </div>
+    );
+  }
+
+  if (!missing.length && publishWarnings.length) {
+    return (
+      <section className="admin-test-readiness" aria-label="Publish warnings">
+        <p className="admin-test-readiness__title">Review before publish</p>
+        <ul className="admin-test-readiness__list">
+          {publishWarnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      </section>
     );
   }
 
@@ -44,6 +65,7 @@ export default function QuizBuilderReadinessPanel({
       <p className="admin-test-readiness__title">Before you can publish</p>
       <TestWizardMissingHint
         missingFields={missing}
+        completeness={completeness}
         activeStep="questions"
         testId={testId}
         variant="list"

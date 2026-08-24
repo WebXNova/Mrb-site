@@ -29,11 +29,11 @@ export default function TestRowActionsMenu({
   return (
     <div className="tests-row-actions" aria-busy={publishingThisTest || exportBusy || resultsBusy || undefined}>
       {published ? (
-        <Link className="tests-row-actions__primary" to={adminRoute(`tests/${test.id}/edit`)}>
-          Edit
+        <Link className="tests-row-actions__primary" to={adminRoute(`tests/${test.id}/dashboard`)}>
+          Open
         </Link>
       ) : (
-        <Link className="tests-row-actions__primary" to={adminRoute(`tests/${test.id}/setup`)}>
+        <Link className="tests-row-actions__primary" to={adminRoute(`tests/${test.id}/dashboard`)}>
           Setup
         </Link>
       )}
@@ -41,10 +41,10 @@ export default function TestRowActionsMenu({
       {published ? (
         <Link
           className="tests-row-actions__link"
-          to={adminRoute(`tests/${test.id}/setup`)}
-          title="View setup"
+          to={adminRoute(`tests/${test.id}/settings`)}
+          title="View settings"
         >
-          Setup
+          Settings
         </Link>
       ) : null}
 
@@ -60,7 +60,7 @@ export default function TestRowActionsMenu({
       <AdminActionMenu triggerLabel="More" triggerClassName="tests-row-actions__more">
         {({ close }) => (
           <>
-            <AdminActionMenuItem as={Link} to={adminRoute(`tests/${test.id}/details`)} onClick={close}>
+            <AdminActionMenuItem as={Link} to={adminRoute(`tests/${test.id}/publish`)} onClick={close}>
               Publish
             </AdminActionMenuItem>
             <AdminActionMenuDivider />

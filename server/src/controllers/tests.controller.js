@@ -22,6 +22,12 @@ import {
   updateTestSettings,
 } from '../services/test.service.js';
 import { getTestResultsAnalytics } from '../services/testResultsAnalytics.service.js';
+import { listAdminTestResults } from '../services/testResultsList.service.js';
+import {
+  releaseTestResults,
+  unreleaseTestResults,
+} from '../services/testResultRelease.service.js';
+import { clearTestResultData } from '../services/testResultClear.service.js';
 import { LEGACY_ENDPOINT_DISABLED, rejectLifecycleFieldsInBody } from '../services/testLifecycle.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import {
@@ -451,4 +457,44 @@ export const getTestResultsAnalyticsHandler = asyncHandler(async (req, res) => {
   const analytics = await getTestResultsAnalytics(testId);
   if (!analytics) throw new ApiError(404, 'Test not found');
   sendSuccess(res, analytics);
+});
+
+export const getTestResultsListHandler = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const payload = await listAdminTestResults(testId, {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
+  sendSuccess(res, payload);
+});
+
+export const postReleaseTestResultsHandler = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const payload = await releaseTestResults(testId, {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
+  sendSuccess(res, payload);
+});
+
+export const postUnreleaseTestResultsHandler = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const payload = await unreleaseTestResults(testId, {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
+  sendSuccess(res, payload);
+});
+
+export const postClearTestResultsHandler = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const payload = await clearTestResultData(testId, {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
+  sendSuccess(res, payload);
 });

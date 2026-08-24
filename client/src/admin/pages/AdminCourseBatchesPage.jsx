@@ -3,6 +3,7 @@ import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
+import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
 import {
   BATCH_STATUSES,
   BATCH_TIMEZONES,
@@ -340,10 +341,14 @@ function AdminCourseBatchesInner() {
               <input id="schedule_label" name="schedule_label" value={form.schedule_label} onChange={onChange} />
             </div>
           </div>
-          <label className="admin-field" style={{ flexDirection: 'row', gap: '0.5rem', alignItems: 'center' }}>
-            <input type="checkbox" name="is_active" checked={form.is_active} onChange={onChange} />
-            Active
-          </label>
+          <AdminToggleSwitch
+            id="batch-is-active"
+            name="is_active"
+            checked={form.is_active}
+            onChange={onChange}
+            label="Active"
+            hint="Make this batch available for enrollment."
+          />
 
           {error ? <p className="admin-error">{error}</p> : null}
           {success ? <p className="admin-success">{success}</p> : null}

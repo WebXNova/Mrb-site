@@ -13,6 +13,7 @@ import {
   quizDraftPayloadSchema,
   upsertTestQuizDraftBodySchema,
 } from '../validators/testQuizDraft.schema.js';
+import { isQuizDraftSection } from '../utils/quizDraftItems.js';
 
 function validationError(message, metadata = {}) {
   return new AppError({
@@ -71,6 +72,60 @@ function assertPositiveQuestionPoints(points, prefix) {
 }
 
 /**
+ * @param {import('zod').infer<typeof quizDraftPayloadSchema>['questions'][number]} item
+ * @param {number} index
+ * @param {'autosave' | 'manual_save'} context
+ */
+function sanitizeDraftItem(item, index, context) {
+  if (isQuizDraftSection(item)) {
+    return {
+      ...item,
+      itemType: 'section',
+      subjectId: Number.isInteger(Number(item.subjectId)) && Number(item.subjectId) > 0
+        ? Number(item.subjectId)
+        : null,
+      subjectLabel: String(item.subjectLabel ?? item.label ?? '').trim().slice(0, 200),
+      collapsed: Boolean(item.collapsed),
+      showDividerContent: Boolean(item.showDividerContent ?? item.showDividerContent),
+      dividerContentHtml: sanitizeDraftHtml(
+        String(item.dividerContentHtml ?? item.dividerContentHtml ?? '')
+      ),
+    };
+  }
+
+  validateQuestionSemantics(item, index, context);
+
+  if (item.questionType === 'multiple_choice' || item.questionType === 'true_false') {
+    const mcqResult = validateMcqQuizDraftQuestion(item, index, { context });
+    const normalized = mcqResult.normalized;
+    return {
+      ...item,
+      title: sanitizeDraftHtml(item.title),
+      questionText: normalized?.questionText ?? sanitizeDraftHtml(item.questionText),
+      explanation: sanitizeDraftHtml(item.explanation),
+      tip: sanitizeDraftHtml(String(item.tip ?? '')),
+      questionImageUrl: normalized?.questionImageUrl ?? item.questionImageUrl ?? null,
+      choices: (normalized?.choices ?? item.choices).map((choice) => ({
+        ...choice,
+        text: choice.text,
+      })),
+    };
+  }
+
+  return {
+    ...item,
+    title: sanitizeDraftHtml(item.title),
+    questionText: sanitizeDraftHtml(item.questionText),
+    explanation: sanitizeDraftHtml(item.explanation),
+    tip: sanitizeDraftHtml(String(item.tip ?? '')),
+    choices: item.choices.map((choice) => ({
+      ...choice,
+      text: sanitizeDraftHtml(choice.text),
+    })),
+  };
+}
+
+/**
  * @param {import('zod').infer<typeof quizDraftPayloadSchema>['questions'][number]} question
  * @param {number} index
  * @param {'autosave' | 'manual_save'} context
@@ -82,7 +137,6 @@ function validateQuestionSemantics(question, index, context) {
   if (question.questionType === 'multiple_choice' || question.questionType === 'true_false') {
     const mcqResult = validateMcqQuizDraftQuestion(question, index, { context });
     if (!mcqResult.skipped && !mcqResult.valid) {
-      const primary = mcqResult.errors[0];
       throw new McqValidationError(mcqResult.errors, {
         context,
         pathPrefix: prefix,
@@ -142,43 +196,18 @@ export function validateAndSanitizeQuizDraftPayload(testId, draftPayload, option
   }
 
   const seenQuestionIds = new Set();
-  const questions = draftPayload.questions.map((question, index) => {
-    if (seenQuestionIds.has(question.id)) {
-      throw validationError(`questions[${index}]: duplicate question id.`, { questionId: question.id });
+  const questions = draftPayload.questions.map((item, index) => {
+    if (seenQuestionIds.has(item.id)) {
+      throw validationError(`questions[${index}]: duplicate item id.`, { itemId: item.id });
     }
-    seenQuestionIds.add(question.id);
-
-    validateQuestionSemantics(question, index, context);
-
-    if (question.questionType === 'multiple_choice' || question.questionType === 'true_false') {
-      const mcqResult = validateMcqQuizDraftQuestion(question, index, { context });
-      const normalized = mcqResult.normalized;
-      return {
-        ...question,
-        title: sanitizeDraftHtml(question.title),
-        questionText: normalized?.questionText ?? sanitizeDraftHtml(question.questionText),
-        explanation: sanitizeDraftHtml(question.explanation),
-        questionImageUrl: normalized?.questionImageUrl ?? question.questionImageUrl ?? null,
-        choices: (normalized?.choices ?? question.choices).map((choice) => ({
-          ...choice,
-          text: choice.text,
-        })),
-      };
-    }
-
-    return {
-      ...question,
-      title: sanitizeDraftHtml(question.title),
-      questionText: sanitizeDraftHtml(question.questionText),
-      explanation: sanitizeDraftHtml(question.explanation),
-      choices: question.choices.map((choice) => ({
-        ...choice,
-        text: sanitizeDraftHtml(choice.text),
-      })),
-    };
+    seenQuestionIds.add(item.id);
+    return sanitizeDraftItem(item, index, context);
   });
 
-  const totalPoints = questions.reduce((sum, question) => sum + Number(question.points), 0);
+  const totalPoints = questions.reduce(
+    (sum, item) => sum + (isQuizDraftSection(item) ? 0 : Number(item.points)),
+    0
+  );
   const savedAt = new Date().toISOString();
 
   return {

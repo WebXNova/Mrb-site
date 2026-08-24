@@ -18,7 +18,9 @@
 import { mysqlPool } from '../config/mysql.js';
 import { findTestQuizDraftByTestIdForRead } from '../repositories/testQuizDraft.repository.js';
 import { validateMcqQuizDraftQuestion } from '../validation/mcq/mcqValidation.engine.js';
+import { validateQuestionMarks } from '../validators/questionMarks.validation.js';
 import { countActiveComposedQuestionsForTest } from './testQuestionComposition.service.js';
+import { isQuizDraftSection } from '../utils/quizDraftItems.js';
 
 /**
  * @param {string|null|undefined} status
@@ -56,16 +58,16 @@ export function countValidDraftQuestions(draftPayload) {
   let validCount = 0;
 
   for (const [index, question] of questions.entries()) {
-    const result = validateMcqQuizDraftQuestion(question, index, { context: 'manual_save' });
-    if (result.skipped) {
-      const text = String(question?.questionText ?? '').trim();
-      const choices = Array.isArray(question?.choices) ? question.choices : [];
-      if (text && choices.length >= 2) {
-        validCount += 1;
-      }
-      continue;
-    }
-    if (result.valid) {
+    if (isQuizDraftSection(question)) continue;
+
+    const result = validateMcqQuizDraftQuestion(question, index, { context: 'publish' });
+    if (result.skipped || !result.valid) continue;
+
+    const marksResult = validateQuestionMarks(question?.points, {
+      defaultWhenMissing: true,
+      field: `questions[${index}].points`,
+    });
+    if (marksResult.ok) {
       validCount += 1;
     }
   }

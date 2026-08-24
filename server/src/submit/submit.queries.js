@@ -1,5 +1,8 @@
 /**
  * Submit module — parameterized SQL (lock engine).
+ *
+ * @deprecated G-RT-02 — mounted only when LEGACY_RUNTIME_ALLOW=true.
+ * Canonical submit is POST /api/tests/:slug/attempts/:attemptId/submit.
  */
 
 /** Params: attemptId */
@@ -33,7 +36,7 @@ export const LOCK_ATTEMPT_SUBMIT_SQL = `
     AND student_id = ?
     AND status = 'in_progress'
     AND expires_at IS NOT NULL
-    AND expires_at >= NOW()
+    AND expires_at >= UTC_TIMESTAMP()
 `;
 
 /** Params: resultId, attemptId, studentId */

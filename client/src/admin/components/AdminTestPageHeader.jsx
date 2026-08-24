@@ -6,13 +6,24 @@ export default function AdminTestPageHeader({
   subtitle,
   backTo = adminRoute('tests'),
   backLabel = 'Back to Tests',
+  backVariant = 'button',
   previousTo,
   previousLabel = 'Previous',
   children,
 }) {
+  const backClassName =
+    backVariant === 'link'
+      ? 'admin-test-page-header__back-link'
+      : 'btn btn--secondary';
+
   return (
     <header className="admin-test-page-header">
-      <div>
+      <div className="admin-test-page-header__main">
+        {backLabel && backVariant === 'link' ? (
+          <Link className={backClassName} to={backTo}>
+            ← {backLabel}
+          </Link>
+        ) : null}
         <h1 className="admin-test-page-header__title">{title}</h1>
         {subtitle ? <p className="admin-test-page-header__subtitle">{subtitle}</p> : null}
       </div>
@@ -23,9 +34,11 @@ export default function AdminTestPageHeader({
             ← {previousLabel}
           </Link>
         ) : null}
-        <Link className="btn btn--secondary" to={backTo}>
-          {backLabel}
-        </Link>
+        {backLabel && backVariant === 'button' ? (
+          <Link className={backClassName} to={backTo}>
+            {backLabel}
+          </Link>
+        ) : null}
       </div>
     </header>
   );

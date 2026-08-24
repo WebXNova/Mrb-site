@@ -20,6 +20,7 @@ export default function QuizRichField({
   const handleEditorReady = useCallback(
     (editor) => {
       registerEditor(editorId, editor);
+      setActiveEditorId(editorId);
       const tracker = editor.ui?.focusTracker;
       if (tracker?.on) {
         tracker.on('change:isFocused', (_evt, _name, isFocused) => {

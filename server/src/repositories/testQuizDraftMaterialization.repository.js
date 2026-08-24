@@ -100,13 +100,42 @@ export async function markDraftMaterialized(connection, draftId, version) {
 
 /**
  * @param {import('mysql2/promise').PoolConnection} connection
- * @param {{ testId: number, questionId: number, displayOrder: number, marksOverride: number|null }} row
+ * @param {number} testId
  */
-export async function insertTestQuestionLink(connection, { testId, questionId, displayOrder, marksOverride }) {
+export async function clearTestSections(connection, testId) {
+  const [result] = await connection.query(`DELETE FROM test_sections WHERE test_id = ?`, [testId]);
+  return Number(result.affectedRows ?? 0);
+}
+
+/**
+ * @param {import('mysql2/promise').PoolConnection} connection
+ * @param {{ testId: number, displayOrder: number, subjectLabel: string, dividerContentHtml: string|null, subjectId?: number|null }} row
+ * @returns {Promise<number>}
+ */
+export async function insertTestSection(
+  connection,
+  { testId, displayOrder, subjectLabel, dividerContentHtml, subjectId = null }
+) {
+  const [result] = await connection.query(
+    `INSERT INTO test_sections (test_id, display_order, subject_label, subject_id, divider_content_html)
+     VALUES (?, ?, ?, ?, ?)`,
+    [testId, displayOrder, subjectLabel, subjectId, dividerContentHtml]
+  );
+  return Number(result.insertId);
+}
+
+/**
+ * @param {import('mysql2/promise').PoolConnection} connection
+ * @param {{ testId: number, questionId: number, displayOrder: number, marksOverride: number|null, sectionId?: number|null }} row
+ */
+export async function insertTestQuestionLink(
+  connection,
+  { testId, questionId, displayOrder, marksOverride, sectionId = null }
+) {
   await connection.query(
-    `INSERT INTO test_questions (test_id, question_id, display_order, marks_override)
-     VALUES (?, ?, ?, ?)`,
-    [testId, questionId, displayOrder, marksOverride]
+    `INSERT INTO test_questions (test_id, question_id, display_order, section_id, marks_override)
+     VALUES (?, ?, ?, ?, ?)`,
+    [testId, questionId, displayOrder, sectionId, marksOverride]
   );
 }
 
@@ -118,6 +147,9 @@ export async function insertTestQuestionLink(connection, { testId, questionId, d
  *   questionText: string,
  *   questionImageUrl: string|null,
  *   explanation: string|null,
+ *   explanation: string|null,
+ *   explanationHtml: string|null,
+ *   tipHtml: string|null,
  *   marks: number,
  *   createdBy: number,
  * }} params
@@ -125,15 +157,27 @@ export async function insertTestQuestionLink(connection, { testId, questionId, d
  */
 export async function insertMaterializedQuestionBankRow(
   connection,
-  { courseId, subjectId, questionText, questionHtml, questionImageUrl, explanation, explanationHtml, marks, createdBy }
+  {
+    courseId,
+    subjectId,
+    questionText,
+    questionHtml,
+    questionImageUrl,
+    explanation,
+    explanationHtml,
+    tipHtml,
+    marks,
+    createdBy,
+  }
 ) {
   const stemHtml = questionHtml ?? questionText;
   const explHtml = explanationHtml ?? explanation;
+  const sanitizedTip = tipHtml != null && String(tipHtml).trim() ? tipHtml : null;
   const [result] = await connection.query(
     `INSERT INTO question_bank
-       (course_id, subject_id, topic, difficulty, question_type, question_text, question_html, question_image_url, explanation, explanation_html, marks, created_by)
-     VALUES (?, ?, NULL, NULL, 'mcq', ?, ?, ?, ?, ?, ?, ?)`,
-    [courseId, subjectId, questionText, stemHtml, questionImageUrl, explanation, explHtml, marks, createdBy]
+       (course_id, subject_id, topic, difficulty, question_type, question_text, question_html, question_image_url, explanation, explanation_html, tip_html, marks, created_by)
+     VALUES (?, ?, NULL, NULL, 'mcq', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [courseId, subjectId, questionText, stemHtml, questionImageUrl, explanation, explHtml, sanitizedTip, marks, createdBy]
   );
   return Number(result.insertId);
 }

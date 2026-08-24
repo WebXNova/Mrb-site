@@ -1,3 +1,5 @@
+import { sanitizeStudentRichHtml } from '../../../security/sanitizeStudentRichHtml.js';
+
 export default function InstructionsSection({ meta }) {
   const custom = meta?.customInstructions || meta?.description || null;
   const standard = Array.isArray(meta?.standardInstructions) ? meta.standardInstructions : [];
@@ -15,7 +17,10 @@ export default function InstructionsSection({ meta }) {
       {custom ? (
         <div className="ti-instructions__custom">
           <h3 className="ti-instructions__subtitle">From your instructor</h3>
-          <p className="ti-instructions__text">{custom}</p>
+          <div
+            className="ti-instructions__text rich-text"
+            dangerouslySetInnerHTML={{ __html: sanitizeStudentRichHtml(custom) }}
+          />
         </div>
       ) : null}
 

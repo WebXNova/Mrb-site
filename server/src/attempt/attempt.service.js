@@ -1,6 +1,9 @@
 /**
  * Attempt session core — fetch, validate, and expiry enforcement only.
  *
+ * @deprecated G-RT-02 — /api/attempt is 410 unless LEGACY_RUNTIME_ALLOW=true.
+ * Canonical runtime: testAttempt.service.js via /api/tests/:slug/attempts/*.
+ *
  * No creation, grading, answers, or submission logic.
  */
 
@@ -97,7 +100,7 @@ export async function validateAttemptAccess(db, attemptId, studentId, options = 
 }
 
 /**
- * Strict server-side expiry enforcement using expires_at + MySQL NOW().
+ * Strict server-side expiry enforcement using expires_at + MySQL UTC_TIMESTAMP().
  * Marks attempt expired and blocks access immediately when past deadline.
  *
  * @param {Record<string, unknown>} attempt

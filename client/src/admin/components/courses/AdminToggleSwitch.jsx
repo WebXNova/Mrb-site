@@ -13,9 +13,9 @@ export default function AdminToggleSwitch({ id, name, checked, onChange, label, 
       <span className="admin-toggle__track" aria-hidden>
         <span className="admin-toggle__thumb" />
       </span>
-      <span>
+      <span className="admin-toggle__body">
         <span className="admin-toggle__text">{label}</span>
-        {hint ? <span className="premium-field__hint admin-toggle__hint">{hint}</span> : null}
+        {hint ? <span className="admin-toggle__hint">{hint}</span> : null}
       </span>
     </label>
   );

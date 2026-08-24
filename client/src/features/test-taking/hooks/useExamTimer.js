@@ -7,6 +7,7 @@ const SAVE_DEBOUNCE_MS = 450;
 
 /**
  * Timer driven exclusively by server-provided expires_at.
+ * Canonical exam clock for slug test-taking (there is no useTestTimer hook).
  */
 export function useExamTimer(expiresAtIso, { onExpire, enabled = true } = {}) {
   const expiresRef = useRef(expiresAtIso);
@@ -75,57 +76,75 @@ export function useAnswerAutosave({
   const timersRef = useRef(new Map());
   const pendingRef = useRef(new Map());
   const inFlightRef = useRef(false);
+  const inFlightPromiseRef = useRef(/** @type {Promise<void>|null} */ (null));
+  const submitLockRef = useRef(false);
 
   const flushQueue = useCallback(async () => {
-    if (inFlightRef.current || disabled || pendingRef.current.size === 0) return;
+    if (inFlightPromiseRef.current) {
+      await inFlightPromiseRef.current;
+      if (pendingRef.current.size === 0) return;
+    }
+    if (pendingRef.current.size === 0) return;
+    if (disabled && !submitLockRef.current) return;
 
-    inFlightRef.current = true;
-    setSaveStatus('saving');
-    setSaveError('');
+    const work = (async () => {
+      inFlightRef.current = true;
+      setSaveStatus('saving');
+      setSaveError('');
 
-    const entries = Array.from(pendingRef.current.entries());
-    pendingRef.current.clear();
+      const entries = Array.from(pendingRef.current.entries());
+      pendingRef.current.clear();
 
-    try {
-      for (const [questionId, selectedOption] of entries) {
-        await testTakingApi.saveAnswer(slug, attemptId, {
-          questionId: Number(questionId),
-          selectedOption: String(selectedOption),
-        });
-      }
-      setSaveStatus('saved');
-    } catch (err) {
-      for (const [questionId, selectedOption] of entries) {
-        pendingRef.current.set(questionId, selectedOption);
-      }
-
-      if (isAttemptTokenError(err)) {
-        try {
-          const fresh = await refreshSession();
-          if (fresh?.attemptId) {
-            inFlightRef.current = false;
-            await flushQueue();
-            return;
-          }
-        } catch {
-          // fall through to failed state
+      try {
+        for (const [questionId, selectedOption] of entries) {
+          await testTakingApi.saveAnswer(slug, attemptId, {
+            questionId: Number(questionId),
+            selectedOption: String(selectedOption),
+          });
         }
-      }
+        setSaveStatus('saved');
+      } catch (err) {
+        for (const [questionId, selectedOption] of entries) {
+          pendingRef.current.set(questionId, selectedOption);
+        }
 
-      setSaveStatus('failed');
-      setSaveError(getAttemptErrorMessage(err, 'Auto-save failed.'));
+        if (isAttemptTokenError(err) && !submitLockRef.current) {
+          try {
+            const fresh = await refreshSession();
+            if (fresh?.attemptId) {
+              return;
+            }
+          } catch {
+            // fall through to failed state
+          }
+        }
+
+        setSaveStatus('failed');
+        setSaveError(getAttemptErrorMessage(err, 'Auto-save failed.'));
+      } finally {
+        inFlightRef.current = false;
+      }
+    })();
+
+    inFlightPromiseRef.current = work;
+    try {
+      await work;
     } finally {
-      inFlightRef.current = false;
-
-      if (pendingRef.current.size > 0) {
-        window.setTimeout(() => flushQueue(), SAVE_DEBOUNCE_MS);
+      if (inFlightPromiseRef.current === work) {
+        inFlightPromiseRef.current = null;
       }
+    }
+
+    if (pendingRef.current.size > 0 && !submitLockRef.current && !disabled) {
+      window.setTimeout(() => {
+        void flushQueue();
+      }, SAVE_DEBOUNCE_MS);
     }
   }, [attemptId, disabled, refreshSession, slug]);
 
   const scheduleSave = useCallback(
     (questionId, selectedOption) => {
-      if (disabled) return;
+      if (disabled || submitLockRef.current) return;
 
       pendingRef.current.set(String(questionId), selectedOption);
 
@@ -166,27 +185,34 @@ export function useAnswerAutosave({
 
   const hasPendingSaves = pendingRef.current.size > 0 || inFlightRef.current;
 
+  const resumeAutosave = useCallback(() => {
+    submitLockRef.current = false;
+  }, []);
+
   const flushPendingSaves = useCallback(async () => {
+    submitLockRef.current = true;
     for (const timer of timersRef.current.values()) {
       window.clearTimeout(timer);
     }
     timersRef.current.clear();
 
-    if (pendingRef.current.size > 0 || inFlightRef.current) {
-      await flushQueue();
+    if (inFlightPromiseRef.current) {
+      await inFlightPromiseRef.current;
     }
-
-    while (inFlightRef.current) {
-      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    if (pendingRef.current.size > 0) {
+      await flushQueue();
     }
   }, [flushQueue]);
 
   return {
     selectAnswer,
+    selectAnswer,
     saveStatus,
     saveError,
     hasPendingSaves,
     retryFailedSaves: flushQueue,
+    retryFailedSaves: flushQueue,
     flushPendingSaves,
+    resumeAutosave,
   };
 }

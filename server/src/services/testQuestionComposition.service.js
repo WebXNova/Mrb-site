@@ -6,6 +6,7 @@
  */
 
 import { mysqlPool } from '../config/mysql.js';
+import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 import { loadTestSubjectPresentation } from './testSubjectPresentation.service.js';
 import {
   toLinkedTestQuestionAdminDto,
@@ -31,12 +32,14 @@ const COMPOSED_LINK_SQL = `
     tq.question_id,
     tq.display_order,
     tq.marks_override,
+    tq.section_id,
     tq.created_at,
     tq.updated_at,
     qb.question_text,
     qb.question_html,
     qb.explanation,
     qb.explanation_html,
+    qb.tip_html,
     qb.marks,
     qb.difficulty,
     qb.topic,
@@ -217,6 +220,8 @@ export function mapComposedQuestionsForStudentAttempt(composed) {
     id: q.questionId,
     questionText: q.questionText,
     questionImageUrl: q.questionImageUrl ?? null,
+    sectionId: q.sectionId ?? null,
+    tipHtml: q.tipHtml ?? null,
     options: (q.options || []).map((o) => ({
       id: o.optionId,
       text: o.optionText,
@@ -224,6 +229,31 @@ export function mapComposedQuestionsForStudentAttempt(composed) {
     marks: q.effectiveMarks ?? q.marks,
     effectiveMarks: q.effectiveMarks ?? q.marks,
     orderIndex: q.displayOrder,
+  }));
+}
+
+/**
+ * @param {number} testId
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
+ */
+export async function loadTestSectionsForStudentAttempt(testId, executor = mysqlPool) {
+  const tid = Number(testId);
+  const [rows] = await executor.query(
+    `SELECT id, subject_label, divider_content_html, display_order
+     FROM test_sections
+     WHERE test_id = ?
+     ORDER BY display_order ASC, id ASC`,
+    [tid]
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    subjectLabel: String(row.subject_label ?? ''),
+    dividerContentHtml:
+      row.divider_content_html != null && String(row.divider_content_html).trim() !== ''
+        ? sanitizeRichHtml(String(row.divider_content_html))
+        : null,
+    displayOrder: Number(row.display_order ?? 0),
   }));
 }
 
@@ -271,7 +301,7 @@ export async function loadPublishedTestMetaBySlug(publicSlug) {
   if (!slug) return null;
 
   const [rows] = await mysqlPool.query(
-    `SELECT id, title, description, duration_minutes, public_slug, course_id,
+    `SELECT id, title, description, introduction_html, duration_minutes, public_slug, course_id,
             passing_marks, negative_marking, max_attempts
      FROM tests
      WHERE public_slug = ? AND status = 'published' AND deleted_at IS NULL
@@ -286,10 +316,15 @@ export async function loadPublishedTestMetaBySlug(publicSlug) {
   const totalMarks = await computeTestTotalMarks(testId);
   const subjectPresentation = await loadTestSubjectPresentation(testId);
   const negativeMarking = Number(test.negative_marking ?? 0);
-  const customInstructions =
+  const introHtml =
+    test.introduction_html != null && String(test.introduction_html).trim() !== ''
+      ? String(test.introduction_html).trim()
+      : '';
+  const descriptionText =
     test.description == null || String(test.description).trim() === ''
-      ? null
+      ? ''
       : String(test.description).trim();
+  const customInstructions = introHtml || descriptionText || null;
 
   return {
     id: testId,

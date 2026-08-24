@@ -1476,3 +1476,55 @@
     width: 100%;
   }
 }
+
+.admin-test-release-panel {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--admin-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--admin-surface);
+}
+
+.admin-test-release-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.admin-results-attempts {
+  margin-top: var(--space-8);
+}
+
+.admin-results-attempts__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.admin-results-cheating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-results-attempts__detail-row td {
+  background: var(--admin-surface-muted, rgba(148, 163, 184, 0.08));
+}
+
+.admin-results-violations {
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--fs-13);
+}

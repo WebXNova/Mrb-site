@@ -1,3 +1,7 @@
+/**
+ * @deprecated G-RT-02 — not mounted unless LEGACY_RUNTIME_ALLOW=true.
+ * Canonical: PATCH /api/tests/:slug/attempts/:attemptId/answers
+ */
 import { Router } from 'express';
 import { enforcePolicy } from '../auth/securityPolicy.js';
 import { attemptGuard } from '../attempt/attempt.middleware.js';

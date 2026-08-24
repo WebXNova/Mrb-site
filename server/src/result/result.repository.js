@@ -26,7 +26,8 @@ export const LOAD_RESULT_CONTEXT_SQL = `
     t.title AS test_title,
     t.show_result_immediately,
     t.show_answers_after_submit,
-    t.show_explanations
+    t.show_explanations,
+    t.results_released_at
   FROM test_attempts a
   INNER JOIN tests t ON t.id = a.test_id AND t.deleted_at IS NULL
   INNER JOIN test_results r ON r.attempt_id = a.id

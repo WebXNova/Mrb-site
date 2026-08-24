@@ -1,5 +1,8 @@
 /**
  * Parameterized SQL for the attempt session core (read + expiry only).
+ *
+ * @deprecated G-RT-02 — mounted only when LEGACY_RUNTIME_ALLOW=true.
+ * Canonical slug flow uses testAttempt.service.js. Do not add new features here.
  */
 
 /** Active attempt for student + test (most recent if multiple — should not happen under uq_attempt). */
@@ -49,7 +52,7 @@ export const EXPIRE_ATTEMPT_IF_PAST_DEADLINE_SQL = `
   WHERE id = ?
     AND status = 'in_progress'
     AND expires_at IS NOT NULL
-    AND expires_at < NOW()
+    AND expires_at < UTC_TIMESTAMP()
 `;
 
 /** Authoritative expiry probe using MySQL clock (never client time). */
@@ -64,7 +67,7 @@ export const CHECK_ATTEMPT_EXPIRED_SQL = `
     expires_at,
     attempt_nonce,
     CASE
-      WHEN expires_at IS NOT NULL AND expires_at < NOW() THEN 1
+      WHEN expires_at IS NOT NULL AND expires_at < UTC_TIMESTAMP() THEN 1
       ELSE 0
     END AS is_past_expiry
   FROM test_attempts

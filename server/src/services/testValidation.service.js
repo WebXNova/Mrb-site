@@ -12,6 +12,7 @@ import { buildTestPublishSummary } from './testPublishSummary.service.js';
 import { AppError } from '../errors/base/AppError.js';
 import {
   INVALID_CATEGORY,
+  INVALID_MCQ_FOR_PUBLISH,
   INVALID_TEST_COMPOSITION,
   INVALID_TEST_STATE,
   INVALID_TEST_TYPE,
@@ -36,6 +37,7 @@ import {
   evaluateTestCompleteness,
   isPublishedDbStatus,
   loadTestCompletenessRow,
+  TEST_LIFECYCLE_STATES,
 } from './testCompleteness.service.js';
 import { getCourseSubjectIds, loadTestSubjectIds } from './testSubjectValidation.service.js';
 import {
@@ -43,6 +45,18 @@ import {
   TEST_SECURITY_ACTIONS,
 } from './testSecurityAudit.service.js';
 import { assertTestUnpublished, enforceUnpublishedTest } from './publishedTestLock.service.js';
+
+/**
+ * @param {Array<{ issues?: Array<{ message?: string }> }>} failures
+ */
+function formatMcqPublishBlockMessage(failures) {
+  if (!Array.isArray(failures) || !failures.length) return null;
+  const firstIssue = failures[0]?.issues?.[0];
+  if (!firstIssue?.message) return null;
+  const extra =
+    failures.length > 1 ? ` (+${failures.length - 1} more issue${failures.length > 2 ? 's' : ''})` : '';
+  return `${firstIssue.message}${extra}`;
+}
 
 export const TEST_VALIDATION_CODES = Object.freeze({
   INVALID_TEST_STATE,
@@ -479,8 +493,37 @@ export async function getFullTestValidationReport(testId, executor = mysqlPool) 
   const errors = [...new Set([...stateReport.errors, ...compositionReport.errors, ...publishReport.errors])];
   const publish_summary = await buildTestPublishSummary(testId, executor);
 
+  const mcqFailures = Array.isArray(publishReport.mcq_validation_failures)
+    ? publishReport.mcq_validation_failures
+    : [];
+  const wizardMissing = Array.isArray(publishReport.missing_fields)
+    ? [...publishReport.missing_fields]
+    : Array.isArray(publishReport.wizard?.missing_fields)
+      ? [...publishReport.wizard.missing_fields]
+      : [];
+
+  if (mcqFailures.length) {
+    const hasSectionLabelIssue = mcqFailures.some((failure) =>
+      (failure.issues || []).some((issue) => issue.code === 'SECTION_LABEL_REQUIRED')
+    );
+    wizardMissing.push(hasSectionLabelIssue ? 'section_labels' : 'invalid_mcq');
+  }
+
+  const canPublish = publishReport.can_publish === true;
+  let lifecycleStatus = publishReport.wizard?.lifecycle_status ?? publishReport.lifecycle_status;
+  // Wizard steps can look "ready" while MCQ/section gates still block publish — don't claim Ready.
+  if (
+    !canPublish &&
+    lifecycleStatus === TEST_LIFECYCLE_STATES.READY_FOR_PUBLISH &&
+    (mcqFailures.length > 0 || errors.includes(INVALID_MCQ_FOR_PUBLISH) || errors.includes('INVALID_MCQ_FOR_PUBLISH'))
+  ) {
+    lifecycleStatus = TEST_LIFECYCLE_STATES.DRAFT;
+  }
+
   return {
     ...publishReport.wizard,
+    lifecycle_status: lifecycleStatus,
+    missing_fields: [...new Set(wizardMissing)],
     question_count: questionCount,
     publish_summary,
     question_authority_source: publishReport.question_authority?.source ?? publishReport.wizard?.question_authority_source ?? null,
@@ -491,6 +534,8 @@ export async function getFullTestValidationReport(testId, executor = mysqlPool) 
       composition: compositionReport,
       publish: publishReport,
     },
-    can_publish: publishReport.can_publish === true,
+    can_publish: canPublish,
+    mcq_validation_failures: mcqFailures,
+    publish_block_message: formatMcqPublishBlockMessage(mcqFailures),
   };
 }

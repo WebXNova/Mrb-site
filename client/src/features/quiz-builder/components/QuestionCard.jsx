@@ -3,6 +3,7 @@ import { validateQuizMcqQuestionClient } from '../validation/quizMcqClientValida
 import { QuizCardEditorProvider } from '../ribbon/QuizCardEditorProvider.jsx';
 import AnswerOptionsList from './AnswerOptionsList.jsx';
 import ExplanationSection from './ExplanationSection.jsx';
+import TipSection from './TipSection.jsx';
 import QuestionPointsInput from './QuestionPointsInput.jsx';
 import QuizCardRibbon from './QuizCardRibbon.jsx';
 import QuizRichField from './QuizRichField.jsx';
@@ -11,6 +12,7 @@ import QuizRichField from './QuizRichField.jsx';
  * @param {{
  *   question: import('../types/quizBuilder.types.js').QuizQuestion,
  *   index: number,
+ *   questionNumber: number,
  *   actions: Record<string, Function>,
  *   disabled?: boolean,
  *   isDragging?: boolean,
@@ -23,6 +25,7 @@ import QuizRichField from './QuizRichField.jsx';
 export default function QuestionCard({
   question,
   index,
+  questionNumber,
   actions,
   disabled = false,
   isDragging = false,
@@ -32,7 +35,6 @@ export default function QuestionCard({
   onDrop,
 }) {
   const [dragOver, setDragOver] = useState(false);
-  const questionNumber = index + 1;
   const titleId = `qb-question-title-${question.id}`;
   const validation = useMemo(
     () => validateQuizMcqQuestionClient(question, index),
@@ -208,6 +210,20 @@ export default function QuestionCard({
                 onChange={(text) =>
                   actions.updateQuestion(question.id, { explanation: text })
                 }
+                disabled={disabled}
+              />
+
+              <TipSection
+                showTip={Boolean(question.showTip)}
+                tip={question.tip ?? ''}
+                questionNumber={questionNumber}
+                onToggle={(enabled) =>
+                  actions.updateQuestion(question.id, {
+                    showTip: enabled,
+                    tip: enabled ? question.tip ?? '' : '',
+                  })
+                }
+                onChange={(text) => actions.updateQuestion(question.id, { tip: text })}
                 disabled={disabled}
               />
             </div>

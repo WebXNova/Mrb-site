@@ -1,5 +1,7 @@
 import { QUIZ_MCQ_MAX_OPTIONS, QUIZ_MCQ_MIN_OPTIONS, QUIZ_MCQ_MIN_POINTS } from '../validation/quizMcqLimits.js';
 import { initialQuizBuilderState } from '../state/quizBuilderReducer.js';
+import { isQuizSection } from '../utils/quizDraftItems.js';
+import { normalizeQuizSection } from '../utils/normalizeQuizSection.js';
 
 export const QUIZ_DRAFT_STORAGE_VERSION = 1;
 export const QUIZ_DRAFT_DEBOUNCE_MS = 800;
@@ -25,10 +27,18 @@ function isValidChoice(choice) {
 }
 
 /**
+ * @param {unknown} section
+ */
+function isValidSection(section) {
+  return Boolean(normalizeQuizSection(section));
+}
+
+/**
  * @param {unknown} question
  */
 function isValidQuestion(question) {
   if (!question || typeof question !== 'object') return false;
+  if (isQuizSection(question)) return isValidSection(question);
   const q = /** @type {Record<string, unknown>} */ (question);
   return (
     typeof q.id === 'string' &&
@@ -39,10 +49,11 @@ function isValidQuestion(question) {
     typeof q.collapsed === 'boolean' &&
     typeof q.showExplanation === 'boolean' &&
     typeof q.explanation === 'string' &&
+    (q.showTip == null || typeof q.showTip === 'boolean') &&
+    (q.tip == null || typeof q.tip === 'string') &&
     Array.isArray(q.choices) &&
     q.choices.length >= QUIZ_MCQ_MIN_OPTIONS &&
     q.choices.length <= QUIZ_MCQ_MAX_OPTIONS &&
-    typeof q.points === 'number' &&
     Number.isFinite(q.points) &&
     q.points >= QUIZ_MCQ_MIN_POINTS &&
     q.choices.every(isValidChoice)
@@ -51,12 +62,14 @@ function isValidQuestion(question) {
 
 /**
  * @param {unknown} questions
- * @returns {import('../types/quizBuilder.types.js').QuizQuestion[] | null}
+ * @returns {import('../types/quizBuilder.types.js').QuizDraftItem[] | null}
  */
 export function normalizeStoredQuestions(questions) {
   if (!Array.isArray(questions) || questions.length === 0) return null;
   if (!questions.every(isValidQuestion)) return null;
-  return /** @type {import('../types/quizBuilder.types.js').QuizQuestion[]} */ (questions);
+  return /** @type {import('../types/quizBuilder.types.js').QuizDraftItem[]} */ (
+    questions.map((item) => normalizeQuizSection(item) ?? item)
+  );
 }
 
 /** @typedef {'synced' | 'pending'} QuizDraftSyncState */

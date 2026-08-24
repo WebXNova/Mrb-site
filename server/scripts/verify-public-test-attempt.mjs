@@ -169,6 +169,33 @@ if (
   } else {
     fail('getStartTest still rotates token on read-only load');
   }
+
+  const saveBlock =
+    controllerSrc.match(/export const patchSaveAnswer[\s\S]*?export const postSubmitAttempt/)?.[0] || '';
+  if (saveBlock && !saveBlock.includes('consumeAttemptNonce')) {
+    ok('patchSaveAnswer does not rotate nonce on autosave');
+  } else {
+    fail('patchSaveAnswer still rotates nonce on autosave');
+  }
+
+  const submitBlock =
+    controllerSrc.match(/export const postSubmitAttempt[\s\S]*?export const getTestResult/)?.[0] || '';
+  if (submitBlock && submitBlock.includes('consumeAttemptNonce')) {
+    ok('postSubmitAttempt rotates nonce once at submit');
+  } else {
+    fail('postSubmitAttempt is missing submit-time nonce rotation');
+  }
+
+  const resultBlock = controllerSrc.match(/export const getTestResult[\s\S]*$/)?.[0] || '';
+  if (
+    resultBlock &&
+    !resultBlock.includes('consumeAttemptNonce') &&
+    !resultBlock.includes('getAttemptPayload')
+  ) {
+    ok('getTestResult is idempotent (no nonce consume, no attempt JWT required)');
+  } else {
+    fail('getTestResult still depends on attempt nonce/JWT');
+  }
 }
 
 if (controllerSrc.includes('ATTEMPT_TOKEN_VALIDATION_FAILURE')) {

@@ -287,6 +287,8 @@ CREATE TABLE IF NOT EXISTS tests (
   course_id BIGINT NOT NULL,
   title VARCHAR(255) NOT NULL,
   description TEXT NULL,
+  introduction_html LONGTEXT NULL,
+  conclusion_html LONGTEXT NULL,
   category VARCHAR(80) NOT NULL DEFAULT 'MDCAT',
   test_type VARCHAR(50) NOT NULL DEFAULT 'subject_wise',
   duration_minutes INT NOT NULL,
@@ -305,6 +307,10 @@ CREATE TABLE IF NOT EXISTS tests (
   public_slug VARCHAR(120) NULL,
   start_date DATETIME NULL,
   end_date DATETIME NULL,
+  layout_mode ENUM('vertical', 'horizontal') NOT NULL DEFAULT 'vertical',
+  display_mode ENUM('all', 'one_per_page') NOT NULL DEFAULT 'all',
+  results_released_at DATETIME NULL COMMENT 'When set, students may view results even if show_result_immediately was off at submit time; NULL means use show_result_immediately only',
+  full_page_mode TINYINT(1) NOT NULL DEFAULT 0,
   created_by BIGINT NOT NULL,
   created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -313,6 +319,7 @@ CREATE TABLE IF NOT EXISTS tests (
   KEY idx_course (course_id),
   KEY idx_status (status),
   KEY idx_dates (start_date, end_date),
+  KEY idx_tests_results_released_at (results_released_at),
   KEY fk_tests_creator (created_by),
   CONSTRAINT fk_tests_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
   CONSTRAINT fk_tests_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
@@ -340,6 +347,7 @@ CREATE TABLE IF NOT EXISTS question_bank (
   question_image_url VARCHAR(1000) NULL,
   explanation LONGTEXT NULL,
   explanation_html LONGTEXT NULL,
+  tip_html LONGTEXT NULL,
   marks DECIMAL(8,2) NOT NULL DEFAULT 1.00,
   created_by BIGINT NOT NULL,
   created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
@@ -467,19 +475,54 @@ CREATE TABLE IF NOT EXISTS test_import_batches (
   CONSTRAINT chk_test_import_batch_status CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- test engine extension (sections, score bands):
+-- Up:       sql/migrations/test_engine_extension.sql
+-- Rollback: sql/migrations/test_engine_extension_rollback.sql
+-- Node:     src/db/ensureTestEngineExtensionSchema.js
+
+CREATE TABLE IF NOT EXISTS test_sections (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  test_id BIGINT NOT NULL,
+  display_order INT NOT NULL DEFAULT 0,
+  subject_label VARCHAR(255) NOT NULL,
+  divider_content_html LONGTEXT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_test_sections_test_id (test_id),
+  KEY idx_test_sections_test_order (test_id, display_order),
+  CONSTRAINT fk_ts_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS test_score_bands (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  test_id BIGINT NOT NULL,
+  min_score DECIMAL(8,2) NOT NULL,
+  max_score DECIMAL(8,2) NOT NULL,
+  message_html LONGTEXT NOT NULL,
+  display_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_test_score_bands_test_id (test_id),
+  KEY idx_test_score_bands_test_order (test_id, display_order),
+  CONSTRAINT fk_tsb_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS test_questions (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   test_id BIGINT NOT NULL,
   question_id BIGINT NOT NULL,
   display_order INT NOT NULL DEFAULT 0,
+  section_id BIGINT NULL,
   marks_override DECIMAL(8,2) NULL,
   created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_test_question (test_id, question_id),
   KEY idx_test (test_id),
   KEY idx_question (question_id),
+  KEY idx_test_questions_section_id (section_id),
   CONSTRAINT fk_tq_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
-  CONSTRAINT fk_tq_question FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE
+  CONSTRAINT fk_tq_question FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tq_section FOREIGN KEY (section_id) REFERENCES test_sections(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS test_quiz_drafts (
@@ -525,6 +568,7 @@ CREATE TABLE IF NOT EXISTS test_attempts (
   result_id BIGINT NULL,
   submitted_at DATETIME NULL,
   completion_reason VARCHAR(50) NULL,
+  is_flagged_cheating TINYINT(1) NOT NULL DEFAULT 0,
   time_taken_seconds INT NULL,
   score DECIMAL(10,2) NULL,
   percentage DECIMAL(5,2) NULL,
@@ -539,6 +583,19 @@ CREATE TABLE IF NOT EXISTS test_attempts (
   KEY idx_test_attempts_user_status (user_id, status),
   CONSTRAINT fk_attempt_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
   CONSTRAINT fk_attempt_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS test_cheating_violations (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  attempt_id BIGINT NOT NULL,
+  violation_number INT NOT NULL,
+  violation_type VARCHAR(64) NOT NULL,
+  occurred_at DATETIME NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_test_cheating_violations_attempt_id (attempt_id),
+  UNIQUE KEY uq_tcv_attempt_violation (attempt_id, violation_number),
+  CONSTRAINT fk_tcv_attempt FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE,
+  CONSTRAINT chk_tcv_violation_number CHECK (violation_number BETWEEN 1 AND 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS student_answers (

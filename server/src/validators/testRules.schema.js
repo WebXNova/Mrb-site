@@ -24,7 +24,7 @@ export const parsePositiveTestIdParam = (value) => {
 export const testRulesBodySchema = z
   .object({
     duration_minutes: z.coerce.number().int().min(1).max(600),
-    max_attempts: z.coerce.number().int().min(1).max(50),
+    max_attempts: z.coerce.number().int().min(0).max(50),
     passing_marks: z.coerce.number().min(0),
     negative_marking: z.coerce.number().min(0).max(1).optional(),
   })

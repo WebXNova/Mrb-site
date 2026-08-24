@@ -94,6 +94,7 @@ import {
  * @property {import('mysql2/promise').PoolConnection} [connection]
  * @property {string} [auditContext]
  * @property {number} [nowMs] — authoritative UTC ms (from getAvailabilityNowMs)
+ * @property {number} [expiryGraceMs] — extra ms after expires_at still treated as in-progress (submit only)
  */
 
 const ATTEMPT_TEST_SELECT = `
@@ -123,6 +124,9 @@ const ATTEMPT_TEST_SELECT = `
          t.shuffle_questions,
          t.shuffle_options,
          t.show_result_immediately,
+         t.results_released_at,
+         t.layout_mode,
+         t.display_mode,
          t.start_date,
          t.end_date
   FROM test_attempts a
@@ -181,6 +185,9 @@ function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
     shuffle_questions: Number(row.shuffle_questions ?? 0),
     shuffle_options: Number(row.shuffle_options ?? 0),
     show_result_immediately: Number(row.show_result_immediately ?? 1),
+    results_released_at: row.results_released_at ?? null,
+    layout_mode: row.layout_mode === 'horizontal' ? 'horizontal' : 'vertical',
+    display_mode: row.display_mode === 'one_per_page' ? 'one_per_page' : 'all',
     start_date: row.start_date ?? null,
     end_date: row.end_date ?? null,
   };
@@ -335,7 +342,9 @@ export async function resolveSecureAttemptContext(input) {
       });
     }
     const expiresMs = parseTestAvailabilityInstant(ctx.attempt.expires_at);
-    if (expiresMs != null && nowMs > expiresMs) {
+    const graceMs = Number(input.expiryGraceMs);
+    const allowedUntilMs = expiresMs + (Number.isFinite(graceMs) && graceMs > 0 ? graceMs : 0);
+    if (expiresMs != null && nowMs > allowedUntilMs) {
       throw new AttemptExpiredError({ attemptId, expiresAt: ctx.attempt.expires_at });
     }
   }

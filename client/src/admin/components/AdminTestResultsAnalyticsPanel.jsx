@@ -22,22 +22,28 @@ function AnalyticsMetric({ label, value, suffix = '' }) {
   );
 }
 
-export default function AdminTestResultsAnalyticsPanel({ tests = [] }) {
+export default function AdminTestResultsAnalyticsPanel({ tests = [], testId = null }) {
   const token = getAdminToken();
-  const publishedTests = useMemo(
-    () => tests.filter((test) => isTestPublishedStatus(test.status)),
-    [tests]
-  );
+  const publishedTests = useMemo(() => {
+    if (testId != null && String(testId).trim() !== '') {
+      return [{ id: Number(testId) }];
+    }
+    return tests.filter((test) => isTestPublishedStatus(test.status));
+  }, [tests, testId]);
   const [selectedTestId, setSelectedTestId] = useState('');
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (testId != null && String(testId).trim() !== '') {
+      setSelectedTestId(String(testId));
+      return;
+    }
     if (selectedTestId) return;
     const first = publishedTests[0];
     if (first?.id) setSelectedTestId(String(first.id));
-  }, [publishedTests, selectedTestId]);
+  }, [publishedTests, selectedTestId, testId]);
 
   const loadAnalytics = useCallback(async () => {
     if (!selectedTestId) {
@@ -196,6 +202,7 @@ export default function AdminTestResultsAnalyticsPanel({ tests = [] }) {
             id="adminTestAnalyticsSelect"
             value={selectedTestId}
             onChange={(event) => setSelectedTestId(event.target.value)}
+            disabled={Boolean(testId)}
           >
             {publishedTests.map((test) => (
               <option key={test.id} value={String(test.id)}>

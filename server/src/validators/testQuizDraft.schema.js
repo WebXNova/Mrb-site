@@ -32,6 +32,67 @@ const choiceSchema = z
   })
   .strict();
 
+/**
+ * @param {Record<string, unknown>} row
+ * @param {string[]} keys
+ */
+function firstDefinedString(row, keys) {
+  for (const key of keys) {
+    if (row[key] != null) return String(row[key]);
+  }
+  return '';
+}
+
+/**
+ * @param {Record<string, unknown>} row
+ * @param {string[]} keys
+ */
+function firstDefinedBoolean(row, keys) {
+  for (const key of keys) {
+    if (row[key] != null) return Boolean(row[key]);
+  }
+  return false;
+}
+
+/**
+ * Map client aliases onto the persisted section shape.
+ * @param {unknown} raw
+ */
+function normalizeSectionInput(raw) {
+  if (!raw || typeof raw !== 'object' || /** @type {{ itemType?: string }} */ (raw).itemType !== 'section') {
+    return raw;
+  }
+  const row = /** @type {Record<string, unknown>} */ (raw);
+  const rawSubjectId = row.subjectId ?? row.subject_id;
+  const subjectId = rawSubjectId == null || rawSubjectId === '' ? null : Number(rawSubjectId);
+  return {
+    id: row.id,
+    itemType: 'section',
+    subjectId: Number.isInteger(subjectId) && subjectId > 0 ? subjectId : null,
+    subjectLabel: firstDefinedString(row, ['subjectLabel', 'label']),
+    collapsed: Boolean(row.collapsed),
+    showDividerContent: firstDefinedBoolean(row, ['showDividerContent', 'showDividerContent']),
+    dividerContentHtml: firstDefinedString(row, [
+      'dividerContentHtml',
+      'dividerContentHtml',
+      'dividerHtml',
+    ]),
+  };
+}
+
+const sectionSchema = z.preprocess(
+  normalizeSectionInput,
+  z.object({
+    id: z.string().trim().min(1).max(64),
+      itemType: z.literal('section'),
+      subjectId: z.number().int().positive().nullable().optional(),
+      subjectLabel: z.string().max(200),
+    collapsed: z.boolean(),
+    showDividerContent: z.boolean(),
+    dividerContentHtml: z.string().max(100_000),
+  })
+);
+
 const questionSchema = z
   .object({
     id: z.string().trim().min(1).max(64),
@@ -43,9 +104,15 @@ const questionSchema = z
     collapsed: z.boolean(),
     showExplanation: z.boolean(),
     explanation: z.string().max(10_000),
+    showTip: z.boolean().optional().default(false),
+    tip: z.string().max(10_000).optional().default(''),
     choices: z.array(choiceSchema).min(QUIZ_DRAFT_MIN_CHOICES).max(QUIZ_DRAFT_MAX_CHOICES),
   })
   .strict();
+
+const draftItemSchema = z.union([sectionSchema, questionSchema]);
+
+export { questionSchema, sectionSchema, draftItemSchema };
 
 export const quizDraftPayloadSchema = z
   .object({
@@ -54,7 +121,7 @@ export const quizDraftPayloadSchema = z
       .union([z.number().int().positive(), z.string().regex(/^\d+$/)])
       .transform((value) => Number(value)),
     storageKey: z.string().max(128).optional(),
-    questions: z.array(questionSchema).max(MAX_QUESTIONS_PER_TEST),
+    questions: z.array(draftItemSchema).max(MAX_QUESTIONS_PER_TEST),
     totalPoints: z.number().min(0).max(MAX_QUESTIONS_PER_TEST * QUIZ_DRAFT_MAX_POINTS),
     savedAt: z.string().datetime({ offset: true }).or(z.string().datetime()),
   })

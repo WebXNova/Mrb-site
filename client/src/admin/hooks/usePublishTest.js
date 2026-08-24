@@ -5,6 +5,40 @@ import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import { useAdminToast } from '../context/AdminToastContext';
 
+function formatMcqPublishIssues(failures) {
+  if (!Array.isArray(failures) || !failures.length) return null;
+  const firstIssue = failures[0]?.issues?.[0];
+  if (!firstIssue?.message) return null;
+  const extra = failures.length > 1 ? ` (+${failures.length - 1} more question${failures.length > 2 ? 's' : ''})` : '';
+  return `${firstIssue.message}${extra}`;
+}
+
+function extractPublishBlockMessage(report) {
+  const mcqMessage = formatMcqPublishIssues(
+    report?.validation?.publish?.mcq_validation_failures ?? report?.mcq_validation_failures
+  );
+  if (mcqMessage) return mcqMessage;
+
+  const items = Array.isArray(report?.missing_requirement_items) ? report.missing_requirement_items : [];
+  if (items.length) {
+    return `Cannot publish yet: ${items.map((item) => item.message || item.code).join(' · ')}`;
+  }
+  const missing = Array.isArray(report?.missing_fields) ? report.missing_fields.join(', ') : 'required fields';
+  return `Cannot publish — incomplete. Missing: ${missing}`;
+}
+
+function extractErrorMessage(err, fallback = 'Failed to publish test') {
+  const detailsIssues = err?.details?.issues ?? err?.metadata?.issues ?? err?.data?.metadata?.issues;
+  if (Array.isArray(detailsIssues) && detailsIssues[0]?.message) {
+    const extra =
+      detailsIssues.length > 1
+        ? ` (+${detailsIssues.length - 1} more issue${detailsIssues.length > 2 ? 's' : ''})`
+        : '';
+    return `${detailsIssues[0].message}${extra}`;
+  }
+  return err?.message || fallback;
+}
+
 /**
  * @param {number} testId
  * @param {{
@@ -29,10 +63,7 @@ export async function publishTestFlow(testId, options) {
     const completenessResponse = await adminApi.getTestCompleteness(token, tid);
     const report = completenessResponse?.data;
     if (!report?.can_publish) {
-      const missing = Array.isArray(report?.missing_fields)
-        ? report.missing_fields.join(', ')
-        : 'required fields';
-      toast.error(`Cannot publish — incomplete. Missing: ${missing}`);
+      toast.error(extractPublishBlockMessage(report));
       return false;
     }
 
@@ -47,7 +78,7 @@ export async function publishTestFlow(testId, options) {
 
     if (navigate) {
       if (redirectTo === 'details') {
-        navigate(adminRoute(`tests/${tid}/details`));
+        navigate(adminRoute(`tests/${tid}/publish`));
       } else if (redirectTo === 'list') {
         navigate(adminRoute('tests'));
       }
@@ -55,7 +86,7 @@ export async function publishTestFlow(testId, options) {
 
     return true;
   } catch (err) {
-    toast.error(err.message || 'Failed to publish test');
+    toast.error(extractErrorMessage(err));
     return false;
   }
 }

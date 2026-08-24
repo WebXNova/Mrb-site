@@ -52,6 +52,7 @@ import { ensureTestTransferAuditSchema } from './db/ensureTestTransferAuditSchem
 import { ensureExportLogsSchema } from './db/ensureExportLogsSchema.js';
 import { ensureStudentStreakSchema } from './db/ensureStudentStreakSchema.js';
 import { ensureTestEnumConstraints } from './db/ensureTestEnumConstraints.js';
+import { ensureTestEngineExtensionSchema } from './db/ensureTestEngineExtensionSchema.js';
 import { ensureCeeDbConstraints } from './db/ensureCeeDbConstraints.js';
 import { ensureCourseDraftsSchema } from './db/ensureCourseDraftsSchema.js';
 import { ensureCourseCatalogSchema } from './db/ensureCourseCatalogSchema.js';
@@ -245,6 +246,7 @@ async function startServer() {
   await ensureExportLogsSchema(mysqlPool);
   await ensureStudentStreakSchema(mysqlPool);
   await ensureTestEnumConstraints(mysqlPool);
+  await ensureTestEngineExtensionSchema(mysqlPool);
   await ensureCeeDbConstraints(mysqlPool);
   await assertRequiredAuthSchema();
 

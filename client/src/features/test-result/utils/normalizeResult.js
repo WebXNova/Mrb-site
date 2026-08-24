@@ -37,6 +37,11 @@ export function normalizeResultPayload(payload) {
     reviewItems: answers,
     hasReview: Array.isArray(answers) && answers.length > 0,
     answersWithheld: false,
+    scoreBandMessageHtml:
+      inner.score_band_message_html ??
+      inner.scoreBandMessageHtml ??
+      inner.score_band?.message_html ??
+      null,
   };
 }
 

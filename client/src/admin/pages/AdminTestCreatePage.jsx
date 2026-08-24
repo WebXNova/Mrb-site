@@ -1,212 +1,227 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { adminRoute } from '../../config/adminPaths';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import { useAdminToast } from '../context/AdminToastContext';
-import {
-  getWizardStepEyebrow,
-  TEST_WIZARD_BUTTONS,
-} from '../config/testWizardConfig';
+import { TEST_WIZARD_BUTTONS } from '../config/testWizardConfig';
 import AdminTestPageHeader from '../components/AdminTestPageHeader';
-import BasicInfoForm from '../components/BasicInfoForm';
-import RulesForm from '../components/RulesForm';
-import SettingsForm from '../components/SettingsForm';
-import TestWizardPhaseStrip from '../components/TestWizardPhaseStrip';
-import { useTestBasicInfoForm } from '../hooks/useTestBasicInfoForm';
-import { defaultTestRulesForm, validateTestRulesForm } from '../utils/testRulesValidation';
-import { defaultTestSettingsForm, validateTestSettingsForm } from '../utils/testSettingsValidation';
+import { buildTestBasicInfoPayload, createDefaultTestBasicInfoForm } from '../utils/testBasicInfoValidation';
+import { useTestCreateOptions } from '../hooks/useTestCreateOptions';
+import PremiumCheckboxGroup from '../components/ui/PremiumCheckboxGroup';
 
+/**
+ * Minimal create flow — name + course + one or more subjects, then Dashboard.
+ */
 export default function AdminTestCreatePage() {
   const token = getAdminToken();
   const navigate = useNavigate();
   const toast = useAdminToast();
+  const { options, isLoading: optionsLoading, error: optionsError } = useTestCreateOptions(token);
 
-  const {
-    courses,
-    form,
-    fieldErrors,
-    error,
-    setError,
-    isSubmitting,
-    setIsSubmitting,
-    createOptions,
-    subjects,
-    isLoadingOptions,
-    optionsError,
-    isLoadingSubjects,
-    subjectsError,
-    canSubmit,
-    onChange,
-    onToggleMixedSubject,
-    validateForSubmit,
-  } = useTestBasicInfoForm(token, { applyCreateDefaults: true });
+  const [title, setTitle] = useState('');
+  const [courseId, setCourseId] = useState('');
+  const [subjectIds, setSubjectIds] = useState(/** @type {number[]} */ ([]));
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [subjects, setSubjects] = useState([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [rulesForm, setRulesForm] = useState(defaultTestRulesForm);
-  const [settingsForm, setSettingsForm] = useState(defaultTestSettingsForm);
-  const [rulesFieldErrors, setRulesFieldErrors] = useState({});
-  const [settingsFieldErrors, setSettingsFieldErrors] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    setCoursesLoading(true);
+    adminApi
+      .courses(token)
+      .then((response) => {
+        if (cancelled) return;
+        const list = Array.isArray(response?.data) ? response.data : [];
+        setCourses(list);
+        if (list.length === 1) {
+          setCourseId(String(list[0].id));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCourses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCoursesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
-  function onRulesChange(event) {
-    const { name, value } = event.target;
-    setRulesForm((prev) => ({ ...prev, [name]: value }));
-    setRulesFieldErrors((prev) => {
-      if (!prev[name]) return prev;
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
-  }
+  useEffect(() => {
+    if (!courseId) {
+      setSubjects([]);
+      setSubjectIds([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setSubjectsLoading(true);
+    adminApi
+      .subjects(token, courseId)
+      .then((response) => {
+        if (cancelled) return;
+        const list = Array.isArray(response?.data) ? response.data : [];
+        setSubjects(list);
+        if (list.length === 1) {
+          setSubjectIds([Number(list[0].id)]);
+        } else {
+          setSubjectIds([]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSubjects([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSubjectsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, courseId]);
 
-  function onSettingsChange(event) {
-    const { name, value } = event.target;
-    setSettingsForm((prev) => ({ ...prev, [name]: value }));
-    setSettingsFieldErrors((prev) => {
-      if (!prev[name]) return prev;
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
-  }
-
-  function onSettingsCheckboxChange(event) {
-    const { name, checked } = event.target;
-    setSettingsForm((prev) => ({ ...prev, [name]: checked }));
+  function toggleSubject(rawId) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) return;
+    setSubjectIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   }
 
   async function onSubmit(event) {
     event.preventDefault();
+    setError('');
 
-    const basicPayload = validateForSubmit();
-    const rulesValidation = validateTestRulesForm(rulesForm);
-    const settingsValidation = validateTestSettingsForm(settingsForm);
-
-    let hasErrors = false;
-
-    if (!basicPayload) {
-      hasErrors = true;
+    const trimmed = String(title).replace(/\s+/g, ' ').trim();
+    if (trimmed.length < 3) {
+      setError('Test name must be at least 3 characters.');
+      return;
     }
 
-    if (!rulesValidation.ok) {
-      setRulesFieldErrors(rulesValidation.errors);
-      hasErrors = true;
+    if (!courseId) {
+      setError('Select a course for this test.');
+      return;
+    }
+
+    if (!subjectIds.length) {
+      setError('Select at least one subject for this test.');
+      return;
+    }
+
+    const form = createDefaultTestBasicInfoForm({
+      defaultCategory: options.defaultCategory,
+      defaultTestType: options.defaultTestType,
+    });
+    form.course_id = courseId;
+    form.title = trimmed;
+
+    if (subjectIds.length === 1) {
+      form.test_type = 'subject_wise';
+      form.subject_id = String(subjectIds[0]);
+      form.subject_ids = [];
     } else {
-      setRulesFieldErrors({});
+      form.test_type = 'mixed_subject';
+      form.subject_id = '';
+      form.subject_ids = subjectIds;
     }
 
-    if (!settingsValidation.ok) {
-      setSettingsFieldErrors(settingsValidation.errors);
-      hasErrors = true;
-    } else {
-      setSettingsFieldErrors({});
-    }
-
-    if (hasErrors || !basicPayload) return;
+    const payload = buildTestBasicInfoPayload(form);
 
     setIsSubmitting(true);
-    setError('');
     try {
-      const response = await adminApi.createTest(token, basicPayload);
+      const response = await adminApi.createTest(token, payload);
       const testId = response?.data?.testId;
       if (!testId) {
         throw new Error('Test was created but no test id was returned.');
       }
-
-      await adminApi.patchTestRules(token, testId, rulesValidation.payload);
-      await adminApi.patchTestSettings(token, testId, settingsValidation.payload);
-
-      toast.success('Test created — add your questions next.');
-      navigate(adminRoute(`tests/${testId}/questions`));
+      toast.success('Test created.');
+      navigate(adminRoute(`tests/${testId}/dashboard`));
     } catch (err) {
-      const message = err.message || 'Failed to create test.';
-      setError(message);
-      toast.error(message);
+      setError(err.message || 'Failed to create test.');
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  if (isLoadingOptions) {
-    return (
-      <section className="admin-page admin-page--tests">
-        <section className="admin-card">
-          <AdminTestPageHeader title="Create test" backLabel={TEST_WIZARD_BUTTONS.backToTests} />
-          <p className="body-md admin-courses__muted">Loading test setup…</p>
-        </section>
-      </section>
-    );
-  }
-
-  if (optionsError) {
-    return (
-      <section className="admin-page admin-page--tests">
-        <section className="admin-card">
-          <AdminTestPageHeader title="Create test" backLabel={TEST_WIZARD_BUTTONS.backToTests} />
-          <p className="admin-error">{optionsError}</p>
-        </section>
-      </section>
-    );
-  }
+  const loading = optionsLoading || coursesLoading;
+  const showSubjectPicker = Boolean(courseId);
 
   return (
     <section className="admin-page admin-page--tests">
       <section className="admin-card">
-        <AdminTestPageHeader
-          title="Create test"
-          backLabel={TEST_WIZARD_BUTTONS.backToTests}
-        />
-        <p className="admin-test-step-label">{getWizardStepEyebrow('setup')}</p>
-        <TestWizardPhaseStrip activePhase="setup" />
+        <AdminTestPageHeader title="Create test" backLabel={TEST_WIZARD_BUTTONS.backToTests} />
 
-        <form className="admin-test-form admin-test-form--unified" onSubmit={onSubmit} noValidate>
-          <p className="admin-test-form__intro">
-            Set title, course, duration, rules, and access. Defaults are pre-filled — adjust only if you need to.
-          </p>
+        <p className="admin-field__hint" style={{ marginBottom: 'var(--space-6)' }}>
+          Enter a name and choose one or more subjects. You can add labeled sections for each subject
+          on the Questions page.
+        </p>
 
-          <BasicInfoForm
-            embedded
-            form={form}
-            fieldErrors={fieldErrors}
-            courses={courses}
-            createOptions={createOptions}
-            subjects={subjects}
-            isLoadingOptions={isLoadingOptions}
-            optionsError={optionsError}
-            isLoadingSubjects={isLoadingSubjects}
-            subjectsError={subjectsError}
-            isSubmitting={isSubmitting}
-            canSubmit={canSubmit}
-            onChange={onChange}
-            onToggleMixedSubject={onToggleMixedSubject}
-          />
+        {loading ? <p className="body-md admin-courses__muted">Loading…</p> : null}
+        {optionsError ? <p className="admin-error">{optionsError}</p> : null}
 
-          <RulesForm
-            embedded
-            form={rulesForm}
-            fieldErrors={rulesFieldErrors}
-            isSubmitting={isSubmitting}
-            onChange={onRulesChange}
-          />
+        <form className="admin-test-form" onSubmit={onSubmit} noValidate style={{ maxWidth: '32rem' }}>
+          <div className="admin-field">
+            <label htmlFor="new-test-title">Test name</label>
+            <input
+              id="new-test-title"
+              name="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              maxLength={120}
+              autoFocus
+              disabled={isSubmitting}
+            />
+          </div>
 
-          <SettingsForm
-            embedded
-            form={settingsForm}
-            fieldErrors={settingsFieldErrors}
-            isSubmitting={isSubmitting}
-            onChange={onSettingsChange}
-            onCheckboxChange={onSettingsCheckboxChange}
-          />
+          {courses.length > 1 ? (
+            <div className="admin-field">
+              <label htmlFor="new-test-course">Course</label>
+              <select
+                id="new-test-course"
+                value={courseId}
+                onChange={(e) => setCourseId(e.target.value)}
+                required
+                disabled={isSubmitting || loading}
+              >
+                <option value="">Select course</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          {showSubjectPicker ? (
+            <div className="admin-field">
+              <PremiumCheckboxGroup
+                legend="Subjects"
+                options={
+                  subjectsLoading
+                    ? []
+                    : subjects.map((subject) => ({
+                        value: Number(subject.id),
+                        label: subject.title ?? subject.name ?? `Subject #${subject.id}`,
+                      }))
+                }
+                selectedValues={subjectIds}
+                onChange={(nextIds) => setSubjectIds(nextIds)}
+                disabled={isSubmitting}
+                emptyMessage={subjectsLoading ? 'Loading subjects…' : 'No subjects found for this course.'}
+              />
+              <p className="admin-field__hint">Select every subject this test will include.</p>
+            </div>
+          ) : null}
 
           {error ? <p className="admin-error">{error}</p> : null}
 
-          <div className="admin-test-form__footer admin-test-form__footer--unified">
-            <button
-              className="btn btn--primary"
-              type="submit"
-              disabled={isSubmitting || !canSubmit}
-              title={!canSubmit ? 'Complete all required fields and select valid course subjects' : undefined}
-            >
-              {isSubmitting ? 'Creating…' : TEST_WIZARD_BUTTONS.saveAndAddQuestions}
+          <div className="admin-test-form__footer">
+            <button className="btn btn--primary" type="submit" disabled={isSubmitting || loading}>
+              {isSubmitting ? 'Creating…' : 'Create test'}
             </button>
           </div>
         </form>

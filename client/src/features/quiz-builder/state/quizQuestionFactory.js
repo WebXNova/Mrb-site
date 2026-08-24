@@ -1,5 +1,6 @@
 let choiceSeq = 0;
 let questionSeq = 0;
+let sectionSeq = 0;
 
 function nextChoiceId() {
   choiceSeq += 1;
@@ -9,6 +10,11 @@ function nextChoiceId() {
 function nextQuestionId() {
   questionSeq += 1;
   return `question-${Date.now()}-${questionSeq}`;
+}
+
+function nextSectionId() {
+  sectionSeq += 1;
+  return `section-${Date.now()}-${sectionSeq}`;
 }
 
 /**
@@ -37,12 +43,40 @@ export function createQuizQuestion() {
     collapsed: false,
     showExplanation: false,
     explanation: '',
+    showTip: false,
+    tip: '',
     choices: [
       createChoice('Choice 1', true),
       createChoice('Choice 2', false),
       createChoice('Choice 3', false),
       createChoice('Choice 4', false),
     ],
+  };
+}
+
+/**
+ * @returns {import('../types/quizBuilder.types.js').QuizSection}
+ */
+export function createQuizSection() {
+  return {
+    id: nextSectionId(),
+    itemType: 'section',
+    subjectId: null,
+    subjectLabel: '',
+    collapsed: false,
+    showDividerContent: false,
+    dividerContentHtml: '',
+  };
+}
+
+/**
+ * @param {import('../types/quizBuilder.types.js').QuizSection} section
+ */
+export function cloneQuizSection(section) {
+  return {
+    ...section,
+    id: nextSectionId(),
+    itemType: 'section',
   };
 }
 

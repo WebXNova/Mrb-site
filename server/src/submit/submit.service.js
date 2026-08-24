@@ -95,7 +95,7 @@ export async function validateSubmission(connection, attemptSession) {
   }
 
   const [[expiryProbe]] = await connection.query(
-    `SELECT CASE WHEN ? < NOW() THEN 1 ELSE 0 END AS is_past_expiry`,
+    `SELECT CASE WHEN ? < UTC_TIMESTAMP() THEN 1 ELSE 0 END AS is_past_expiry`,
     [row.expires_at]
   );
   if (Number(expiryProbe?.is_past_expiry) === 1) {

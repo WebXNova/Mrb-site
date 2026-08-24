@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import {
-  consumeAttemptNonce,
+  recoverAlreadySubmittedAttempt,
   getAttemptResult,
   getAttemptTestForStart,
   saveAttemptAnswer,
@@ -60,9 +60,16 @@ function getCeeContext(req) {
   };
 }
 
-function getAttemptPayload(req) {
+function getAttemptPayload(req, userId) {
   try {
-    return readAndVerifyAttemptToken(req);
+    const decoded = readAndVerifyAttemptToken(req);
+    if (decoded.userId != null && Number(decoded.userId) !== Number(userId)) {
+      throw new AttemptTokenInvalidError({
+        reason: 'user_mismatch',
+        attemptId: decoded.attemptId ?? null,
+      });
+    }
+    return decoded;
   } catch (error) {
     if (error instanceof AttemptTokenInvalidError) {
       logger.warn('ATTEMPT_TOKEN_VALIDATION_FAILURE', {
@@ -149,7 +156,7 @@ export const postVerifyTestCode = asyncHandler(async (req, res) => {
 export const getStartTest = asyncHandler(async (req, res) => {
   const slug = String(req.params.slug || '').trim();
   const { userId, courseId, entitlement } = getCeeContext(req);
-  const attemptPayload = getAttemptPayload(req);
+  const attemptPayload = getAttemptPayload(req, userId);
   const attemptId = Number(req.params.attemptId);
   if (!attemptId || attemptPayload.attemptId !== attemptId || attemptPayload.slug !== slug) {
     throw new ApiError(403, 'Attempt access denied');
@@ -173,18 +180,11 @@ export const getStartTest = asyncHandler(async (req, res) => {
 export const patchSaveAnswer = asyncHandler(async (req, res) => {
   const slug = String(req.params.slug || '').trim();
   const { userId, courseId } = getCeeContext(req);
-  const attemptPayload = getAttemptPayload(req);
+  const attemptPayload = getAttemptPayload(req, userId);
   const attemptId = Number(req.params.attemptId);
   if (!attemptId || attemptPayload.attemptId !== attemptId || attemptPayload.slug !== slug) {
     throw new ApiError(403, 'Attempt access denied');
   }
-  const nextAttemptToken = await consumeAttemptNonce({
-    slug,
-    attemptId,
-    tokenNonce: attemptPayload.nonce,
-    userId,
-    courseId,
-  });
   const parsed = saveAnswerSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, 'Invalid answer payload', parsed.error.flatten());
 
@@ -197,53 +197,65 @@ export const patchSaveAnswer = asyncHandler(async (req, res) => {
     courseId,
     slug,
     entitlement,
+    tokenNonce: attemptPayload.nonce,
   });
-  sendAttemptSuccess(res, { ...data, nextAttemptToken }, { token: nextAttemptToken });
+  const currentAttemptToken = readAttemptTokenString(req);
+  sendAttemptSuccess(res, { ...data, nextAttemptToken: currentAttemptToken }, {
+    token: currentAttemptToken,
+  });
 });
 
 export const postSubmitAttempt = asyncHandler(async (req, res) => {
   const slug = String(req.params.slug || '').trim();
-  const { userId, courseId } = getCeeContext(req);
-  const attemptPayload = getAttemptPayload(req);
+  const { userId, courseId, entitlement } = getCeeContext(req);
   const attemptId = Number(req.params.attemptId);
-  if (!attemptId || attemptPayload.attemptId !== attemptId || attemptPayload.slug !== slug) {
+  if (!attemptId) {
     throw new ApiError(403, 'Attempt access denied');
   }
-  const nextAttemptToken = await consumeAttemptNonce({
-    slug,
-    attemptId,
-    tokenNonce: attemptPayload.nonce,
-    userId,
-    courseId,
-  });
-  const { entitlement } = getCeeContext(req);
+
+  let attemptPayload = null;
+  try {
+    attemptPayload = getAttemptPayload(req, userId);
+    if (attemptPayload.attemptId !== attemptId || attemptPayload.slug !== slug) {
+      throw new ApiError(403, 'Attempt access denied');
+    }
+  } catch (error) {
+    if (error instanceof AttemptTokenInvalidError) {
+      const recovered = await recoverAlreadySubmittedAttempt({
+        attemptId,
+        userId,
+        courseId,
+        slug,
+        entitlement,
+      });
+      if (recovered) {
+        clearAttemptTokenCookie(res);
+        sendAttemptSuccess(res, recovered, { token: null });
+        return;
+      }
+    }
+    throw error;
+  }
+
   const data = await submitAttempt({
     attemptId,
     userId,
     courseId,
     slug,
     entitlement,
+    tokenNonce: attemptPayload.nonce,
   });
   clearAttemptTokenCookie(res);
-  sendAttemptSuccess(res, { ...data, nextAttemptToken }, { token: null });
+  sendAttemptSuccess(res, data, { token: null });
 });
 
 export const getTestResult = asyncHandler(async (req, res) => {
   const slug = String(req.params.slug || '').trim();
-  const { userId, courseId } = getCeeContext(req);
-  const attemptPayload = getAttemptPayload(req);
+  const { userId, courseId, entitlement } = getCeeContext(req);
   const attemptId = Number(req.params.attemptId);
-  if (!attemptId || attemptPayload.attemptId !== attemptId || attemptPayload.slug !== slug) {
+  if (!attemptId) {
     throw new ApiError(403, 'Attempt access denied');
   }
-  const nextAttemptToken = await consumeAttemptNonce({
-    slug,
-    attemptId,
-    tokenNonce: attemptPayload.nonce,
-    userId,
-    courseId,
-  });
-  const { entitlement } = getCeeContext(req);
   const data = await getAttemptResult({
     slug,
     attemptId,
@@ -251,5 +263,5 @@ export const getTestResult = asyncHandler(async (req, res) => {
     courseId,
     entitlement,
   });
-  sendAttemptSuccess(res, { ...data, nextAttemptToken }, { token: nextAttemptToken });
+  sendAttemptSuccess(res, data, { token: null });
 });

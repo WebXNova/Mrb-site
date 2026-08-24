@@ -22,6 +22,8 @@ export function buildAdminListQuery(filters = {}) {
   setIf('dateTo', filters.dateTo);
   setIf('search', filters.search);
   setIf('status', filters.status);
+  setIf('sortBy', filters.sortBy);
+  setIf('sortDirection', filters.sortDirection);
 
   if (filters.limit != null) sp.set('limit', String(filters.limit));
   if (filters.offset != null) sp.set('offset', String(filters.offset));
@@ -53,6 +55,8 @@ export function readAdminFiltersFromUrl(searchParams) {
     search: get('search') || '',
     status: get('status') || 'all',
     page: get('page') || '1',
+    sortBy: get('sortBy') || 'updated_at',
+    sortDirection: get('sortDirection') === 'asc' ? 'asc' : 'desc',
   };
 }
 
@@ -79,6 +83,8 @@ export function writeAdminFiltersToUrl(searchParams, patch) {
   if ('search' in patch) sync('search', patch.search);
   if ('status' in patch) sync('status', patch.status);
   if ('page' in patch) sync('page', patch.page);
+  if ('sortBy' in patch) sync('sortBy', patch.sortBy);
+  if ('sortDirection' in patch) sync('sortDirection', patch.sortDirection);
 
   if ('courseId' in patch && !patch.courseId) {
     next.delete('subject_id');

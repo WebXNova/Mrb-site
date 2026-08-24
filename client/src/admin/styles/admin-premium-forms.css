@@ -1,0 +1,318 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Premium Form Components — shared across all admin pages.
+   Based on design tokens from admin-theme.css and patterns
+   established in test-settings (admin-test-workspace.css).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Section Card ─── */
+.premium-section-card {
+  padding: var(--space-6);
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--radius-lg);
+  background: var(--admin-surface, #fff);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.premium-section-card__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-18);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight, -0.01em);
+  color: var(--admin-text-primary, var(--color-ink-900));
+  line-height: 1.25;
+}
+
+.premium-section-card__lead {
+  margin: 0 0 var(--space-5);
+  font-size: var(--fs-14);
+  line-height: 1.5;
+  color: var(--admin-text-secondary, var(--color-ink-600));
+}
+
+.premium-section-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ─── Premium Checkbox ─── */
+.premium-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--radius-md);
+  background: var(--admin-surface, #fff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.premium-checkbox:hover:not(.premium-checkbox--disabled) {
+  border-color: var(--admin-border-strong, var(--color-ink-200));
+  background: var(--admin-surface-nested, #f9fafb);
+}
+
+.premium-checkbox--checked {
+  border-color: color-mix(in srgb, var(--admin-secondary, #4f46e5) 35%, var(--admin-border-subtle, #e5e7eb));
+  background: color-mix(in srgb, var(--admin-secondary, #4f46e5) 4%, var(--admin-surface, #fff));
+}
+
+.premium-checkbox--checked:hover:not(.premium-checkbox--disabled) {
+  border-color: color-mix(in srgb, var(--admin-secondary, #4f46e5) 50%, var(--admin-border-subtle, #e5e7eb));
+}
+
+.premium-checkbox--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.premium-checkbox__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.premium-checkbox__indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.1rem;
+  border: 1.5px solid var(--admin-border-strong, var(--color-ink-300));
+  border-radius: var(--radius-sm, 4px);
+  background: var(--admin-surface, #fff);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.premium-checkbox--checked .premium-checkbox__indicator {
+  background: var(--admin-secondary, #4f46e5);
+  border-color: var(--admin-secondary, #4f46e5);
+}
+
+.premium-checkbox__check {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.premium-checkbox--checked .premium-checkbox__check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.premium-checkbox__input:focus-visible ~ .premium-checkbox__indicator {
+  outline: 2px solid var(--admin-secondary, #4f46e5);
+  outline-offset: 2px;
+}
+
+.premium-checkbox__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.premium-checkbox__label {
+  font-size: var(--fs-14);
+  font-weight: var(--fw-medium, 500);
+  color: var(--admin-text-primary, var(--color-ink-900));
+  line-height: 1.4;
+}
+
+.premium-checkbox--checked .premium-checkbox__label {
+  font-weight: var(--fw-semibold, 600);
+  color: var(--admin-text-primary, var(--color-ink-900));
+}
+
+.premium-checkbox__hint {
+  font-size: var(--fs-12);
+  font-weight: var(--fw-regular, 400);
+  line-height: 1.4;
+  color: var(--admin-text-muted, var(--color-ink-500));
+}
+
+/* ─── Premium Checkbox Group (multi-select) ─── */
+.premium-checkbox-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.premium-checkbox-group__legend {
+  display: block;
+  float: none;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semibold);
+  color: var(--admin-text-primary, var(--color-ink-900));
+}
+
+.premium-checkbox-group__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.premium-checkbox-group__empty {
+  padding: var(--space-4);
+  margin: 0;
+  font-size: var(--fs-14);
+  color: var(--admin-text-muted, var(--color-ink-500));
+  text-align: center;
+  border: 1px dashed var(--admin-border, var(--color-ink-200));
+  border-radius: var(--radius-md);
+}
+
+/* ─── Premium Radio Group ─── */
+.premium-radio-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.premium-radio-group__legend {
+  display: block;
+  float: none;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semibold);
+  color: var(--admin-text-primary, var(--color-ink-900));
+}
+
+.premium-radio-group__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--admin-border-subtle, var(--color-ink-100));
+  border-radius: var(--radius-md);
+  background: var(--admin-surface-nested, var(--color-bg-alt, #f8fafc));
+}
+
+.premium-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+  user-select: none;
+}
+
+.premium-radio:hover:not(.premium-radio--disabled) {
+  background: color-mix(in srgb, var(--admin-secondary, #4f46e5) 5%, transparent);
+}
+
+.premium-radio--selected {
+  background: color-mix(in srgb, var(--admin-secondary, #4f46e5) 6%, transparent);
+}
+
+.premium-radio--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.premium-radio__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.premium-radio__indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.15rem;
+  border: 1.5px solid var(--admin-border-strong, var(--color-ink-300));
+  border-radius: 999px;
+  background: var(--admin-surface, #fff);
+  transition: border-color 0.15s ease;
+}
+
+.premium-radio--selected .premium-radio__indicator {
+  border-color: var(--admin-secondary, #4f46e5);
+}
+
+.premium-radio__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--admin-secondary, #4f46e5);
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.premium-radio--selected .premium-radio__dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.premium-radio__input:focus-visible ~ .premium-radio__indicator {
+  outline: 2px solid var(--admin-secondary, #4f46e5);
+  outline-offset: 2px;
+}
+
+.premium-radio__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.premium-radio__label {
+  font-size: var(--fs-14);
+  line-height: 1.45;
+  color: var(--admin-text-primary, var(--color-ink-800));
+}
+
+.premium-radio--selected .premium-radio__label {
+  font-weight: var(--fw-medium, 500);
+}
+
+.premium-radio__hint {
+  font-size: var(--fs-12);
+  font-weight: var(--fw-regular, 400);
+  line-height: 1.4;
+  color: var(--admin-text-muted, var(--color-ink-500));
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 640px) {
+  .premium-section-card {
+    padding: var(--space-4);
+  }
+}
+
+/* ─── Table Selection Checkboxes (compact utility style) ─── */
+.admin-table input[type='checkbox'],
+.admin-tests-table input[type='checkbox'],
+.tests-list-table__check-col input[type='checkbox'],
+.admin-question-bank__col-check input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--admin-secondary, #4f46e5);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 3px);
+}

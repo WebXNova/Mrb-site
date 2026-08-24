@@ -14,8 +14,11 @@ import {
   assertStudentResultVisible,
   isShowAnswersAfterSubmitEnabled,
   isShowExplanationsEnabled,
+  isStudentResultVisible,
   loadSanitizedPortalAnswerReview,
 } from '../services/testResultVisibility.service.js';
+import { findMatchingScoreBand } from '../services/testScoreBands.service.js';
+import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 import {
   loadDetailedAnswerRows,
   loadResultContextRow,
@@ -141,11 +144,18 @@ export async function getResult(studentId, attemptId) {
   const summary = getResultSummary(context);
   const answers = await getDetailedResult(context);
 
+  const matchingBand = await findMatchingScoreBand(Number(context.test_id), context.percentage);
+  const scoreBandMessage =
+    matchingBand?.message_html && String(matchingBand.message_html).trim()
+      ? sanitizeRichHtml(matchingBand.message_html)
+      : null;
+
   logger.info('result fetched', {
     event: 'RESULT_FETCHED',
     attemptId: context.attempt_id,
     studentId,
     hasDetailedAnswers: Array.isArray(answers),
+    hasScoreBand: Boolean(scoreBandMessage),
   });
 
   return {
@@ -155,7 +165,9 @@ export async function getResult(studentId, attemptId) {
     submitted_at: context.submitted_at == null ? null : String(context.submitted_at),
     summary,
     ...(answers ? { answers } : {}),
+    ...(scoreBandMessage ? { score_band_message_html: scoreBandMessage } : {}),
     visibility: {
+      resultsReleased: isStudentResultVisible(context),
       showAnswersAfterSubmit: isShowAnswersAfterSubmitEnabled(context.show_answers_after_submit),
       showExplanations: isShowExplanationsEnabled(context.show_explanations),
     },

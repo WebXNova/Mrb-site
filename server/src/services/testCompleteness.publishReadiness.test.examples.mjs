@@ -31,6 +31,7 @@ const completeWizardRow = {
   category: 'MDCAT',
   duration_minutes: 30,
   max_attempts: 2,
+  passing_marks: 40,
   access_mode: 'private',
 };
 
@@ -131,6 +132,35 @@ console.log('testCompleteness.publishReadiness — G-03\n');
   );
   assert(wizard.can_publish === false, 'publish context completeness false without draft');
   assert(wizard.missing_fields.includes('quiz_draft'), 'publish context surfaces quiz_draft missing');
+}
+
+{
+  const multi = evaluateTestCompleteness(
+    {
+      ...completeWizardRow,
+      duration_minutes: 0,
+      max_attempts: 0,
+    },
+    0,
+    'publish',
+    [1],
+    {
+      source: QUESTION_AUTHORITY_SOURCES.RUNTIME_COMPOSED,
+      questionCount: 0,
+      runtimeComposedCount: 0,
+      hasQuizDraft: false,
+    }
+  );
+  assert(multi.missing_fields.includes('duration_minutes'), 'collects duration when missing');
+  assert(multi.missing_fields.includes('max_attempts'), 'collects max attempts in the same pass');
+  assert(
+    multi.missing_fields.includes('quiz_draft') || multi.missing_fields.includes('questions'),
+    'also reports missing questions/draft'
+  );
+  assert(
+    multi.missing_requirement_items.length >= 2,
+    'missing_requirement_items lists multiple issues at once'
+  );
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

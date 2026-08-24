@@ -53,18 +53,25 @@ expectThrow(
   'withheld results throw ResultNotAccessibleError'
 );
 
+expectThrow(
+  () => assertStudentResultVisible({ show_result_immediately: 1 }, { attemptId: 9 }),
+  ResultNotAccessibleError,
+  'show_result_immediately alone does not grant access without release'
+);
+
 try {
-  assertStudentResultVisible({ show_result_immediately: 1 });
+  assertStudentResultVisible({ results_released_at: '2026-08-21T00:00:00.000Z' });
   passed += 1;
-  console.log('  ✓ visible results pass assert');
+  console.log('  ✓ released results pass assert');
 } catch {
   failed += 1;
-  console.error('  ✗ visible results pass assert');
+  console.error('  ✗ released results pass assert');
 }
 
 {
   const redacted = redactStudentResultListItem({
-    show_result_immediately: 0,
+    results_released_at: null,
+    show_result_immediately: 1,
     score: 18,
     max_score: 20,
     percentage: 90,
@@ -92,7 +99,7 @@ try {
         options: [{ id: 1, isCorrect: true }],
       },
     ],
-    { show_answers_after_submit: 0, show_explanations: 1 }
+    { show_answers_after_submit: 0, show_explanations: 1, results_released_at: '2026-01-01T00:00:00.000Z' }
   );
   assert(
     details?.length === 1 && details[0].correctOptionText === 'B',
@@ -113,7 +120,7 @@ try {
         options: [{ id: 1, isCorrect: true }],
       },
     ],
-    { show_answers_after_submit: 1, show_explanations: 0 }
+    { show_answers_after_submit: 1, show_explanations: 0, results_released_at: '2026-01-01T00:00:00.000Z' }
   );
   assert(
     details?.length === 1 &&

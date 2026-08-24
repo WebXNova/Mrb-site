@@ -1,6 +1,14 @@
 import { memo, useCallback } from 'react';
+import { sanitizeStudentRichHtml } from '../../../security/sanitizeStudentRichHtml.js';
 
-function QuestionOptions({ questionId, options, selectedOptionId, onSelectOption, disabled }) {
+function QuestionOptions({
+  questionId,
+  options,
+  selectedOptionId,
+  onSelectOption,
+  disabled,
+  layoutMode = 'vertical',
+}) {
   const handleKeyDown = useCallback(
     (event, optionId) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -19,13 +27,17 @@ function QuestionOptions({ questionId, options, selectedOptionId, onSelectOption
     );
   }
 
+  const layoutClass =
+    layoutMode === 'horizontal' ? 'tt-options tt-options--horizontal' : 'tt-options';
+
   return (
-    <fieldset className="tt-options" disabled={disabled}>
+    <fieldset className={layoutClass} disabled={disabled}>
       <legend className="visually-hidden">Select one answer</legend>
       {options.map((option, index) => {
         const optionId = String(option.id);
         const isSelected = selectedOptionId === optionId;
         const letter = String.fromCharCode(65 + index);
+        const optionHtml = option.text ?? '';
 
         return (
           <label
@@ -44,7 +56,17 @@ function QuestionOptions({ questionId, options, selectedOptionId, onSelectOption
             <span className="tt-option__marker" aria-hidden="true">
               {letter}
             </span>
-            <span className="tt-option__text">{option.text}</span>
+            <span className="tt-option__text">
+              {optionHtml.includes('<') ? (
+                <span
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeStudentRichHtml(optionHtml),
+                  }}
+                />
+              ) : (
+                optionHtml
+              )}
+            </span>
           </label>
         );
       })}

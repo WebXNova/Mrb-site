@@ -7,6 +7,7 @@ import {
   CHAPTER_DESCRIPTION_MAX_UX,
   CHAPTER_TITLE_MAX_UX,
 } from './chapterFormUtils';
+import AdminToggleSwitch from '../../admin/components/courses/AdminToggleSwitch';
 
 /** @typedef {{ course?: string, subject?: string }} LockedTitles */
 
@@ -187,19 +188,15 @@ export default function AdminChapterFormFields({
       </div>
 
       {variant === 'create' ? (
-        <div className="admin-field">
-          <label htmlFor={idActive}>
-            <input
-              id={idActive}
-              name="isActive"
-              type="checkbox"
-              checked={Boolean(formState.isActive)}
-              onChange={onFormChange}
-              disabled={fieldsDisabled}
-            />{' '}
-            Active
-          </label>
-        </div>
+        <AdminToggleSwitch
+          id={idActive}
+          name="isActive"
+          checked={Boolean(formState.isActive)}
+          onChange={onFormChange}
+          label="Active"
+          hint="Make this chapter visible to students immediately."
+          disabled={fieldsDisabled}
+        />
       ) : null}
 
       {children}

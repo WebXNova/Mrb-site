@@ -28,6 +28,8 @@ import QuizAikenImportSummary from './QuizAikenImportSummary.jsx';
 import QuizBuilderEmptyState from './QuizBuilderEmptyState.jsx';
 import QuizDraftRecoveryBanner from './QuizDraftRecoveryBanner.jsx';
 import QuizDraftStatus from './QuizDraftStatus.jsx';
+import { filterQuizQuestions } from '../utils/quizDraftItems.js';
+import { normalizeTestSubjectOptions } from '../utils/sectionSubject.js';
 
 /**
  * Testmoz-style question list builder — shared by test quiz-builder and question bank routes.
@@ -62,6 +64,43 @@ export default function QuizBuilderView({
   const safeActions = useReadOnlyQuizActions(actions, readOnly);
   const [serverVersion, setServerVersion] = useState(/** @type {number|null} */ (null));
   const [publishedEditUpdatedAt, setPublishedEditUpdatedAt] = useState(/** @type {string|null} */ (null));
+  const [testSubjects, setTestSubjects] = useState(/** @type {Array<{ id: number, title: string }>} */ ([]));
+
+  useEffect(() => {
+    if (!testId) {
+      setTestSubjects([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const token = getAdminToken();
+    adminApi
+      .getTest(token, testId)
+      .then((response) => {
+        if (cancelled) return;
+        const data = response?.data || {};
+        const fromObjects = normalizeTestSubjectOptions(data.subjects);
+        if (fromObjects.length) {
+          setTestSubjects(fromObjects);
+          return;
+        }
+        const ids = Array.isArray(data.subjectIds) ? data.subjectIds : [];
+        const titles = Array.isArray(data.subjectTitles) ? data.subjectTitles : [];
+        setTestSubjects(
+          ids
+            .map((id, index) => ({
+              id: Number(id),
+              title: String(titles[index] || '').trim() || `Subject #${id}`,
+            }))
+            .filter((item) => Number.isInteger(item.id) && item.id > 0)
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setTestSubjects([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [testId]);
 
   useEffect(() => {
     if (!editPublished || !testId) {
@@ -158,16 +197,19 @@ export default function QuizBuilderView({
     disabled: !aikenImportReady,
   });
 
-  const questionCount = state.questions.length;
+  const questionCount = filterQuizQuestions(state.questions).length;
+  const sectionCount = state.questions.length - questionCount;
   const summary =
     questionCount === 0
-      ? 'No questions added yet'
-      : `${questionCount} multiple choice question${questionCount === 1 ? '' : 's'} · ${totalPoints} point${totalPoints === 1 ? '' : 's'} total`;
+      ? sectionCount > 0
+        ? `${sectionCount} section${sectionCount === 1 ? '' : 's'} · add questions to publish`
+        : 'No questions added yet'
+      : `${questionCount} multiple choice question${questionCount === 1 ? '' : 's'}${sectionCount > 0 ? ` · ${sectionCount} section${sectionCount === 1 ? '' : 's'}` : ''} · ${totalPoints} point${totalPoints === 1 ? '' : 's'} total`;
 
   const resolvedBackTo = backTo || adminRoute('tests');
   const resolvedTitle = pageTitle || (testId ? testPageHeading(testTitle, testId) : 'Questions');
   const previousStep = testId ? getTestWizardPreviousStep('questions', testId, editPublished) : null;
-  const publishPath = testId && !editPublished ? adminRoute(`tests/${testId}/details`) : null;
+  const publishPath = testId && !editPublished ? adminRoute(`tests/${testId}/publish`) : null;
 
   const handleAddQuestion = useCallback(() => {
     if (readOnly) return;
@@ -179,7 +221,17 @@ export default function QuizBuilderView({
     });
   }, [readOnly, safeActions]);
 
-  const showEmptyState = hydrationState === 'ready' && questionCount === 0;
+  const handleAddSection = useCallback(() => {
+    if (readOnly) return;
+    safeActions.addSection();
+    requestAnimationFrame(() => {
+      const cards = document.querySelectorAll('.qb-section-card');
+      const last = cards[cards.length - 1];
+      last?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [readOnly, safeActions]);
+
+  const showEmptyState = hydrationState === 'ready' && questionCount === 0 && sectionCount === 0;
 
   return (
     <div className="qb-page">
@@ -239,6 +291,9 @@ export default function QuizBuilderView({
                 <>
                   <button type="button" className="btn btn--primary" onClick={handleAddQuestion}>
                     {TEST_WIZARD_BUTTONS.addQuestion}
+                  </button>
+                  <button type="button" className="btn btn--secondary" onClick={handleAddSection}>
+                    Add section
                   </button>
                   {testId ? (
                     <button
@@ -322,7 +377,13 @@ export default function QuizBuilderView({
               readOnly={readOnly}
             />
           ) : (
-            <QuestionCardList questions={state.questions} actions={safeActions} disabled={readOnly} />
+            <QuestionCardList
+              questions={state.questions}
+              actions={safeActions}
+              disabled={readOnly}
+              testId={testId}
+              subjects={testSubjects}
+            />
           )
         ) : hydrationState === 'error' ? (
           <p className="qb-page__summary">Fix the error above to continue editing questions.</p>

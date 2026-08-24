@@ -49,6 +49,17 @@
   color: var(--color-ink-500);
 }
 
+.tr-timeout-banner {
+  margin: var(--space-4) auto 0;
+  max-width: 36rem;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, #fff);
+  color: var(--color-ink-800);
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
 .tr-section-title {
   margin: 0 0 var(--space-4);
   font-family: var(--font-display);
@@ -652,4 +663,18 @@
   .tr-page {
     gap: var(--space-5);
   }
+}
+
+.tr-score-band-message {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.tr-score-band-message__body {
+  margin-top: var(--space-3);
+  font-size: var(--fs-15);
+  line-height: 1.6;
+  color: var(--color-ink-700);
 }

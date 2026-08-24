@@ -244,19 +244,18 @@ export default function AdminCoursesPage() {
               </>
             )}
           </section>
-
           <section className="courses-page__management">
             <header className="courses-page__section-head">
               <h2 className="courses-page__section-title">All courses</h2>
               <p className="courses-page__section-lead">Search, filter, and manage your course library.</p>
             </header>
-
             <CourseDataGrid
               courses={courses}
               categoryOptions={categoryOptions}
               loading={coursesLoading}
               onEdit={onEdit}
               onArchive={onArchive}
+              onActivate={onActivate}
               onPurge={onPurge}
               onBulkArchive={onBulkArchive}
             />

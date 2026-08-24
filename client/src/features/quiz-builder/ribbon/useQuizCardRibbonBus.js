@@ -5,15 +5,22 @@ import { insertFormulaIntoEditor } from '../../create-question/utils/formula/ins
 /**
  * Per-question ribbon command bus — routes formatting to question, choice, or explanation editors.
  */
-export function useQuizCardRibbonBus() {
+export function useQuizCardRibbonBus(initialActiveId = '') {
   const editorsRef = useRef(new Map());
-  const [activeEditorId, setActiveEditorId] = useState('question');
-  const [focusTarget, setFocusTarget] = useState('question');
+  const [activeEditorId, setActiveEditorId] = useState(initialActiveId);
+  const [focusTarget, setFocusTarget] = useState(initialActiveId);
   const [formulaDialogOpen, setFormulaDialogOpen] = useState(false);
   const [imagePopoverOpen, setImagePopoverOpen] = useState(false);
 
   const registerEditor = useCallback((editorId, editor) => {
     editorsRef.current.set(editorId, editor);
+    setActiveEditorId((current) => {
+      const next = editorsRef.current.has(current) ? current : editorId;
+      if (next !== current) {
+        setFocusTarget(next);
+      }
+      return next;
+    });
   }, []);
 
   const unregisterEditor = useCallback((editorId) => {
@@ -87,8 +94,10 @@ export function useQuizCardRibbonBus() {
 
       const options = { ...def.ckOptions, ...extra };
       const hasOptions = Object.keys(options).length > 0;
-      editor.execute(def.ckCommand, hasOptions ? options : undefined);
       editor.editing.view.focus();
+      const command = editor.commands.get(def.ckCommand);
+      if (!command) return { ok: false, reason: 'missing_command' };
+      editor.execute(def.ckCommand, hasOptions ? options : undefined);
       return { ok: true };
     },
     [getActiveEditor]

@@ -158,7 +158,7 @@ async function loadEntitledStudentResults(studentId, courseId) {
     userId: studentId,
   });
   return db.rows(
-    `SELECT a.id AS attempt_id, t.title AS test_title, t.public_slug, t.show_result_immediately,
+    `SELECT a.id AS attempt_id, t.title AS test_title, t.public_slug, t.results_released_at,
             a.submitted_at, r.score, r.max_score, r.percentage,
             ${DERIVED_PASS_STATUS_SQL} AS pass_status
      FROM test_attempts a
@@ -546,6 +546,7 @@ export async function getStudentResultByAttempt(studentId, attemptId, entitledCo
     timeTakenSeconds: data.summary.time_taken_seconds,
     status: data.summary.status,
     ...(details ? { details } : {}),
+    ...(data.score_band_message_html ? { scoreBandMessageHtml: data.score_band_message_html } : {}),
     visibility: data.visibility,
   };
 }

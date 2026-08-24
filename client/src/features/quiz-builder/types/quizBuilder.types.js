@@ -12,6 +12,7 @@
 /**
  * @typedef {Object} QuizQuestion
  * @property {string} id
+ * @property {string} [itemType]
  * @property {string} title
  * @property {string} questionText
  * @property {number} points
@@ -19,12 +20,27 @@
  * @property {boolean} collapsed
  * @property {boolean} showExplanation
  * @property {string} explanation
+ * @property {boolean} [showTip]
+ * @property {string} [tip]
  * @property {QuizChoice[]} choices
  */
 
 /**
+ * @typedef {Object} QuizSection
+ * @property {string} id
+ * @property {'section'} itemType
+ * @property {number|null} [subjectId]
+ * @property {string} subjectLabel
+ * @property {boolean} collapsed
+ * @property {boolean} showDividerContent
+ * @property {string} dividerContentHtml
+ */
+
+/** @typedef {QuizQuestion | QuizSection} QuizDraftItem */
+
+/**
  * @typedef {Object} QuizBuilderState
- * @property {QuizQuestion[]} questions
+ * @property {QuizDraftItem[]} questions
  * @property {boolean} isDirty
  */
 

@@ -25,6 +25,8 @@ import {
   primaryClientValidationMessage,
   validateQuizDraftQuestionsClient,
 } from '../validation/quizMcqClientValidation.js';
+import { buildOrderedDraftForServerSave } from '../persistence/quizDraftPayload.js';
+import { filterQuizQuestions, isQuizSection } from '../utils/quizDraftItems.js';
 
 export const QUIZ_DRAFT_SERVER_DEBOUNCE_MS = 2000;
 
@@ -204,18 +206,31 @@ export function useQuizDraftPersistence({
       }
 
       const persistableQuestions = filterPersistableQuizDraftQuestions(questions);
-      const clientValidation = validateQuizDraftQuestionsClient(questions);
-      if (!clientValidation.valid) {
-        const message = primaryClientValidationMessage(clientValidation.issues);
+      const hasSections = questions.some(isQuizSection);
+
+      if (!persistableQuestions.length && !hasSections) {
+        const message = 'Add at least one complete question (text + one correct answer).';
         setStatus('error');
         setSaveError(message);
-        logQuizDraftSync('server_save.client_validation', {
-          testId: tid,
-          issueCount: clientValidation.issues.length,
-          message,
-        });
         return { ok: false, error: message };
       }
+
+      if (persistableQuestions.length) {
+        const clientValidation = validateQuizDraftQuestionsClient(questions);
+        if (!clientValidation.valid) {
+          const message = primaryClientValidationMessage(clientValidation.issues);
+          setStatus('error');
+          setSaveError(message);
+          logQuizDraftSync('server_save.client_validation', {
+            testId: tid,
+            issueCount: clientValidation.issues.length,
+            message,
+          });
+          return { ok: false, error: message };
+        }
+      }
+
+      const questionsForServer = buildOrderedDraftForServerSave(questions);
 
       let draftPayload;
 
@@ -223,8 +238,11 @@ export function useQuizDraftPersistence({
         draftPayload = buildQuizDraftPayload({
           testId: tid,
           storageKey: storageKeyRef.current,
-          questions: persistableQuestions,
-          totalPoints: persistableQuestions.reduce((sum, q) => sum + (Number(q.points) || 0), 0),
+          questions: questionsForServer,
+          totalPoints: filterQuizQuestions(questionsForServer).reduce(
+            (sum, q) => sum + (Number(q.points) || 0),
+            0
+          ),
         });
       } catch (error) {
         setStatus('error');
@@ -483,7 +501,7 @@ export function useQuizDraftPersistence({
       serverInFlightRef.current = true;
       let result;
       try {
-        result = await runServerSave(persistableQuestions, persistablePoints, 0);
+        result = await runServerSave(questions, totalPoints, 0);
       } finally {
         serverInFlightRef.current = false;
       }

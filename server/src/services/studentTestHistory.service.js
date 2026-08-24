@@ -103,7 +103,7 @@ function buildFilterClauses({ search, statusFilter, subjectId, dateRange, submit
   if (statusFilter === 'PASS' || statusFilter === 'FAIL') {
     clauses.push(`(${DERIVED_PASS_STATUS_SQL}) = ?`);
     params.push(statusFilter);
-    clauses.push(`t.show_result_immediately = 1`);
+    clauses.push(`t.results_released_at IS NOT NULL`);
   }
 
   const extraWhere = clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
@@ -156,7 +156,7 @@ export async function getStudentTestHistory(studentId, query = {}) {
        a.submitted_at,
        t.title AS test_title,
        t.public_slug,
-       t.show_result_immediately,
+       t.results_released_at,
        r.score,
        r.max_score,
        r.percentage,
@@ -191,13 +191,13 @@ export async function getStudentTestHistory(studentId, query = {}) {
        SUM(CASE WHEN (${DERIVED_PASS_STATUS_SQL}) = 'FAIL' THEN 1 ELSE 0 END) AS failed_tests,
        AVG(r.percentage) AS average_percentage
      ${HISTORY_FROM_SQL}
-       AND t.show_result_immediately = 1`,
+       AND t.results_released_at IS NOT NULL`,
     [courseId, studentId]
   );
 
   return {
     items: itemRows.map((row) => {
-      const resultVisible = Boolean(Number(row.show_result_immediately));
+      const resultVisible = row.results_released_at != null;
       const presentation = presentationByTestId.get(Number(row.test_id));
       return {
         attemptId: Number(row.attempt_id),

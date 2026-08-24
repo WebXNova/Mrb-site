@@ -8,6 +8,7 @@ export default function SubmitConfirmModal({
   unansweredCount,
   isSubmitting,
   submitError,
+  timedOut = false,
   onContinue,
   onConfirm,
   onRetry,
@@ -57,13 +58,15 @@ export default function SubmitConfirmModal({
             !
           </div>
           <h2 id={titleId} className="tt-submit-modal__title">
-            Submit test?
+            {timedOut ? 'Time is up' : 'Submit test?'}
           </h2>
         </header>
 
         <div id={descId} className="tt-submit-modal__body">
           <p className="tt-submit-modal__warning">
-            You cannot change answers after submission.
+            {timedOut
+              ? 'Time is up. Your answered questions are being submitted automatically.'
+              : 'You cannot change answers after submission.'}
           </p>
 
           <dl className="tt-submit-modal__stats">
@@ -81,7 +84,7 @@ export default function SubmitConfirmModal({
             </div>
           </dl>
 
-          {unansweredCount > 0 && !isSubmitting ? (
+          {unansweredCount > 0 && !isSubmitting && !timedOut ? (
             <p className="tt-submit-modal__note" role="status">
               {unansweredCount} question{unansweredCount === 1 ? '' : 's'} still unanswered.
               You can continue the test or submit anyway.
@@ -102,6 +105,7 @@ export default function SubmitConfirmModal({
         </div>
 
         <footer className="tt-submit-modal__actions">
+          {timedOut ? null : (
           <button
             type="button"
             className="btn btn--secondary tt-submit-modal__btn"
@@ -110,6 +114,7 @@ export default function SubmitConfirmModal({
           >
             Continue test
           </button>
+          )}
 
           {submitError && onRetry ? (
             <button

@@ -1,6 +1,7 @@
 import { COURSE_WIZARD_BATCH_TIMEZONES } from '@course-wizard-schema';
 import { fromLocalDatetimeValue, toLocalDatetimeValue } from '../../course/batchPresentation';
 import CourseAdmissionStatusField from './CourseAdmissionStatusField.jsx';
+import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
 
 const BATCH_STATUSES = ['draft', 'published', 'archived'];
 
@@ -164,60 +165,27 @@ export default function CourseStepBatches({
               paddingTop: 'var(--space-2)',
             }}
           >
-            <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                fontSize: 'var(--fs-14)',
-                fontWeight: 'var(--fw-semibold)',
-                color: 'var(--color-ink-700)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!b.is_active}
-                onChange={(e) => onBatchChange(0, { is_active: e.target.checked })}
-              />
-              Active
-            </label>
-            <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                fontSize: 'var(--fs-14)',
-                fontWeight: 'var(--fw-semibold)',
-                color: 'var(--color-ink-700)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!b.show_publicly}
-                onChange={(e) => onBatchChange(0, { show_publicly: e.target.checked })}
-              />
-              Show publicly
-            </label>
-            <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                fontSize: 'var(--fs-14)',
-                fontWeight: 'var(--fw-semibold)',
-                color: 'var(--color-ink-700)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!b.recordings_enabled}
-                onChange={(e) => onBatchChange(0, { recordings_enabled: e.target.checked })}
-              />
-              Recordings enabled
-            </label>
+            <AdminToggleSwitch
+              id="batch-is-active"
+              name="is_active"
+              checked={!!b.is_active}
+              onChange={(e) => onBatchChange(0, { is_active: e.target.checked })}
+              label="Active"
+            />
+            <AdminToggleSwitch
+              id="batch-show-publicly"
+              name="show_publicly"
+              checked={!!b.show_publicly}
+              onChange={(e) => onBatchChange(0, { show_publicly: e.target.checked })}
+              label="Show publicly"
+            />
+            <AdminToggleSwitch
+              id="batch-recordings-enabled"
+              name="recordings_enabled"
+              checked={!!b.recordings_enabled}
+              onChange={(e) => onBatchChange(0, { recordings_enabled: e.target.checked })}
+              label="Recordings enabled"
+            />
           </div>
         </div>
       </fieldset>

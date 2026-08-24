@@ -57,5 +57,29 @@ for (const emptyHtml of ['<p></p>', '<p>&nbsp;</p>', '<p><br></p>', '<div></div>
   assert(sanitized.questions[0].questionText.includes('Real question'), 'legitimate draft question preserved');
 }
 
+{
+  const withSection = validateAndSanitizeQuizDraftPayload(42, {
+    ...baseDraft,
+    questions: [
+      {
+        id: 'sec-1',
+        itemType: 'section',
+        subjectId: 7,
+        subjectLabel: '  Physics  ',
+        collapsed: false,
+        showDividerContent: true,
+        dividerContentHtml: '<p>Intro <img src="https://cdn.example.com/diagram.png" alt="diagram"></p>',
+      },
+      ...baseDraft.questions,
+    ],
+  });
+  assert(withSection.questions[0].subjectId === 7, 'section subjectId is persisted');
+  assert(withSection.questions[0].subjectLabel === 'Physics', 'section subjectLabel is trimmed and persisted');
+  assert(
+    String(withSection.questions[0].dividerContentHtml).includes('img'),
+    'section divider HTML keeps images'
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

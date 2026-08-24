@@ -177,7 +177,18 @@
   font-size: var(--fs-15);
   line-height: var(--lh-relaxed);
   color: var(--color-ink-700);
-  white-space: pre-wrap;
+}
+
+.ti-instructions__text.rich-text {
+  white-space: normal;
+}
+
+.ti-instructions__text img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 0.75rem 0;
 }
 
 .ti-instructions__list {

@@ -49,10 +49,10 @@ for (const [label, src] of [
   }
 }
 
-if (expireSql.includes('expires_at < NOW()')) {
-  ok('expiry update compares against MySQL NOW()');
+if (expireSql.includes('expires_at < UTC_TIMESTAMP()')) {
+  ok('expiry update compares against MySQL UTC_TIMESTAMP()');
 } else {
-  fail('expiry SQL still uses bound JS timestamp');
+  fail('expiry SQL still uses bound JS timestamp or NOW()');
 }
 
 const attemptService = await fs.readFile(

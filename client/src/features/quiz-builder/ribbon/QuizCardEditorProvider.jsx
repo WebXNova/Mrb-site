@@ -7,8 +7,8 @@ import { useQuizCardRibbonBus } from './useQuizCardRibbonBus.js';
 
 const QuizCardEditorContext = createContext(null);
 
-export function QuizCardEditorProvider({ children, disabled = false }) {
-  const bus = useQuizCardRibbonBus();
+export function QuizCardEditorProvider({ children, disabled = false, initialActiveId = '' }) {
+  const bus = useQuizCardRibbonBus(initialActiveId);
   const toggleState = useRibbonCommandState(bus);
 
   useRibbonShortcuts({

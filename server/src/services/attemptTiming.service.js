@@ -94,3 +94,47 @@ export function logAttemptTimeCalculation(logger, payload) {
     ...payload,
   });
 }
+
+/** Client timer + network/clock slack after expires_at for submit only. */
+export const SUBMIT_GRACE_MS = 15_000;
+
+const ATTEMPT_JWT_BUFFER_MS = 120_000;
+const ATTEMPT_JWT_MIN_MS = 120_000;
+const ATTEMPT_JWT_UNLIMITED_MS = 8 * 60 * 60 * 1000;
+const ATTEMPT_JWT_HARD_CAP_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * True when submit is still allowed (expires_at + grace).
+ * @param {number} nowMs
+ * @param {number|null|undefined} expiresAtMs
+ */
+export function isWithinSubmitGraceWindow(nowMs, expiresAtMs) {
+  if (expiresAtMs == null || !Number.isFinite(expiresAtMs)) return true;
+  return Number(nowMs) <= expiresAtMs + SUBMIT_GRACE_MS;
+}
+
+/**
+ * JWT envelope in seconds: remaining attempt time + buffer, 8h when unlimited/unknown.
+ * Finite durations may exceed 8h up to a 12h safety cap (schema max is 600 minutes).
+ *
+ * @param {{ expiresAt?: unknown, durationMinutes?: unknown, nowMs?: number }} input
+ * @returns {number}
+ */
+export function resolveAttemptJwtExpiresInSeconds({ expiresAt, durationMinutes, nowMs = Date.now() } = {}) {
+  const expiresMs = parseTestAvailabilityInstant(expiresAt);
+  let ttlMs;
+
+  if (expiresMs != null) {
+    ttlMs = expiresMs - nowMs + ATTEMPT_JWT_BUFFER_MS;
+  } else {
+    const minutes = Number(durationMinutes);
+    if (Number.isFinite(minutes) && minutes > 0) {
+      ttlMs = minutes * 60_000 + ATTEMPT_JWT_BUFFER_MS;
+    } else {
+      ttlMs = ATTEMPT_JWT_UNLIMITED_MS;
+    }
+  }
+
+  ttlMs = Math.max(ATTEMPT_JWT_MIN_MS, Math.min(ATTEMPT_JWT_HARD_CAP_MS, ttlMs));
+  return Math.ceil(ttlMs / 1000);
+}

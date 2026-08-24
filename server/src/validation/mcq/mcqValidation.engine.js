@@ -398,6 +398,8 @@ export function validateMcqOptions(options, optionsConfig = {}) {
   );
 }
 
+import { isQuizDraftSection } from '../../utils/quizDraftItems.js';
+
 /**
  * Quiz Builder draft question adapter.
  *
@@ -419,6 +421,9 @@ export function validateMcqQuizDraftQuestion(question, index, options = {}) {
   }
 
   const q = /** @type {Record<string, unknown>} */ (question);
+  if (q.itemType === 'section') {
+    return { valid: true, errors: [], normalized: null, skipped: true };
+  }
   if (q.questionType !== 'multiple_choice' && q.questionType !== 'true_false') {
     return { valid: true, errors: [], normalized: null, skipped: true };
   }

@@ -1,21 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import AllQuestionsView from './components/AllQuestionsView';
 import ExamHeader from './components/ExamHeader';
 import MobilePaletteSheet from './components/MobilePaletteSheet';
 import NavigationBar from './components/NavigationBar';
 import OfflineBanner from './components/OfflineBanner';
 import QuestionPalette from './components/QuestionPalette';
 import QuestionPanel from './components/QuestionPanel';
+import SectionDivider from './components/SectionDivider';
 import SubmitConfirmModal from './components/SubmitConfirmModal';
 import TestTakingError from './components/TestTakingError';
 import TestTakingErrorBoundary from './components/TestTakingErrorBoundary';
 import TestTakingSkeleton from './components/TestTakingSkeleton';
 import { useAnswerAutosave, useExamTimer } from './hooks/useExamTimer';
 import { useBeforeUnloadGuard, useOnlineStatus } from './hooks/useOnlineStatus';
-import { useQuestionNavigation } from './hooks/useQuestionNavigation';
+import { useExamItemNavigation } from './hooks/useExamItemNavigation';
 import { useSubmitAttempt } from './hooks/useSubmitAttempt';
 import { useTestAttemptLoad } from './hooks/useTestAttemptLoad';
+import {
+  buildExamItems,
+  questionIndexToItemIndex,
+} from './utils/buildExamItems';
 import { countAnswered } from './utils/questionStatus';
+import {
+  normalizeAttemptSections,
+  normalizeTestDisplaySettings,
+} from './utils/normalizeQuestion';
 import './styles/test-taking.css';
 
 function TestTakingContent() {
@@ -23,6 +33,9 @@ function TestTakingContent() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const autoSubmittedRef = useRef(false);
+  const questionRefs = useRef(new Map());
+  const [scrollCurrentId, setScrollCurrentId] = useState(null);
+  const [scrollVisited, setScrollVisited] = useState(() => new Set());
 
   const {
     payload,
@@ -36,29 +49,42 @@ function TestTakingContent() {
     refreshSession,
   } = useTestAttemptLoad(slug);
 
-  const questionIds = useMemo(() => questions.map((q) => q.id), [questions]);
-  const questionsById = useMemo(() => {
-    const map = new Map();
-    for (const q of questions) map.set(q.id, q);
-    return map;
-  }, [questions]);
+  const sections = useMemo(
+    () => normalizeAttemptSections(payload?.test?.sections),
+    [payload?.test?.sections]
+  );
+  const { layoutMode, displayMode } = useMemo(
+    () => normalizeTestDisplaySettings(payload?.test),
+    [payload?.test]
+  );
+  // Flat tests with DB-default display_mode='all' historically used paginated UX in production.
+  const effectiveDisplayMode = useMemo(() => {
+    if (displayMode === 'all' && sections.length === 0) return 'one_per_page';
+    return displayMode;
+  }, [displayMode, sections.length]);
+  const isScrollAll = effectiveDisplayMode === 'all';
 
-  const {
-    currentIndex,
-    currentId,
-    visited,
-    questionRef,
-    goToIndex,
-    goPrevious,
-    goNext,
-    canGoPrevious,
-    canGoNext,
-  } = useQuestionNavigation(questionIds);
+  const questionIds = useMemo(() => questions.map((q) => q.id), [questions]);
+  const examItems = useMemo(
+    () => buildExamItems(questions, sections),
+    [questions, sections]
+  );
+
+  const itemNav = useExamItemNavigation(examItems);
+
+  useEffect(() => {
+    if (!isScrollAll || !questionIds.length) return;
+    setScrollCurrentId((prev) => prev ?? questionIds[0]);
+    setScrollVisited((prev) => {
+      const next = new Set(prev);
+      next.add(questionIds[0]);
+      return next;
+    });
+  }, [isScrollAll, questionIds]);
 
   const { executeSubmit, isSubmitting, submitError, clearSubmitError } = useSubmitAttempt({
     slug,
     attemptId,
-    refreshSession,
   });
 
   const isOnline = useOnlineStatus();
@@ -73,7 +99,7 @@ function TestTakingContent() {
   const uiLocked = isSubmitting || submitModalOpen;
   const autosaveDisabled = !examReady || timer.isExpired || uiLocked;
 
-  const { selectAnswer, saveStatus, saveError, retryFailedSaves, flushPendingSaves } =
+  const { selectAnswer, saveStatus, saveError, retryFailedSaves, flushPendingSaves, resumeAutosave } =
     useAnswerAutosave({
       slug,
       attemptId,
@@ -85,11 +111,15 @@ function TestTakingContent() {
   const handleAutoSubmit = useCallback(async () => {
     if (autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
-    setSubmitModalOpen(false);
+    setSubmitModalOpen(true);
     clearSubmitError();
     await flushPendingSaves();
-    await executeSubmit();
-  }, [clearSubmitError, executeSubmit, flushPendingSaves]);
+    const result = await executeSubmit({ timedOut: true });
+    if (!result?.ok) {
+      autoSubmittedRef.current = false;
+      resumeAutosave();
+    }
+  }, [clearSubmitError, executeSubmit, flushPendingSaves, resumeAutosave]);
 
   autoSubmitRef.current = handleAutoSubmit;
 
@@ -101,18 +131,50 @@ function TestTakingContent() {
     }
   }, [isOnline, retryFailedSaves, saveStatus]);
 
-  const currentQuestion = currentId ? questionsById.get(currentId) : null;
   const answeredCount = countAnswered(questionIds, answers);
   const unansweredCount = Math.max(0, questions.length - answeredCount);
 
+  const paletteCurrentId = isScrollAll
+    ? scrollCurrentId
+    : itemNav.currentQuestionId;
+  const paletteVisited = isScrollAll ? scrollVisited : itemNav.visitedQuestionIds;
+  const headerQuestionIndex = isScrollAll
+    ? Math.max(0, questionIds.indexOf(scrollCurrentId ?? ''))
+    : itemNav.questionIndex;
+
   const handleJump = useCallback(
-    (index) => {
+    (questionIndex) => {
       if (uiLocked) return;
-      goToIndex(index);
+
+      if (isScrollAll) {
+        const qid = questionIds[questionIndex];
+        if (!qid) return;
+        const el = questionRefs.current.get(String(qid));
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setScrollCurrentId(String(qid));
+        setScrollVisited((prev) => {
+          const next = new Set(prev);
+          next.add(String(qid));
+          return next;
+        });
+      } else {
+        itemNav.goToItemIndex(questionIndexToItemIndex(examItems, questionIndex));
+      }
+
       setPaletteOpen(false);
     },
-    [goToIndex, uiLocked]
+    [examItems, isScrollAll, itemNav, questionIds, uiLocked]
   );
+
+  const handleScrollQuestionVisible = useCallback((questionId) => {
+    setScrollCurrentId(String(questionId));
+    setScrollVisited((prev) => {
+      if (prev.has(String(questionId))) return prev;
+      const next = new Set(prev);
+      next.add(String(questionId));
+      return next;
+    });
+  }, []);
 
   const handleOpenSubmitModal = useCallback(() => {
     if (isSubmitting) return;
@@ -130,32 +192,36 @@ function TestTakingContent() {
     if (isSubmitting) return;
     clearSubmitError();
     await flushPendingSaves();
-    const result = await executeSubmit();
+    const result = await executeSubmit({ timedOut: timer.isExpired });
     if (result?.ok) {
       setSubmitModalOpen(false);
+    } else {
+      resumeAutosave();
     }
-  }, [clearSubmitError, executeSubmit, flushPendingSaves, isSubmitting]);
+  }, [clearSubmitError, executeSubmit, flushPendingSaves, isSubmitting, resumeAutosave, timer.isExpired]);
 
   const handleRetrySubmit = useCallback(async () => {
     if (isSubmitting) return;
     clearSubmitError();
-    await executeSubmit();
-  }, [clearSubmitError, executeSubmit, isSubmitting]);
+    await flushPendingSaves();
+    const result = await executeSubmit({ timedOut: timer.isExpired });
+    if (!result?.ok) resumeAutosave();
+  }, [clearSubmitError, executeSubmit, flushPendingSaves, isSubmitting, resumeAutosave, timer.isExpired]);
 
   const handleKeyDown = useCallback(
     (event) => {
-      if (uiLocked || submitModalOpen) return;
+      if (uiLocked || submitModalOpen || isScrollAll) return;
       if (event.target.closest('input, textarea, select, button')) return;
 
-      if (event.key === 'ArrowLeft' && canGoPrevious) {
+      if (event.key === 'ArrowLeft' && itemNav.canGoPrevious) {
         event.preventDefault();
-        goPrevious();
-      } else if (event.key === 'ArrowRight' && canGoNext) {
+        itemNav.goPrevious();
+      } else if (event.key === 'ArrowRight' && itemNav.canGoNext) {
         event.preventDefault();
-        goNext();
+        itemNav.goNext();
       }
     },
-    [canGoNext, canGoPrevious, goNext, goPrevious, submitModalOpen, uiLocked]
+    [isScrollAll, itemNav, submitModalOpen, uiLocked]
   );
 
   if (status === 'loading') {
@@ -168,10 +234,72 @@ function TestTakingContent() {
 
   const paletteProps = {
     questionIds,
-    currentId,
+    currentId: paletteCurrentId,
     answers,
-    visited,
+    visited: paletteVisited,
     onJump: handleJump,
+  };
+
+  const renderPaginatedMain = () => {
+    const item = itemNav.currentItem;
+    if (!item) {
+      return (
+        <article className="tt-question tt-question--empty">
+          <p>No questions available for this test.</p>
+        </article>
+      );
+    }
+
+    if (item.type === 'section') {
+      return (
+        <>
+          <SectionDivider
+            section={item.section}
+            showContinue
+            onContinue={itemNav.goNext}
+            disabled={uiLocked}
+          />
+          <div className="tt-nav-wrap">
+            <nav className="tt-nav" aria-label="Section navigation">
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={itemNav.goPrevious}
+                disabled={!itemNav.canGoPrevious || uiLocked || isSubmitting}
+              >
+                Previous
+              </button>
+            </nav>
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <QuestionPanel
+          question={item.question}
+          questionNumber={item.questionNumber}
+          totalQuestions={questions.length}
+          selectedOptionId={answers[item.question.id] ?? null}
+          onSelectOption={selectAnswer}
+          questionRef={itemNav.focusRef}
+          layoutMode={layoutMode}
+          disabled={autosaveDisabled}
+        />
+        <div className="tt-nav-wrap">
+          <NavigationBar
+            canGoPrevious={itemNav.canGoPrevious}
+            canGoNext={itemNav.canGoNext}
+            onPrevious={itemNav.goPrevious}
+            onNext={itemNav.goNext}
+            onSubmit={handleOpenSubmitModal}
+            isSubmitting={isSubmitting}
+            disabled={uiLocked}
+          />
+        </div>
+      </>
+    );
   };
 
   return (
@@ -180,7 +308,7 @@ function TestTakingContent() {
 
       <ExamHeader
         title={payload?.test?.title || 'Test'}
-        currentIndex={currentIndex}
+        currentIndex={headerQuestionIndex}
         totalQuestions={questions.length}
         answeredCount={answeredCount}
         timerFormatted={timer.formatted}
@@ -192,6 +320,7 @@ function TestTakingContent() {
         onRetrySave={retryFailedSaves}
         onOpenPalette={() => !uiLocked && setPaletteOpen(true)}
         showPaletteToggle
+        displayMode={effectiveDisplayMode}
       />
 
       {submitError && !submitModalOpen ? (
@@ -207,28 +336,35 @@ function TestTakingContent() {
       ) : null}
 
       <div className="tt-exam__body">
-        <main className="tt-exam__main">
-          <QuestionPanel
-            question={currentQuestion}
-            questionNumber={currentIndex + 1}
-            totalQuestions={questions.length}
-            selectedOptionId={currentId ? answers[currentId] ?? null : null}
-            onSelectOption={selectAnswer}
-            questionRef={questionRef}
-            disabled={autosaveDisabled}
-          />
-
-          <div className="tt-nav-wrap">
-            <NavigationBar
-              canGoPrevious={canGoPrevious}
-              canGoNext={canGoNext}
-              onPrevious={goPrevious}
-              onNext={goNext}
-              onSubmit={handleOpenSubmitModal}
-              isSubmitting={isSubmitting}
-              disabled={uiLocked}
-            />
-          </div>
+        <main className={`tt-exam__main ${isScrollAll ? 'tt-exam__main--scroll-all' : ''}`}>
+          {isScrollAll ? (
+            <>
+              <AllQuestionsView
+                examItems={examItems}
+                totalQuestions={questions.length}
+                answers={answers}
+                onSelectOption={selectAnswer}
+                layoutMode={layoutMode}
+                disabled={autosaveDisabled}
+                questionRefs={questionRefs}
+                onQuestionVisible={handleScrollQuestionVisible}
+              />
+              <div className="tt-nav-wrap tt-nav-wrap--submit-only">
+                <nav className="tt-nav" aria-label="Submit test">
+                  <button
+                    type="button"
+                    className="btn btn--primary tt-nav__submit"
+                    onClick={handleOpenSubmitModal}
+                    disabled={uiLocked || isSubmitting}
+                  >
+                    Submit test
+                  </button>
+                </nav>
+              </div>
+            </>
+          ) : (
+            renderPaginatedMain()
+          )}
         </main>
 
         <QuestionPalette {...paletteProps} className="tt-exam__sidebar" />
@@ -248,6 +384,7 @@ function TestTakingContent() {
         unansweredCount={unansweredCount}
         isSubmitting={isSubmitting}
         submitError={submitError}
+        timedOut={timer.isExpired}
         onContinue={handleContinueTest}
         onConfirm={handleConfirmSubmit}
         onRetry={handleRetrySubmit}

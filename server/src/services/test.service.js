@@ -175,6 +175,8 @@ function toTest(row, subjectIds = []) {
     category: row.category || DEFAULT_TEST_CATEGORY,
     testType: row.test_type || 'subject_wise',
     subjectIds: Array.isArray(subjectIds) ? subjectIds : [],
+    subjectTitles: Array.isArray(row.subject_titles) ? row.subject_titles : [],
+    subjects: Array.isArray(row.subjects) ? row.subjects : [],
     subjectLabel: row.subject_label ?? null,
     durationMinutes: row.duration_minutes,
     passingMarks: row.passing_marks != null ? Number(row.passing_marks) : 0,
@@ -191,73 +193,118 @@ function toTest(row, subjectIds = []) {
     publicLink: buildPublicLink(row.public_slug),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    questionCount: Number(row.question_count ?? 0),
+    scoresCount: Number(row.scores_count ?? 0),
+    avgScore: row.avg_score != null ? Number(row.avg_score) : null,
+    minScore: row.min_score != null ? Number(row.min_score) : null,
+    maxScore: row.max_score != null ? Number(row.max_score) : null,
   };
 }
 
+/** Maps client sort keys to SQL ORDER BY expressions (aggregates defined in listTests join). */
+const TEST_LIST_SORT_SQL = Object.freeze({
+  title: 't.title',
+  status: "CASE WHEN LOWER(t.status) = 'published' THEN 1 ELSE 0 END",
+  questions: 'question_count',
+  scores: 'scores_count',
+  avg_score: 'avg_score',
+  updated_at: 't.updated_at',
+});
+
+function buildTestListOrderBy(sortBy, sortDirection) {
+  const column = TEST_LIST_SORT_SQL[sortBy] ?? TEST_LIST_SORT_SQL.updated_at;
+  const direction = sortDirection === 'asc' ? 'ASC' : 'DESC';
+  return `${column} ${direction}, t.id DESC`;
+}
+
 export async function listTests(filters = {}) {
-  const conditions = ['deleted_at IS NULL'];
+  const conditions = ['t.deleted_at IS NULL'];
   const params = [];
 
   if (filters.testId) {
-    conditions.push('id = ?');
+    conditions.push('t.id = ?');
     params.push(filters.testId);
   }
 
   if (filters.courseId) {
-    conditions.push('course_id = ?');
+    conditions.push('t.course_id = ?');
     params.push(filters.courseId);
   }
 
   if (filters.subjectId) {
     conditions.push(
-      `EXISTS (SELECT 1 FROM test_subjects ts WHERE ts.test_id = tests.id AND ts.subject_id = ?)`
+      `EXISTS (SELECT 1 FROM test_subjects ts WHERE ts.test_id = t.id AND ts.subject_id = ?)`
     );
     params.push(filters.subjectId);
   }
 
   if (filters.status === 'published') {
-    conditions.push("LOWER(status) = 'published'");
+    conditions.push("LOWER(t.status) = 'published'");
   } else if (filters.status === 'incomplete') {
-    conditions.push("UPPER(status) = 'INCOMPLETE'");
+    conditions.push("UPPER(t.status) = 'INCOMPLETE'");
   } else if (filters.status === 'draft') {
-    conditions.push("LOWER(status) <> 'published' AND UPPER(status) <> 'INCOMPLETE'");
+    conditions.push("LOWER(t.status) <> 'published' AND UPPER(t.status) <> 'INCOMPLETE'");
   }
 
   if (filters.dateFrom) {
-    conditions.push('DATE(created_at) >= ?');
+    conditions.push('DATE(t.created_at) >= ?');
     params.push(filters.dateFrom);
   }
   if (filters.dateTo) {
-    conditions.push('DATE(created_at) <= ?');
+    conditions.push('DATE(t.created_at) <= ?');
     params.push(filters.dateTo);
   }
 
   const search = String(filters.search ?? '').trim();
   if (search) {
     const like = `%${search.replace(/[%_\\]/g, ' ').replace(/\s+/g, ' ').trim()}%`;
-    conditions.push('(title LIKE ? OR description LIKE ? OR category LIKE ?)');
+    conditions.push('(t.title LIKE ? OR t.description LIKE ? OR t.category LIKE ?)');
     params.push(like, like, like);
   }
 
   const whereSql = conditions.join(' AND ');
   const limit = filters.limit != null ? Number(filters.limit) : null;
   const offset = filters.offset != null ? Number(filters.offset) : 0;
+  const orderBySql = buildTestListOrderBy(filters.sortBy, filters.sortDirection);
+
+  const statsJoinSql = `
+    LEFT JOIN (
+      SELECT tq.test_id, COUNT(*) AS question_count
+      FROM test_questions tq
+      INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+      GROUP BY tq.test_id
+    ) qc ON qc.test_id = t.id
+    LEFT JOIN (
+      SELECT test_id,
+        COUNT(*) AS scores_count,
+        AVG(percentage) AS avg_score,
+        MIN(percentage) AS min_score,
+        MAX(percentage) AS max_score
+      FROM test_results
+      GROUP BY test_id
+    ) rs ON rs.test_id = t.id`;
 
   let total = null;
   if (limit != null) {
     const [[countRow]] = await mysqlPool.query(
-      `SELECT COUNT(*) AS total FROM tests WHERE ${whereSql}`,
+      `SELECT COUNT(*) AS total FROM tests t WHERE ${whereSql}`,
       params
     );
     total = Number(countRow?.total ?? 0);
   }
 
-  let sql = `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_marks,
-            max_attempts, negative_marking, shuffle_questions, shuffle_options,
-            show_explanations, access_mode, tags_json, status, public_slug, created_at, updated_at
-     FROM tests
+  let sql = `SELECT t.id, t.course_id, t.title, t.description, t.category, t.test_type, t.duration_minutes, t.passing_marks,
+            t.max_attempts, t.negative_marking, t.shuffle_questions, t.shuffle_options,
+            t.show_explanations, t.access_mode, t.tags_json, t.status, t.public_slug, t.created_at, t.updated_at,
+            COALESCE(qc.question_count, 0) AS question_count,
+            COALESCE(rs.scores_count, 0) AS scores_count,
+            rs.avg_score,
+            rs.min_score,
+            rs.max_score
+     FROM tests t
+     ${statsJoinSql}
      WHERE ${whereSql}
-     ORDER BY created_at DESC`;
+     ORDER BY ${orderBySql}`;
 
   const queryParams = [...params];
   if (limit != null) {
@@ -274,6 +321,11 @@ export async function listTests(filters = {}) {
       {
         ...row,
         subject_label: presentation?.displayLabel ?? null,
+        subject_titles: presentation?.subjectTitles ?? [],
+        subjects: (presentation?.subjectIds || []).map((id, index) => ({
+          id,
+          title: presentation.subjectTitles?.[index] ?? '',
+        })),
       },
       presentation?.subjectIds ?? []
     );
@@ -297,7 +349,18 @@ export async function getTestById(testId) {
   );
   if (!rows[0]) return null;
   const presentation = await loadTestSubjectPresentation(testId);
-  return toTest({ ...rows[0], subject_label: presentation.displayLabel }, presentation.subjectIds);
+  return toTest(
+    {
+      ...rows[0],
+      subject_label: presentation.displayLabel,
+      subject_titles: presentation.subjectTitles,
+      subjects: (presentation.subjectIds || []).map((id, index) => ({
+        id,
+        title: presentation.subjectTitles?.[index] ?? '',
+      })),
+    },
+    presentation.subjectIds
+  );
 }
 
 /**
@@ -456,9 +519,11 @@ async function getActiveTestSettingsRow(testId) {
   const tid = Number(testId);
   if (!Number.isInteger(tid) || tid <= 0) return null;
   const [rows] = await mysqlPool.query(
-    `SELECT id, title, shuffle_questions, shuffle_options, show_explanations,
+    `SELECT id, title, description, shuffle_questions, shuffle_options, show_explanations,
             show_result_immediately, show_answers_after_submit, allow_retake,
-            access_mode, status, start_date, end_date, public_slug
+            access_mode, status, start_date, end_date, public_slug,
+            layout_mode, display_mode, full_page_mode, results_released_at,
+            introduction_html, conclusion_html
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
      LIMIT 1`,
@@ -484,14 +549,32 @@ export async function getTestSettingsById(testId) {
   }
 
   const report = await getTestCompletenessReport(Number(testId));
+  const { listTestScoreBands } = await import('./testScoreBands.service.js');
+  const scoreBands = await listTestScoreBands(Number(testId));
+
+  const introductionHtml =
+    row.introduction_html != null && String(row.introduction_html).trim() !== ''
+      ? String(row.introduction_html)
+      : row.description != null
+        ? String(row.description)
+        : null;
 
   return {
     testId: Number(row.id),
+    title: String(row.title ?? ''),
     shuffle_questions: Boolean(Number(row.shuffle_questions)),
     shuffle_options: Boolean(Number(row.shuffle_options)),
     show_explanations: Boolean(Number(row.show_explanations)),
     show_result_immediately: Boolean(Number(row.show_result_immediately)),
+    show_answers_after_submit: Boolean(Number(row.show_answers_after_submit)),
     access_mode: row.access_mode === 'public' ? 'public' : 'private',
+    layout_mode: row.layout_mode === 'horizontal' ? 'horizontal' : 'vertical',
+    display_mode: row.display_mode === 'one_per_page' ? 'one_per_page' : 'all',
+    full_page_mode: Boolean(Number(row.full_page_mode)),
+    results_released_at: row.results_released_at ? new Date(row.results_released_at).toISOString() : null,
+    introduction_html: introductionHtml,
+    conclusion_html: row.conclusion_html != null ? String(row.conclusion_html) : null,
+    score_bands: scoreBands,
     lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
     start_date: toAvailabilityIso(row.start_date),
     end_date: toAvailabilityIso(row.end_date),
@@ -529,54 +612,124 @@ export async function updateTestSettings(testId, payload, access = {}) {
     });
   }
 
+  const { sanitizeQuestionHtml } = await import('../utils/questionHtmlSanitizer.js');
+  const layoutMode = payload.layout_mode ?? (existing.layout_mode === 'horizontal' ? 'horizontal' : 'vertical');
+  const displayMode =
+    payload.display_mode ?? (existing.display_mode === 'one_per_page' ? 'one_per_page' : 'all');
+  const fullPageMode =
+    payload.full_page_mode != null ? Boolean(payload.full_page_mode) : Boolean(Number(existing.full_page_mode));
+  const showAnswersAfterSubmit =
+    payload.show_answers_after_submit != null
+      ? Boolean(payload.show_answers_after_submit)
+      : Boolean(Number(existing.show_answers_after_submit));
+
+  const introductionHtml =
+    payload.introduction_html !== undefined
+      ? payload.introduction_html == null
+        ? null
+        : sanitizeQuestionHtml(payload.introduction_html)
+      : existing.introduction_html;
+
+  const conclusionHtml =
+    payload.conclusion_html !== undefined
+      ? payload.conclusion_html == null
+        ? null
+        : sanitizeQuestionHtml(payload.conclusion_html)
+      : existing.conclusion_html;
+
   const startDate =
-    payload.start_date == null ? null : formatMySqlDateTime(payload.start_date, { fieldName: 'start_date' });
+    payload.start_date !== undefined
+      ? payload.start_date == null
+        ? null
+        : formatMySqlDateTime(payload.start_date, { fieldName: 'start_date' })
+      : existing.start_date;
+
   const endDate =
-    payload.end_date == null ? null : formatMySqlDateTime(payload.end_date, { fieldName: 'end_date' });
+    payload.end_date !== undefined
+      ? payload.end_date == null
+        ? null
+        : formatMySqlDateTime(payload.end_date, { fieldName: 'end_date' })
+      : existing.end_date;
 
-  await mysqlPool.query(
-    `UPDATE tests
-     SET shuffle_questions = ?,
-         shuffle_options = ?,
-         show_explanations = ?,
-         show_result_immediately = ?,
-         access_mode = ?,
-         start_date = ?,
-         end_date = ?,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ? AND deleted_at IS NULL`,
-    [
-      payload.shuffle_questions ? 1 : 0,
-      payload.shuffle_options ? 1 : 0,
-      payload.show_explanations ? 1 : 0,
-      payload.show_result_immediately ? 1 : 0,
-      payload.access_mode,
-      startDate,
-      endDate,
-      tid,
-    ]
-  );
+  const connection = await mysqlPool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  const report = await syncTestLifecycleStatus(tid);
+    await connection.query(
+      `UPDATE tests
+       SET shuffle_questions = ?,
+           shuffle_options = ?,
+           show_explanations = ?,
+           show_result_immediately = ?,
+           show_answers_after_submit = ?,
+           access_mode = ?,
+           layout_mode = ?,
+           display_mode = ?,
+           full_page_mode = ?,
+           introduction_html = ?,
+           conclusion_html = ?,
+           start_date = ?,
+           end_date = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND deleted_at IS NULL`,
+      [
+        payload.shuffle_questions ? 1 : 0,
+        payload.shuffle_options ? 1 : 0,
+        payload.show_explanations ? 1 : 0,
+        payload.show_result_immediately ? 1 : 0,
+        showAnswersAfterSubmit ? 1 : 0,
+        payload.access_mode,
+        layoutMode,
+        displayMode,
+        fullPageMode ? 1 : 0,
+        introductionHtml,
+        conclusionHtml,
+        startDate,
+        endDate,
+        tid,
+      ]
+    );
 
-  if (publishContext.isPublished) {
-    await auditPublishedTestEdit({
+    let scoreBands = null;
+    if (payload.score_bands != null) {
+      const { replaceTestScoreBands } = await import('./testScoreBands.service.js');
+      scoreBands = await replaceTestScoreBands(tid, payload.score_bands, connection);
+    }
+
+    await connection.commit();
+
+    const report = await syncTestLifecycleStatus(tid);
+
+    if (publishContext.isPublished) {
+      await auditPublishedTestEdit({
+        testId: tid,
+        userId: access.userId ?? null,
+        role: access.role ?? 'admin',
+        section: 'settings',
+        metadata: {
+          accessMode: payload.access_mode,
+          attemptStats: publishContext.attemptStats,
+        },
+      });
+    }
+
+    const result = {
       testId: tid,
-      userId: access.userId ?? null,
-      role: access.role ?? 'admin',
-      section: 'settings',
-      metadata: {
-        accessMode: payload.access_mode,
-        attemptStats: publishContext.attemptStats,
-      },
-    });
-  }
+      lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
+      ...buildPublishedEditMetadata(publishContext.attemptStats),
+    };
 
-  return {
-    testId: tid,
-    lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
-    ...buildPublishedEditMetadata(publishContext.attemptStats),
-  };
+    if (scoreBands) {
+      result.score_bands = scoreBands;
+    }
+
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function getPublishedTestBySlug(publicSlug) {
@@ -852,6 +1005,11 @@ export async function publishTest(testId, options = {}) {
       replayPublicSlug = lockedRow.public_slug ?? null;
       await connection.commit();
     } else {
+      await validatePublishEligibility(tid, connection, {
+        throwOnFailure: true,
+        userId,
+      });
+
       materializationSummary = await materializeQuizDraftToRuntimeTables(tid, userId, connection);
 
       logPublishMaterialized({
@@ -864,11 +1022,6 @@ export async function publishTest(testId, options = {}) {
         replacedLinks: materializationSummary.replacedLinks,
         supersededCleanup: materializationSummary.supersededCleanup ?? null,
         materializationIdempotent: materializationSummary.idempotent,
-      });
-
-      await validatePublishEligibility(tid, connection, {
-        throwOnFailure: true,
-        userId,
       });
 
       const syncReport = await syncTestLifecycleStatus(tid, connection);

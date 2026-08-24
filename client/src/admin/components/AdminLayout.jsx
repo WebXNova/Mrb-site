@@ -22,6 +22,7 @@ import '../styles/admin-density.css';
 import '../styles/admin-layout-cleanup.css';
 import '../styles/admin-course-edit-layout.css';
 import '../styles/admin-theme-overrides.css';
+import '../styles/admin-premium-forms.css';
 import { AdminThemeProvider, useAdminTheme } from '../context/AdminThemeContext';
 import AdminToastContainer from './AdminToastContainer';
 import AdminBreadcrumbs from './AdminBreadcrumbs';

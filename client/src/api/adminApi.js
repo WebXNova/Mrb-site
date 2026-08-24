@@ -192,6 +192,13 @@ export const adminApi = {
   getTestCompleteness: (token, testId) => http.get(ap(`tests/${testId}/completeness`), { token }),
   getTestResultsAnalytics: (token, testId) =>
     http.get(ap(`tests/${testId}/results/analytics`), { token }),
+  getTestResults: (token, testId) => http.get(ap(`tests/${testId}/results`), { token }),
+  releaseTestResults: (token, testId) =>
+    http.post(ap(`tests/${testId}/release-results`), {}, { token }),
+  unreleaseTestResults: (token, testId) =>
+    http.post(ap(`tests/${testId}/unrelease-results`), {}, { token }),
+  clearTestResults: (token, testId) =>
+    http.post(ap(`tests/${testId}/clear-results`), {}, { token }),
   deleteTest: (token, testId) => http.delete(ap(`tests/${testId}`), { token }),
   publishTest: (token, testId) => http.post(ap(`tests/${testId}/publish`), {}, { token }),
   publishCourse: (token, courseId) => http.post(ap(`courses/${courseId}/publish`), {}, { token }),
@@ -570,22 +577,22 @@ export const testsApi = {
   getStartData: (slug, attemptId) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/start`, {
       authScope: 'student',
-      retryOnUnauthorized: true,
+      retryOnUnauthorized: false,
     }),
   saveAnswer: (slug, attemptId, payload) =>
     http.patch(`/tests/${slug}/attempts/${attemptId}/answers`, payload, {
       authScope: 'student',
-      retryOnUnauthorized: true,
+      retryOnUnauthorized: false,
     }),
   submitAttempt: (slug, attemptId) =>
     http.post(`/tests/${slug}/attempts/${attemptId}/submit`, {}, {
       authScope: 'student',
-      retryOnUnauthorized: true,
+      retryOnUnauthorized: false,
     }),
   getResult: (slug, attemptId) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/result`, {
       authScope: 'student',
-      retryOnUnauthorized: true,
+      retryOnUnauthorized: false,
     }),
 };
 

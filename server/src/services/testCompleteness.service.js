@@ -7,6 +7,11 @@ import { VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
 import { mysqlPool } from '../config/mysql.js';
 import { loadTestSubjectIds } from './testSubjectValidation.service.js';
 import { resolveTestQuestionAuthority } from './testQuestionAuthority.service.js';
+import { findTestQuizDraftByTestIdForRead } from '../repositories/testQuizDraft.repository.js';
+import {
+  collectEmptySectionWarnings,
+  collectInvalidSectionLabels,
+} from './quizDraftSectionValidation.service.js';
 
 export const TEST_LIFECYCLE_STATES = Object.freeze({
   INCOMPLETE: 'INCOMPLETE',
@@ -65,42 +70,43 @@ export function isPublishDbStatusValue(dbOrLifecycleStatus) {
  * @param {string[]} missingFields
  */
 function evaluateStep1(testRow, subjectIds, missingFields) {
+  let complete = true;
   const courseId = Number(testRow.course_id);
   if (!Number.isInteger(courseId) || courseId <= 0) {
     missingFields.push('course_id');
-    return false;
+    complete = false;
   }
 
   const title = String(testRow.title ?? '').trim();
   if (title.length < 3) {
     missingFields.push('title');
-    return false;
+    complete = false;
   }
 
   const testType = String(testRow.test_type ?? '').trim();
   if (!testType || !STEP1_TYPES.has(testType)) {
     missingFields.push('test_type');
-    return false;
+    complete = false;
   }
 
   const category = String(testRow.category ?? '').trim();
   if (!category) {
     missingFields.push('category');
-    return false;
+    complete = false;
   }
 
   const ids = subjectIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
   if (testType === 'subject_wise') {
     if (ids.length !== 1) {
       missingFields.push('subject_id');
-      return false;
+      complete = false;
     }
   } else if (testType === 'mixed_subject' && ids.length < 1) {
     missingFields.push('subject_ids');
-    return false;
+    complete = false;
   }
 
-  return true;
+  return complete;
 }
 
 /**
@@ -108,25 +114,26 @@ function evaluateStep1(testRow, subjectIds, missingFields) {
  * @param {string[]} missingFields
  */
 function evaluateStep2(testRow, missingFields) {
-  const duration = Number(testRow.duration_minutes);
+  let complete = true;
+  const duration = Number(testRow.duration_minutes ?? testRow.duration_minutes);
   if (!Number.isInteger(duration) || duration <= 0 || duration > 600) {
     missingFields.push('duration_minutes');
-    return false;
+    complete = false;
   }
 
   const maxAttempts = Number(testRow.max_attempts);
   if (!Number.isInteger(maxAttempts) || maxAttempts <= 0 || maxAttempts > 50) {
     missingFields.push('max_attempts');
-    return false;
+    complete = false;
   }
 
   const passingMarks = testRow.passing_marks;
   if (passingMarks == null || !Number.isFinite(Number(passingMarks)) || Number(passingMarks) < 0) {
     missingFields.push('passing_marks');
-    return false;
+    complete = false;
   }
 
-  return true;
+  return complete;
 }
 
 /**
@@ -190,6 +197,53 @@ function evaluateStep4(testRow, authorityMeta, missingFields) {
 }
 
 /**
+ * Structured publish checklist — one entry per missing requirement (not first-only).
+ * Empty-section warnings are included as non-blocking items.
+ *
+ * @param {string[]} missingFields
+ * @param {{
+ *   invalidSections?: Array<{ id?: string, index?: number, sectionNumber?: number, label?: string }>,
+ *   emptySectionWarnings?: string[],
+ * }} [extras]
+ */
+export function buildMissingRequirementItems(missingFields = [], extras = {}) {
+  const fields = [...new Set((missingFields || []).map((field) => String(field)))];
+  const invalidSections = Array.isArray(extras.invalidSections) ? extras.invalidSections : [];
+  const emptySectionWarnings = Array.isArray(extras.emptySectionWarnings) ? extras.emptySectionWarnings : [];
+  const items = [];
+
+  for (const code of fields) {
+    if (code === 'section_labels' && invalidSections.length) {
+      invalidSections.forEach((section) => {
+        const name = String(section.label || '').trim();
+        const number = Number(section.sectionNumber) || Number(section.index) + 1;
+        items.push({
+          code,
+          blocking: true,
+          key: `section_labels:${section.id || section.index || number}`,
+          message: name
+            ? `Section "${name}" is missing a valid subject label`
+            : `Section ${number} is missing a valid subject label`,
+        });
+      });
+      continue;
+    }
+    items.push({ code, blocking: true, key: code });
+  }
+
+  emptySectionWarnings.forEach((warning, index) => {
+    items.push({
+      code: 'empty_section',
+      blocking: false,
+      key: `empty_section:${index}`,
+      message: String(warning),
+    });
+  });
+
+  return items;
+}
+
+/**
  * @param {Record<string, unknown>} testRow
  * @param {number} questionCount
  * @param {'general'|'publish'} [context]
@@ -239,6 +293,7 @@ export function evaluateTestCompleteness(
     draft_question_count: authorityMeta.draftQuestionCount ?? null,
     draft_total_count: authorityMeta.draftTotalCount ?? null,
     has_quiz_draft: authorityMeta.hasQuizDraft ?? false,
+    missing_requirement_items: buildMissingRequirementItems(uniqueMissing),
   };
 }
 
@@ -278,7 +333,32 @@ export async function getTestCompletenessReport(testId, executor = mysqlPool) {
   if (!row) return null;
   const authority = await resolveTestQuestionAuthority(testId, executor, { testRow: row });
   const subjectIds = await loadTestSubjectIds(testId, executor);
-  return evaluateTestCompleteness(row, authority.questionCount, 'general', subjectIds, authority);
+  const report = evaluateTestCompleteness(row, authority.questionCount, 'general', subjectIds, authority);
+  let invalidSections = [];
+  let publishWarnings = [];
+
+  if (authority.hasQuizDraft) {
+    const draft = await findTestQuizDraftByTestIdForRead(executor, Number(testId));
+    if (draft?.draftPayload) {
+      invalidSections = collectInvalidSectionLabels(draft.draftPayload);
+      publishWarnings = collectEmptySectionWarnings(draft.draftPayload);
+      if (invalidSections.length) {
+        report.missing_fields = [...new Set([...report.missing_fields, 'section_labels'])];
+        report.can_publish = false;
+        if (report.step4_complete && report.missing_fields.includes('section_labels')) {
+          report.step4_complete = false;
+        }
+      }
+      report.publish_warnings = publishWarnings;
+    }
+  }
+
+  report.missing_requirement_items = buildMissingRequirementItems(report.missing_fields, {
+    invalidSections,
+    emptySectionWarnings: publishWarnings,
+  });
+
+  return report;
 }
 
 /**

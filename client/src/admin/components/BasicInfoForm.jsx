@@ -1,6 +1,8 @@
 /**
  * Shared Step 1 basic-info form for create and edit test flows.
  */
+import PremiumCheckboxGroup from './ui/PremiumCheckboxGroup';
+
 export default function BasicInfoForm({
   form,
   fieldErrors,
@@ -131,27 +133,25 @@ export default function BasicInfoForm({
             </div>
           ) : (
             <div className="admin-field">
-              <span className="body-md" style={{ fontWeight: 'var(--fw-semibold)' }}>
-                Subjects
-              </span>
+              <PremiumCheckboxGroup
+                legend="Subjects"
+                options={subjects.map((subject) => ({
+                  value: Number(subject.id),
+                  label: subject.title || subject.name || `Subject #${subject.id}`,
+                }))}
+                selectedValues={form.subject_ids}
+                onChange={(nextIds) => {
+                  subjects.forEach((s) => {
+                    const id = Number(s.id);
+                    const wasSelected = form.subject_ids.includes(id);
+                    const isSelected = nextIds.includes(id);
+                    if (wasSelected !== isSelected) onToggleMixedSubject(s.id);
+                  });
+                }}
+                disabled={disabled}
+                emptyMessage="No subjects found for this course."
+              />
               <p className="admin-field__hint">Select one or more subjects from the course.</p>
-              <div className="admin-test-form__subjects-list">
-                {subjects.length ? (
-                  subjects.map((subject) => (
-                    <label key={subject.id}>
-                      <input
-                        type="checkbox"
-                        checked={form.subject_ids.includes(Number(subject.id))}
-                        onChange={() => onToggleMixedSubject(subject.id)}
-                        disabled={disabled}
-                      />
-                      {subject.title || subject.name || `Subject #${subject.id}`}
-                    </label>
-                  ))
-                ) : (
-                  <p className="admin-courses__muted">No subjects found for this course.</p>
-                )}
-              </div>
               {fieldErrors.subject_ids ? <div className="admin-field__error">{fieldErrors.subject_ids}</div> : null}
             </div>
           )}

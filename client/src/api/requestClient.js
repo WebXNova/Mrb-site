@@ -466,7 +466,13 @@ export async function request(path, options = {}) {
 
   if (response.status === 401) {
     profile.end('401');
-    throw createHttpError(failMsg() || 'Unauthorized', { status: 401, refreshAlreadyTried: true });
+    throw createHttpError(failMsg() || 'Unauthorized', {
+      status: 401,
+      refreshAlreadyTried: true,
+      errorCode: data?.error?.code ?? data?.errorCode ?? null,
+      details: data?.details ?? data?.error?.metadata ?? null,
+      responseData: data,
+    });
   }
   profile.end('error', { status: response.status });
   const errorCode = data?.error?.code ?? data?.errorCode ?? null;

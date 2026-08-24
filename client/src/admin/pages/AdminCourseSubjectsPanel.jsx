@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { useAdminToast } from '../context/AdminToastContext';
 import AdminLoadingButton from '../components/AdminLoadingButton';
+import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
 
 const emptyForm = { title: '', description: '' };
 
@@ -304,14 +305,13 @@ export default function AdminCourseSubjectsPanel({ token, courseId, embedded = f
       <section className="admin-card">
         <div className="course-edit-subjects__table-head admin-row-actions">
           <h3 className="heading-4">Subjects</h3>
-          <label className="admin-field course-edit-subjects__filter">
-            <input
-              type="checkbox"
-              checked={includeInactive}
-              onChange={(e) => setIncludeInactive(e.target.checked)}
-            />
-            Show inactive
-          </label>
+          <AdminToggleSwitch
+            id="show-inactive-subjects"
+            name="includeInactive"
+            checked={includeInactive}
+            onChange={(e) => setIncludeInactive(e.target.checked)}
+            label="Show inactive"
+          />
         </div>
 
         <div className="course-edit-subjects__table-wrap admin-table-wrap">

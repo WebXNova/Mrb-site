@@ -63,9 +63,34 @@ export function parseAdminListFilters(query = {}, options = {}) {
     dateTo: parseIsoDate(query.dateTo, 'dateTo'),
     search: parseSearch(query.search),
     status: parseStatus(query.status),
+    sortBy: parseSortBy(query.sortBy ?? query.sort_by),
+    sortDirection: parseSortDirection(query.sortDirection ?? query.sort_dir ?? query.order),
     limit,
     offset,
   };
+}
+
+const TEST_LIST_SORT_KEYS = Object.freeze([
+  'title',
+  'status',
+  'questions',
+  'scores',
+  'avg_score',
+  'updated_at',
+]);
+
+function parseSortBy(value) {
+  const key = String(value ?? 'updated_at')
+    .trim()
+    .toLowerCase();
+  return TEST_LIST_SORT_KEYS.includes(key) ? key : 'updated_at';
+}
+
+function parseSortDirection(value) {
+  const dir = String(value ?? 'desc')
+    .trim()
+    .toLowerCase();
+  return dir === 'asc' ? 'asc' : 'desc';
 }
 
 /**

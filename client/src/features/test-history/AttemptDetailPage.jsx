@@ -69,6 +69,21 @@ export default function AttemptDetailPage() {
         ) : null}
       </header>
 
+      {result?.scoreBandMessageHtml ? (
+        <section
+          className="tr-score-band-message"
+          aria-labelledby="th-detail-score-band-heading"
+        >
+          <h2 id="th-detail-score-band-heading" className="tr-section-title">
+            Feedback
+          </h2>
+          <div
+            className="tr-score-band-message__body rich-text"
+            dangerouslySetInnerHTML={{ __html: result.scoreBandMessageHtml }}
+          />
+        </section>
+      ) : null}
+
       <section className="th-detail-grid" aria-labelledby="th-detail-summary-heading">
         <h2 id="th-detail-summary-heading" className="visually-hidden">
           Attempt summary

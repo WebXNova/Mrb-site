@@ -17,7 +17,7 @@ function buildWizardPhases(completeness, published) {
     {
       key: 'publish',
       label: 'Publish',
-      done: published || completeness.can_publish,
+      done: published,
     },
   ];
 }
@@ -44,13 +44,18 @@ export function TestWizardProgress({
   const steps = buildWizardPhases(completeness, published);
 
   function renderMissingHint() {
-    if (!showMissingDetails || !missing.length) return null;
+    const hasItems =
+      missing.length ||
+      (Array.isArray(completeness.missing_requirement_items) && completeness.missing_requirement_items.length) ||
+      (Array.isArray(completeness.publish_warnings) && completeness.publish_warnings.length);
+    if (!showMissingDetails || !hasItems) return null;
     return (
       <TestWizardMissingHint
         missingFields={missing}
+        completeness={completeness}
         activeStep={activeStep}
         testId={testId}
-        variant="inline"
+        variant="list"
       />
     );
   }

@@ -1,6 +1,8 @@
 import TestStatusBadge, { formatTestStatusLabel } from './TestStatusBadge';
 import { TestWizardProgress } from './TestWizardProgress';
 import TestPublishActions from './TestPublishActions';
+import TestResultsReleasePanel from './TestResultsReleasePanel';
+import TestWizardMissingHint from './TestWizardMissingHint';
 
 function DetailRow({ label, value }) {
   return (
@@ -46,21 +48,53 @@ export default function TestDetailsView({
   publishSummary = null,
   summaryLoading = false,
   readOnly = false,
+  onResultsReleasedChange,
 }) {
   const subjectIds = Array.isArray(test?.subjectIds) ? test.subjectIds.join(', ') : '—';
   const canPublish = Boolean(completeness?.can_publish) && !readOnly;
+  const showReleasePanel = readOnly && Boolean(testId);
+  const showPublishPanel = !readOnly && Boolean(completeness);
 
   return (
     <div className="admin-test-details">
-      <TestWizardProgress completeness={completeness} showMissingDetails readOnly={readOnly} testId={testId} activeStep="publish" />
+      <TestWizardProgress
+        completeness={completeness}
+        showMissingDetails
+        readOnly={readOnly}
+        testId={testId}
+        activeStep="publish"
+      />
 
-      {canPublish ? (
+      {showReleasePanel ? (
+        <TestResultsReleasePanel
+          testId={testId}
+          resultsReleasedAt={settings?.results_released_at ?? null}
+          onChanged={onResultsReleasedChange}
+        />
+      ) : null}
+
+      {showPublishPanel && canPublish ? (
         <TestPublishActions
           testId={testId}
           completeness={completeness}
           summaryLoading={summaryLoading}
           onPublished={onPublished}
         />
+      ) : null}
+
+      {showPublishPanel && !canPublish ? (
+        <div className="admin-publish-callout admin-publish-callout--blocked">
+          <p className="admin-publish-callout__text">
+            <strong>Cannot publish yet.</strong> Fix everything below, then try again.
+          </p>
+          <TestWizardMissingHint
+            completeness={completeness}
+            missingFields={completeness?.missing_fields || []}
+            activeStep="publish"
+            testId={testId}
+            variant="list"
+          />
+        </div>
       ) : null}
 
       <DetailSection title="Overview">
@@ -92,6 +126,14 @@ export default function TestDetailsView({
         <DetailRow label="Shuffle options" value={formatBool(settings?.shuffle_options)} />
         <DetailRow label="Show explanations" value={formatBool(settings?.show_explanations)} />
         <DetailRow label="Show result immediately" value={formatBool(settings?.show_result_immediately)} />
+        <DetailRow
+          label="Results released"
+          value={
+            settings?.results_released_at
+              ? formatDate(settings.results_released_at)
+              : 'Not Released'
+          }
+        />
         <DetailRow label="Start date" value={formatDate(settings?.start_date)} />
         <DetailRow label="End date" value={formatDate(settings?.end_date)} />
       </DetailSection>

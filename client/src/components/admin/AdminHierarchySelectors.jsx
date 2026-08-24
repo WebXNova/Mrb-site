@@ -11,9 +11,10 @@ function onSelectValue(handler) {
  * @param {ReturnType<import('./useAdminHierarchyCascade.js').useAdminHierarchyCascade>} props.cascade
  * @param {2 | 3} [props.depth=3]
  * @param {boolean} [props.disabled=false]
+ * @param {boolean} [props.hideCourse=false]
  * @param {{ course?: string, subject?: string, chapter?: string }} [props.idPrefix={}]
  */
-export default function AdminHierarchySelectors({ cascade, depth = 3, disabled = false, idPrefix = {} }) {
+export default function AdminHierarchySelectors({ cascade, depth = 3, disabled = false, hideCourse = false, idPrefix = {} }) {
   const idCourse = idPrefix.course ?? 'hierarchy-course';
   const idSubject = idPrefix.subject ?? 'hierarchy-subject';
   const idChapter = idPrefix.chapter ?? 'hierarchy-chapter';
@@ -48,6 +49,7 @@ export default function AdminHierarchySelectors({ cascade, depth = 3, disabled =
 
   return (
     <>
+      {!hideCourse ? (
       <div className="admin-field">
         <label htmlFor={idCourse}>Course</label>
         <select
@@ -69,6 +71,7 @@ export default function AdminHierarchySelectors({ cascade, depth = 3, disabled =
         </select>
         {!selectedCourseId ? <p className="admin-muted" style={{ marginTop: '0.35rem' }}>Select a course first.</p> : null}
       </div>
+      ) : null}
 
       <div className="admin-field">
         <label htmlFor={idSubject}>Subject</label>

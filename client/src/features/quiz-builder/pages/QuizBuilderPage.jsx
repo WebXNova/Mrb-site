@@ -1,20 +1,23 @@
+import { useOutletContext } from 'react-router-dom';
 import { adminRoute } from '../../../config/adminPaths';
-import { useParams } from 'react-router-dom';
 import '../../create-question/workspace/workspace.css';
 import QuizBuilderView from '../components/QuizBuilderView.jsx';
 import '../styles/quiz-builder.css';
 
 export default function QuizBuilderPage() {
-  const { testId } = useParams();
+  const { testId } = useOutletContext();
 
   return (
-    <section className="admin-page admin-page--tests admin-page--quiz-builder">
+    <div className="admin-page--quiz-builder-embedded">
+      <h2 className="heading-4" style={{ marginTop: 0 }}>
+        Questions
+      </h2>
       <QuizBuilderView
         testId={testId}
-        backTo={adminRoute('tests')}
-        backLabel="Back to Tests"
-        showWizard
+        backTo={adminRoute(`tests/${testId}/dashboard`)}
+        backLabel={null}
+        showWizard={false}
       />
-    </section>
+    </div>
   );
 }

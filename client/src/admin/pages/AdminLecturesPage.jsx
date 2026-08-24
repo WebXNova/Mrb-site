@@ -18,6 +18,7 @@ import { useDebouncedValue } from '../../components/admin/useDebouncedValue';
 import { useAdminHierarchyCascade } from '../../components/admin/useAdminHierarchyCascade';
 import { getAdminToken } from '../../auth/session';
 import '../styles/admin-courses-dashboard.css';
+import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
 
 const LECTURE_FIELD_DEFAULTS = {
   title: '',
@@ -903,10 +904,15 @@ export default function AdminLecturesPage() {
             />
           </div>
 
-          <label className="admin-field admin-lectures-form__toggle" htmlFor="formIsActive">
-            <input id="formIsActive" name="isActive" type="checkbox" checked={formState.isActive} onChange={onFormFieldChange} disabled={mutationBusy} />
-            Active
-          </label>
+          <AdminToggleSwitch
+            id="formIsActive"
+            name="isActive"
+            checked={formState.isActive}
+            onChange={onFormFieldChange}
+            label="Active"
+            hint="Make this lecture visible to students."
+            disabled={mutationBusy}
+          />
 
           {errorState.form ? (
             <p className="admin-error" role="alert" style={{ gridColumn: '1 / -1' }}>

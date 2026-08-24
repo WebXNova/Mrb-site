@@ -1,18 +1,28 @@
 import { z } from 'zod';
 import { PUBLISHED_EDIT_CONTROL_KEYS } from '../services/publishedTestEdit.service.js';
+import { scoreBandsPayloadSchema } from './testScoreBands.schema.js';
 
 export const TEST_SETTINGS_ALLOWED_KEYS = Object.freeze([
   'shuffle_questions',
   'shuffle_options',
   'show_explanations',
   'show_result_immediately',
+  'show_answers_after_submit',
   'access_mode',
+  'layout_mode',
+  'display_mode',
+  'full_page_mode',
+  'introduction_html',
+  'conclusion_html',
+  'score_bands',
   'start_date',
   'end_date',
   ...PUBLISHED_EDIT_CONTROL_KEYS,
 ]);
 
 export const TEST_ACCESS_MODES = Object.freeze(['public', 'private']);
+export const TEST_LAYOUT_MODES = Object.freeze(['vertical', 'horizontal']);
+export const TEST_DISPLAY_MODES = Object.freeze(['all', 'one_per_page']);
 
 const strictBoolean = z.boolean({
   required_error: 'Boolean value is required',
@@ -25,6 +35,12 @@ const nullableIsoDateSchema = z.preprocess((value) => {
   return String(value).trim();
 }, z.union([z.null(), z.string().datetime({ message: 'Invalid ISO datetime' })]));
 
+const nullableRichHtmlSchema = z.preprocess((value) => {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed === '' ? null : trimmed;
+}, z.union([z.null(), z.string().max(100_000)]));
+
 /**
  * Step 3 — strict whitelist. Rejects unknown fields (no mass assignment).
  */
@@ -34,7 +50,14 @@ export const testSettingsBodySchema = z
     shuffle_options: strictBoolean,
     show_explanations: strictBoolean,
     show_result_immediately: strictBoolean,
+    show_answers_after_submit: strictBoolean.optional(),
     access_mode: z.enum(TEST_ACCESS_MODES),
+    layout_mode: z.enum(TEST_LAYOUT_MODES).optional(),
+    display_mode: z.enum(TEST_DISPLAY_MODES).optional(),
+    full_page_mode: strictBoolean.optional(),
+    introduction_html: nullableRichHtmlSchema.optional(),
+    conclusion_html: nullableRichHtmlSchema.optional(),
+    score_bands: scoreBandsPayloadSchema.optional(),
     start_date: nullableIsoDateSchema.optional(),
     end_date: nullableIsoDateSchema.optional(),
   })

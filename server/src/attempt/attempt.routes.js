@@ -1,3 +1,7 @@
+/**
+ * @deprecated G-RT-02 — not mounted unless LEGACY_RUNTIME_ALLOW=true.
+ * Canonical: GET /api/tests/:slug/attempts/:attemptId/start
+ */
 import { Router } from 'express';
 import { enforcePolicy } from '../auth/securityPolicy.js';
 import { getActiveAttemptForTest, getAttempt } from './attempt.controller.js';

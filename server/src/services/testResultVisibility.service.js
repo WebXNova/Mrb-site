@@ -1,5 +1,9 @@
 /**
- * G-RT-07 — Authoritative student result visibility (`show_result_immediately`, `show_explanations`).
+ * G-RT-07 — Authoritative student result visibility.
+ *
+ * Master gate: `results_released_at` on the test row. When NULL, students must not
+ * see scores, answer review, or explanations — regardless of `show_result_immediately`.
+ * (Legacy immediate-display tests now require an explicit admin release.)
  *
  * `show_answers_after_submit` is deprecated — answer review is shown whenever results are visible.
  */
@@ -12,6 +16,7 @@ import { ResultNotAccessibleError } from '../result/result.errors.js';
  * @property {unknown} [show_result_immediately]
  * @property {unknown} [show_answers_after_submit]
  * @property {unknown} [show_explanations]
+ * @property {unknown} [results_released_at]
  */
 
 /**
@@ -20,6 +25,27 @@ import { ResultNotAccessibleError } from '../result/result.errors.js';
  */
 export function isShowResultImmediatelyEnabled(value) {
   return Boolean(Number(value ?? 0));
+}
+
+/**
+ * @param {TestResultVisibilitySettings|null|undefined} settings
+ * @returns {boolean}
+ */
+export function isResultsReleased(settings) {
+  const raw = settings?.results_released_at;
+  if (raw == null) return false;
+  if (raw instanceof Date) return !Number.isNaN(raw.getTime());
+  return String(raw).trim() !== '';
+}
+
+/**
+ * Authoritative visibility check for student-facing result surfaces.
+ *
+ * @param {TestResultVisibilitySettings|null|undefined} settings
+ * @returns {boolean}
+ */
+export function isStudentResultVisible(settings) {
+  return isResultsReleased(settings);
 }
 
 /**
@@ -39,19 +65,19 @@ export function isShowExplanationsEnabled(value) {
 }
 
 /**
- * Fail-closed — no summary or review when results are withheld.
+ * Fail-closed — no summary or review until admin releases results.
  *
  * @param {TestResultVisibilitySettings|null|undefined} settings
  * @param {{ attemptId?: number, context?: string }} [options]
  */
 export function assertStudentResultVisible(settings, options = {}) {
-  if (isShowResultImmediatelyEnabled(settings?.show_result_immediately)) {
+  if (isResultsReleased(settings)) {
     return;
   }
 
   throw new ResultNotAccessibleError({
     attemptId: options.attemptId ?? null,
-    reason: 'show_result_immediately_disabled',
+    reason: 'results_not_released',
     context: options.context ?? 'testResultVisibility.assertStudentResultVisible',
   });
 }
@@ -64,6 +90,10 @@ export function assertStudentResultVisible(settings, options = {}) {
  * @returns {Array<Record<string, unknown>>|null}
  */
 export function sanitizeGradingDetailItems(details, settings) {
+  if (!isStudentResultVisible(settings)) {
+    return null;
+  }
+
   if (!isShowAnswersAfterSubmitEnabled(settings?.show_answers_after_submit)) {
     return null;
   }
@@ -130,6 +160,10 @@ export async function loadSanitizedPortalAnswerReview(
   loadRows,
   optionsMap
 ) {
+  if (!isStudentResultVisible(settings)) {
+    return null;
+  }
+
   if (!isShowAnswersAfterSubmitEnabled(settings?.show_answers_after_submit)) {
     return null;
   }
@@ -184,7 +218,7 @@ export async function loadSanitizedPortalAnswerReview(
  * @param {Record<string, unknown>} row
  */
 export function redactStudentResultListItem(row) {
-  const resultVisible = isShowResultImmediatelyEnabled(row.show_result_immediately);
+  const resultVisible = isResultsReleased(row);
 
   return {
     resultAvailable: resultVisible,

@@ -25,6 +25,7 @@ import {
 } from './testAttempt/secureAttemptContext.js';
 import { loadTestSubjectPresentation } from './testSubjectPresentation.service.js';
 import {
+  loadTestSectionsForStudentAttempt,
   mapComposedQuestionsForStudentAttempt,
   summarizeComposedQuestionOptions,
 } from './testQuestionComposition.service.js';
@@ -50,6 +51,9 @@ import {
   computeAttemptTimeTakenSeconds,
   logAttemptTimeCalculation,
   resolveAttemptTimeTakenSeconds,
+  resolveAttemptJwtExpiresInSeconds,
+  isWithinSubmitGraceWindow,
+  SUBMIT_GRACE_MS,
 } from './attemptTiming.service.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import {
@@ -68,9 +72,10 @@ import { INSERT_TEST_RESULT_SQL } from './testResult.queries.js';
 import { derivePassStatus } from '../result/passStatus.js';
 import {
   assertStudentResultVisible,
-  isShowResultImmediatelyEnabled,
+  isResultsReleased,
   sanitizeGradingDetailItems,
 } from './testResultVisibility.service.js';
+import { findMatchingScoreBand } from './testScoreBands.service.js';
 import {
   recordAttemptCreation,
   recordAttemptSubmission,
@@ -126,7 +131,7 @@ function buildSlugSubmitSuccess(ctx, resultId, meta = {}) {
     attemptId: ctx.attempt.id,
     resultId: Number(resultId),
     recovered: Boolean(meta.recovered),
-    resultAvailable: isShowResultImmediatelyEnabled(ctx.test?.show_result_immediately),
+    resultAvailable: isResultsReleased(ctx.test),
   };
 }
 
@@ -252,8 +257,25 @@ async function checkVerifyRateLimit(slug, ipAddress) {
   attemptRateMap.set(key, bucket);
 }
 
-function signAttemptToken(payload) {
-  return jwt.sign(payload, env.jwt.accessSecret, { expiresIn: '6h' });
+/**
+ * Bind the attempt JWT to the student, attempt, and exam window.
+ * Nonce is still present for submit replay protection, but autosave does not rotate it.
+ */
+function signAttemptToken({ attemptId, testId, slug, nonce, userId, expiresAt, durationMinutes }) {
+  const expiresIn = resolveAttemptJwtExpiresInSeconds({ expiresAt, durationMinutes });
+  return jwt.sign(
+    {
+      type: 'test_attempt',
+      attemptId: Number(attemptId),
+      testId: Number(testId),
+      slug,
+      nonce,
+      userId: Number(userId),
+      expiresAt: toAvailabilityIso(expiresAt),
+    },
+    env.jwt.accessSecret,
+    { expiresIn }
+  );
 }
 
 function buildDeviceFingerprint(ipAddress, userAgent) {
@@ -282,9 +304,17 @@ export function verifyAttemptToken(rawToken) {
       });
       throw new AttemptTokenInvalidError({ reason: 'invalid_token_type' });
     }
+    const claimExpiresMs = parseTestAvailabilityInstant(decoded.expiresAt);
+    if (claimExpiresMs != null && !isWithinSubmitGraceWindow(Date.now(), claimExpiresMs)) {
+      throw new AttemptExpiredError({
+        attemptId: decoded.attemptId ?? null,
+        expiresAt: decoded.expiresAt,
+        reason: 'token_expires_at',
+      });
+    }
     return decoded;
   } catch (error) {
-    if (error instanceof AttemptTokenInvalidError) throw error;
+    if (error instanceof AttemptTokenInvalidError || error instanceof AttemptExpiredError) throw error;
     logger.warn('ATTEMPT_TOKEN_VALIDATION_FAILURE', {
       event: 'ATTEMPT_TOKEN_VALIDATION_FAILURE',
       reason: 'jwt_invalid_or_expired',
@@ -295,9 +325,33 @@ export function verifyAttemptToken(rawToken) {
 }
 
 /**
- * Rotate attempt nonce after token validation (replay protection).
- * @param {{ slug: string, attemptId: number, tokenNonce: string, userId: number, courseId: number, entitlement?: import('./entitlement.service.js').EntitlementContext }}
+ * Idempotent retry after the attempt cookie was cleared by a prior successful submit.
+ * Returns a submit success payload only when this student already submitted this attempt.
  */
+export async function recoverAlreadySubmittedAttempt({ attemptId, userId, courseId, slug, entitlement }) {
+  try {
+    const ctx = await resolveSecureAttemptContext({
+      attemptId,
+      userId,
+      courseId,
+      slug,
+      entitlement,
+      requireInProgress: false,
+      enforceAvailabilityWindow: false,
+      auditContext: 'testAttempt.recoverAlreadySubmittedAttempt',
+    });
+    const status = String(ctx.attempt.status || '');
+    if (status !== 'submitted' && status !== 'graded') {
+      return null;
+    }
+    const resultId = ctx.attempt.result_id;
+    if (!resultId) return null;
+    return buildSlugSubmitSuccess(ctx, resultId, { recovered: true, outcome: 'already_submitted' });
+  } catch {
+    return null;
+  }
+}
+
 export async function consumeAttemptNonce({ slug, attemptId, tokenNonce, userId, courseId, entitlement }) {
   const ctx = await resolveSecureAttemptContext({
     attemptId,
@@ -307,6 +361,7 @@ export async function consumeAttemptNonce({ slug, attemptId, tokenNonce, userId,
     entitlement,
     tokenNonce,
     requireInProgress: true,
+    expiryGraceMs: SUBMIT_GRACE_MS,
     auditContext: 'testAttempt.consumeAttemptNonce',
   });
 
@@ -322,11 +377,13 @@ export async function consumeAttemptNonce({ slug, attemptId, tokenNonce, userId,
   );
 
   return signAttemptToken({
-    type: 'test_attempt',
     attemptId: ctx.attempt.id,
     testId: ctx.test.id,
     slug,
     nonce: nextNonce,
+    userId: ctx.userId,
+    expiresAt: ctx.attempt.expires_at,
+    durationMinutes: ctx.test.duration_minutes,
   });
 }
 
@@ -461,11 +518,13 @@ export async function createEntitledTestAttempt({
         await connection.commit();
 
         const resumeToken = signAttemptToken({
-          type: 'test_attempt',
           attemptId: resumeAttemptId,
           testId,
           slug: normalizedSlug,
           nonce: resumeNonce,
+          userId: normalizedStudentId,
+          expiresAt: activeAttempt.expires_at,
+          durationMinutes: testWindowRow.duration_minutes,
         });
 
         logger.info('ATTEMPT_CREATE_SUCCESS', {
@@ -631,11 +690,13 @@ export async function createEntitledTestAttempt({
     await connection.commit();
 
     const token = signAttemptToken({
-      type: 'test_attempt',
       attemptId,
       testId,
       slug: normalizedSlug,
       nonce: attemptNonce,
+      userId: normalizedStudentId,
+      expiresAt: timingRow?.expires_at,
+      durationMinutes,
     });
 
     logSecurityEvent({
@@ -763,6 +824,7 @@ export async function getAttemptTestForStart({ slug, attemptId, userId, courseId
   });
 
   const questions = await loadEntitledQuestions(ctx);
+  const sections = await loadTestSectionsForStudentAttempt(ctx.attempt.test_id);
   const optionStats = summarizeComposedQuestionOptions(questions);
 
   logger.info('ATTEMPT_START_QUESTIONS_LOADED', {
@@ -806,7 +868,10 @@ export async function getAttemptTestForStart({ slug, attemptId, userId, courseId
       subject: ctx.test.subject,
       durationMinutes: ctx.test.duration_minutes,
       showExplanations: !!ctx.test.show_explanations,
+      layoutMode: ctx.test.layout_mode === 'horizontal' ? 'horizontal' : 'vertical',
+      displayMode: ctx.test.display_mode === 'one_per_page' ? 'one_per_page' : 'all',
       questionCount: questions.length,
+      sections,
       questions,
     },
     savedAnswers,
@@ -917,7 +982,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
 
     const nowMs = await getAvailabilityNowMs(connection);
     const expiresMs = parseTestAvailabilityInstant(ctx.attempt.expires_at);
-    if (expiresMs != null && nowMs > expiresMs) {
+    if (expiresMs != null && !isWithinSubmitGraceWindow(nowMs, expiresMs)) {
       throw new AttemptExpiredError({
         attemptId: ctx.attempt.id,
         expiresAt: ctx.attempt.expires_at,
@@ -1088,16 +1153,16 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
 
 /**
  * Get submitted attempt result (getResult).
- * @param {{ slug: string, attemptId: number, userId: number, courseId: number, entitlement?: import('./entitlement.service.js').EntitlementContext, tokenNonce?: string }}
+ * Idempotent — no attempt nonce; student session + ownership is enough.
+ * @param {{ slug: string, attemptId: number, userId: number, courseId: number, entitlement?: import('./entitlement.service.js').EntitlementContext }}
  */
-export async function getAttemptResult({ slug, attemptId, userId, courseId, entitlement, tokenNonce }) {
+export async function getAttemptResult({ slug, attemptId, userId, courseId, entitlement }) {
   const ctx = await resolveSecureAttemptContext({
     attemptId,
     userId,
     courseId,
     slug,
     entitlement,
-    tokenNonce,
     requireSubmitted: true,
     auditContext: 'testAttempt.getAttemptResult',
   });
@@ -1107,7 +1172,7 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
   const rows = await db.rows(
     `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
             t.title AS test_title, t.id AS test_id,
-            t.show_result_immediately, t.show_answers_after_submit, t.show_explanations
+            t.show_result_immediately, t.show_answers_after_submit, t.show_explanations, t.results_released_at
      FROM test_attempts a
      INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
      INNER JOIN test_results r ON r.attempt_id = a.id
@@ -1134,6 +1199,11 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
   const subjectPresentation = await loadTestSubjectPresentation(Number(row.test_id));
   const rawDetails = JSON.parse(row.detail_json || '[]');
   const details = sanitizeGradingDetailItems(rawDetails, row);
+  const matchingBand = await findMatchingScoreBand(Number(row.test_id), row.percentage);
+  const scoreBandMessage =
+    matchingBand?.message_html && String(matchingBand.message_html).trim()
+      ? sanitizeRichHtml(matchingBand.message_html)
+      : null;
 
   return {
     resultId: row.id,
@@ -1151,6 +1221,7 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
       storedSeconds: row.time_taken_seconds,
     }),
     ...(details ? { details } : {}),
+    ...(scoreBandMessage ? { scoreBandMessageHtml: scoreBandMessage } : {}),
   };
 }
 

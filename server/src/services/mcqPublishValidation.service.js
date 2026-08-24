@@ -5,8 +5,12 @@
 import { mysqlPool } from '../config/mysql.js';
 import { McqValidationError } from '../validation/mcq/McqValidationError.js';
 import { validateMcqQuestion, validateMcqQuizDraftQuestion } from '../validation/mcq/mcqValidation.engine.js';
+import { validateQuestionMarks } from '../validators/questionMarks.validation.js';
 import { findTestQuizDraftByTestIdForRead } from '../repositories/testQuizDraft.repository.js';
+import { isQuizDraftSection } from '../utils/quizDraftItems.js';
+import { collectInvalidSectionLabels } from './quizDraftSectionValidation.service.js';
 import { QUESTION_AUTHORITY_SOURCES } from './testQuestionAuthority.service.js';
+import { loadTestSubjectPresentation } from './testSubjectPresentation.service.js';
 
 export const MCQ_PUBLISH_ERROR_CODE = 'INVALID_MCQ_FOR_PUBLISH';
 
@@ -38,15 +42,72 @@ async function collectDraftMcqFailures(testId, executor) {
   const failures = [];
 
   const draft = await findTestQuizDraftByTestIdForRead(executor, testId);
-  const draftQuestions = Array.isArray(draft?.draftPayload?.questions) ? draft.draftPayload.questions : [];
+  const draftItems = Array.isArray(draft?.draftPayload?.questions) ? draft.draftPayload.questions : [];
+  const presentation = await loadTestSubjectPresentation(testId, executor);
+  const subjects = (presentation.subjectIds || []).map((id, index) => ({
+    id,
+    title: presentation.subjectTitles?.[index] ?? '',
+  }));
 
-  for (const [index, question] of draftQuestions.entries()) {
+  for (const section of collectInvalidSectionLabels(draft?.draftPayload, subjects)) {
+    failures.push({
+      source: 'quiz_draft',
+      questionId: null,
+      issues: [
+        {
+          code: 'SECTION_SUBJECT_REQUIRED',
+          message: subjects.length
+            ? 'Every section marker must have a subject selected from this test before publish.'
+            : 'Add at least one subject in Settings, then choose a subject for each section.',
+          field: `questions[${section.index}].subjectId`,
+        },
+      ],
+    });
+  }
+
+  for (const [index, question] of draftItems.entries()) {
+    if (isQuizDraftSection(question)) continue;
+
     const result = validateMcqQuizDraftQuestion(question, index, { context: 'publish' });
-    if (!result.skipped && !result.valid) {
+    if (result.skipped) {
+      failures.push({
+        source: 'quiz_draft',
+        questionId: question?.id ?? null,
+        issues: [
+          {
+            code: 'UNSUPPORTED_QUESTION_TYPE',
+            message: `Question ${index + 1}: type "${question?.questionType ?? 'unknown'}" is not supported for publish.`,
+            field: `questions[${index}].questionType`,
+          },
+        ],
+      });
+      continue;
+    }
+
+    if (!result.valid) {
       failures.push({
         source: 'quiz_draft',
         questionId: question?.id ?? null,
         issues: result.errors,
+      });
+      continue;
+    }
+
+    const marksResult = validateQuestionMarks(question?.points, {
+      defaultWhenMissing: true,
+      field: `questions[${index}].points`,
+    });
+    if (!marksResult.ok) {
+      failures.push({
+        source: 'quiz_draft',
+        questionId: question?.id ?? null,
+        issues: [
+          {
+            code: 'INVALID_QUESTION_MARKS',
+            message: `Question ${index + 1}: ${marksResult.message}`,
+            field: `questions[${index}].points`,
+          },
+        ],
       });
     }
   }

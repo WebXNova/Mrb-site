@@ -25,10 +25,12 @@ import { invalidateTestTotalMarksCache } from './testTotalMarks.service.js';
 import {
   assertTestQuestionLinkNotDuplicate,
   clearTestQuestionLinks,
+  clearTestSections,
   countTestQuestionLinks,
   insertMaterializedQuestionBankRow,
   insertMaterializedQuestionOptions,
   insertTestQuestionLink,
+  insertTestSection,
   loadPrimaryTestSubjectId,
   loadTestPublishScopeRow,
   markDraftMaterialized,
@@ -39,6 +41,12 @@ import {
 } from './materializedQuestionCleanup.service.js';
 import { assertPersistedQuestionIntegrity } from './questionBankIntegrity.service.js';
 import { isPublishedDbStatus } from './testCompleteness.service.js';
+import {
+  collectInvalidSectionLabels,
+  resolveDraftSectionSubject,
+} from './quizDraftSectionValidation.service.js';
+import { loadTestSubjectPresentation } from './testSubjectPresentation.service.js';
+import { isQuizDraftSection, filterQuizDraftQuestions } from '../utils/quizDraftItems.js';
 import { TEST_IS_LOCKED, VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
 import { MAX_QUESTIONS_PER_TEST } from '../validators/testQuestionLimits.schema.js';
 import { QUIZ_DRAFT_MIN_POINTS } from '../validators/testQuizDraft.schema.js';
@@ -140,7 +148,8 @@ export async function materializeQuizDraftToRuntimeTables(
     throw draftNotFoundError(tid);
   }
 
-  const draftQuestions = Array.isArray(draft.draftPayload?.questions) ? draft.draftPayload.questions : [];
+  const draftItems = Array.isArray(draft.draftPayload?.questions) ? draft.draftPayload.questions : [];
+  const draftQuestions = filterQuizDraftQuestions(draftItems);
   if (!draftQuestions.length) {
     throw draftHasNoQuestionsError(tid, draft.draftId);
   }
@@ -149,6 +158,24 @@ export async function materializeQuizDraftToRuntimeTables(
       questionCount: draftQuestions.length,
       max: MAX_QUESTIONS_PER_TEST,
     });
+  }
+
+  const presentation = await loadTestSubjectPresentation(tid, connection);
+  const subjects = (presentation.subjectIds || []).map((id, index) => ({
+    id,
+    title: presentation.subjectTitles?.[index] ?? '',
+  }));
+  const invalidSections = collectInvalidSectionLabels(draft.draftPayload, subjects);
+  if (invalidSections.length) {
+    throw invalidMcqMaterializationError(tid, [
+      {
+        code: 'SECTION_SUBJECT_REQUIRED',
+        message: subjects.length
+          ? 'Every section marker must have a subject selected from this test before publish.'
+          : 'Add at least one subject in Settings, then choose a subject for each section.',
+        field: `questions[${invalidSections[0].index}].subjectId`,
+      },
+    ]);
   }
 
   const linkedBefore = await countTestQuestionLinks(connection, tid);
@@ -177,9 +204,10 @@ export async function materializeQuizDraftToRuntimeTables(
   /** @type {import('../validation/mcq/mcqValidation.engine.js').McqValidationIssue[]} */
   const validationIssues = [];
 
-  for (const [index, draftQuestion] of draftQuestions.entries()) {
+  for (const [index, draftItem] of draftItems.entries()) {
+    if (isQuizDraftSection(draftItem)) continue;
     try {
-      validateDraftQuestionForMaterialization(draftQuestion, index);
+      validateDraftQuestionForMaterialization(draftItem, index);
     } catch (error) {
       if (error instanceof McqValidationError) {
         validationIssues.push(...error.issues);
@@ -205,12 +233,35 @@ export async function materializeQuizDraftToRuntimeTables(
   if (replaceExistingLinks && linkedBefore > 0) {
     replacedLinks = await clearTestQuestionLinks(connection, tid);
   }
+  await clearTestSections(connection, tid);
 
-  for (const [index, draftQuestion] of draftQuestions.entries()) {
-    const normalized = validateDraftQuestionForMaterialization(draftQuestion, index);
+  let sectionDisplayOrder = 0;
+  let questionDisplayOrder = 0;
+  /** @type {number|null} */
+  let activeSectionId = null;
+
+  for (const [index, draftItem] of draftItems.entries()) {
+    if (isQuizDraftSection(draftItem)) {
+      const resolved = resolveDraftSectionSubject(draftItem, subjects);
+      const subjectLabel = String(resolved?.title || draftItem.subjectLabel || '').trim();
+      const dividerHtml = sanitizeQuestionHtml(
+        String(draftItem.dividerContentHtml ?? draftItem.dividerContentHtml ?? '')
+      ).trim();
+      activeSectionId = await insertTestSection(connection, {
+        testId: tid,
+        displayOrder: sectionDisplayOrder,
+        subjectLabel,
+        subjectId: resolved?.id ?? null,
+        dividerContentHtml: dividerHtml || null,
+      });
+      sectionDisplayOrder += 1;
+      continue;
+    }
+
+    const normalized = validateDraftQuestionForMaterialization(draftItem, index);
     const bankOptions = mapNormalizedDraftToBankOptions(normalized, index);
 
-    const marksResult = validateQuestionMarks(draftQuestion.points, {
+    const marksResult = validateQuestionMarks(draftItem.points, {
       defaultWhenMissing: true,
       field: `questions[${index}].points`,
     });
@@ -218,14 +269,18 @@ export async function materializeQuizDraftToRuntimeTables(
       throw invalidMcqMaterializationError(tid, [
         {
           code: 'INVALID_QUESTION_MARKS',
-          message: `Question ${index + 1}: ${marksResult.message}`,
+          message: `Question ${questionDisplayOrder + 1}: ${marksResult.message}`,
           field: `questions[${index}].points`,
         },
       ]);
     }
     const marks = marksResult.marks;
 
-    const sanitizedExplanation = sanitizeQuestionHtml(String(draftQuestion.explanation ?? '')).trim();
+    const sanitizedExplanation = sanitizeQuestionHtml(String(draftItem.explanation ?? '')).trim();
+    const sanitizedTip =
+      draftItem.showTip && String(draftItem.tip ?? '').trim()
+        ? sanitizeQuestionHtml(String(draftItem.tip ?? '')).trim()
+        : null;
 
     const questionBankId = await insertMaterializedQuestionBankRow(connection, {
       courseId,
@@ -235,6 +290,7 @@ export async function materializeQuizDraftToRuntimeTables(
       questionImageUrl: normalized.questionImageUrl ?? null,
       explanation: sanitizedExplanation || null,
       explanationHtml: sanitizedExplanation || null,
+      tipHtml: sanitizedTip,
       marks,
       createdBy,
     });
@@ -259,15 +315,17 @@ export async function materializeQuizDraftToRuntimeTables(
     await insertTestQuestionLink(connection, {
       testId: tid,
       questionId: questionBankId,
-      displayOrder: index,
+      displayOrder: questionDisplayOrder,
+      sectionId: activeSectionId,
       marksOverride: marks,
     });
 
     materialized.push({
-      draftQuestionId: String(draftQuestion.id),
+      draftQuestionId: String(draftItem.id),
       questionBankId,
-      displayOrder: index,
+      displayOrder: questionDisplayOrder,
     });
+    questionDisplayOrder += 1;
   }
 
   const supersededCleanup = await softDeleteSupersededMaterializedQuestions(connection, {

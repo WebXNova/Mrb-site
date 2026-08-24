@@ -81,6 +81,10 @@ const AdminTestEditSettingsPage = lazy(() => import('../admin/pages/AdminTestEdi
 const AdminTestDetailsPage = lazy(() => import('../admin/pages/AdminTestDetailsPage'));
 const AdminTestRulesPage = lazy(() => import('../admin/pages/AdminTestRulesPage'));
 const AdminTestSettingsPage = lazy(() => import('../admin/pages/AdminTestSettingsPage'));
+const AdminTestDashboardPage = lazy(() => import('../admin/pages/AdminTestDashboardPage'));
+const AdminTestPublishPage = lazy(() => import('../admin/pages/AdminTestPublishPage'));
+const AdminTestResultsPage = lazy(() => import('../admin/pages/AdminTestResultsPage'));
+const TestWorkspaceLayout = lazy(() => import('../admin/components/test-workspace/TestWorkspaceLayout'));
 const QuizBuilderPage = lazy(() => import('../features/quiz-builder/pages/QuizBuilderPage'));
 const AdminSettingsPage = lazy(() => import('../admin/pages/AdminSettingsPage'));
 const AdminPaymentAccountsPage = lazy(() => import('../admin/pages/AdminPaymentAccountsPage'));
@@ -103,6 +107,26 @@ function QuizBuilderLegacyRedirect() {
   const { testId } = useParams();
   const location = useLocation();
   return <Navigate to={`${adminRoute(`tests/${testId}/questions`)}${location.search}`} replace />;
+}
+
+function TestWorkspaceIndexRedirect() {
+  const { testId } = useParams();
+  return <Navigate to={adminRoute(`tests/${testId}/dashboard`)} replace />;
+}
+
+function LegacyTestSetupRedirect() {
+  const { testId } = useParams();
+  return <Navigate to={adminRoute(`tests/${testId}/settings`)} replace />;
+}
+
+function LegacyTestDetailsRedirect() {
+  const { testId } = useParams();
+  return <Navigate to={adminRoute(`tests/${testId}/dashboard`)} replace />;
+}
+
+function LegacyTestEditRedirect() {
+  const { testId } = useParams();
+  return <Navigate to={adminRoute(`tests/${testId}/settings`)} replace />;
 }
 
 function RouteAwareFallback() {
@@ -437,19 +461,24 @@ export default function AppRouter({ authStatus }) {
             <Route path="tests/new" element={<AdminTestCreatePage />} />
             <Route path="tests/import" element={<AdminTestImportWizardPage />} />
             <Route path="tests/transfer" element={<AdminTestTransferPage />} />
-            <Route path="tests/:testId/setup" element={<AdminTestSetupPage />} />
-            <Route path="tests/:testId/edit" element={<AdminTestEditPage />} />
+            <Route path="tests/:testId" element={<TestWorkspaceLayout />}>
+              <Route index element={<TestWorkspaceIndexRedirect />} />
+              <Route path="dashboard" element={<AdminTestDashboardPage />} />
+              <Route path="settings" element={<AdminTestSettingsPage />} />
+              <Route path="questions" element={<QuizBuilderPage />} />
+              <Route path="publish" element={<AdminTestPublishPage />} />
+              <Route path="results" element={<AdminTestResultsPage />} />
+            </Route>
+            <Route path="tests/:testId/setup" element={<LegacyTestSetupRedirect />} />
+            <Route path="tests/:testId/edit" element={<LegacyTestEditRedirect />} />
             <Route path="tests/:testId/edit/questions" element={<AdminTestEditQuestionsPage />} />
             <Route path="tests/:testId/edit/basic-info" element={<AdminTestEditBasicInfoPage />} />
             <Route path="tests/:testId/edit/rules" element={<AdminTestEditRulesPage />} />
-            <Route path="tests/:testId/edit/settings" element={<AdminTestEditSettingsPage />} />
-            <Route path="tests/:testId/details" element={<AdminTestDetailsPage />} />
-            <Route path="tests/:testId/rules" element={<AdminTestRulesPage />} />
-            <Route path="tests/:testId/settings" element={<AdminTestSettingsPage />} />
-            <Route path="tests/:testId/questions" element={<QuizBuilderPage />} />
+            <Route path="tests/:testId/edit/settings" element={<LegacyTestSetupRedirect />} />
+            <Route path="tests/:testId/details" element={<LegacyTestDetailsRedirect />} />
+            <Route path="tests/:testId/rules" element={<LegacyTestSetupRedirect />} />
             <Route path="tests/:testId/quiz-builder" element={<QuizBuilderLegacyRedirect />} />
             <Route path="tests" element={<AdminTestsPage />} />
-            <Route path="tests/:id" element={<AdminTestsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="teachers" element={<AdminTeachersPage />} />
             <Route path="teachers/create" element={<AdminTeacherCreatePage />} />

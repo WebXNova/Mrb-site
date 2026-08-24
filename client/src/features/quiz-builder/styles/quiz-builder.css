@@ -502,25 +502,51 @@
   flex-direction: column;
 }
 
+/* Insert controls between cards */
+.qb-insert-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  position: absolute;
+  top: -22px;
+  right: 0;
+  z-index: 2;
+}
+
+.qb-insert-row--end {
+  top: auto;
+  bottom: 0.75rem;
+}
+
 .qb-insert-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  min-width: 26px;
   height: 26px;
-  padding: 0;
+  padding: 0 0.45rem;
   border: 1px solid var(--qb-border);
-  border-radius: 50%;
+  border-radius: 999px;
   background: #fff;
   color: var(--qb-muted);
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 0.68rem;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
   box-shadow: var(--qb-shadow);
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   flex-shrink: 0;
-  z-index: 2;
+}
+
+.qb-insert-btn--section {
+  color: #1e3a8a;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.qb-insert-btn--gap,
+.qb-insert-btn--card-end {
+  position: static;
 }
 
 .qb-insert-btn:hover:not(:disabled) {
@@ -532,20 +558,6 @@
 .qb-insert-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-
-/* Sits in the gap above this card — one per boundary, no overlap with card-end */
-.qb-insert-btn--gap {
-  position: absolute;
-  top: -22px;
-  right: 0;
-}
-
-/* Sits at the bottom-right inside the card area */
-.qb-insert-btn--card-end {
-  position: absolute;
-  bottom: 0.75rem;
-  right: 0;
 }
 
 /* Question card */
@@ -896,6 +908,254 @@
 
 .qb-explanation__editor {
   margin-top: 0.65rem;
+}
+
+/* Tip (in-test hint) */
+.qb-tip {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--qb-border);
+}
+
+.qb-tip__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--qb-ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.qb-tip__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--qb-muted);
+  line-height: 1.4;
+}
+
+.qb-tip__label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--qb-muted);
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.qb-tip__editor {
+  margin-top: 0.65rem;
+}
+
+/* Section divider card */
+.qb-section-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0;
+  width: 100%;
+  border: 2px solid #1e3a8a;
+  border-radius: var(--qb-radius);
+  background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+  box-shadow: var(--qb-shadow);
+  overflow: hidden;
+}
+
+.qb-section-card--incomplete,
+.qb-section-card--invalid {
+  border-color: #dc2626;
+}
+
+.qb-section-card--incomplete .qb-section-card__label-input,
+.qb-section-card--invalid .qb-section-card__label-input {
+  border-color: #dc2626;
+}
+
+.qb-section-card__label-error {
+  flex-basis: 100%;
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: #b91c1c;
+}
+
+.qb-section-card .ck-content img,
+.qb-section-card__body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.qb-section-card--dragging {
+  opacity: 0.55;
+}
+
+.qb-section-card--drag-over {
+  outline: 2px dashed var(--qb-accent);
+  outline-offset: 2px;
+}
+
+.qb-section-card__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.65rem 0.45rem;
+  background: #1e3a8a;
+  color: #fff;
+}
+
+.qb-section-card__drag,
+.qb-section-card__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.qb-section-card__drag:hover:not(:disabled),
+.qb-section-card__icon-btn:hover:not(:disabled) {
+  background: rgb(255 255 255 / 12%);
+}
+
+.qb-section-card__icon-btn--danger:hover:not(:disabled) {
+  background: rgb(239 68 68 / 35%);
+}
+
+.qb-section-card__main {
+  min-width: 0;
+  padding: 0.85rem 1rem 1rem;
+}
+
+.qb-section-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.qb-section-card__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: #1e3a8a;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.qb-section-card__label-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--qb-radius);
+  background: #fff;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.qb-section-card__label-select {
+  appearance: auto;
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.95rem;
+}
+
+.qb-section-card__label-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--qb-muted, #64748b);
+}
+
+.qb-section-card__body {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.qb-section-card__editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.qb-section-card__ribbon {
+  margin: 0;
+  border: 1px solid var(--qb-border);
+  border-radius: 8px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.qb-section-card__ribbon .qaw-ribbon {
+  padding: 0.3rem 0.15rem;
+  min-height: auto;
+}
+
+.qb-section-card__ribbon .qaw-ribbon-group {
+  padding: 0.4rem 0.7rem;
+}
+
+.qb-section-card__ribbon .qaw-ribbon-btn {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 6px;
+}
+
+.qb-section-card__ribbon .qaw-ribbon-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.qb-section-card__ribbon .qaw-ribbon-btn--pressed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.qb-section-card .premium-checkbox {
+  margin: 0;
+}
+
+.qb-section-card .qb-rich-field {
+  border: 1px solid var(--qb-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.qb-section-card__content-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+  cursor: pointer;
+}
+
+.qb-section-card__content-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  color: var(--qb-muted);
+}
+
+.qb-section-card--collapsed .qb-section-card__main {
+  padding-bottom: 0.85rem;
 }
 
 /* Non-choice stub */

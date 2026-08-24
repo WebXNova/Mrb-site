@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import AdminSearchField from '../AdminSearchField';
 import { SUBJECT_SEARCH_THRESHOLD } from '../../hooks/useUniqueTeacherSubjects';
+import PremiumCheckboxGroup from '../ui/PremiumCheckboxGroup';
 
 export default function TeacherSubjectAssignmentField({
   subjects = [],
@@ -85,33 +86,23 @@ export default function TeacherSubjectAssignmentField({
               ) : null}
             </div>
           ) : (
-            <div
-              className="admin-teacher-subjects-field__grid"
-              role="group"
-              aria-label="Subject assignment options"
-            >
-              {filteredSubjects.map((subject) => {
-                const subjectId = Number(subject.id);
-                const checked = selectedIds.includes(subjectId);
-                const inputId = `teacher-subject-${subjectId}`;
-                return (
-                  <label
-                    key={subjectId}
-                    className={`admin-teacher-subjects-field__item${checked ? ' admin-teacher-subjects-field__item--checked' : ''}`}
-                    htmlFor={inputId}
-                  >
-                    <input
-                      id={inputId}
-                      type="checkbox"
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() => onToggle(subjectId)}
-                    />
-                    <span className="admin-teacher-subjects-field__label">{subject.title}</span>
-                  </label>
-                );
-              })}
-            </div>
+            <PremiumCheckboxGroup
+              options={filteredSubjects.map((subject) => ({
+                value: Number(subject.id),
+                label: subject.title,
+              }))}
+              selectedValues={selectedIds}
+              onChange={(nextIds) => {
+                filteredSubjects.forEach((s) => {
+                  const id = Number(s.id);
+                  const wasSelected = selectedIds.includes(id);
+                  const isSelected = nextIds.includes(id);
+                  if (wasSelected !== isSelected) onToggle(id);
+                });
+              }}
+              disabled={disabled}
+              emptyMessage="No subjects available."
+            />
           )}
         </>
       )}

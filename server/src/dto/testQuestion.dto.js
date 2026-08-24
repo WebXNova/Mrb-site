@@ -82,10 +82,15 @@ export function toLinkedTestQuestionStudentDto(linkRow, optionRows = []) {
   return {
     questionId: Number(linkRow.question_id),
     displayOrder: Number(linkRow.display_order ?? 0),
+    sectionId: linkRow.section_id == null ? null : Number(linkRow.section_id),
     marks: effectiveMarks,
     effectiveMarks,
     questionText: sanitizeRichHtml(resolveQuestionHtml(linkRow)),
     questionImageUrl: linkRow.question_image_url == null ? null : String(linkRow.question_image_url),
+    tipHtml:
+      linkRow.tip_html != null && String(linkRow.tip_html).trim() !== ''
+        ? sanitizeRichHtml(String(linkRow.tip_html))
+        : null,
     options: optionRows.map(toTestQuestionOptionStudentDto),
   };
 }

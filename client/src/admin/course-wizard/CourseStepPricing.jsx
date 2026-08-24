@@ -1,3 +1,5 @@
+import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
+
 const PRICING_TYPES = [
   { value: 'free', label: 'Free' },
   { value: 'one_time', label: 'One-time' },
@@ -67,34 +69,27 @@ export default function CourseStepPricing({ pricing, onChange, fieldErrors }) {
             </div>
           ) : null}
         </div>
-        <div className="admin-field">
-          <label className="admin-field__inline">
-            <input type="checkbox" name="is_active" checked={!!pricing.is_active} onChange={onChange} /> Active pricing
-            row
-          </label>
-        </div>
-        <div className="admin-field">
-          <label className="admin-field__inline">
-            <input
-              type="checkbox"
-              name="enrollment_visible"
-              checked={!!pricing.enrollment_visible}
-              onChange={onChange}
-            />{' '}
-            Enrollment visibility
-          </label>
-        </div>
-        <div className="admin-field">
-          <label className="admin-field__inline">
-            <input
-              type="checkbox"
-              name="public_purchase_visible"
-              checked={!!pricing.public_purchase_visible}
-              onChange={onChange}
-            />{' '}
-            Public purchase visibility
-          </label>
-        </div>
+        <AdminToggleSwitch
+          id="pricing-is-active"
+          name="is_active"
+          checked={!!pricing.is_active}
+          onChange={onChange}
+          label="Active pricing row"
+        />
+        <AdminToggleSwitch
+          id="pricing-enrollment-visible"
+          name="enrollment_visible"
+          checked={!!pricing.enrollment_visible}
+          onChange={onChange}
+          label="Enrollment visibility"
+        />
+        <AdminToggleSwitch
+          id="pricing-public-purchase-visible"
+          name="public_purchase_visible"
+          checked={!!pricing.public_purchase_visible}
+          onChange={onChange}
+          label="Public purchase visibility"
+        />
       </div>
       <div className="admin-card" style={{ marginTop: '1rem', padding: '1rem' }}>
         <h4 className="heading-4" style={{ marginTop: 0 }}>

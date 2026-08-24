@@ -29,6 +29,10 @@ import {
   getTests,
   getTestCreateOptions,
   getTestResultsAnalyticsHandler,
+  getTestResultsListHandler,
+  postReleaseTestResultsHandler,
+  postUnreleaseTestResultsHandler,
+  postClearTestResultsHandler,
   getTestCompletenessHandler,
   getTestRules,
   getTestSettings,
@@ -237,6 +241,10 @@ router.post('/tests/:testId/publish', testWriteRateLimit, idempotencyMiddleware,
 router.put('/tests/:testId/publish', testWriteRateLimit, putTestPublish);
 router.post('/tests/:testId/duplicate', testWriteRateLimit, postDuplicateTest);
 router.get('/tests/:testId/results/analytics', getTestResultsAnalyticsHandler);
+router.get('/tests/:testId/results', getTestResultsListHandler);
+router.post('/tests/:testId/release-results', testWriteRateLimit, postReleaseTestResultsHandler);
+router.post('/tests/:testId/unrelease-results', testWriteRateLimit, postUnreleaseTestResultsHandler);
+router.post('/tests/:testId/clear-results', testWriteRateLimit, postClearTestResultsHandler);
 router.get('/tests/:testId/results/export', testWriteRateLimit, getTestResultsExport);
 
 router.get('/tests/:testId/questions', getLinkedTestQuestions);
