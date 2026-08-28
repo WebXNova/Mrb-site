@@ -7,12 +7,50 @@ function stripHtml(value) {
     .trim();
 }
 
-function firstFieldError(fieldErrors) {
-  if (!fieldErrors || typeof fieldErrors !== 'object') return '';
-  for (const key of Object.keys(fieldErrors)) {
-    const arr = fieldErrors[key];
+function humanizeFieldName(key) {
+  return String(key || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatFieldError(field, message) {
+  const label = humanizeFieldName(field);
+  const msg = String(message || '').trim();
+  if (!msg) return label;
+  const lower = msg.toLowerCase();
+  if (lower === 'required' || lower === 'required.') return `${label} is required`;
+  return `${label}: ${msg}`;
+}
+
+function fieldErrorMap(details) {
+  if (!details || typeof details !== 'object') return null;
+  if (details.fieldErrors && typeof details.fieldErrors === 'object') return details.fieldErrors;
+  const nested = details.legacyDetails;
+  if (nested && typeof nested === 'object' && nested.fieldErrors && typeof nested.fieldErrors === 'object') {
+    return nested.fieldErrors;
+  }
+  return null;
+}
+
+function formatFieldErrorsFromDetails(details) {
+  const fer = fieldErrorMap(details);
+  if (!fer) return '';
+  const parts = [];
+  for (const key of Object.keys(fer)) {
+    const arr = fer[key];
     const first = Array.isArray(arr) ? arr.find((m) => typeof m === 'string' && m.trim()) : arr;
-    if (typeof first === 'string' && first.trim()) return first.trim();
+    if (typeof first === 'string' && first.trim()) parts.push(formatFieldError(key, first));
+  }
+  return parts.join('; ');
+}
+
+function firstFormError(details) {
+  if (!details || typeof details !== 'object') return '';
+  const lists = [details.formErrors, details.legacyDetails?.formErrors];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    const first = list.find((m) => typeof m === 'string' && m.trim());
+    if (first) return first.trim();
   }
   return '';
 }
@@ -24,6 +62,13 @@ function firstFieldError(fieldErrors) {
 export function inferApiFailureMessage(body, { status, statusText, rawText } = {}) {
   const trimmedStatusText = typeof statusText === 'string' ? statusText.trim() : '';
   if (body && typeof body === 'object') {
+    const fieldSummary =
+      formatFieldErrorsFromDetails(body.details) ||
+      formatFieldErrorsFromDetails({ fieldErrors: body.field_errors });
+    if (fieldSummary) return fieldSummary;
+    const formSummary = firstFormError(body.details);
+    if (formSummary) return formSummary;
+
     if (body.success === false && body.error && typeof body.error === 'object') {
       const em = body.error.message;
       if (typeof em === 'string' && em.trim()) {
@@ -50,11 +95,6 @@ export function inferApiFailureMessage(body, { status, statusText, rawText } = {
     }
     if (typeof body.error === 'string' && body.error.trim()) return body.error.trim();
     if (typeof body.detail === 'string' && body.detail.trim()) return body.detail.trim();
-    const fer = body.details?.fieldErrors ?? body.field_errors;
-    const feMsg = firstFieldError(fer);
-    if (feMsg) return feMsg;
-    const formErr = Array.isArray(body.details?.formErrors) ? body.details.formErrors.filter(Boolean)[0] : null;
-    if (typeof formErr === 'string' && formErr.trim()) return formErr.trim();
     if (Array.isArray(body.errors)) {
       const first = body.errors.find((e) => typeof e === 'string' && e.trim());
       if (first) return first.trim();
