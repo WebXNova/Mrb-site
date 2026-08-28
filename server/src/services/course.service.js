@@ -1,6 +1,10 @@
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
-import { applyCourseModelHooks, deriveCourseAdmissionFromBatch } from '../models/course.model.js';
+import {
+  applyCourseModelHooks,
+  deriveCourseAdmissionFromBatch,
+  normalizeCourseStatus,
+} from '../models/course.model.js';
 import { toCourseAdminDto } from '../dto/course.dto.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { updateBatch } from './courseBatch.service.js';
@@ -90,40 +94,63 @@ export async function getCourseById(courseId, { activeOnly = false } = {}) {
   return toCourseAdminDto(row);
 }
 
+/**
+ * Merge a partial PUT body onto the current course row.
+ * Undefined keys keep existing values so admission-only saves cannot blank title/description.
+ */
+export function mergeCourseUpdatePayload(existingRow, payload = {}) {
+  const wasActive = Boolean(Number(existingRow.is_active));
+  const nextActive = payload.is_active !== undefined ? Boolean(payload.is_active) : wasActive;
+  const admission = resolveAdmissionWriteFields(payload, { existing: existingRow });
+  return {
+    title: payload.title !== undefined ? payload.title : existingRow.title,
+    description: payload.description !== undefined ? payload.description : existingRow.description,
+    short_description:
+      payload.short_description !== undefined
+        ? payload.short_description
+        : existingRow.short_description ?? null,
+    level:
+      payload.level !== undefined && payload.level !== null ? payload.level : existingRow.level,
+    thumbnail_url:
+      payload.thumbnail_url !== undefined ? payload.thumbnail_url : existingRow.image_url ?? null,
+    is_active: nextActive,
+    status:
+      payload.status !== undefined
+        ? normalizeCourseStatus(payload.status)
+        : normalizeCourseStatus(existingRow.status),
+    start_date: admission.start_date,
+    end_date: admission.end_date,
+    admission_status: admission.admission_status,
+    wasActive,
+    nextActive,
+  };
+}
+
 export async function updateCourse(courseId, payload) {
   const existingRow = await getCourseRowById(courseId);
   if (!existingRow) throw courseNotFound();
 
-  const level = payload.level !== undefined && payload.level !== null ? payload.level : existingRow.level;
-
-  const shortDesc =
-    payload.short_description !== undefined ? payload.short_description : existingRow.short_description ?? null;
-
-  const thumb =
-    payload.thumbnail_url !== undefined ? payload.thumbnail_url : existingRow.image_url ?? null;
-
-  const wasActive = Boolean(Number(existingRow.is_active));
-  const nextActive =
-    payload.is_active !== undefined ? Boolean(payload.is_active) : wasActive;
-
-  const admission = resolveAdmissionWriteFields(payload, { existing: existingRow });
+  const next = mergeCourseUpdatePayload(existingRow, payload);
+  const wasActive = next.wasActive;
+  const nextActive = next.nextActive;
 
   await mysqlPool.query(
     `UPDATE courses
      SET title = ?, description = ?, short_description = ?, level = ?, image_url = ?,
-         is_active = ?, start_date = ?, end_date = ?, admission_status = ?,
+         is_active = ?, status = ?, start_date = ?, end_date = ?, admission_status = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
-      payload.title,
-      payload.description,
-      shortDesc,
-      level,
-      thumb,
+      next.title,
+      next.description,
+      next.short_description,
+      next.level,
+      next.thumbnail_url,
       nextActive,
-      admission.start_date,
-      admission.end_date,
-      admission.admission_status,
+      next.status,
+      next.start_date,
+      next.end_date,
+      next.admission_status,
       courseId,
     ]
   );

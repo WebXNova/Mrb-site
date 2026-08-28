@@ -60,22 +60,16 @@ export const putCourse = asyncHandler(async (req, res) => {
 
   const parsed = courseWriteBodySchema.safeParse(req.body);
   if (!parsed.success) {
-    throw new ApiError(422, 'Invalid course payload', parsed.error.flatten());
+    const flat = parsed.error.flatten();
+    const firstField = Object.values(flat.fieldErrors || {}).flat().find(Boolean);
+    const firstForm = Array.isArray(flat.formErrors) ? flat.formErrors[0] : null;
+    throw new ApiError(422, firstField || firstForm || 'Invalid course payload', {
+      ...flat,
+      code: 'INVALID_COURSE_PAYLOAD',
+    });
   }
 
-  const p = parsed.data;
-  const updated = await updateCourse(courseId, {
-    title: p.title,
-    description: p.description,
-    short_description: p.short_description,
-    level: p.level,
-    thumbnail_url: p.thumbnail_url,
-    is_active: p.is_active,
-    status: p.status,
-    start_date: p.start_date,
-    end_date: p.end_date,
-    admission_status: p.admission_status,
-  });
+  const updated = await updateCourse(courseId, parsed.data);
 
   await logActivity({
     userId: req.user?.id,
