@@ -9,6 +9,7 @@ const footerSections = [
     links: [
       { to: '/courses', label: 'All Courses' },
       { to: '/courses?tab=mdcat', label: 'MDCAT Courses' },
+      { to: '/paid-tests', label: 'Tests' },
     ],
   },
   {
@@ -42,7 +43,7 @@ export default function Footer() {
           </p>
           <div className="footer__social">
             <h4 className="footer__section-title">Follow MRB</h4>
-            <SocialMediaLinks />
+            <SocialMediaLinks compact />
           </div>
         </div>
 

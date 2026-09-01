@@ -17,14 +17,26 @@ export function parseBatchTimestamp(value) {
   return Date.parse(s);
 }
 
+function hasScheduleValue(value) {
+  if (value == null) return false;
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  return String(value).trim() !== '';
+}
+
 /**
- * Validate batch delivery schedule (start → end only).
+ * Validate batch delivery schedule when both timestamps are present.
+ * Dates are optional — missing values do not fail create/publish.
  * Enrollment gating uses courses.admission_status — not batch windows.
  *
- * @param {{ start_date: string, end_date: string }} row
+ * @param {{ start_date?: unknown, end_date?: unknown }} row
  * @returns {{ ok: true } | { ok: false, message: string, field?: string }}
  */
 export function validateBatchScheduleWindow(row) {
+  const hasStart = hasScheduleValue(row?.start_date);
+  const hasEnd = hasScheduleValue(row?.end_date);
+  if (!hasStart && !hasEnd) return { ok: true };
+  if (!hasStart || !hasEnd) return { ok: true };
+
   const start = parseBatchTimestamp(row.start_date);
   const end = parseBatchTimestamp(row.end_date);
 

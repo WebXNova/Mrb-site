@@ -6,7 +6,7 @@ export default function TestResultError({ errorState, slug, onRetry }) {
 
   const title =
     kind === 'hidden'
-      ? 'Results not available'
+      ? 'Results are being reviewed'
       : kind === 'unauthorized'
         ? 'Sign in required'
         : kind === 'not_found'
@@ -32,6 +32,9 @@ export default function TestResultError({ errorState, slug, onRetry }) {
             Back to test
           </Link>
         ) : null}
+        <Link className="btn btn--secondary" to="/tests/my-results">
+          My Results
+        </Link>
         <Link className="btn btn--secondary" to="/dashboard">
           Go to dashboard
         </Link>

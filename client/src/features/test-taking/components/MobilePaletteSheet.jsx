@@ -2,12 +2,12 @@ export default function MobilePaletteSheet({ isOpen, onClose, children }) {
   if (!isOpen) return null;
 
   return (
-    <div className="tt-palette-sheet" role="dialog" aria-modal="true" aria-label="Question palette">
+    <div className="tt-palette-sheet" role="dialog" aria-modal="true" aria-label="Question navigator">
       <button
         type="button"
         className="tt-palette-sheet__backdrop"
         onClick={onClose}
-        aria-label="Close question palette"
+        aria-label="Close question navigator"
       />
       <div className="tt-palette-sheet__panel">
         <div className="tt-palette-sheet__header">

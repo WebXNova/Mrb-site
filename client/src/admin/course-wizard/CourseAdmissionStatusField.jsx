@@ -1,5 +1,8 @@
 import PremiumFormField from '../components/courses/PremiumFormField';
 
+export const ADMISSION_HINT =
+  'OPEN allows new enrollments and keeps the course visible in the catalog. CLOSED blocks new enrollments and hides the course from the public catalog — existing students keep their access.';
+
 export const ADMISSION_OPTIONS = [
   { value: 'OPEN', label: 'Open — new students can enroll' },
   { value: 'CLOSED', label: 'Closed — no new enrollments' },
@@ -16,8 +19,8 @@ export function AdmissionStatusAlert({ status }) {
         <div className="course-edit-callout__body">
           <p className="course-edit-callout__title">Admissions open</p>
           <p className="course-edit-callout__text">
-            New students can enroll while admission status is OPEN. Existing students keep access when
-            you close admissions.
+            New students can enroll, and the course can appear in the public catalog. Existing
+            students keep access if you later close admissions.
           </p>
         </div>
       </div>
@@ -32,8 +35,8 @@ export function AdmissionStatusAlert({ status }) {
       <div className="course-edit-callout__body">
         <p className="course-edit-callout__title">Admissions closed</p>
         <p className="course-edit-callout__text">
-          New enrollments are blocked. Students who already have active access keep their course
-          content — closing admissions does not remove existing access.
+          New enrollments are blocked, and the course is hidden from the public catalog. Students
+          who already have access keep it — closing admissions does not revoke them.
         </p>
       </div>
     </div>
@@ -58,7 +61,7 @@ export default function CourseAdmissionStatusField({
         id={`${idPrefix}_admission_status`}
         label="Admission status"
         required
-        hint="OPEN allows new enrollments; CLOSED blocks new students only."
+        hint={ADMISSION_HINT}
         error={fieldErrors.admission_status}
       >
         <select

@@ -21,6 +21,17 @@
   color: var(--color-muted, #64748b);
 }
 
+.mp-clear-test-filter {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-primary, #2563eb);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .mp-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 0;

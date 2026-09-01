@@ -13,13 +13,13 @@ import { mysqlPool } from '../config/mysql.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { STUDENT_ELIGIBLE_TEST_STATUS } from '../constants/studentEligibleTest.constants.js';
 import { studentOwnsAttempt } from './attemptOwnership.service.js';
+import { isShuffleEnabled } from './attemptDeliveryLayout.service.js';
 import {
-  isShuffleEnabled,
-  loadComposedQuestionsWithAttemptLayout,
-} from './attemptDeliveryLayout.service.js';
+  resolveAttemptExamSnapshot,
+  snapshotQuestionsForStudent,
+} from './attemptExamSnapshot.service.js';
 import {
   AttemptNotFoundError,
-  AttemptNotOwnedError,
   TestNotAccessibleError,
 } from '../errors/testAttempt/TestAttemptErrors.js';
 import { toStudentAttemptLoadResponse } from '../dto/studentAttemptLoad.dto.js';
@@ -30,7 +30,7 @@ import {
 
 import { assertAttemptActive } from './attemptTimerGuard.service.js';
 import {
-  assertTestAvailabilityWindow,
+  assertTestAvailabilityWindowForTest,
   AVAILABILITY_PHASE,
   getAvailabilityNowMs,
 } from './testAvailabilityWindow.service.js';
@@ -75,9 +75,10 @@ export async function assertAttemptLoadable(row, nowMs, options = {}) {
     markExpired: options.markExpired,
   });
 
-  assertTestAvailabilityWindow(
+  assertTestAvailabilityWindowForTest(
     {
       id: row.test_id,
+      course_id: row.course_id,
       start_date: row.start_date,
       end_date: row.end_date,
     },
@@ -108,10 +109,10 @@ export function assertAttemptBelongsToStudent(row, studentId) {
     (ownerStudentId != null && ownerStudentId === uid);
 
   if (!identityMatch) {
-    throw new AttemptNotOwnedError({
+    throw new AttemptNotFoundError({
       attemptId: row.id,
       userId: uid,
-      ownerId: ownerUserId ?? ownerStudentId,
+      reason: 'attempt_not_found',
     });
   }
 }
@@ -141,15 +142,16 @@ export async function loadStudentAttemptPage(studentId, attemptId) {
   const loadNowMs = await getAvailabilityNowMs(mysqlPool);
 
   const testId = Number(attemptRow.test_id);
-  const composedQuestions = await loadComposedQuestionsWithAttemptLayout({
+  const snapshot = await resolveAttemptExamSnapshot({
     attemptId,
     testId,
-    shuffleQuestions: isShuffleEnabled(attemptRow.shuffle_questions),
-    shuffleOptions: isShuffleEnabled(attemptRow.shuffle_options),
+    examSnapshotJson: attemptRow.exam_snapshot_json,
     deliveryLayoutJson: attemptRow.delivery_layout_json,
     attemptNonce: attemptRow.attempt_nonce,
-    audience: 'student',
+    shuffleQuestions: isShuffleEnabled(attemptRow.shuffle_questions),
+    shuffleOptions: isShuffleEnabled(attemptRow.shuffle_options),
   });
+  const composedQuestions = snapshotQuestionsForStudent(snapshot);
 
   const [savedAnswerRows] = await mysqlPool.query(LOAD_SAVED_ANSWERS_SQL, [attemptId]);
 

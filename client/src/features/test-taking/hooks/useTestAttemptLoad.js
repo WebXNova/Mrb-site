@@ -9,6 +9,7 @@ import {
   setAttemptSession,
 } from '../utils/attemptSession';
 import { normalizeAttemptQuestions, normalizeSavedAnswers } from '../utils/normalizeQuestion';
+import { freeSessionPostSubmitPath, freeTestPath, isFreeGuestRuntime } from '../../free-session/freeSessionNav';
 
 /**
  * Loads attempt start payload from the backend.
@@ -26,9 +27,26 @@ export function useTestAttemptLoad(slug) {
 
   const attemptIdRef = useRef(session.attemptId);
 
-  const applyPayload = useCallback(
+    const applyPayload = useCallback(
     (response, activeSession) => {
       const data = response?.data;
+      const previous = getAttemptSession(slug);
+      const accessKind = activeSession.accessKind ?? previous.accessKind ?? null;
+
+      if (data?.submitted || data?.attempt?.status === 'submitted') {
+        const resultAvailable = data.resultAvailable !== false;
+        setAttemptSession(slug, {
+          attemptId: activeSession.attemptId,
+          expiresAt: null,
+          accessKind,
+        });
+        navigate(freeSessionPostSubmitPath(slug, { ...data, resultAvailable }), {
+          replace: true,
+          state: { attemptId: activeSession.attemptId, timedOut: false },
+        });
+        return;
+      }
+
       const attemptExpiresAt = data?.attempt?.expiresAt ?? null;
 
       attemptIdRef.current = activeSession.attemptId;
@@ -36,6 +54,7 @@ export function useTestAttemptLoad(slug) {
       setAttemptSession(slug, {
         attemptId: activeSession.attemptId,
         expiresAt: attemptExpiresAt,
+        accessKind,
       });
 
       setExpiresAt(attemptExpiresAt);
@@ -44,10 +63,24 @@ export function useTestAttemptLoad(slug) {
       setStatus('ready');
       setError('');
     },
-    [slug]
+    [navigate, slug]
   );
 
   const refreshSession = useCallback(async () => {
+    if (isFreeGuestRuntime(slug)) {
+      const response = await testTakingApi.resumeAttempt(slug);
+      const data = response?.data;
+      if (!data?.attemptId) return null;
+      const previous = getAttemptSession(slug);
+      const fresh = {
+        attemptId: data.attemptId,
+        expiresAt: data.expiresAt ?? null,
+        accessKind: previous.accessKind ?? 'free_standalone',
+      };
+      setAttemptSession(slug, fresh);
+      return fresh;
+    }
+
     const studentToken = getStudentToken();
     if (!studentToken) return null;
 
@@ -55,9 +88,11 @@ export function useTestAttemptLoad(slug) {
     const data = response?.data;
     if (!data?.attemptId) return null;
 
+    const previous = getAttemptSession(slug);
     const fresh = {
       attemptId: data.attemptId,
       expiresAt: data.expiresAt ?? null,
+      accessKind: previous.accessKind ?? null,
     };
     setAttemptSession(slug, fresh);
     return fresh;
@@ -65,7 +100,7 @@ export function useTestAttemptLoad(slug) {
 
   useEffect(() => {
     if (!session.attemptId) {
-      navigate(`/tests/${slug}`, { replace: true });
+      navigate(isFreeGuestRuntime(slug) ? freeTestPath(slug) : `/tests/${slug}`, { replace: true });
       return undefined;
     }
 
@@ -125,9 +160,11 @@ export function useTestAttemptLoad(slug) {
     (nextExpiresAt) => {
       if (!nextExpiresAt) return;
       setExpiresAt(nextExpiresAt);
+      const previous = getAttemptSession(slug);
       setAttemptSession(slug, {
         attemptId: attemptIdRef.current,
         expiresAt: nextExpiresAt,
+        accessKind: previous.accessKind ?? null,
       });
     },
     [slug]

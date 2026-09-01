@@ -13,6 +13,7 @@ import { useTestCompleteness } from '../../../admin/hooks/useTestCompleteness.js
 import PublishedTestReadOnlyBanner from '../../../admin/components/PublishedTestReadOnlyBanner.jsx';
 import PublishedTestEditBanner from '../../../admin/components/PublishedTestEditBanner.jsx';
 import { useTestReadOnly } from '../../../admin/hooks/useTestReadOnly.js';
+import { isTestPublishedStatus } from '../../../admin/utils/testBasicInfoValidation.js';
 import { useReadOnlyQuizActions } from '../hooks/useReadOnlyQuizActions.js';
 import { testPageHeading, useTestTitle } from '../../../admin/hooks/useTestTitle.js';
 import { useQuizBuilderState } from '../hooks/useQuizBuilderState.js';
@@ -56,8 +57,9 @@ export default function QuizBuilderView({
   const storageKey = draftKey || testId || 'question-bank';
   const testTitle = useTestTitle(testId);
   const { completeness, reload: reloadCompleteness } = useTestCompleteness(testId);
-  const { readOnly: serverReadOnly, loading: readOnlyLoading } = useTestReadOnly(testId);
-  const readOnly = editPublished ? false : serverReadOnly;
+  const { testStatus, loading: statusLoading } = useTestReadOnly(testId);
+  const editingPublished = Boolean(editPublished || isTestPublishedStatus(testStatus));
+  const readOnly = false;
   const { state, actions, totalPoints } = useQuizBuilderState(storageKey, {
     skipLocalInit: Boolean(testId),
   });
@@ -103,7 +105,7 @@ export default function QuizBuilderView({
   }, [testId]);
 
   useEffect(() => {
-    if (!editPublished || !testId) {
+    if (!editingPublished || !testId) {
       setPublishedEditUpdatedAt(null);
       return undefined;
     }
@@ -122,14 +124,14 @@ export default function QuizBuilderView({
     return () => {
       cancelled = true;
     };
-  }, [editPublished, testId]);
+  }, [editingPublished, testId]);
 
   const { hydrationState, hydrationError, recovery, retryHydration } = useQuizDraftHydration({
     testId,
     storageKey,
     readOnly,
-    editPublished,
-    pauseUntilReady: readOnlyLoading,
+    editPublished: editingPublished,
+    pauseUntilReady: statusLoading,
     actions,
     onServerVersion: setServerVersion,
   });
@@ -149,7 +151,7 @@ export default function QuizBuilderView({
     onServerVersion: setServerVersion,
     onServerSaved: () => {
       reloadCompleteness();
-      if (editPublished && testId) {
+      if (editingPublished && testId) {
         const token = getAdminToken();
         adminApi.getTest(token, testId).then((response) => {
           setPublishedEditUpdatedAt(response?.data?.updatedAt ?? null);
@@ -157,7 +159,7 @@ export default function QuizBuilderView({
       }
     },
     needsServerSync: Boolean(recovery?.needsSync),
-    publishedEditEnabled: editPublished,
+    publishedEditEnabled: editingPublished,
     publishedEditUpdatedAt,
   });
 
@@ -208,8 +210,8 @@ export default function QuizBuilderView({
 
   const resolvedBackTo = backTo || adminRoute('tests');
   const resolvedTitle = pageTitle || (testId ? testPageHeading(testTitle, testId) : 'Questions');
-  const previousStep = testId ? getTestWizardPreviousStep('questions', testId, editPublished) : null;
-  const publishPath = testId && !editPublished ? adminRoute(`tests/${testId}/publish`) : null;
+  const previousStep = testId ? getTestWizardPreviousStep('questions', testId, editingPublished) : null;
+  const publishPath = testId && !editingPublished ? adminRoute(`tests/${testId}/publish`) : null;
 
   const handleAddQuestion = useCallback(() => {
     if (readOnly) return;
@@ -250,8 +252,10 @@ export default function QuizBuilderView({
           <div className="qb-shell__intro">
             {showWizard && testId ? (
               <p className="qb-shell__eyebrow">{getWizardStepEyebrow('questions')}</p>
-            ) : null}
-            <h1 className="qb-shell__title">{resolvedTitle}</h1>
+            ) : (
+              <p className="qb-shell__eyebrow">Questions</p>
+            )}
+            {showWizard ? <h1 className="qb-shell__title">{resolvedTitle}</h1> : null}
             <p className="qb-shell__summary">{summary}</p>
             {showWizard && testId && !readOnly ? (
               <p className="qb-shell__autosave-hint">Questions auto-save as you edit.</p>
@@ -263,7 +267,7 @@ export default function QuizBuilderView({
         </div>
 
         {readOnly ? <PublishedTestReadOnlyBanner /> : null}
-        {editPublished ? <PublishedTestEditBanner testTitle={testTitle} /> : null}
+        {editingPublished && showWizard ? <PublishedTestEditBanner testTitle={testTitle} /> : null}
 
         {testId && !readOnly ? (
           <QuizDraftRecoveryBanner
@@ -276,7 +280,7 @@ export default function QuizBuilderView({
 
         {showWizard && testId ? (
           <div className="qb-shell__nav">
-            <TestWizardNav testId={testId} activeStep="questions" editMode={editPublished} />
+            <TestWizardNav testId={testId} activeStep="questions" editMode={editingPublished} />
           </div>
         ) : null}
 
@@ -325,9 +329,11 @@ export default function QuizBuilderView({
                   {TEST_WIZARD_BUTTONS.publish} →
                 </Link>
               ) : null}
-              <Link className="btn btn--ghost btn--sm" to={resolvedBackTo}>
-                {backLabel}
-              </Link>
+              {backLabel ? (
+                <Link className="btn btn--ghost btn--sm" to={resolvedBackTo}>
+                  {backLabel}
+                </Link>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -338,9 +344,11 @@ export default function QuizBuilderView({
                   ← {previousStep.label}
                 </Link>
               ) : null}
-              <Link className="btn btn--ghost btn--sm" to={resolvedBackTo}>
-                {backLabel}
-              </Link>
+              {backLabel ? (
+                <Link className="btn btn--ghost btn--sm" to={resolvedBackTo}>
+                  {backLabel}
+                </Link>
+              ) : null}
             </div>
           </div>
         )}

@@ -133,6 +133,26 @@ export function IconCalendar(props) {
   );
 }
 
+export function IconClock(props) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </IconBase>
+  );
+}
+
+export function IconRepeat(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M17 1v4h-4" />
+      <path d="M20 8A8 8 0 0 0 6.35 5.64L3 9" />
+      <path d="M7 23v-4h4" />
+      <path d="M4 16a8 8 0 0 0 13.65 2.36L21 15" />
+    </IconBase>
+  );
+}
+
 export function IconLayers(props) {
   return (
     <IconBase {...props}>
@@ -214,6 +234,8 @@ const ICON_MAP = {
   'log-out': IconLogOut,
   search: IconSearch,
   calendar: IconCalendar,
+  clock: IconClock,
+  repeat: IconRepeat,
   layers: IconLayers,
   award: IconAward,
   trophy: IconTrophy,

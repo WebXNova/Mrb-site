@@ -33,9 +33,19 @@ export function mapTestQuizDraftRow(row) {
     }
   }
 
+  const canonicalTestId = Number(row.test_id);
+  if (draftPayload && typeof draftPayload === 'object') {
+    if (Number(draftPayload.testId) !== canonicalTestId) {
+      draftPayload.testId = canonicalTestId;
+    }
+    if (draftPayload.storageKey != null && String(draftPayload.storageKey) !== String(canonicalTestId)) {
+      draftPayload.storageKey = String(canonicalTestId);
+    }
+  }
+
   return {
     draftId: Number(row.draft_id),
-    testId: Number(row.test_id),
+    testId: canonicalTestId,
     draftPayload,
     version: Number(row.version),
     createdBy: Number(row.created_by),

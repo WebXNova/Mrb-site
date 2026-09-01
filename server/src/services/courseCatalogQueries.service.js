@@ -7,7 +7,7 @@ import { mysqlPool } from '../config/mysql.js';
  */
 export const COURSE_CORE_COLUMNS_QUALIFIED = `
   c.id, c.title, c.description, c.short_description, c.level, c.image_url,
-  c.start_date, c.end_date, c.admission_status,
+  c.start_date, c.end_date, c.admission_status, c.finished_at,
   c.is_active, c.status, c.created_by, c.created_at, c.updated_at
 `;
 
@@ -40,12 +40,27 @@ const EFFECTIVE_PRICING_JOIN = `
   )
 `;
 
-function buildCatalogSelect({ activeOnly = false } = {}) {
+export const PUBLIC_CATALOG_WHERE = `
+  c.is_active = TRUE
+  AND c.status = 'published'
+  AND c.admission_status = 'OPEN'
+`;
+
+/** Published + active only — does not consult admission (instructional / enrolled reads). */
+export const ACTIVE_PUBLISHED_WHERE = `c.is_active = TRUE AND c.status = 'published'`;
+
+function catalogWhereClause({ activeOnly = false, catalogVisible = false } = {}) {
+  if (catalogVisible) return `WHERE ${PUBLIC_CATALOG_WHERE}`;
+  if (activeOnly) return `WHERE ${ACTIVE_PUBLISHED_WHERE}`;
+  return '';
+}
+
+function buildCatalogSelect({ activeOnly = false, catalogVisible = false } = {}) {
   return `
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}, ${PRICING_PROJECTION}
     FROM courses c
     ${EFFECTIVE_PRICING_JOIN}
-    ${activeOnly ? "WHERE c.is_active = TRUE AND c.status = 'published'" : ''}
+    ${catalogWhereClause({ activeOnly, catalogVisible })}
   `;
 }
 
@@ -69,17 +84,17 @@ function isMissingPricingSchemaError(error) {
   return code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_FIELD_ERROR';
 }
 
-function buildCatalogSelectCoreOnly({ activeOnly = false } = {}) {
+function buildCatalogSelectCoreOnly({ activeOnly = false, catalogVisible = false } = {}) {
   return `
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}
     FROM courses c
-    ${activeOnly ? "WHERE c.is_active = TRUE AND c.status = 'published'" : ''}
+    ${catalogWhereClause({ activeOnly, catalogVisible })}
   `;
 }
 
 export async function listActiveCourseRowsWithoutPricing() {
   const [rows] = await mysqlPool.query(
-    `${buildCatalogSelectCoreOnly({ activeOnly: true })} ORDER BY c.created_at DESC`
+    `${buildCatalogSelectCoreOnly({ catalogVisible: true })} ORDER BY c.created_at DESC`
   );
   return rows;
 }
@@ -120,7 +135,7 @@ export async function listActiveCourseRows(opts = {}) {
   const { categoryJoin, params } = buildActiveCatalogQuery(opts);
   try {
     const [rows] = await mysqlPool.query(
-      `${buildCatalogSelect({ activeOnly: true }).replace(
+      `${buildCatalogSelect({ catalogVisible: true }).replace(
         'FROM courses c',
         `FROM courses c${categoryJoin}`
       )} ORDER BY c.created_at DESC`,
@@ -134,7 +149,7 @@ export async function listActiveCourseRows(opts = {}) {
     }
     if (!isMissingPricingSchemaError(error)) throw error;
     const [rows] = await mysqlPool.query(
-      `${buildCatalogSelectCoreOnly({ activeOnly: true }).replace(
+      `${buildCatalogSelectCoreOnly({ catalogVisible: true }).replace(
         'FROM courses c',
         `FROM courses c${categoryJoin}`
       )} ORDER BY c.created_at DESC`,
@@ -144,18 +159,23 @@ export async function listActiveCourseRows(opts = {}) {
   }
 }
 
-export async function getCourseRowById(courseId, { activeOnly = false } = {}) {
+export async function getCourseRowById(courseId, { activeOnly = false, catalogVisible = false } = {}) {
+  const extra = catalogVisible
+    ? ` AND ${PUBLIC_CATALOG_WHERE}`
+    : activeOnly
+      ? ` AND ${ACTIVE_PUBLISHED_WHERE}`
+      : '';
   const baseSql = `
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}, ${PRICING_PROJECTION}
     FROM courses c
     ${EFFECTIVE_PRICING_JOIN}
-    WHERE c.id = ?${activeOnly ? " AND c.is_active = TRUE AND c.status = 'published'" : ''}
+    WHERE c.id = ?${extra}
     LIMIT 1
   `;
   const fallbackSql = `
     SELECT ${COURSE_CORE_COLUMNS_QUALIFIED}
     FROM courses c
-    WHERE c.id = ?${activeOnly ? " AND c.is_active = TRUE AND c.status = 'published'" : ''}
+    WHERE c.id = ?${extra}
     LIMIT 1
   `;
 

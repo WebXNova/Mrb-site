@@ -1,6 +1,7 @@
 import PremiumFormField from '../components/courses/PremiumFormField';
 import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
 import ThumbnailDropzone from '../components/courses/ThumbnailDropzone';
+import CourseCategoryAssignmentField from '../components/courses/CourseCategoryAssignmentField';
 
 const LEVEL_OPTIONS = [
   { value: 'beginner', label: 'Beginner' },
@@ -19,6 +20,11 @@ export default function CourseStepDetails({
   imageInputRef,
   onImageChange,
   onClearImage,
+  allCategories = [],
+  categoryIds = [],
+  onToggleCategory,
+  categoriesLoading = false,
+  categoriesError = '',
 }) {
   return (
     <div className="admin-course-wizard-step">
@@ -127,6 +133,20 @@ export default function CourseStepDetails({
             uploading={imageUploading}
             onFileChange={onImageChange}
             onClear={onClearImage}
+          />
+        </PremiumFormField>
+        <PremiumFormField
+          id="wiz_categories"
+          label="Categories"
+          hint="Optional. Class, department, and board show on each category. You can also assign these after create."
+          className="premium-form-grid__span-2"
+        >
+          <CourseCategoryAssignmentField
+            allCategories={allCategories}
+            selectedIds={categoryIds}
+            onToggle={onToggleCategory}
+            isLoading={categoriesLoading}
+            loadError={categoriesError}
           />
         </PremiumFormField>
       </div>

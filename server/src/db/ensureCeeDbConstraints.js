@@ -38,7 +38,7 @@ async function ensureTestsCourseIdNotNull(pool, db) {
   }
 
   const [orphanRows] = await pool.query(
-    `SELECT COUNT(*) AS n FROM tests WHERE course_id IS NULL`
+    `SELECT COUNT(*) AS n FROM tests WHERE course_id IS NULL AND (test_access_type IS NULL OR test_access_type = 'course_locked')`
   );
   const orphanCount = Number(orphanRows[0]?.n ?? 0);
   if (orphanCount > 0) {
@@ -50,7 +50,7 @@ async function ensureTestsCourseIdNotNull(pool, db) {
   }
 
   console.log(
-  '[CEE.schema] tests.course_id contains no NULL values; FK already exists. Skipping NOT NULL enforcement.'
-);
+    '[CEE.schema] No course-locked tests have NULL course_id. Standalone tests may still be course-less. Skipping NOT NULL enforcement.'
+  );
 return;
 }

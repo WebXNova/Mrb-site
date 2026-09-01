@@ -5,6 +5,8 @@
  */
 import {
   assertCanCreateNewTestAttempt,
+  computeEligiblePrepCanStart,
+  computePrepCanStart,
   evaluateRetakePolicy,
   TERMINAL_ATTEMPT_STATUSES,
 } from './testRetakePolicy.service.js';
@@ -115,6 +117,56 @@ try {
 } catch {
   failed += 1;
   console.error('  ✗ assertCanCreateNewTestAttempt allows when under max');
+}
+
+{
+  const retake = evaluateRetakePolicy({ max_attempts: 1 }, { totalAttempts: 0, hasActiveAttempt: false });
+  const openWindow = {
+    canCreateAttempt: true,
+    canResumeInProgress: true,
+    notYetAvailable: false,
+    noLongerAvailable: false,
+  };
+  assert(
+    computeEligiblePrepCanStart({
+      examOpen: true,
+      availability: openWindow,
+      retake,
+      hasActiveAttempt: false,
+    }) === true,
+    'standalone prep canStart true when exam open, in window, and retake allows'
+  );
+  assert(
+    computeEligiblePrepCanStart({
+      examOpen: false,
+      availability: openWindow,
+      retake,
+      hasActiveAttempt: false,
+    }) === false,
+    'standalone prep canStart false when exam is closed'
+  );
+  assert(
+    computeEligiblePrepCanStart({
+      examOpen: false,
+      availability: openWindow,
+      retake: evaluateRetakePolicy({ max_attempts: 1 }, { totalAttempts: 1, hasActiveAttempt: true }),
+      hasActiveAttempt: true,
+    }) === true,
+    'in-progress resume remains allowed when exam is closed'
+  );
+  assert(
+    computeEligiblePrepCanStart({
+      examOpen: true,
+      availability: { ...openWindow, canCreateAttempt: false, notYetAvailable: true },
+      retake,
+      hasActiveAttempt: false,
+    }) === false,
+    'standalone prep canStart false before availability window'
+  );
+  assert(
+    computePrepCanStart({ availability: openWindow, retake }) !== true,
+    'legacy { availability, retake } bag is not a valid retake evaluation'
+  );
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

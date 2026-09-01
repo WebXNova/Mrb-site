@@ -220,6 +220,16 @@
   grid-template-columns: 1fr;
 }
 
+.home-test-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.home-test-grid__item {
+  min-width: 0;
+}
+
 @media (min-width: 768px) {
   .popular-courses__grid--free {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -236,6 +246,25 @@
 .popular-courses--visible .pc-card {
   animation: pc-card-enter 0.7s var(--pc-ease) both;
   animation-delay: calc(0.15s + (var(--card-i, 0) * 0.1s));
+}
+
+.popular-courses--visible .home-test-grid__item .home-test-card {
+  animation: pc-card-enter 0.55s var(--pc-ease) both;
+  animation-delay: calc(0.08s + (var(--card-i, 0) * 0.07s));
+}
+
+.popular-courses--hub {
+  padding-block: clamp(3rem, 6vw, 4.25rem);
+}
+
+.popular-courses--paid-tests .popular-courses__backdrop {
+  background: linear-gradient(
+    165deg,
+    #0a0814 0%,
+    #120814 42%,
+    #1a0b14 72%,
+    #070b18 100%
+  );
 }
 
 @keyframes pc-card-enter {
@@ -325,7 +354,8 @@
     transition: none;
   }
 
-  .popular-courses--visible .pc-card {
+  .popular-courses--visible .pc-card,
+  .popular-courses--visible .home-test-grid__item .home-test-card {
     animation: none;
   }
 }

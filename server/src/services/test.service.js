@@ -7,7 +7,26 @@ import { sanitizePlainText } from '../utils/plainTextSanitizer.js';
 import { formatMySqlDateTime } from '../utils/dateTime.js';
 import { AppError } from '../errors/base/AppError.js';
 import { toAvailabilityIso } from './testAvailabilityWindow.service.js';
-import { NOT_FOUND, PUBLISH_REQUIREMENTS_NOT_MET, TEST_IS_LOCKED, UNAUTHORIZED, VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
+import { isCourseLinkedTest } from '../security/cee/courseLinkedTestAccess.service.js';
+import {
+  assertTestAccessTypeCoursePairing,
+  isStandaloneAccessType,
+} from '../validators/testAccessType.js';
+import { DEFAULT_TEST_ACCESS_TYPE, TEST_ACCESS_TYPE_FREE_STANDALONE } from '../constants/testAccessType.constants.js';
+import {
+  NOT_FOUND,
+  PUBLISH_REQUIREMENTS_NOT_MET,
+  TEST_IS_LOCKED,
+  UNAUTHORIZED,
+  VALIDATION_ERROR,
+} from '../errors/codes/ErrorCodes.js';
+import {
+  layoutModeFromDisplay,
+  resolveAuthoritativeDisplay,
+  resolveAuthoritativeLayout,
+  resolveDisplayModeFromPayload,
+  resolveFullPageMode,
+} from '../utils/testPresentation.js';
 
 import {
   getTestCompletenessReport,
@@ -33,7 +52,7 @@ import {
   buildPublishedEditMetadata,
   resolvePublishedEditContext,
 } from './publishedTestEdit.service.js';
-import { enforceUnpublishedTest, isTestReadOnlyStatus } from './publishedTestLock.service.js';
+import { enforceUnpublishedTest } from './publishedTestLock.service.js';
 import {
   assertTestCompletenessAccess,
   assertTestMutationAccess,
@@ -43,7 +62,7 @@ import {
   loadTestSubjectIds,
   normalizeSubjectIdsFromPayload,
   replaceTestSubjects,
-  validateSubjectsForTest,
+  validateSubjectsForTestAccess,
 } from './testSubjectValidation.service.js';
 import { parseStrictTestCategory, parseStrictTestType } from '../validators/testEnumGuards.js';
 import { LEGACY_ENDPOINT_DISABLED } from './testLifecycle.service.js';
@@ -96,7 +115,7 @@ for (const [exportName, binding] of REQUIRED_COMPLETENESS_BINDINGS) {
 
 /** Step 1 creates an incomplete shell — rules must be saved in Step 2. */
 const STEP1_DEFAULT_DURATION_MINUTES = 0;
-const STEP1_DEFAULT_MAX_ATTEMPTS = 0;
+const STEP1_DEFAULT_MAX_ATTEMPTS = 1;
 const STEP1_DEFAULT_STATUS = TEST_LIFECYCLE_STATES.INCOMPLETE;
 
 function slugify(value) {
@@ -110,9 +129,12 @@ function slugify(value) {
     .slice(0, 120);
 }
 
-function buildPublicLink(publicSlug) {
+function buildPublicLink(publicSlug, accessType) {
   if (!publicSlug) return null;
   const base = String(env.clientUrl || '').replace(/\/$/, '');
+  if (String(accessType || '') === TEST_ACCESS_TYPE_FREE_STANDALONE) {
+    return `${base}/free-test/${publicSlug}`;
+  }
   return `${base}/tests/${publicSlug}`;
 }
 
@@ -170,6 +192,7 @@ function toTest(row, subjectIds = []) {
   return {
     id: row.id,
     courseId: row.course_id != null ? Number(row.course_id) : null,
+    testAccessType: row.test_access_type || DEFAULT_TEST_ACCESS_TYPE,
     title: row.title,
     description: row.description,
     category: row.category || DEFAULT_TEST_CATEGORY,
@@ -188,9 +211,9 @@ function toTest(row, subjectIds = []) {
     accessMode: row.access_mode || 'private',
     tags,
     status: row.status,
-    isReadOnly: isTestReadOnlyStatus(row.status),
+    isReadOnly: false,
     publicSlug: row.public_slug || null,
-    publicLink: buildPublicLink(row.public_slug),
+    publicLink: buildPublicLink(row.public_slug, row.test_access_type),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     questionCount: Number(row.question_count ?? 0),
@@ -198,6 +221,13 @@ function toTest(row, subjectIds = []) {
     avgScore: row.avg_score != null ? Number(row.avg_score) : null,
     minScore: row.min_score != null ? Number(row.min_score) : null,
     maxScore: row.max_score != null ? Number(row.max_score) : null,
+    courseTitle: row.course_title != null ? String(row.course_title) : null,
+    startDate: toAvailabilityIso(row.start_date),
+    endDate: toAvailabilityIso(row.end_date),
+    pricePkr: Number(row.price_pkr || 0),
+    seatCapacity: Number(row.seat_capacity || 0),
+    confirmedSeats: Number(row.confirmed_seats ?? 0),
+    resultsReleasedAt: row.results_released_at ? new Date(row.results_released_at).toISOString() : null,
   };
 }
 
@@ -246,6 +276,12 @@ export async function listTests(filters = {}) {
     conditions.push("LOWER(t.status) <> 'published' AND UPPER(t.status) <> 'INCOMPLETE'");
   }
 
+  const accessType = String(filters.accessType ?? filters.testAccessType ?? '').trim();
+  if (accessType === 'course_locked' || accessType === 'free_standalone' || accessType === 'paid_standalone') {
+    conditions.push('t.test_access_type = ?');
+    params.push(accessType);
+  }
+
   if (filters.dateFrom) {
     conditions.push('DATE(t.created_at) >= ?');
     params.push(filters.dateFrom);
@@ -282,7 +318,14 @@ export async function listTests(filters = {}) {
         MAX(percentage) AS max_score
       FROM test_results
       GROUP BY test_id
-    ) rs ON rs.test_id = t.id`;
+    ) rs ON rs.test_id = t.id
+    LEFT JOIN courses c ON c.id = t.course_id
+    LEFT JOIN (
+      SELECT test_id, COUNT(*) AS confirmed_seats
+      FROM standalone_test_orders
+      WHERE status = 'approved' AND seat_status = 'confirmed'
+      GROUP BY test_id
+    ) so ON so.test_id = t.id`;
 
   let total = null;
   if (limit != null) {
@@ -293,14 +336,17 @@ export async function listTests(filters = {}) {
     total = Number(countRow?.total ?? 0);
   }
 
-  let sql = `SELECT t.id, t.course_id, t.title, t.description, t.category, t.test_type, t.duration_minutes, t.passing_marks,
+  let sql = `SELECT t.id, t.course_id, t.test_access_type, t.title, t.description, t.category, t.test_type, t.duration_minutes, t.passing_marks,
             t.max_attempts, t.negative_marking, t.shuffle_questions, t.shuffle_options,
             t.show_explanations, t.access_mode, t.tags_json, t.status, t.public_slug, t.created_at, t.updated_at,
+            t.start_date, t.end_date, t.price_pkr, t.seat_capacity, t.results_released_at,
+            c.title AS course_title,
             COALESCE(qc.question_count, 0) AS question_count,
             COALESCE(rs.scores_count, 0) AS scores_count,
             rs.avg_score,
             rs.min_score,
-            rs.max_score
+            rs.max_score,
+            COALESCE(so.confirmed_seats, 0) AS confirmed_seats
      FROM tests t
      ${statsJoinSql}
      WHERE ${whereSql}
@@ -339,19 +385,41 @@ export async function listTests(filters = {}) {
 
 export async function getTestById(testId) {
   const [rows] = await mysqlPool.query(
-    `SELECT id, course_id, title, description, category, test_type, duration_minutes, passing_marks,
-            max_attempts, negative_marking, shuffle_questions, shuffle_options,
-            show_explanations, access_mode, tags_json, status, public_slug, created_at, updated_at
-     FROM tests
-     WHERE id = ? AND deleted_at IS NULL
+    `SELECT t.id, t.course_id, t.test_access_type, t.title, t.description, t.category, t.test_type, t.duration_minutes, t.passing_marks,
+            t.max_attempts, t.negative_marking, t.shuffle_questions, t.shuffle_options,
+            t.show_explanations, t.access_mode, t.tags_json, t.status, t.public_slug, t.created_at, t.updated_at,
+            t.start_date, t.end_date, t.price_pkr, t.seat_capacity, t.results_released_at,
+            c.title AS course_title
+     FROM tests t
+     LEFT JOIN courses c ON c.id = t.course_id
+     WHERE t.id = ? AND t.deleted_at IS NULL
      LIMIT 1`,
     [testId]
   );
   if (!rows[0]) return null;
+
+  let confirmedSeats = 0;
+  if (isStandaloneAccessType(rows[0].test_access_type)) {
+    const [seatRows] = await mysqlPool.query(
+      `SELECT COUNT(*) AS n
+       FROM standalone_test_orders
+       WHERE test_id = ? AND status = 'approved' AND seat_status = 'confirmed'`,
+      [testId]
+    );
+    confirmedSeats = Number(seatRows[0]?.n ?? 0);
+  }
+
+  const [[scoreRow]] = await mysqlPool.query(
+    `SELECT COUNT(*) AS scores_count FROM test_results WHERE test_id = ?`,
+    [testId]
+  );
+
   const presentation = await loadTestSubjectPresentation(testId);
   return toTest(
     {
       ...rows[0],
+      confirmed_seats: confirmedSeats,
+      scores_count: Number(scoreRow?.scores_count ?? 0),
       subject_label: presentation.displayLabel,
       subject_titles: presentation.subjectTitles,
       subjects: (presentation.subjectIds || []).map((id, index) => ({
@@ -521,7 +589,8 @@ async function getActiveTestSettingsRow(testId) {
   const [rows] = await mysqlPool.query(
     `SELECT id, title, description, shuffle_questions, shuffle_options, show_explanations,
             show_result_immediately, show_answers_after_submit, allow_retake,
-            access_mode, status, start_date, end_date, public_slug,
+            access_mode, status, start_date, end_date, public_slug, course_id, test_access_type,
+            price_pkr, seat_capacity,
             layout_mode, display_mode, full_page_mode, results_released_at,
             introduction_html, conclusion_html
      FROM tests
@@ -552,6 +621,17 @@ export async function getTestSettingsById(testId) {
   const { listTestScoreBands } = await import('./testScoreBands.service.js');
   const scoreBands = await listTestScoreBands(Number(testId));
 
+  let confirmedSeats = 0;
+  if (isStandaloneAccessType(row.test_access_type)) {
+    const [seatRows] = await mysqlPool.query(
+      `SELECT COUNT(*) AS n
+       FROM standalone_test_orders
+       WHERE test_id = ? AND status = 'approved' AND seat_status = 'confirmed'`,
+      [Number(row.id)]
+    );
+    confirmedSeats = Number(seatRows[0]?.n ?? 0);
+  }
+
   const introductionHtml =
     row.introduction_html != null && String(row.introduction_html).trim() !== ''
       ? String(row.introduction_html)
@@ -568,9 +648,9 @@ export async function getTestSettingsById(testId) {
     show_result_immediately: Boolean(Number(row.show_result_immediately)),
     show_answers_after_submit: Boolean(Number(row.show_answers_after_submit)),
     access_mode: row.access_mode === 'public' ? 'public' : 'private',
-    layout_mode: row.layout_mode === 'horizontal' ? 'horizontal' : 'vertical',
-    display_mode: row.display_mode === 'one_per_page' ? 'one_per_page' : 'all',
-    full_page_mode: Boolean(Number(row.full_page_mode)),
+    layout_mode: resolveAuthoritativeLayout(row),
+    display_mode: resolveAuthoritativeDisplay(row),
+    full_page_mode: resolveFullPageMode(row),
     results_released_at: row.results_released_at ? new Date(row.results_released_at).toISOString() : null,
     introduction_html: introductionHtml,
     conclusion_html: row.conclusion_html != null ? String(row.conclusion_html) : null,
@@ -578,6 +658,10 @@ export async function getTestSettingsById(testId) {
     lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
     start_date: toAvailabilityIso(row.start_date),
     end_date: toAvailabilityIso(row.end_date),
+    test_access_type: String(row.test_access_type || 'course_locked'),
+    price_pkr: Number(row.price_pkr || 0),
+    seat_capacity: Number(row.seat_capacity || 0),
+    confirmed_seats: confirmedSeats,
   };
 }
 
@@ -613,11 +697,10 @@ export async function updateTestSettings(testId, payload, access = {}) {
   }
 
   const { sanitizeQuestionHtml } = await import('../utils/questionHtmlSanitizer.js');
-  const layoutMode = payload.layout_mode ?? (existing.layout_mode === 'horizontal' ? 'horizontal' : 'vertical');
-  const displayMode =
-    payload.display_mode ?? (existing.display_mode === 'one_per_page' ? 'one_per_page' : 'all');
+  const displayMode = resolveDisplayModeFromPayload(payload, existing);
+  const layoutMode = layoutModeFromDisplay(displayMode);
   const fullPageMode =
-    payload.full_page_mode != null ? Boolean(payload.full_page_mode) : Boolean(Number(existing.full_page_mode));
+    payload.full_page_mode != null ? Boolean(payload.full_page_mode) : resolveFullPageMode(existing);
   const showAnswersAfterSubmit =
     payload.show_answers_after_submit != null
       ? Boolean(payload.show_answers_after_submit)
@@ -637,19 +720,63 @@ export async function updateTestSettings(testId, payload, access = {}) {
         : sanitizeQuestionHtml(payload.conclusion_html)
       : existing.conclusion_html;
 
-  const startDate =
-    payload.start_date !== undefined
+  const skipScheduleWrite = isCourseLinkedTest(existing);
+  const startDate = skipScheduleWrite
+    ? existing.start_date
+    : payload.start_date !== undefined
       ? payload.start_date == null
         ? null
         : formatMySqlDateTime(payload.start_date, { fieldName: 'start_date' })
       : existing.start_date;
 
-  const endDate =
-    payload.end_date !== undefined
+  const endDate = skipScheduleWrite
+    ? existing.end_date
+    : payload.end_date !== undefined
       ? payload.end_date == null
         ? null
         : formatMySqlDateTime(payload.end_date, { fieldName: 'end_date' })
       : existing.end_date;
+
+  const isPaidStandalone = String(existing.test_access_type) === 'paid_standalone';
+  const isStandalone = isStandaloneAccessType(existing.test_access_type);
+  const pricePkr = isPaidStandalone
+    ? payload.price_pkr !== undefined
+      ? Number(payload.price_pkr)
+      : Number(existing.price_pkr || 0)
+    : Number(existing.price_pkr || 0);
+  const seatCapacity = isStandalone
+    ? payload.seat_capacity !== undefined
+      ? Number(payload.seat_capacity)
+      : Number(existing.seat_capacity || 0)
+    : Number(existing.seat_capacity || 0);
+
+  if (isPaidStandalone) {
+    if (payload.price_pkr !== undefined && (!Number.isInteger(pricePkr) || pricePkr < 1)) {
+      throw new AppError({
+        message: 'Paid standalone tests require a server-side price of at least Rs. 1.',
+        errorCode: VALIDATION_ERROR,
+        httpStatus: 422,
+        isOperational: true,
+      });
+    }
+    if (payload.seat_capacity !== undefined && (!Number.isInteger(seatCapacity) || seatCapacity < 1)) {
+      throw new AppError({
+        message: 'Paid standalone tests require a seat capacity of at least 1.',
+        errorCode: VALIDATION_ERROR,
+        httpStatus: 422,
+        isOperational: true,
+      });
+    }
+  } else if (isStandalone && payload.seat_capacity !== undefined) {
+    if (!Number.isInteger(seatCapacity) || seatCapacity < 0) {
+      throw new AppError({
+        message: 'Seat capacity must be 0 or greater.',
+        errorCode: VALIDATION_ERROR,
+        httpStatus: 422,
+        isOperational: true,
+      });
+    }
+  }
 
   const connection = await mysqlPool.getConnection();
   try {
@@ -670,6 +797,8 @@ export async function updateTestSettings(testId, payload, access = {}) {
            conclusion_html = ?,
            start_date = ?,
            end_date = ?,
+           price_pkr = ?,
+           seat_capacity = ?,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND deleted_at IS NULL`,
       [
@@ -686,6 +815,8 @@ export async function updateTestSettings(testId, payload, access = {}) {
         conclusionHtml,
         startDate,
         endDate,
+        pricePkr,
+        seatCapacity,
         tid,
       ]
     );
@@ -760,16 +891,22 @@ export async function createTestBasicInfo(payload, createdBy) {
     });
   }
 
-  const courseId = Number(payload.course_id);
-  const course = await getCourseRowById(courseId);
-  if (!course) {
-    throw new AppError({
-      message: 'Course was not found.',
-      errorCode: NOT_FOUND,
-      httpStatus: 404,
-      isOperational: true,
-      metadata: { courseId },
-    });
+  const { accessType, courseId } = assertTestAccessTypeCoursePairing(
+    payload.test_access_type,
+    payload.course_id
+  );
+
+  if (courseId != null) {
+    const course = await getCourseRowById(courseId);
+    if (!course) {
+      throw new AppError({
+        message: 'Course was not found.',
+        errorCode: NOT_FOUND,
+        httpStatus: 404,
+        isOperational: true,
+        metadata: { courseId },
+      });
+    }
   }
 
   const title = sanitizePlainText(payload.title, { maxLength: 120 });
@@ -782,6 +919,7 @@ export async function createTestBasicInfo(payload, createdBy) {
 
   validateTestStateForCreate({
     course_id: courseId,
+    test_access_type: accessType,
     title,
     category,
     test_type: testType,
@@ -791,14 +929,15 @@ export async function createTestBasicInfo(payload, createdBy) {
   const connection = await mysqlPool.getConnection();
   try {
     await connection.beginTransaction();
-    await validateSubjectsForTest(courseId, testType, normalizedSubjectIds, connection);
+    await validateSubjectsForTestAccess(accessType, courseId, testType, normalizedSubjectIds, connection);
 
     const [result] = await connection.query(
       `INSERT INTO tests
-         (course_id, title, description, category, test_type, duration_minutes, max_attempts, status, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (course_id, test_access_type, title, description, category, test_type, duration_minutes, max_attempts, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         courseId,
+        accessType,
         title,
         description,
         category,
@@ -819,6 +958,7 @@ export async function createTestBasicInfo(payload, createdBy) {
       testId,
       status: STEP1_DEFAULT_STATUS,
       test_type: testType,
+      test_access_type: accessType,
       category,
       subject_ids: normalizedSubjectIds,
     };
@@ -831,16 +971,21 @@ export async function createTestBasicInfo(payload, createdBy) {
 }
 
 /**
- * Step 1 — update basic info on an existing non-published test.
+ * Step 1 — update basic info on an existing test (including published).
  * @param {number} testId
  * @param {Parameters<typeof createTestBasicInfo>[0]} payload
  */
 export async function updateTestBasicInfo(testId, payload, access = {}) {
   const tid = Number(testId);
+  const { accessType, courseId } = assertTestAccessTypeCoursePairing(
+    payload.test_access_type,
+    payload.course_id
+  );
+
   if (access.userId != null) {
     await assertTestMutationAccess(tid, access.userId, access.role ?? 'admin', {
       action: 'update_basic_info',
-      targetCourseId: payload.course_id,
+      targetCourseId: courseId,
     });
   }
 
@@ -851,16 +996,17 @@ export async function updateTestBasicInfo(testId, payload, access = {}) {
 
   await enforceWizardWrite(tid, 'basic', mysqlPool, { allowPublishedEdit: publishContext.isPublished });
 
-  const courseId = Number(payload.course_id);
-  const course = await getCourseRowById(courseId);
-  if (!course) {
-    throw new AppError({
-      message: 'Course was not found.',
-      errorCode: NOT_FOUND,
-      httpStatus: 404,
-      isOperational: true,
-      metadata: { courseId },
-    });
+  if (courseId != null) {
+    const course = await getCourseRowById(courseId);
+    if (!course) {
+      throw new AppError({
+        message: 'Course was not found.',
+        errorCode: NOT_FOUND,
+        httpStatus: 404,
+        isOperational: true,
+        metadata: { courseId },
+      });
+    }
   }
 
   const title = sanitizePlainText(payload.title, { maxLength: 120 });
@@ -872,6 +1018,7 @@ export async function updateTestBasicInfo(testId, payload, access = {}) {
 
   validateTestStateForCreate({
     course_id: courseId,
+    test_access_type: accessType,
     title,
     category,
     test_type: testType,
@@ -880,18 +1027,19 @@ export async function updateTestBasicInfo(testId, payload, access = {}) {
   const connection = await mysqlPool.getConnection();
   try {
     await connection.beginTransaction();
-    await validateSubjectsForTest(courseId, testType, normalizedSubjectIds, connection);
+    await validateSubjectsForTestAccess(accessType, courseId, testType, normalizedSubjectIds, connection);
 
     await connection.query(
       `UPDATE tests
        SET course_id = ?,
+           test_access_type = ?,
            title = ?,
            description = ?,
            category = ?,
            test_type = ?,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND deleted_at IS NULL`,
-      [courseId, title, description, category, testType, tid]
+      [courseId, accessType, title, description, category, testType, tid]
     );
 
     await replaceTestSubjects(tid, normalizedSubjectIds, connection);
@@ -908,6 +1056,7 @@ export async function updateTestBasicInfo(testId, payload, access = {}) {
         metadata: {
           courseId,
           testType,
+          testAccessType: accessType,
           attemptStats: publishContext.attemptStats,
         },
       });
@@ -917,6 +1066,7 @@ export async function updateTestBasicInfo(testId, payload, access = {}) {
       testId: tid,
       updated: true,
       test_type: testType,
+      test_access_type: accessType,
       category,
       subject_ids: normalizedSubjectIds,
       lifecycle_status: report?.lifecycle_status ?? TEST_LIFECYCLE_STATES.INCOMPLETE,
@@ -1192,6 +1342,119 @@ export async function getTestCompleteness(testId, access = {}) {
   };
 }
 
+/**
+ * Deep-clone a question_bank row + options so a duplicated test does not share bank IDs.
+ * @param {import('mysql2/promise').PoolConnection} connection
+ * @param {number} sourceQuestionId
+ * @param {number|null} createdBy
+ * @returns {Promise<number|null>}
+ */
+async function cloneQuestionBankForDuplicate(connection, sourceQuestionId, createdBy) {
+  const [qbRows] = await connection.query(
+    `SELECT course_id, subject_id, topic, difficulty, question_type, question_text, question_html,
+            question_image_url, explanation, explanation_html, tip_html, marks, created_by
+     FROM question_bank
+     WHERE id = ? AND deleted_at IS NULL
+     LIMIT 1`,
+    [sourceQuestionId]
+  );
+  const qb = qbRows[0];
+  if (!qb) return null;
+
+  const creatorId = Number(createdBy ?? qb.created_by);
+  const [insert] = await connection.query(
+    `INSERT INTO question_bank
+       (course_id, subject_id, topic, difficulty, question_type, question_text, question_html,
+        question_image_url, explanation, explanation_html, tip_html, marks, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      qb.course_id,
+      qb.subject_id,
+      qb.topic,
+      qb.difficulty,
+      qb.question_type,
+      qb.question_text,
+      qb.question_html,
+      qb.question_image_url,
+      qb.explanation,
+      qb.explanation_html,
+      qb.tip_html,
+      qb.marks,
+      creatorId,
+    ]
+  );
+  const newId = Number(insert.insertId);
+
+  const [opts] = await connection.query(
+    `SELECT option_key, option_text, option_html, image_url, is_correct, sort_order
+     FROM question_options
+     WHERE question_id = ?
+     ORDER BY sort_order ASC, id ASC`,
+    [sourceQuestionId]
+  );
+  for (const option of opts) {
+    await connection.query(
+      `INSERT INTO question_options
+         (question_id, option_key, option_text, option_html, image_url, is_correct, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newId,
+        option.option_key,
+        option.option_text,
+        option.option_html,
+        option.image_url,
+        option.is_correct,
+        option.sort_order,
+      ]
+    );
+  }
+
+  return newId;
+}
+
+/**
+ * Remap quiz-draft identities onto the duplicated test. Does not copy attempts or results.
+ * @param {Record<string, unknown>} draftPayload
+ * @param {{ newTestId: number, questionIdMap: Map<number, number>, sectionIdMap: Map<number, number> }} maps
+ */
+export function remapDuplicatedQuizDraft(draftPayload, { newTestId, questionIdMap, sectionIdMap }) {
+  const next = JSON.parse(JSON.stringify(draftPayload));
+  next.testId = newTestId;
+  next.storageKey = String(newTestId);
+
+  function visit(node) {
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+
+    if (node.id != null && sectionIdMap.has(Number(node.id)) && ('subjectLabel' in node || 'subject_label' in node)) {
+      node.id = sectionIdMap.get(Number(node.id));
+    }
+
+    for (const key of ['questionId', 'question_id', 'bankQuestionId']) {
+      if (node[key] != null && questionIdMap.has(Number(node[key]))) {
+        node[key] = questionIdMap.get(Number(node[key]));
+      }
+    }
+
+    if (typeof node.id === 'string' && node.id.startsWith('runtime-q-')) {
+      const oldId = Number(node.id.slice('runtime-q-'.length));
+      if (questionIdMap.has(oldId)) {
+        node.id = `runtime-q-${questionIdMap.get(oldId)}`;
+      }
+    }
+
+    for (const value of Object.values(node)) {
+      visit(value);
+    }
+  }
+
+  visit(next);
+  return next;
+}
+
 export async function duplicateTest(testId, createdBy = null, access = {}) {
   if (access.userId != null) {
     await assertTestMutationAccess(testId, access.userId, access.role ?? 'admin', {
@@ -1212,10 +1475,11 @@ export async function duplicateTest(testId, createdBy = null, access = {}) {
 
     const [insertResult] = await connection.query(
       `INSERT INTO tests
-       (course_id, title, description, category, test_type, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
+       (course_id, test_access_type, title, description, category, test_type, duration_minutes, passing_marks, max_attempts, negative_marking, shuffle_questions, shuffle_options, show_explanations, access_mode, tags_json, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
       [
         source.course_id,
+        source.test_access_type || DEFAULT_TEST_ACCESS_TYPE,
         `${source.title} (Copy)`,
         source.description,
         source.category || DEFAULT_TEST_CATEGORY,
@@ -1244,14 +1508,80 @@ export async function duplicateTest(testId, createdBy = null, access = {}) {
       await connection.query(`INSERT INTO test_subjects (test_id, subject_id) VALUES ?`, [values]);
     }
 
-    await connection.query(
-      `INSERT INTO test_questions (test_id, question_id, display_order, marks_override)
-       SELECT ?, tq.question_id, tq.display_order, tq.marks_override
+    const sectionIdMap = new Map();
+    const [sectionRows] = await connection.query(
+      `SELECT id, subject_label, subject_id, divider_content_html, display_order
+       FROM test_sections
+       WHERE test_id = ?
+       ORDER BY display_order ASC, id ASC`,
+      [testId]
+    );
+    for (const section of sectionRows) {
+      const [sectionInsert] = await connection.query(
+        `INSERT INTO test_sections (test_id, subject_label, subject_id, divider_content_html, display_order)
+         VALUES (?, ?, ?, ?, ?)`,
+        [newTestId, section.subject_label, section.subject_id, section.divider_content_html, section.display_order]
+      );
+      sectionIdMap.set(Number(section.id), Number(sectionInsert.insertId));
+    }
+
+    const [questionLinks] = await connection.query(
+      `SELECT tq.question_id, tq.display_order, tq.marks_override, tq.section_id
        FROM test_questions tq
        INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
-       WHERE tq.test_id = ?`,
-      [newTestId, testId]
+       WHERE tq.test_id = ?
+       ORDER BY tq.display_order ASC, tq.id ASC`,
+      [testId]
     );
+    const questionIdMap = new Map();
+    if (questionLinks.length) {
+      const questionValues = [];
+      for (const row of questionLinks) {
+        const sourceQuestionId = Number(row.question_id);
+        const clonedId = await cloneQuestionBankForDuplicate(connection, sourceQuestionId, createdBy);
+        if (!clonedId) continue;
+        questionIdMap.set(sourceQuestionId, clonedId);
+        questionValues.push([
+          newTestId,
+          clonedId,
+          Number(row.display_order ?? 0),
+          row.marks_override != null ? Number(row.marks_override) : null,
+          row.section_id != null ? (sectionIdMap.get(Number(row.section_id)) ?? null) : null,
+        ]);
+      }
+      if (questionValues.length) {
+        await connection.query(
+          `INSERT INTO test_questions (test_id, question_id, display_order, marks_override, section_id) VALUES ?`,
+          [questionValues]
+        );
+      }
+    }
+
+    const [draftRows] = await connection.query(
+      `SELECT draft_payload, created_by
+       FROM test_quiz_drafts
+       WHERE test_id = ? AND deleted_at IS NULL
+       LIMIT 1`,
+      [testId]
+    );
+    if (draftRows.length && draftRows[0].draft_payload != null) {
+      let draftPayload = draftRows[0].draft_payload;
+      if (typeof draftPayload === 'string') {
+        try { draftPayload = JSON.parse(draftPayload); } catch { draftPayload = null; }
+      }
+      if (draftPayload) {
+        draftPayload = remapDuplicatedQuizDraft(draftPayload, {
+          newTestId,
+          questionIdMap,
+          sectionIdMap,
+        });
+        await connection.query(
+          `INSERT INTO test_quiz_drafts (test_id, draft_payload, version, created_by)
+           VALUES (?, CAST(? AS JSON), 1, ?)`,
+          [newTestId, JSON.stringify(draftPayload), createdBy ?? Number(draftRows[0].created_by ?? 0)]
+        );
+      }
+    }
 
     await connection.commit();
     return getTestById(newTestId);

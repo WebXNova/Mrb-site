@@ -24,11 +24,35 @@
   --sp-text-tertiary: #64748b;
   --sp-text-placeholder: #64748b;
 
-  /* ── Typography sizes (fluid — inherits public site tokens) ── */
-  --sp-text-xs: var(--text-footer-meta);
-  --sp-text-sm: var(--text-body-sm);
-  --sp-text-base: var(--text-body);
-  --sp-text-lg: var(--fs-18);
+  /* ── Compact type (do not inherit public-site fluid --fs floor) ── */
+  --fs-12: 0.6875rem;
+  --fs-13: 0.75rem;
+  --fs-14: 0.8125rem;
+  --fs-15: 0.8125rem;
+  --fs-16: 0.875rem;
+  --fs-18: 0.9375rem;
+  --fs-20: 1rem;
+  --fs-22: 1.0625rem;
+  --fs-24: 1.125rem;
+  --fs-28: 1.25rem;
+  --fs-32: 1.375rem;
+  --fs-36: 1.5rem;
+  --text-body: 0.8125rem;
+  --text-body-sm: 0.75rem;
+  --text-nav: 0.8125rem;
+  --heading-h1: 1.25rem;
+  --heading-h2: 1.125rem;
+  --heading-h3: 1rem;
+  --heading-h4: 0.9375rem;
+
+  --sp-text-xs: 0.6875rem;
+  --sp-text-sm: 0.75rem;
+  --sp-text-base: 0.8125rem;
+  --sp-text-lg: 0.9375rem;
+
+  --space-8: 1.5rem;
+  --space-10: 1.75rem;
+  --space-12: 2rem;
 
   /* ── Legacy aliases (map old tokens → 2-color system) ── */
   --sp-charcoal: var(--sp-text-primary);
@@ -139,8 +163,8 @@
 
 .sp-monogram {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: none;
   border-radius: 10px;
@@ -179,9 +203,9 @@
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 100;
-  width: min(var(--sp-sidebar-width, 280px), 88vw);
+  width: min(var(--sp-sidebar-width, 232px), 88vw);
   height: 100vh;
-  padding: 1.75rem 1.25rem;
+  padding: 1rem 0.85rem;
   display: flex;
   flex-direction: column;
   background: var(--sp-white);
@@ -196,8 +220,8 @@
 }
 
 .sp-sidebar__brand {
-  margin-bottom: 2rem;
-  padding-bottom: 1.25rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--sp-border);
 }
 
@@ -211,16 +235,16 @@
 }
 
 .sp-sidebar__brand-logo {
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   flex-shrink: 0;
 }
 
 .sp-sidebar__brand-wordmark {
-  height: 36px;
+  height: 26px;
   width: auto;
-  max-width: calc(100% - 52px);
+  max-width: calc(100% - 40px);
   object-fit: contain;
   display: block;
 }
@@ -232,9 +256,20 @@
 
 .student-shell .student-nav__item {
   color: var(--sp-text-secondary);
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 500;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  padding: 0.4rem 0.65rem;
+  min-height: 0;
+  gap: 0.5rem;
   transition: color 0.2s ease, background 0.2s ease;
+}
+
+.student-shell .student-nav__icon {
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0;
 }
 
 .student-shell .student-nav__item:hover {
@@ -308,7 +343,6 @@
 .student-shell .sp-panel,
 .student-shell .student-tests-page,
 .student-shell .student-test-card,
-.student-shell .student-test-sections__empty,
 .student-shell .student-lecture-tab {
   background: var(--sp-surface-card, var(--sp-white));
   border: 1px solid var(--sp-border);
@@ -355,6 +389,14 @@
   --btn-color: var(--sp-accent);
 }
 
+.student-shell .btn,
+.student-shell .sp-btn {
+  font-size: 0.8125rem;
+  padding: 0.4rem 0.75rem;
+  min-height: 2.25rem;
+  border-radius: 8px;
+}
+
 .student-shell .admin-stat-card__label,
 .student-shell .student-feature-card__label,
 .student-shell .student-my-course__stat-label {
@@ -398,6 +440,26 @@
   color: var(--sp-text-primary);
   font-family: var(--sp-font-sans);
   font-weight: 650;
+}
+
+.student-shell .heading-1 {
+  font-size: 1.25rem;
+  line-height: 1.25;
+}
+
+.student-shell .heading-2 {
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+.student-shell .heading-3 {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.student-shell .heading-4 {
+  font-size: 0.9375rem;
+  line-height: 1.4;
 }
 
 .student-shell a:not(.btn):not(.sp-btn):not(.student-nav__item):not(.student-bottom-nav__item):not(.sp-link):not(.sp-quick-link):not(.sp-settings-card) {

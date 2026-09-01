@@ -22,6 +22,7 @@ export function buildAdminListQuery(filters = {}) {
   setIf('dateTo', filters.dateTo);
   setIf('search', filters.search);
   setIf('status', filters.status);
+  setIf('test_access_type', filters.accessType ?? filters.test_access_type);
   setIf('sortBy', filters.sortBy);
   setIf('sortDirection', filters.sortDirection);
 
@@ -54,6 +55,7 @@ export function readAdminFiltersFromUrl(searchParams) {
     dateTo: get('dateTo') || '',
     search: get('search') || '',
     status: get('status') || 'all',
+    accessType: get('test_access_type') || get('accessType') || 'all',
     page: get('page') || '1',
     sortBy: get('sortBy') || 'updated_at',
     sortDirection: get('sortDirection') === 'asc' ? 'asc' : 'desc',
@@ -82,6 +84,7 @@ export function writeAdminFiltersToUrl(searchParams, patch) {
   if ('dateTo' in patch) sync('dateTo', patch.dateTo);
   if ('search' in patch) sync('search', patch.search);
   if ('status' in patch) sync('status', patch.status);
+  if ('accessType' in patch) sync('test_access_type', patch.accessType);
   if ('page' in patch) sync('page', patch.page);
   if ('sortBy' in patch) sync('sortBy', patch.sortBy);
   if ('sortDirection' in patch) sync('sortDirection', patch.sortDirection);

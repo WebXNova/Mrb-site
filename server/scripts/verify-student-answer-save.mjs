@@ -53,7 +53,8 @@ const serviceSrc = await fs.readFile(path.join(root, '../src/services/studentAns
 if (
   serviceSrc.includes('assertAttemptLoadable') &&
   serviceSrc.includes('studentOwnsAttempt') &&
-  serviceSrc.includes('QUESTION_BELONGS_TO_TEST_SQL')
+  serviceSrc.includes('assertAnswerBelongsToExamSnapshot') &&
+  serviceSrc.includes('resolveAttemptExamSnapshot')
 ) {
   ok('validation flow present');
 } else {

@@ -27,13 +27,10 @@ export function buildDefaultWizardPricing() {
 }
 
 export function buildDefaultWizardBatch() {
-  const now = new Date();
-  const start = new Date(now.getTime() + 3 * 60 * 60 * 1000);
-  const end = new Date(now.getTime() + 27 * 60 * 60 * 1000);
   return {
     title: 'Primary cohort',
-    start_date: start.toISOString(),
-    end_date: end.toISOString(),
+    start_date: null,
+    end_date: null,
     total_seats: 40,
     instructor_name: '',
     schedule_label: '',
@@ -52,8 +49,8 @@ export function sanitizeWizardBatch(batch) {
   if (!batch || typeof batch !== 'object') return defaults;
   return {
     title: batch.title ?? defaults.title,
-    start_date: batch.start_date ?? defaults.start_date,
-    end_date: batch.end_date ?? defaults.end_date,
+    start_date: batch.start_date ?? null,
+    end_date: batch.end_date ?? null,
     total_seats: batch.total_seats ?? defaults.total_seats,
     instructor_name: batch.instructor_name ?? defaults.instructor_name,
     schedule_label: batch.schedule_label ?? defaults.schedule_label,

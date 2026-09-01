@@ -1065,3 +1065,37 @@
     top: calc(var(--admin-topbar-height, 56px) + 24px);
   }
 }
+
+.admin-shell .course-edit-layout .course-edit-card--lifecycle {
+  margin-bottom: var(--ce-stack-gap);
+  padding: var(--ce-card-pad);
+  border: 1px solid var(--badge-danger-border);
+  background: color-mix(in srgb, var(--badge-danger-bg) 55%, var(--admin-surface));
+  border-radius: var(--ce-radius-lg);
+}
+
+.admin-shell .course-edit-layout .course-edit-card--lifecycle-done {
+  border-color: var(--admin-border);
+  background: var(--admin-surface);
+}
+
+.admin-shell .course-edit-layout .course-edit-card--lifecycle .course-edit-form__group-title {
+  margin: 0;
+  color: var(--badge-danger-text);
+}
+
+.admin-shell .course-edit-layout .course-edit-card--lifecycle-done .course-edit-form__group-title {
+  color: var(--admin-text-primary);
+}
+
+.admin-shell .course-edit-layout .course-control-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 767px) {
+  .admin-shell .course-edit-layout .course-edit-card--lifecycle {
+    padding: 18px;
+  }
+}

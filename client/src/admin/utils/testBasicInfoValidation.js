@@ -1,8 +1,14 @@
+import {
+  isStandaloneAccessType,
+  TEST_ACCESS_TYPE_COURSE_LOCKED,
+} from '../constants/testAccessType.js';
+
 /**
  * @param {{ defaultCategory?: string, defaultTestType?: string }} [defaults]
  */
 export function createDefaultTestBasicInfoForm(defaults = {}) {
   return {
+    test_access_type: TEST_ACCESS_TYPE_COURSE_LOCKED,
     course_id: '',
     title: '',
     description: '',
@@ -36,9 +42,11 @@ export function validateTestBasicInfoForm(form, options = {}) {
   );
   const testTypeValues =
     allowedTestTypes.length > 0 ? allowedTestTypes : ['subject_wise', 'mixed_subject'];
+  const accessType = String(form.test_access_type ?? TEST_ACCESS_TYPE_COURSE_LOCKED).trim();
+  const standalone = isStandaloneAccessType(accessType);
 
   const courseId = Number(form.course_id);
-  if (!Number.isInteger(courseId) || courseId <= 0) {
+  if (!standalone && (!Number.isInteger(courseId) || courseId <= 0)) {
     errors.course_id = 'Course is required.';
   }
 
@@ -64,27 +72,35 @@ export function validateTestBasicInfoForm(form, options = {}) {
   } else if (isLoadingSubjects) {
     errors.subject_id = 'Loading subjects…';
     errors.subject_ids = 'Loading subjects…';
-  } else if (courseId > 0 && !allowedSubjectIds.size) {
+  } else if (!standalone && courseId > 0 && !allowedSubjectIds.size) {
     const emptyMsg = 'No subjects found for this course. Add subjects to the course first.';
+    if (form.test_type === 'subject_wise') errors.subject_id = emptyMsg;
+    else errors.subject_ids = emptyMsg;
+  } else if (standalone && !allowedSubjectIds.size) {
+    const emptyMsg = 'No active subjects found. Add subjects in the catalog first.';
     if (form.test_type === 'subject_wise') errors.subject_id = emptyMsg;
     else errors.subject_ids = emptyMsg;
   } else if (form.test_type === 'subject_wise') {
     const subjectId = Number(form.subject_id);
     if (!Number.isInteger(subjectId) || subjectId <= 0) {
-      errors.subject_id = 'Select a subject from the course.';
+      errors.subject_id = 'Select a subject.';
     } else if (!allowedSubjectIds.has(subjectId)) {
-      errors.subject_id = 'Selected subject is not valid for this course.';
+      errors.subject_id = standalone
+        ? 'Selected subject is not valid.'
+        : 'Selected subject is not valid for this course.';
     }
   } else if (form.test_type === 'mixed_subject') {
     const ids = Array.isArray(form.subject_ids)
       ? form.subject_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
       : [];
     if (!ids.length) {
-      errors.subject_ids = 'Select at least one subject from the course.';
+        errors.subject_ids = 'Select at least one subject.';
     } else {
       const invalid = ids.filter((id) => !allowedSubjectIds.has(id));
       if (invalid.length) {
-        errors.subject_ids = 'One or more selected subjects are not valid for this course.';
+        errors.subject_ids = standalone
+          ? 'One or more selected subjects are not valid.'
+          : 'One or more selected subjects are not valid for this course.';
       }
     }
   }
@@ -100,17 +116,25 @@ export function validateTestBasicInfoForm(form, options = {}) {
  * @param {ReturnType<createDefaultTestBasicInfoForm>} form
  */
 export function buildTestBasicInfoPayload(form) {
+  const accessType = String(form.test_access_type ?? TEST_ACCESS_TYPE_COURSE_LOCKED).trim();
+  const standalone = isStandaloneAccessType(accessType);
   const courseId = Number(form.course_id);
   const title = String(form.title ?? '').replace(/\s+/g, ' ').trim();
   const description = String(form.description ?? '').replace(/\s+/g, ' ').trim();
   const category = String(form.category ?? 'MDCAT').trim() || 'MDCAT';
 
   const payload = {
-    course_id: courseId,
+    test_access_type: accessType,
     title,
     category,
     test_type: form.test_type,
   };
+
+  if (standalone) {
+    payload.course_id = null;
+  } else {
+    payload.course_id = courseId;
+  }
 
   if (description) payload.description = description;
 
@@ -136,8 +160,12 @@ export function mapTestToBasicInfoForm(test) {
     .filter((id) => Number.isInteger(id) && id > 0);
   const testType = String(test.testType ?? test.test_type ?? 'subject_wise').trim() || 'subject_wise';
   const courseId = test.courseId ?? test.course_id;
+  const accessType =
+    String(test.testAccessType ?? test.test_access_type ?? TEST_ACCESS_TYPE_COURSE_LOCKED).trim() ||
+    TEST_ACCESS_TYPE_COURSE_LOCKED;
 
   return {
+    test_access_type: accessType,
     course_id: courseId != null && courseId !== '' ? String(courseId) : '',
     title: test.title ?? '',
     description: test.description ?? '',

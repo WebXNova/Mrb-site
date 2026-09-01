@@ -49,6 +49,11 @@ for (const sql of [LIST_STUDENT_ELIGIBLE_TESTS_SQL, COUNT_STUDENT_ELIGIBLE_TESTS
   } else {
     fail('SQL missing required filters');
   }
+  if (sql.includes("access_mode = 'public'")) {
+    ok('SQL excludes admin-only (private) tests from student list');
+  } else {
+    fail('SQL must require access_mode public for student listing');
+  }
 }
 
 const listSrc = await fs.readFile(path.join(root, '../src/services/studentTestListing.queries.js'), 'utf8');
@@ -79,6 +84,7 @@ for (const field of [
   'max_attempts',
   'passing_marks',
   'total_marks',
+  'question_count',
   'status',
   'active_attempt_id',
   'attempts_used',
@@ -86,6 +92,13 @@ for (const field of [
 ]) {
   if (dtoSrc.includes(field)) ok(`response field ${field}`);
   else fail(`response field ${field} missing`);
+}
+
+const whereSql = LIST_STUDENT_ELIGIBLE_TESTS_SQL.split(/WHERE/i)[1] || '';
+if (!whereSql.includes('start_date') && !whereSql.includes('end_date')) {
+  ok('listing WHERE does not gate on start_date/end_date');
+} else {
+  fail('listing WHERE must not use test schedule dates as access');
 }
 
 const parsed = studentTestListQuerySchema.safeParse({ page: '2', limit: '10' });

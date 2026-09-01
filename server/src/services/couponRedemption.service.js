@@ -1,6 +1,9 @@
 /**
- * Coupon validation and redemption for manual payment checkout.
- * Admin coupon CRUD lives in coupons.service.js — this module is consumption only.
+ * Coupon validation and redemption for COURSE manual payment checkout only.
+ *
+ * Phase 4 decision: coupons stay course-scoped (assertCouponEligibility requires course_id).
+ * Paid standalone test orders do not accept coupons. Do not apply course coupons to
+ * standalone_test product records.
  */
 
 import { mysqlPool } from '../config/mysql.js';

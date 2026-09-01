@@ -5,8 +5,10 @@ import { adminApi } from '../../../api/adminApi';
 import { getAdminToken } from '../../../auth/session';
 import { TEST_WIZARD_BUTTONS } from '../../config/testWizardConfig';
 import AdminTestPageHeader from '../AdminTestPageHeader';
-import PublishedTestReadOnlyBanner from '../PublishedTestReadOnlyBanner';
+import PublishedTestEditBanner from '../PublishedTestEditBanner';
 import TestDashboardPrimaryAction from '../TestDashboardPrimaryAction';
+import TestWizardNav from '../TestWizardNav';
+import TestWorkspaceSummary from '../TestWorkspaceSummary';
 import { isTestPublishedStatus } from '../../utils/testBasicInfoValidation';
 import '../../styles/admin-test-workspace.css';
 
@@ -18,6 +20,15 @@ function isTestSettingsRoute(pathname) {
   return /\/tests\/[^/]+\/settings\/?$/.test(String(pathname || ''));
 }
 
+function workspaceNavStep(pathname) {
+  const path = String(pathname || '');
+  if (/\/tests\/[^/]+\/questions\/?$/.test(path)) return 'questions';
+  if (/\/tests\/[^/]+\/settings\/?$/.test(path)) return 'settings';
+  if (/\/tests\/[^/]+\/publish\/?$/.test(path)) return 'publish';
+  if (/\/tests\/[^/]+\/results\/?$/.test(path)) return 'results';
+  return 'dashboard';
+}
+
 /**
  * Shared layout for test admin pages (Dashboard, Settings, Questions, Publish, Results).
  */
@@ -26,9 +37,11 @@ export default function TestWorkspaceLayout() {
   const { pathname } = useLocation();
   const isDashboard = isTestDashboardRoute(pathname);
   const isSettings = isTestSettingsRoute(pathname);
+  const navStep = workspaceNavStep(pathname);
   const token = getAdminToken();
   const [testTitle, setTestTitle] = useState('');
   const [testStatus, setTestStatus] = useState('');
+  const [test, setTest] = useState(null);
   const [loadError, setLoadError] = useState('');
 
   const loadTest = useCallback(() => {
@@ -38,13 +51,15 @@ export default function TestWorkspaceLayout() {
     return adminApi
       .getTest(token, testId)
       .then((response) => {
-        const test = response?.data;
-        if (!test) {
+        const next = response?.data;
+        if (!next) {
           setLoadError('Test not found.');
+          setTest(null);
           return;
         }
-        setTestTitle(test.title ?? '');
-        setTestStatus(test.status ?? '');
+        setTest(next);
+        setTestTitle(next.title ?? '');
+        setTestStatus(next.status ?? '');
       })
       .catch((err) => {
         setLoadError(err.message || 'Failed to load test.');
@@ -69,31 +84,39 @@ export default function TestWorkspaceLayout() {
     <section
       className={`admin-page admin-page--tests admin-page--test-workspace${
         isDashboard ? ' admin-page--test-dashboard' : ''
-      }`}
+      }${isSettings ? ' admin-page--test-settings' : ''}`}
     >
       <div className="test-workspace">
         <div className="test-workspace__main">
-          <section className="admin-card test-workspace__card">
-            <AdminTestPageHeader
-              title={pageTitle}
-              backTo={adminRoute('tests')}
-              backLabel={isSettings ? null : TEST_WIZARD_BUTTONS.backToTests}
-              backVariant={isDashboard ? 'link' : 'button'}
-            >
-              {isDashboard ? (
-                <TestDashboardPrimaryAction
-                  testId={testId}
-                  testStatus={testStatus}
-                  onPublished={loadTest}
-                />
-              ) : null}
-            </AdminTestPageHeader>
-            {published ? <PublishedTestReadOnlyBanner /> : null}
+          <section
+            className={`admin-card test-workspace__card${isSettings ? ' test-workspace__card--settings' : ''}`}
+          >
+            {isSettings ? null : (
+              <AdminTestPageHeader
+                title={pageTitle}
+                backTo={adminRoute('tests')}
+                backLabel={TEST_WIZARD_BUTTONS.backToTests}
+                backVariant={isDashboard ? 'link' : 'button'}
+              >
+                {isDashboard ? (
+                  <TestDashboardPrimaryAction
+                    testId={testId}
+                    testStatus={testStatus}
+                    onPublished={loadTest}
+                  />
+                ) : null}
+              </AdminTestPageHeader>
+            )}
+            {isSettings ? null : <TestWizardNav testId={testId} activeStep={navStep} />}
+            {published ? <PublishedTestEditBanner testTitle={testTitle} /> : null}
+            {isSettings ? null : <TestWorkspaceSummary test={test} />}
             {loadError ? <p className="admin-error">{loadError}</p> : null}
             <Outlet
               context={{
                 testId,
-                readOnly: published,
+                test,
+                readOnly: false,
+                isPublished: published,
                 testTitle,
                 testStatus,
                 refreshTest: loadTest,

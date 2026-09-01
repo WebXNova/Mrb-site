@@ -74,7 +74,7 @@ export function shuffleIdsInPlace(items, random) {
 }
 
 /**
- * @param {Array<{ questionId: number, displayOrder?: number, options?: Array<{ optionId: number, sortOrder?: number }> }>} composedQuestions
+ * @param {Array<{ questionId: number, displayOrder?: number, sectionId?: number|null, options?: Array<{ optionId: number, sortOrder?: number }> }>} composedQuestions
  * @param {{ shuffleQuestions?: boolean, shuffleOptions?: boolean, seed: number }} settings
  * @returns {AttemptDeliveryLayout}
  */
@@ -89,9 +89,36 @@ export function buildAttemptDeliveryLayout(composedQuestions, settings) {
     return Number(a.questionId) - Number(b.questionId);
   });
 
-  const questionOrder = sortedQuestions.map((q) => Number(q.questionId));
-  if (shuffleQuestions && questionOrder.length > 1) {
-    shuffleIdsInPlace(questionOrder, createSeededRandom(seed));
+  let questionOrder;
+  if (shuffleQuestions && sortedQuestions.length > 1) {
+    const sectionGroups = new Map();
+    const sectionOrder = [];
+    for (const q of sortedQuestions) {
+      const sectionKey = q.sectionId != null ? String(q.sectionId) : '__no_section__';
+      if (!sectionGroups.has(sectionKey)) {
+        sectionGroups.set(sectionKey, []);
+        sectionOrder.push(sectionKey);
+      }
+      sectionGroups.get(sectionKey).push(Number(q.questionId));
+    }
+
+    if (sectionGroups.size > 1) {
+      questionOrder = [];
+      let sectionSeedOffset = 0;
+      for (const key of sectionOrder) {
+        const ids = sectionGroups.get(key);
+        if (ids.length > 1) {
+          shuffleIdsInPlace(ids, createSeededRandom((seed + sectionSeedOffset) >>> 0));
+        }
+        questionOrder.push(...ids);
+        sectionSeedOffset += 1;
+      }
+    } else {
+      questionOrder = sortedQuestions.map((q) => Number(q.questionId));
+      shuffleIdsInPlace(questionOrder, createSeededRandom(seed));
+    }
+  } else {
+    questionOrder = sortedQuestions.map((q) => Number(q.questionId));
   }
 
   const optionOrderByQuestion = {};

@@ -11,7 +11,6 @@ import {
 import { scopedQuery } from '../db/scopedQuery.js';
 import {
   AttemptNotFoundError,
-  AttemptNotOwnedError,
   CourseScopeViolationError,
 } from '../../../errors/testAttempt/TestAttemptErrors.js';
 import { EnrollmentNotFoundError } from '../../../errors/entitlement/EntitlementErrors.js';
@@ -123,7 +122,7 @@ export async function assertAttemptOwnership(input) {
       userId,
       tables: ['test_attempts'],
     });
-    throw new AttemptNotOwnedError({ attemptId, userId, ownerId: row.user_id });
+    throw new AttemptNotFoundError({ attemptId, userId, courseId: entitlement.courseId });
   }
 
   if (Number(row.course_id) !== Number(entitlement.courseId)) {

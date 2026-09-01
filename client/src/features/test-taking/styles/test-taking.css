@@ -1,12 +1,134 @@
 /* Test Taking Interface — production exam experience */
+@import '../../../components/ui/Button.css';
 
 .tt-exam {
+  --tt-sticky-offset: 5.75rem;
+  position: relative;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--color-bg-alt);
   display: flex;
   flex-direction: column;
-  overflow-x: clip;
+  overflow-x: hidden;
+}
+
+/*
+ * Fullscreen uses ONE scroll container: .tt-exam itself.
+ * Children must grow with content (not flex:1 clip) so later questions remain reachable.
+ */
+.tt-exam:fullscreen,
+.tt-exam:-webkit-full-screen,
+.tt-exam:-ms-fullscreen,
+.tt-exam--is-fullscreen {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  background: var(--color-bg-alt);
+  padding-bottom: 0;
+}
+
+html.tt-exam-fullscreen-active,
+html.tt-exam-fullscreen-active body,
+html.tt-exam-fullscreen-active #root {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+html.tt-exam-fullscreen-active #root {
+  isolation: auto;
+}
+
+html.tt-exam-fullscreen-active .tt-exam {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+html.tt-exam-fullscreen-active .mobile-whatsapp-button {
+  display: none;
+}
+
+.tt-exam:fullscreen .tt-exam__body,
+.tt-exam:-webkit-full-screen .tt-exam__body,
+.tt-exam--is-fullscreen .tt-exam__body {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+}
+
+.tt-exam:fullscreen .tt-exam__main,
+.tt-exam:-webkit-full-screen .tt-exam__main,
+.tt-exam--is-fullscreen .tt-exam__main,
+.tt-exam:fullscreen .tt-all-questions,
+.tt-exam:-webkit-full-screen .tt-all-questions,
+.tt-exam--is-fullscreen .tt-all-questions {
+  overflow: visible;
+  height: auto;
+  max-height: none;
+}
+
+.tt-exam--is-fullscreen .tt-header,
+.tt-exam--is-fullscreen .tt-exam__body,
+.tt-exam--is-fullscreen .tt-banner {
+  pointer-events: auto;
+}
+
+.tt-exam--needs-fs .tt-header,
+.tt-exam--needs-fs .tt-exam__body,
+.tt-exam--needs-fs .tt-banner,
+.tt-exam--needs-fs .tt-offline-banner {
+  pointer-events: none;
+  user-select: none;
+  filter: blur(2px);
+}
+
+.tt-fs-gate {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.tt-fs-gate__card {
+  width: min(100%, 28rem);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-5);
+}
+
+.tt-fs-gate__card h2 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-20);
+  color: var(--color-ink-900);
+}
+
+.tt-fs-gate__card p {
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink-600);
+  font-size: var(--fs-14);
+  line-height: 1.5;
+}
+
+.tt-fs-gate__error {
+  color: #b91c1c !important;
+}
+
+.tt-fs-gate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .tt-exam--locked .tt-header,
@@ -121,7 +243,8 @@
   gap: var(--space-3);
 }
 
-.tt-header__palette-btn {
+.tt-header__palette-btn,
+.tt-header__fs-btn {
   display: inline-flex;
 }
 
@@ -307,15 +430,17 @@
 }
 
 .tt-question__heading {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-18);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-800);
+  line-height: var(--lh-snug);
+}
+
+.tt-question__heading-total {
+  font-weight: var(--fw-medium);
+  color: var(--color-ink-500);
 }
 
 .tt-question__text {
@@ -383,11 +508,43 @@
   gap: var(--space-3);
 }
 
-.tt-option {
+.tt-banner--presence,
+.tt-banner--fs-exit {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.tt-banner--presence p,
+.tt-banner--fs-exit p {
+  margin: 0;
+}
+
+.tt-banner__dismiss {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+  color: #92400e;
+}
+
+.tt-exam:fullscreen .tt-option,
+.tt-exam:-webkit-full-screen .tt-option,
+.tt-exam--is-fullscreen .tt-option {
+  pointer-events: auto;
+}
+
+.tt-option {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
   gap: var(--space-3);
-  min-height: 2.75rem;
+  min-height: 3rem;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-ink-200);
   border-radius: var(--radius-md);
@@ -444,8 +601,8 @@
 .tt-option__text {
   flex: 1;
   min-width: 0;
-  font-size: var(--fs-15);
-  line-height: var(--lh-relaxed);
+  font-size: clamp(var(--fs-15), 2.2vw, var(--fs-16));
+  line-height: 1.55;
   color: var(--color-ink-800);
   overflow-wrap: break-word;
   word-break: break-word;
@@ -458,17 +615,6 @@
   background: rgba(239, 68, 68, 0.08);
   color: #b91c1c;
   font-size: var(--fs-14);
-}
-
-/* Horizontal option layout — collapses to vertical below 640px for readability */
-.tt-options--horizontal {
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-}
-
-@media (max-width: 640px) {
-  .tt-options--horizontal {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Section dividers */
@@ -549,7 +695,8 @@
 }
 
 .tt-all-questions__block {
-  scroll-margin-top: calc(5.5rem + var(--space-4));
+  scroll-margin-top: var(--tt-sticky-offset);
+  scroll-margin-bottom: 5.5rem;
 }
 
 .tt-nav-wrap--submit-only .tt-nav {
@@ -558,6 +705,17 @@
   bottom: var(--space-3);
   z-index: var(--z-sticky);
   box-shadow: var(--shadow-md);
+}
+
+.tt-nav__progress {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 7rem;
+  text-align: center;
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-600);
+  align-self: center;
 }
 
 /* Navigation */
@@ -886,9 +1044,10 @@
 
   .tt-header__actions {
     width: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--space-2);
   }
 
@@ -901,6 +1060,13 @@
     padding: var(--space-1) var(--space-2);
   }
 
+  .tt-nav__progress {
+    flex: 1 1 100%;
+    order: -1;
+    min-width: 0;
+  }
+
+  .tt-header__fs-btn,
   .tt-header__palette-btn {
     white-space: nowrap;
     padding-inline: var(--space-3);
@@ -999,6 +1165,20 @@
     top: calc(5.5rem + var(--space-4));
     max-height: calc(100vh - 7rem);
     overflow: hidden;
+  }
+
+  .tt-exam:fullscreen .tt-exam__sidebar,
+  .tt-exam:-webkit-full-screen .tt-exam__sidebar,
+  .tt-exam--is-fullscreen .tt-exam__sidebar {
+    top: calc(var(--tt-sticky-offset) + var(--space-4));
+    max-height: calc(100% - 7rem);
+    overflow: auto;
+  }
+
+  .tt-exam:fullscreen .tt-exam__sidebar .tt-palette__grid,
+  .tt-exam:-webkit-full-screen .tt-exam__sidebar .tt-palette__grid,
+  .tt-exam--is-fullscreen .tt-exam__sidebar .tt-palette__grid {
+    max-height: min(50vh, 22rem);
   }
 
   .tt-exam__sidebar .tt-palette__grid {

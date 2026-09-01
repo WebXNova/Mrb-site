@@ -5,43 +5,57 @@ import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import { useAdminToast } from '../context/AdminToastContext';
 import AdminConfirmDialog from '../components/AdminConfirmDialog';
+import SeatInventoryMeter from '../components/SeatInventoryMeter';
+import { isStandaloneAccessType } from '../constants/testAccessType.js';
+import {
+  formatResultsReleaseLabel,
+  formatScheduleWindow,
+  getAccessModeOptionCopy,
+  getResultsReleaseState,
+  getTestAvailabilityState,
+} from '../utils/testAdminDisplay.js';
 
-function buildTasks(questionCount) {
+function buildTasks(questionCount, test) {
   const hasQuestions = Number(questionCount) > 0;
+  const standalone = isStandaloneAccessType(test?.testAccessType ?? test?.test_access_type);
+  const paid = String(test?.testAccessType ?? test?.test_access_type) === 'paid_standalone';
   return [
     {
       key: 'settings',
       path: (id) => adminRoute(`tests/${id}/settings`),
-      title: 'Adjust settings',
-      description:
-        'Change the test name, introduction, question display, review options, and access rules.',
+      title: standalone ? 'Settings, schedule, and seats' : 'Adjust settings',
+      description: standalone
+        ? paid
+          ? 'Set price, seat capacity, availability window, timer, and what students see after submit.'
+          : 'Set the availability window, optional seat limit, timer, and what students see after submit.'
+        : 'Change the test name, introduction, question display, review options, and access rules.',
     },
     {
       key: 'questions',
       path: (id) => adminRoute(`tests/${id}/questions`),
       title: hasQuestions ? 'Edit questions' : 'Add questions',
       description: hasQuestions
-        ? 'Update or reorder the questions in this test.'
-        : "It's not much of a test if it doesn't have questions.",
+        ? 'Update, reorder, or import questions. Changes apply to future attempts.'
+        : 'Add questions manually or import an Aiken file before publishing.',
       complete: hasQuestions,
     },
     {
       key: 'publish',
       path: (id) => adminRoute(`tests/${id}/publish`),
       title: 'Publish & distribute',
-      description: 'Review readiness, publish your test, and release results when ready.',
+      description: 'Review readiness, publish the test, and confirm access mode before students can start.',
     },
     {
       key: 'results',
       path: (id) => adminRoute(`tests/${id}/results`),
       title: 'View results',
-      description: 'See how well your students did on the test.',
+      description: 'Review attempts and publish results to students when you are ready. No email is sent.',
     },
   ];
 }
 
 export default function AdminTestDashboardPage() {
-  const { testId } = useOutletContext();
+  const { testId, test } = useOutletContext();
   const token = getAdminToken();
   const navigate = useNavigate();
   const toast = useAdminToast();
@@ -69,7 +83,17 @@ export default function AdminTestDashboardPage() {
     };
   }, [testId, token]);
 
-  const tasks = useMemo(() => buildTasks(questionCount), [questionCount]);
+  const tasks = useMemo(() => buildTasks(questionCount, test), [questionCount, test]);
+  const standalone = isStandaloneAccessType(test?.testAccessType ?? test?.test_access_type);
+  const paid = String(test?.testAccessType ?? test?.test_access_type) === 'paid_standalone';
+  const resultsLabel = formatResultsReleaseLabel(getResultsReleaseState(test));
+  const scheduleLabel = formatScheduleWindow(test);
+  const availabilityState = getTestAvailabilityState(test);
+  const accessMode = String(test?.accessMode ?? test?.access_mode ?? 'private').toLowerCase();
+  const examOpenCopy = getAccessModeOptionCopy(
+    test?.testAccessType ?? test?.test_access_type,
+    accessMode
+  );
 
   const handleClone = useCallback(async () => {
     if (!testId || utilitiesBusy) return;
@@ -77,7 +101,11 @@ export default function AdminTestDashboardPage() {
     try {
       const response = await adminApi.duplicateTest(token, testId);
       const newId = response?.data?.id ?? response?.data?.testId;
-      toast.success('Test cloned as a draft copy.');
+      toast.success(
+        test?.testAccessType === 'paid_standalone'
+          ? 'Test cloned as a draft copy. Set price and seat capacity on the new test.'
+          : 'Test cloned as a draft copy.'
+      );
       if (newId) {
         navigate(adminRoute(`tests/${newId}/dashboard`));
       }
@@ -86,7 +114,7 @@ export default function AdminTestDashboardPage() {
     } finally {
       setUtilitiesBusy('');
     }
-  }, [navigate, testId, toast, token, utilitiesBusy]);
+  }, [navigate, test?.testAccessType, testId, toast, token, utilitiesBusy]);
 
   const handleClearResults = useCallback(async () => {
     if (!testId || utilitiesBusy) return;
@@ -110,9 +138,46 @@ export default function AdminTestDashboardPage() {
   return (
     <div className="test-dashboard">
       <p className="admin-field__hint test-dashboard__intro">
-        This is the control panel where you can adjust settings, add questions, publish the test, and
-        view results.
+        Adjust settings, add questions, publish the test, and review results from this control panel.
+        Published tests stay editable where the server allows it — already-started attempts keep their original exam.
       </p>
+
+      {standalone ? (
+        <section className="test-dashboard-availability" aria-labelledby="test-dashboard-availability-heading">
+          <h2 id="test-dashboard-availability-heading" className="heading-5 test-dashboard__section-title">
+            Availability
+          </h2>
+          <p className="test-dashboard-availability__schedule">{scheduleLabel || 'Schedule not set'}</p>
+          <p className="test-dashboard-availability__hint">
+            {availabilityState === 'closed' || accessMode !== 'public'
+              ? examOpenCopy.hint
+              : examOpenCopy.label}
+            {' '}
+            <Link to={adminRoute(`tests/${testId}/settings`)}>Open or close the exam in Settings</Link>
+            {' '}
+            (Access mode). Publish is separate from opening the exam.
+          </p>
+          <SeatInventoryMeter test={test} />
+          {paid ? (
+            <p className="test-dashboard-availability__hint">
+              <Link to={`${adminRoute('standalone-test-payments')}?testId=${testId}`}>
+                Review paid registrations and payment proofs
+              </Link>
+              . Approving a payment confirms a seat — it does not open the exam.
+            </p>
+          ) : (
+            <p className="test-dashboard-availability__hint">
+              Set the start and end window in Settings. Students can start only while the test is published, open, and inside that window.
+            </p>
+          )}
+          {resultsLabel ? (
+            <p className="test-dashboard-availability__hint">
+              {resultsLabel}. Manage release from{' '}
+              <Link to={adminRoute(`tests/${testId}/results`)}>Results</Link>.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="test-dashboard__section" aria-labelledby="test-dashboard-tasks-heading">
         <h2 id="test-dashboard-tasks-heading" className="heading-5 test-dashboard__section-title">
@@ -155,6 +220,9 @@ export default function AdminTestDashboardPage() {
               <span className="test-dashboard-utilities__card-title">Clone</span>
               <span className="test-dashboard-utilities__card-desc">
                 Create a draft copy with the same questions and settings.
+                {test?.testAccessType === 'paid_standalone'
+                  ? ' Price and seat capacity are not copied.'
+                  : ''}
               </span>
             </button>
           </li>

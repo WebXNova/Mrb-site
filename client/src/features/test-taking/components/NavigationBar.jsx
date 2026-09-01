@@ -6,6 +6,7 @@ export default function NavigationBar({
   onSubmit,
   isSubmitting,
   disabled,
+  progressLabel,
 }) {
   return (
     <nav className="tt-nav" aria-label="Question navigation">
@@ -17,6 +18,11 @@ export default function NavigationBar({
       >
         Previous
       </button>
+      {progressLabel ? (
+        <p className="tt-nav__progress" aria-live="polite">
+          {progressLabel}
+        </p>
+      ) : null}
       <button
         type="button"
         className="btn btn--secondary"

@@ -104,10 +104,10 @@ export async function insertImportedTestRow(connection, testMeta, courseId, crea
   const tags = Array.isArray(testMeta.tags) ? JSON.stringify(testMeta.tags) : JSON.stringify([]);
   const [result] = await connection.query(
     `INSERT INTO tests
-       (course_id, title, description, category, test_type, duration_minutes, passing_marks, max_attempts,
+       (course_id, test_access_type, title, description, category, test_type, duration_minutes, passing_marks, max_attempts,
         negative_marking, shuffle_questions, shuffle_options, show_explanations, show_result_immediately,
         show_answers_after_submit, allow_retake, access_mode, tags_json, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
+     VALUES (?, 'course_locked', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
     [
       courseId,
       testMeta.title,
@@ -207,13 +207,28 @@ export async function insertImportedTestQuestionLink(
   testId,
   questionId,
   displayOrder,
-  marksOverride
+  marksOverride,
+  sectionId = null
 ) {
   await connection.query(
-    `INSERT INTO test_questions (test_id, question_id, display_order, marks_override)
-     VALUES (?, ?, ?, ?)`,
-    [testId, questionId, displayOrder, marksOverride]
+    `INSERT INTO test_questions (test_id, question_id, display_order, marks_override, section_id)
+     VALUES (?, ?, ?, ?, ?)`,
+    [testId, questionId, displayOrder, marksOverride, sectionId]
   );
+}
+
+/**
+ * @param {import('mysql2/promise').PoolConnection} connection
+ * @param {number} testId
+ * @param {{ subject_label: string, subject_id: number|null, display_order: number }} section
+ */
+export async function insertImportedTestSection(connection, testId, section) {
+  const [result] = await connection.query(
+    `INSERT INTO test_sections (test_id, subject_label, subject_id, divider_content_html, display_order)
+     VALUES (?, ?, ?, NULL, ?)`,
+    [testId, section.subject_label, section.subject_id, section.display_order]
+  );
+  return Number(result.insertId);
 }
 
 /**
@@ -247,9 +262,13 @@ export async function loadRichContentExportRows(executor, testId) {
   );
 
   const [linkRows] = await executor.query(
-    `SELECT
+    `     SELECT
        tq.display_order,
        tq.marks_override,
+       tq.section_id,
+       ts.subject_label AS section_label,
+       ts.display_order AS section_display_order,
+       ts.subject_id AS section_subject_id,
        qb.topic,
        qb.difficulty,
        qb.question_type,
@@ -259,9 +278,11 @@ export async function loadRichContentExportRows(executor, testId) {
        qb.explanation,
        qb.explanation_html,
        qb.marks,
+       qb.subject_id,
        qb.id AS question_id
      FROM test_questions tq
      INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+     LEFT JOIN test_sections ts ON ts.id = tq.section_id
      WHERE tq.test_id = ?
      ORDER BY tq.display_order ASC, tq.id ASC`,
     [testId]

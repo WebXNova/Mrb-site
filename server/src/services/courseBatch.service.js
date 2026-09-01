@@ -189,7 +189,7 @@ export async function listPublicCourseBatches(courseId) {
   if (!Number.isFinite(cid) || cid <= 0) {
     throw new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
   }
-  const course = await getCourseRowById(cid, { activeOnly: true });
+  const course = await getCourseRowById(cid, { activeOnly: false });
   if (!course) throw courseNotFound();
   const placeholders = COURSE_BATCH_PUBLIC_STATUSES.map(() => '?').join(', ');
   const [rows] = await mysqlPool.query(

@@ -7,6 +7,7 @@
  */
 
 import { mysqlPool } from '../config/mysql.js';
+import { isStandaloneAccessType, normalizeOptionalCourseId } from '../validators/testAccessType.js';
 import { findLinkedMcqsWithoutOptions } from './testQuestionComposition.service.js';
 import { buildTestPublishSummary } from './testPublishSummary.service.js';
 import { AppError } from '../errors/base/AppError.js';
@@ -159,9 +160,13 @@ function humanMessageForCode(code) {
  */
 export function validateTestState(testRow) {
   const errors = [];
+  const courseId = normalizeOptionalCourseId(testRow.course_id);
 
-  const courseId = Number(testRow.course_id);
-  if (!Number.isInteger(courseId) || courseId <= 0) {
+  if (isStandaloneAccessType(testRow.test_access_type)) {
+    if (courseId != null) {
+      errors.push(INVALID_TEST_STATE);
+    }
+  } else if (courseId == null) {
     errors.push(INVALID_TEST_STATE);
   }
 
@@ -213,7 +218,7 @@ export function validateTestState(testRow) {
 export async function loadTestValidationRow(testId, executor = mysqlPool) {
   const tid = Number(testId);
   const [rows] = await executor.query(
-    `SELECT id, course_id, title, category, test_type, duration_minutes, max_attempts, passing_marks,
+    `SELECT id, course_id, test_access_type, title, category, test_type, duration_minutes, max_attempts, passing_marks,
             access_mode, status
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
@@ -260,11 +265,13 @@ export async function evaluateSubjectAndLinkComposition(testId, testRow, executo
     errors.push(NO_SUBJECTS);
   }
 
-  const courseSubjects = await getCourseSubjectIds(courseId, executor);
-  const courseSet = new Set(courseSubjects);
-  const invalidSubjects = subjectIds.filter((id) => !courseSet.has(id));
-  if (invalidSubjects.length) {
-    errors.push(INVALID_TEST_COMPOSITION);
+  if (!isStandaloneAccessType(testRow.test_access_type)) {
+    const courseSubjects = await getCourseSubjectIds(courseId, executor);
+    const courseSet = new Set(courseSubjects);
+    const invalidSubjects = subjectIds.filter((id) => !courseSet.has(id));
+    if (invalidSubjects.length) {
+      errors.push(INVALID_TEST_COMPOSITION);
+    }
   }
 
   const allowedSubjectIdSet = new Set(subjectIds);
@@ -458,6 +465,7 @@ export async function enforceQuestionMutationPreconditions(testId, executor = my
 export function validateTestStateForCreate(payload) {
   const report = validateTestState({
     course_id: payload.course_id,
+    test_access_type: payload.test_access_type,
     title: payload.title,
     category: payload.category || DEFAULT_TEST_CATEGORY,
     test_type: payload.test_type,

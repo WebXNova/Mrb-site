@@ -7,6 +7,10 @@ import { resolveActiveEntitlement, assertEntitlementGrantable } from './entitlem
 import { EnrollmentNotFoundError } from '../errors/entitlement/EntitlementErrors.js';
 import { DERIVED_PASS_STATUS_SQL } from '../result/passStatus.js';
 import { loadTestSubjectPresentationBatch } from './testSubjectPresentation.service.js';
+import { redactStudentResultListItem } from './testResultVisibility.service.js';
+
+/** Matches isStudentResultVisible() — admin release OR show_result_immediately. */
+const RESULT_VISIBLE_SQL = `(t.results_released_at IS NOT NULL OR t.show_result_immediately = 1)`;
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
@@ -103,7 +107,7 @@ function buildFilterClauses({ search, statusFilter, subjectId, dateRange, submit
   if (statusFilter === 'PASS' || statusFilter === 'FAIL') {
     clauses.push(`(${DERIVED_PASS_STATUS_SQL}) = ?`);
     params.push(statusFilter);
-    clauses.push(`t.results_released_at IS NOT NULL`);
+    clauses.push(RESULT_VISIBLE_SQL);
   }
 
   const extraWhere = clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
@@ -157,6 +161,7 @@ export async function getStudentTestHistory(studentId, query = {}) {
        t.title AS test_title,
        t.public_slug,
        t.results_released_at,
+       t.show_result_immediately,
        r.score,
        r.max_score,
        r.percentage,
@@ -187,17 +192,24 @@ export async function getStudentTestHistory(studentId, query = {}) {
   const statsRow = await db.first(
     `SELECT
        COUNT(*) AS total_tests,
-       SUM(CASE WHEN (${DERIVED_PASS_STATUS_SQL}) = 'PASS' THEN 1 ELSE 0 END) AS passed_tests,
-       SUM(CASE WHEN (${DERIVED_PASS_STATUS_SQL}) = 'FAIL' THEN 1 ELSE 0 END) AS failed_tests,
-       AVG(r.percentage) AS average_percentage
-     ${HISTORY_FROM_SQL}
-       AND t.results_released_at IS NOT NULL`,
+       SUM(CASE WHEN ${RESULT_VISIBLE_SQL} AND (${DERIVED_PASS_STATUS_SQL}) = 'PASS' THEN 1 ELSE 0 END) AS passed_tests,
+       SUM(CASE WHEN ${RESULT_VISIBLE_SQL} AND (${DERIVED_PASS_STATUS_SQL}) = 'FAIL' THEN 1 ELSE 0 END) AS failed_tests,
+       SUM(CASE WHEN NOT (${RESULT_VISIBLE_SQL}) THEN 1 ELSE 0 END) AS pending_tests,
+       AVG(CASE WHEN ${RESULT_VISIBLE_SQL} THEN r.percentage ELSE NULL END) AS average_percentage
+     ${HISTORY_FROM_SQL}`,
     [courseId, studentId]
   );
 
   return {
     items: itemRows.map((row) => {
-      const resultVisible = row.results_released_at != null;
+      const redacted = redactStudentResultListItem({
+        results_released_at: row.results_released_at,
+        show_result_immediately: row.show_result_immediately,
+        score: row.score,
+        max_score: row.max_score,
+        percentage: row.percentage,
+        pass_status: row.pass_status,
+      });
       const presentation = presentationByTestId.get(Number(row.test_id));
       return {
         attemptId: Number(row.attempt_id),
@@ -207,11 +219,7 @@ export async function getStudentTestHistory(studentId, query = {}) {
         subjectIds: presentation?.subjectIds ?? [],
         slug: row.public_slug ?? null,
         submittedAt: row.submitted_at == null ? null : String(row.submitted_at),
-        resultAvailable: resultVisible,
-        score: resultVisible ? Number(row.score ?? 0) : null,
-        maxScore: resultVisible && row.max_score != null ? Number(row.max_score) : null,
-        percentage: resultVisible ? Number(row.percentage ?? 0) : null,
-        status: resultVisible ? String(row.pass_status ?? '') : null,
+        ...redacted,
       };
     }),
     pagination: {
@@ -230,6 +238,7 @@ export async function getStudentTestHistory(studentId, query = {}) {
       totalTests: Number(statsRow?.total_tests ?? 0),
       passedTests: Number(statsRow?.passed_tests ?? 0),
       failedTests: Number(statsRow?.failed_tests ?? 0),
+      pendingTests: Number(statsRow?.pending_tests ?? 0),
       averagePercentage:
         statsRow?.average_percentage == null
           ? null

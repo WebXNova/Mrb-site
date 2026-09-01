@@ -1,0 +1,26 @@
+.paid-tests-showcase {
+  padding: 3rem 1.25rem;
+}
+.paid-tests-showcase__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.paid-tests-showcase__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  list-style: none;
+  padding: 0;
+}
+.paid-tests-showcase__card {
+  display: block;
+  padding: 1.25rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+}
+.paid-tests-showcase__card h3 {
+  margin: 0 0 0.5rem;
+}

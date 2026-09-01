@@ -78,7 +78,7 @@ mustContain(
 
 mustContain(
   'src/security/questionContentSecurity.js',
-  ['sanitizeQuestionHtml(option.option_text)'],
+  ['sanitizeQuestionHtml(option.option_text, { allowArchivePaths })'],
   'option text sanitized'
 );
 
@@ -96,8 +96,8 @@ mustContain(
 
 mustContain(
   'src/validators/testBasicInfo.schema.js',
-  ['.strict()'],
-  'mass assignment guard basic info'
+  ['.strict()', 'test_access_type'],
+  'mass assignment guard basic info includes test_access_type'
 );
 
 mustContain(

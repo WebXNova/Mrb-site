@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import './styles/test-taking.css';
 import AllQuestionsView from './components/AllQuestionsView';
 import ExamHeader from './components/ExamHeader';
+import FullscreenGate, { FullscreenExitBanner } from './components/FullscreenGate';
 import MobilePaletteSheet from './components/MobilePaletteSheet';
 import NavigationBar from './components/NavigationBar';
 import OfflineBanner from './components/OfflineBanner';
@@ -13,6 +15,7 @@ import TestTakingError from './components/TestTakingError';
 import TestTakingErrorBoundary from './components/TestTakingErrorBoundary';
 import TestTakingSkeleton from './components/TestTakingSkeleton';
 import { useAnswerAutosave, useExamTimer } from './hooks/useExamTimer';
+import { useExamFullscreen, useExamPresenceWarning } from './hooks/useExamFocus';
 import { useBeforeUnloadGuard, useOnlineStatus } from './hooks/useOnlineStatus';
 import { useExamItemNavigation } from './hooks/useExamItemNavigation';
 import { useSubmitAttempt } from './hooks/useSubmitAttempt';
@@ -26,16 +29,22 @@ import {
   normalizeAttemptSections,
   normalizeTestDisplaySettings,
 } from './utils/normalizeQuestion';
-import './styles/test-taking.css';
+import { isAllQuestionsDisplay } from '../../utils/testPresentation.js';
+import { freeSessionPostSubmitPath } from '../free-session/freeSessionNav';
+import { scrollQuestionIntoView } from './utils/examScroll';
 
 function TestTakingContent() {
   const { slug } = useParams();
+  const navigate = useNavigate();
+  const examRef = useRef(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [autoSubmitActive, setAutoSubmitActive] = useState(false);
   const autoSubmittedRef = useRef(false);
   const questionRefs = useRef(new Map());
   const [scrollCurrentId, setScrollCurrentId] = useState(null);
   const [scrollVisited, setScrollVisited] = useState(() => new Set());
+  const [fullscreenBypass, setFullscreenBypass] = useState(false);
 
   const {
     payload,
@@ -53,16 +62,11 @@ function TestTakingContent() {
     () => normalizeAttemptSections(payload?.test?.sections),
     [payload?.test?.sections]
   );
-  const { layoutMode, displayMode } = useMemo(
+  const { displayMode, fullPageMode } = useMemo(
     () => normalizeTestDisplaySettings(payload?.test),
     [payload?.test]
   );
-  // Flat tests with DB-default display_mode='all' historically used paginated UX in production.
-  const effectiveDisplayMode = useMemo(() => {
-    if (displayMode === 'all' && sections.length === 0) return 'one_per_page';
-    return displayMode;
-  }, [displayMode, sections.length]);
-  const isScrollAll = effectiveDisplayMode === 'all';
+  const isScrollAll = isAllQuestionsDisplay(displayMode);
 
   const questionIds = useMemo(() => questions.map((q) => q.id), [questions]);
   const examItems = useMemo(
@@ -96,7 +100,29 @@ function TestTakingContent() {
     onExpire: () => autoSubmitRef.current?.(),
   });
 
+  const {
+    isFullscreen,
+    error: fullscreenError,
+    supported: fullscreenSupported,
+    hasEnteredOnce,
+    enter: enterFullscreen,
+    exit: exitFullscreen,
+  } = useExamFullscreen(examRef, { required: fullPageMode && examReady });
   const uiLocked = isSubmitting || submitModalOpen;
+  const handleIntegrityBlocked = useCallback(
+    (payload) => {
+      const navState = { attemptId, timedOut: false };
+      navigate(freeSessionPostSubmitPath(slug, payload), { replace: true, state: navState });
+    },
+    [attemptId, navigate, slug]
+  );
+
+  const presence = useExamPresenceWarning({
+    enabled: examReady && !timer.isExpired && !isSubmitting,
+    slug,
+    attemptId,
+    onBlocked: handleIntegrityBlocked,
+  });
   const autosaveDisabled = !examReady || timer.isExpired || uiLocked;
 
   const { selectAnswer, saveStatus, saveError, retryFailedSaves, flushPendingSaves, resumeAutosave } =
@@ -111,6 +137,7 @@ function TestTakingContent() {
   const handleAutoSubmit = useCallback(async () => {
     if (autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
+    setAutoSubmitActive(true);
     setSubmitModalOpen(true);
     clearSubmitError();
     await flushPendingSaves();
@@ -124,6 +151,12 @@ function TestTakingContent() {
   autoSubmitRef.current = handleAutoSubmit;
 
   useBeforeUnloadGuard(examReady && !timer.isExpired && !isSubmitting);
+
+  useEffect(() => {
+    if (isFullscreen && examRef.current) {
+      examRef.current.focus({ preventScroll: true });
+    }
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (isOnline && saveStatus === 'failed') {
@@ -150,7 +183,7 @@ function TestTakingContent() {
         const qid = questionIds[questionIndex];
         if (!qid) return;
         const el = questionRefs.current.get(String(qid));
-        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollQuestionIntoView(el, examRef.current);
         setScrollCurrentId(String(qid));
         setScrollVisited((prev) => {
           const next = new Set(prev);
@@ -177,16 +210,16 @@ function TestTakingContent() {
   }, []);
 
   const handleOpenSubmitModal = useCallback(() => {
-    if (isSubmitting) return;
+    if (isSubmitting || autoSubmitActive) return;
     clearSubmitError();
     setSubmitModalOpen(true);
-  }, [clearSubmitError, isSubmitting]);
+  }, [autoSubmitActive, clearSubmitError, isSubmitting]);
 
   const handleContinueTest = useCallback(() => {
-    if (isSubmitting) return;
+    if (isSubmitting || autoSubmitActive) return;
     clearSubmitError();
     setSubmitModalOpen(false);
-  }, [clearSubmitError, isSubmitting]);
+  }, [autoSubmitActive, clearSubmitError, isSubmitting]);
 
   const handleConfirmSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -210,8 +243,20 @@ function TestTakingContent() {
 
   const handleKeyDown = useCallback(
     (event) => {
-      if (uiLocked || submitModalOpen || isScrollAll) return;
+      if (uiLocked || submitModalOpen) return;
       if (event.target.closest('input, textarea, select, button')) return;
+
+      if (isScrollAll) {
+        const idx = Math.max(0, questionIds.indexOf(scrollCurrentId ?? ''));
+        if (event.key === 'ArrowLeft' && idx > 0) {
+          event.preventDefault();
+          handleJump(idx - 1);
+        } else if (event.key === 'ArrowRight' && idx < questionIds.length - 1) {
+          event.preventDefault();
+          handleJump(idx + 1);
+        }
+        return;
+      }
 
       if (event.key === 'ArrowLeft' && itemNav.canGoPrevious) {
         event.preventDefault();
@@ -221,7 +266,7 @@ function TestTakingContent() {
         itemNav.goNext();
       }
     },
-    [isScrollAll, itemNav, submitModalOpen, uiLocked]
+    [handleJump, isScrollAll, itemNav, questionIds, scrollCurrentId, submitModalOpen, uiLocked]
   );
 
   if (status === 'loading') {
@@ -231,6 +276,26 @@ function TestTakingContent() {
   if (status === 'error') {
     return <TestTakingError message={error} slug={slug} />;
   }
+
+  const needsFullscreenGate =
+    fullPageMode && status === 'ready' && !isFullscreen && !fullscreenBypass && !hasEnteredOnce;
+  const showFullscreenExitBanner =
+    fullPageMode && status === 'ready' && !isFullscreen && !fullscreenBypass && hasEnteredOnce;
+  const navProgressLabel =
+    questions.length > 0
+      ? `Question ${headerQuestionIndex + 1} of ${questions.length}`
+      : '';
+  const canGoPreviousQuestion = headerQuestionIndex > 0;
+  const canGoNextQuestion = headerQuestionIndex < questions.length - 1;
+  const examClassName = [
+    'tt-exam',
+    isScrollAll ? 'tt-exam--all' : 'tt-exam--one-per-page',
+    uiLocked ? 'tt-exam--locked' : '',
+    isFullscreen ? 'tt-exam--is-fullscreen' : '',
+    needsFullscreenGate ? 'tt-exam--needs-fs' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const paletteProps = {
     questionIds,
@@ -284,7 +349,6 @@ function TestTakingContent() {
           selectedOptionId={answers[item.question.id] ?? null}
           onSelectOption={selectAnswer}
           questionRef={itemNav.focusRef}
-          layoutMode={layoutMode}
           disabled={autosaveDisabled}
         />
         <div className="tt-nav-wrap">
@@ -296,6 +360,7 @@ function TestTakingContent() {
             onSubmit={handleOpenSubmitModal}
             isSubmitting={isSubmitting}
             disabled={uiLocked}
+            progressLabel={navProgressLabel}
           />
         </div>
       </>
@@ -303,7 +368,12 @@ function TestTakingContent() {
   };
 
   return (
-    <div className={`tt-exam ${uiLocked ? 'tt-exam--locked' : ''}`} onKeyDown={handleKeyDown}>
+    <div
+      ref={examRef}
+      className={examClassName}
+      onKeyDown={handleKeyDown}
+      tabIndex={-1}
+    >
       <OfflineBanner isOnline={isOnline} />
 
       <ExamHeader
@@ -320,8 +390,40 @@ function TestTakingContent() {
         onRetrySave={retryFailedSaves}
         onOpenPalette={() => !uiLocked && setPaletteOpen(true)}
         showPaletteToggle
-        displayMode={effectiveDisplayMode}
+        displayMode={displayMode}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={() => (isFullscreen ? exitFullscreen() : enterFullscreen())}
       />
+
+      <FullscreenGate
+        open={needsFullscreenGate}
+        error={fullscreenError}
+        onEnter={enterFullscreen}
+        onContinueWithout={
+          !fullscreenSupported || fullscreenError
+            ? () => setFullscreenBypass(true)
+            : undefined
+        }
+      />
+
+      <FullscreenExitBanner open={showFullscreenExitBanner} onEnter={enterFullscreen} />
+
+      {fullscreenError && !needsFullscreenGate ? (
+        <p className="tt-banner tt-banner--warn" role="status">
+          {fullscreenError}
+        </p>
+      ) : null}
+
+      {presence.visible && presence.message ? (
+        <div className="tt-banner tt-banner--warn tt-banner--presence" role="alert">
+          <p>{presence.message}</p>
+          {!presence.blocked ? (
+            <button type="button" className="tt-banner__dismiss" onClick={presence.dismiss}>
+              Continue test
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {submitError && !submitModalOpen ? (
         <p className="tt-banner tt-banner--error" role="alert">
@@ -329,9 +431,9 @@ function TestTakingContent() {
         </p>
       ) : null}
 
-      {timer.isExpired && isSubmitting ? (
+      {timer.isExpired && (isSubmitting || autoSubmitActive) ? (
         <p className="tt-banner tt-banner--warn" role="status">
-          Time is up. Submitting your test…
+          Time is up. Your test is being submitted.
         </p>
       ) : null}
 
@@ -344,22 +446,23 @@ function TestTakingContent() {
                 totalQuestions={questions.length}
                 answers={answers}
                 onSelectOption={selectAnswer}
-                layoutMode={layoutMode}
                 disabled={autosaveDisabled}
                 questionRefs={questionRefs}
                 onQuestionVisible={handleScrollQuestionVisible}
+                scrollRootRef={examRef}
+                isFullscreen={isFullscreen}
               />
-              <div className="tt-nav-wrap tt-nav-wrap--submit-only">
-                <nav className="tt-nav" aria-label="Submit test">
-                  <button
-                    type="button"
-                    className="btn btn--primary tt-nav__submit"
-                    onClick={handleOpenSubmitModal}
-                    disabled={uiLocked || isSubmitting}
-                  >
-                    Submit test
-                  </button>
-                </nav>
+              <div className="tt-nav-wrap">
+                <NavigationBar
+                  canGoPrevious={canGoPreviousQuestion}
+                  canGoNext={canGoNextQuestion}
+                  onPrevious={() => handleJump(headerQuestionIndex - 1)}
+                  onNext={() => handleJump(headerQuestionIndex + 1)}
+                  onSubmit={handleOpenSubmitModal}
+                  isSubmitting={isSubmitting}
+                  disabled={uiLocked}
+                  progressLabel={navProgressLabel}
+                />
               </div>
             </>
           ) : (
@@ -384,7 +487,7 @@ function TestTakingContent() {
         unansweredCount={unansweredCount}
         isSubmitting={isSubmitting}
         submitError={submitError}
-        timedOut={timer.isExpired}
+        timedOut={timer.isExpired || autoSubmitActive}
         onContinue={handleContinueTest}
         onConfirm={handleConfirmSubmit}
         onRetry={handleRetrySubmit}

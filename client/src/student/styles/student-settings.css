@@ -16,7 +16,7 @@
 .sp-settings__title {
   margin: 0;
   font-family: var(--sp-font-sans);
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-size: 1.125rem;
   font-weight: 650;
   color: var(--sp-text-primary);
   letter-spacing: -0.02em;
@@ -24,7 +24,7 @@
 
 .sp-settings__subtitle {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--sp-text-secondary);
   max-width: 36rem;
@@ -215,14 +215,14 @@
 .sp-my-courses-hero__title {
   margin: 0.25rem 0 0.5rem;
   font-family: var(--sp-font-sans);
-  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--sp-text-primary);
 }
 
 .sp-my-courses-hero__lead {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.8125rem;
   line-height: 1.65;
   color: var(--sp-text-secondary);
   max-width: 40rem;
@@ -242,7 +242,7 @@
 }
 
 .sp-my-courses-hero__badge-value {
-  font-size: 2.25rem;
+  font-size: 1.375rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -282,7 +282,7 @@
 
 .sp-my-courses-stat__value {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.375rem;
   font-weight: 700;
   line-height: 1.1;
   color: var(--sp-text-primary);
@@ -334,7 +334,7 @@
 
 .sp-my-courses-card__title {
   margin: 0.15rem 0 0;
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 650;
   color: var(--sp-text-primary);
 }
@@ -434,7 +434,7 @@
 
 .sp-profile-fields dd {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--sp-text-primary);
 }

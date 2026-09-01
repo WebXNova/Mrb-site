@@ -107,6 +107,9 @@ export const studentApi = {
     const qs = query.toString();
     return studentRequest(`/student/test-history${qs ? `?${qs}` : ''}`);
   },
+  currentLeaderboard: () => studentRequest('/student/leaderboard'),
+  courseLeaderboard: (courseId) =>
+    studentRequest(`/courses/${encodeURIComponent(String(courseId))}/leaderboard`),
   listTests: (params = {}) => {
     const query = new URLSearchParams();
     if (params.page) query.set('page', String(params.page));

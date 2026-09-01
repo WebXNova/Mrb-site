@@ -1,15 +1,17 @@
 /**
  * Published test edit authority — allows in-place edits while keeping status published.
  *
- * Versioning is not implemented yet; existing attempts remain linked to question rows
- * they answered. Superseded question_bank rows are soft-deleted when rematerialized.
+ * Versioning is implemented as an attempt exam snapshot (exam_snapshot_json).
+ * Admin edits change the current test definition; in-progress and completed
+ * attempts keep the paper captured at start.
  */
 
 import { mysqlPool } from '../config/mysql.js';
 import { AppError } from '../errors/base/AppError.js';
-import { NOT_FOUND, TEST_IS_LOCKED, VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
+import { NOT_FOUND, VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
 import { isPublishedDbStatus } from './testCompleteness.service.js';
 import { loadTestLockRow } from './publishedTestLock.service.js';
+import { PUBLISHED_EDIT_CONFIRMATION_REQUIRED } from '../errors/codes/ErrorCodes.js';
 import { logActivity } from './activityLog.service.js';
 import { logSecurityEvent, TEST_SECURITY_ACTIONS } from './testSecurityAudit.service.js';
 
@@ -76,6 +78,39 @@ export function isPublishedTestRow(testRow) {
 }
 
 /**
+ * Backend gate: edits to a test that already has attempts require an explicit confirm flag.
+ *
+ * @param {{
+ *   testId?: number,
+ *   requiresConfirmation: boolean,
+ *   confirmPublishedEdit: boolean,
+ *   attemptStats?: { total?: number, inProgress?: number, completed?: number }|null,
+ * }} input
+ */
+export function assertPublishedEditConfirmed({
+  testId,
+  requiresConfirmation,
+  confirmPublishedEdit,
+  attemptStats = null,
+}) {
+  if (!requiresConfirmation || confirmPublishedEdit) {
+    return;
+  }
+
+  throw new AppError({
+    message:
+      'This test has existing student attempts. Confirm the published edit to continue. Already-started attempts keep their original exam.',
+    errorCode: PUBLISHED_EDIT_CONFIRMATION_REQUIRED,
+    httpStatus: 409,
+    isOperational: true,
+    metadata: {
+      testId: testId != null ? Number(testId) : null,
+      attemptStats,
+    },
+  });
+}
+
+/**
  * @param {number} testId
  * @param {{ confirmPublishedEdit?: boolean, expectedUpdatedAt?: string|null }} controls
  * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
@@ -104,26 +139,24 @@ export async function resolvePublishedEditContext(testId, controls = {}, executo
   const attemptStats = await countTestAttempts(testId, executor);
   const requiresConfirmation = attemptStats.total > 0;
 
-  if (requiresConfirmation && !controls.confirmPublishedEdit) {
+  assertPublishedEditConfirmed({
+    testId,
+    requiresConfirmation,
+    confirmPublishedEdit: Boolean(controls.confirmPublishedEdit),
+    attemptStats,
+  });
+
+  // Authorized admins may edit the current test definition. Existing attempts
+  // keep the exam snapshot captured at start and are not rewritten.
+  if (requiresConfirmation) {
     logSecurityEvent({
       action: TEST_SECURITY_ACTIONS.PUBLISHED_TEST_EDIT_ATTEMPT,
       testId: Number(testId),
-      outcome: 'denied',
-      reason: 'PUBLISHED_EDIT_CONFIRMATION_REQUIRED',
-      errorCode: TEST_IS_LOCKED,
-      metadata: { attemptStats },
-    });
-
-    throw new AppError({
-      message:
-        'This published test has student attempts. Set confirm_published_edit to true to apply changes.',
-      errorCode: 'PUBLISHED_EDIT_CONFIRMATION_REQUIRED',
-      httpStatus: 409,
-      isOperational: true,
+      outcome: 'allowed',
+      reason: 'PUBLISHED_EDIT_WITH_EXISTING_ATTEMPTS',
       metadata: {
-        testId: Number(testId),
         attemptStats,
-        requiresConfirmation: true,
+        confirmPublishedEdit: Boolean(controls.confirmPublishedEdit),
       },
     });
   }
@@ -203,7 +236,8 @@ export function buildPublishedEditMetadata(attemptStats) {
 
   return {
     publishedEditWarning: {
-      message: 'This test has existing student attempts. Changes apply to future attempts immediately.',
+      message:
+        'This test has existing student attempts. Changes apply to future attempts immediately. Already-started attempts keep their original exam.',
       attemptStats,
     },
   };

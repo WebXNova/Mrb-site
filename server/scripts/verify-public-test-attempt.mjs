@@ -36,10 +36,15 @@ if (!routesSrc.includes('getPublicTestMeta')) {
   fail('public meta handler should not be mounted under /api/tests');
 }
 
-if (routesSrc.includes("router.post('/:slug/verify-code', postVerifyTestCode)")) {
+if (routesSrc.includes('postVerifyTestCode') && routesSrc.includes("'/\:slug/verify-code'")) {
   ok('route POST /:slug/verify-code registered');
 } else {
   fail('verify-code route missing');
+}
+if (routesSrc.includes('requireCsrf') && routesSrc.includes('postVerifyTestCode')) {
+  ok('verify-code requires CSRF');
+} else {
+  fail('verify-code CSRF missing');
 }
 
 const controllerSrc = await fs.readFile(
@@ -50,6 +55,18 @@ if (controllerSrc.includes('getPublicTestMeta') && controllerSrc.includes('loadP
   ok('controller loads published test meta by slug');
 } else {
   fail('getPublicTestMeta handler missing');
+}
+
+if (controllerSrc.includes('assertCourseLinkedTestMetaAccessible')) {
+  ok('public meta uses canonical course-linked view gate');
+} else {
+  fail('public meta missing assertCourseLinkedTestMetaAccessible');
+}
+
+if (controllerSrc.includes('isPublicAccessMode(accessRow)') && controllerSrc.includes('return;')) {
+  fail('meta must not allow anonymous view of course-linked tests');
+} else {
+  ok('meta does not short-circuit to anonymous public view');
 }
 
 if (controllerSrc.includes('studentId') && !controllerSrc.includes('studentUser')) {
@@ -91,6 +108,12 @@ if (queriesSrc.includes('FOR UPDATE')) {
 }
 
 const serviceSrc = await fs.readFile(path.join(root, '../src/services/testAttempt.service.js'), 'utf8');
+if (serviceSrc.includes('resolveEntitledTestBySlug') && serviceSrc.includes('assertCourseAccess')) {
+  ok('start requires entitlement + course-linked resolve (public cannot bypass)');
+} else {
+  fail('start path missing entitled resolve');
+}
+
 if (serviceSrc.includes('Cannot create test attempt without test slug')) {
   ok('service validates slug before DB');
 } else {
@@ -180,10 +203,15 @@ if (
 
   const submitBlock =
     controllerSrc.match(/export const postSubmitAttempt[\s\S]*?export const getTestResult/)?.[0] || '';
-  if (submitBlock && submitBlock.includes('consumeAttemptNonce')) {
-    ok('postSubmitAttempt rotates nonce once at submit');
+  if (
+    submitBlock &&
+    submitBlock.includes('submitAttempt') &&
+    submitBlock.includes('clearAttemptTokenCookie') &&
+    submitBlock.includes('token: null')
+  ) {
+    ok('postSubmitAttempt invalidates attempt cookie after submit');
   } else {
-    fail('postSubmitAttempt is missing submit-time nonce rotation');
+    fail('postSubmitAttempt is missing submit-time cookie invalidation');
   }
 
   const resultBlock = controllerSrc.match(/export const getTestResult[\s\S]*$/)?.[0] || '';

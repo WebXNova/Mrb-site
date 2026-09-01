@@ -93,8 +93,14 @@ export function getResultErrorState(err) {
   const status = err?.status;
   const message = String(err?.message || '');
 
-  if (status === 403 || /not available|hidden|denied/i.test(message)) {
-    return { kind: 'hidden', message: message || 'Results are not available for this test yet.' };
+  if (status === 403 || /not available|hidden|denied|not released/i.test(message)) {
+    return {
+      kind: 'hidden',
+      message:
+        message && !/sql|stack|internal/i.test(message)
+          ? message
+          : 'Your test has been submitted successfully. The result is not yet available.',
+    };
   }
   if (status === 401 || /session expired|authentication/i.test(message)) {
     return { kind: 'unauthorized', message: message || 'Please sign in to view this result.' };

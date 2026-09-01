@@ -32,9 +32,9 @@
 .student-shell textarea,
 .student-shell select {
   width: 100%;
-  padding: 0.65rem 0.875rem;
+  padding: 0.45rem 0.7rem;
   border: 1px solid var(--sp-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--sp-white);
   color: var(--sp-navy);
   font-family: var(--sp-font-sans);
@@ -79,8 +79,9 @@
   color: var(--sp-accent);
 }
 
+.student-shell .sp-search input.sp-search__input,
 .sp-search__input {
-  padding-left: 2.5rem;
+  padding: 0.45rem 1.1rem 0.45rem 2.75rem;
   border-radius: 999px;
   box-shadow: var(--sp-shadow-sm);
 }
@@ -93,8 +94,8 @@
 .sp-card {
   background: var(--sp-surface-card, var(--sp-white));
   border: 1px solid var(--sp-border);
-  border-radius: 16px;
-  padding: 1.5rem;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
   box-shadow: var(--sp-shadow-sm);
   transition: var(--sp-transition);
 }
@@ -238,6 +239,8 @@
 
 .student-shell .sp-bottom-nav__icon {
   color: inherit;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 /* ── Links with gold underline ── */
@@ -329,9 +332,9 @@
 
 /* Lecture filters premium styling */
 .student-shell .student-lecture-filters {
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-top: 1.25rem;
+  border-radius: 12px;
+  padding: 0.85rem 0.9rem;
+  margin-top: 0.75rem;
 }
 
 .student-shell .student-lecture-filters__label {

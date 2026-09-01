@@ -66,7 +66,7 @@ export default function SubmitConfirmModal({
           <p className="tt-submit-modal__warning">
             {timedOut
               ? 'Time is up. Your answered questions are being submitted automatically.'
-              : 'You cannot change answers after submission.'}
+              : `You have answered ${answeredCount} of ${totalQuestions} questions. You cannot change answers after submission.`}
           </p>
 
           <dl className="tt-submit-modal__stats">
@@ -99,22 +99,22 @@ export default function SubmitConfirmModal({
 
           {isSubmitting ? (
             <p className="tt-submit-modal__loading" role="status" aria-live="polite">
-              Submitting your test… Please do not close this page.
+              {timedOut ? 'Time is up. Your test is being submitted.' : 'Submitting your test… Please do not close this page.'}
             </p>
           ) : null}
         </div>
 
         <footer className="tt-submit-modal__actions">
-          {timedOut ? null : (
-          <button
-            type="button"
-            className="btn btn--secondary tt-submit-modal__btn"
-            onClick={onContinue}
-            disabled={isSubmitting}
-          >
-            Continue test
-          </button>
-          )}
+          {!timedOut ? (
+            <button
+              type="button"
+              className="btn btn--secondary tt-submit-modal__btn"
+              onClick={onContinue}
+              disabled={isSubmitting}
+            >
+              Continue test
+            </button>
+          ) : null}
 
           {submitError && onRetry ? (
             <button
@@ -125,7 +125,7 @@ export default function SubmitConfirmModal({
             >
               Try again
             </button>
-          ) : (
+          ) : !timedOut ? (
             <button
               type="button"
               className="btn btn--primary tt-submit-modal__btn"
@@ -135,7 +135,7 @@ export default function SubmitConfirmModal({
             >
               {isSubmitting ? 'Submitting…' : 'Submit test'}
             </button>
-          )}
+          ) : null}
         </footer>
       </div>
     </div>

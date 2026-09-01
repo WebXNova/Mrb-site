@@ -1,25 +1,24 @@
 import { Link } from 'react-router-dom';
-import { getWizardPhaseKey, TEST_WIZARD_EDIT_PHASES, TEST_WIZARD_PHASES } from '../config/testWizardConfig';
+import { getWizardPhaseKey, TEST_NAV_ITEMS } from '../config/testWizardConfig';
 
 export {
   getWizardPhaseKey,
   getWizardPreviousPhase as getTestWizardPreviousStep,
-  TEST_WIZARD_PHASES as TEST_WIZARD_STEPS,
+  TEST_NAV_ITEMS as TEST_WIZARD_STEPS,
 } from '../config/testWizardConfig';
 
 /**
- * Top-level wizard tabs: Setup → Questions → Review.
+ * Persistent test workspace tabs: Dashboard, Settings, Questions, Publish, Results.
  * @param {{ testId: string|number, activeStep: string, editMode?: boolean }} props
  */
-export default function TestWizardNav({ testId, activeStep, editMode = false }) {
+export default function TestWizardNav({ testId, activeStep }) {
   if (!testId) return null;
 
-  const phases = editMode ? TEST_WIZARD_EDIT_PHASES : TEST_WIZARD_PHASES;
   const activePhase = getWizardPhaseKey(activeStep);
 
   return (
-    <nav className="admin-test-edit-nav" aria-label="Test builder steps">
-      {phases.map((phase) => (
+    <nav className="admin-test-edit-nav" aria-label="Test management">
+      {TEST_NAV_ITEMS.map((phase) => (
         <Link
           key={phase.key}
           className={`admin-test-edit-nav__link${

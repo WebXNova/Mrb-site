@@ -43,13 +43,14 @@ function normalizeWizardDraftStep(step) {
 
 function applyDraftState(d, setters) {
   if (!d || typeof d !== 'object') return;
-  const { setCourse, setPricing, setBatches, setSubjects, setStep } = setters;
+  const { setCourse, setPricing, setBatches, setSubjects, setStep, setCategoryIds } = setters;
   if (d.course) setCourse(d.course);
   if (d.pricing) setPricing(d.pricing);
   if (Array.isArray(d.batches) && d.batches.length) {
     setBatches([sanitizeWizardBatch(d.batches[0])]);
   }
   if (Array.isArray(d.subjects) && d.subjects.length) setSubjects(d.subjects);
+  if (Array.isArray(d.category_ids)) setCategoryIds?.(d.category_ids.map(Number).filter((id) => id > 0));
   if (typeof d.step === 'number') setStep(normalizeWizardDraftStep(d.step));
 }
 
@@ -94,8 +95,8 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
 
       return {
         title: String(b.title).trim(),
-        start_date: b.start_date,
-        end_date: b.end_date,
+        start_date: b.start_date || null,
+        end_date: b.end_date || null,
         total_seats: Math.trunc(Number(b.total_seats)),
         seats_fantasy: Math.trunc(Number(b.seats_fantasy ?? 0)),
         instructor_name: (b.instructor_name && String(b.instructor_name).trim()) || null,
@@ -107,7 +108,6 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
         recordings_enabled: b.recordings_enabled !== false,
       };
     });
-  const primaryBatch = batchesOut[0];
   const courseOut = {
     ...course,
     short_description:
@@ -115,12 +115,8 @@ function buildWizardPayload(publish, course, pricing, batches, subjects) {
         ? null
         : String(course.short_description).trim(),
     thumbnail_url: course.thumbnail_url === undefined ? null : course.thumbnail_url ?? null,
-    start_date: primaryBatch
-      ? toDateInputValue(primaryBatch.start_date) || null
-      : toDateInputValue(course.start_date) || null,
-    end_date: primaryBatch
-      ? toDateInputValue(primaryBatch.end_date) || null
-      : toDateInputValue(course.end_date) || null,
+    start_date: toDateInputValue(course.start_date) || null,
+    end_date: toDateInputValue(course.end_date) || null,
     admission_status: course.admission_status || 'CLOSED',
     // Auto-activate course when publishing
     is_active: publishIntent ? true : Boolean(course.is_active),
@@ -144,6 +140,10 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   const [pricing, setPricing] = useState(() => buildDefaultWizardPricing());
   const [batches, setBatches] = useState(() => [buildDefaultWizardBatch()]);
   const [subjects, setSubjects] = useState(() => [buildDefaultWizardSubject()]);
+  const [categoryIds, setCategoryIds] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState('');
   const [stepError, setStepError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [batchFieldErrors, setBatchFieldErrors] = useState({});
@@ -173,6 +173,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
         pricing,
         batches: batches.map((batch) => sanitizeWizardBatch(batch)),
         subjects,
+        category_ids: categoryIds,
         step,
       };
       const response = await adminApi.saveCourseDraft(token, payload);
@@ -181,7 +182,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
     } catch {
       /* ignore */
     }
-  }, [token, draftHydrated, course, pricing, batches, subjects, step]);
+  }, [token, draftHydrated, course, pricing, batches, subjects, categoryIds, step]);
 
   const hasDraftContent =
     Boolean(course.title?.trim()) ||
@@ -215,7 +216,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
 
         const draft = response?.data?.draft;
         if (draft) {
-          applyDraftState(draft, { setCourse, setPricing, setBatches, setSubjects, setStep });
+        applyDraftState(draft, { setCourse, setPricing, setBatches, setSubjects, setStep, setCategoryIds });
           if (response?.data?.updatedAt) {
             setDraftSavedAt(new Date(response.data.updatedAt).getTime());
           }
@@ -224,7 +225,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
             const raw = localStorage.getItem(LEGACY_DRAFT_KEY);
             if (raw) {
               const legacyDraft = JSON.parse(raw);
-              applyDraftState(legacyDraft, { setCourse, setPricing, setBatches, setSubjects, setStep });
+              applyDraftState(legacyDraft, { setCourse, setPricing, setBatches, setSubjects, setStep, setCategoryIds });
               localStorage.removeItem(LEGACY_DRAFT_KEY);
               await adminApi.saveCourseDraft(token, legacyDraft);
               setDraftSavedAt(Date.now());
@@ -248,6 +249,30 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   }, [token]);
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadCategories() {
+      if (!token) return;
+      setCategoriesLoading(true);
+      setCategoriesError('');
+      try {
+        const res = await adminApi.courseCategories(token);
+        if (cancelled) return;
+        setAllCategories(res?.data?.categories ?? []);
+      } catch (err) {
+        if (cancelled) return;
+        setAllCategories([]);
+        setCategoriesError(err?.message || 'Failed to load categories.');
+      } finally {
+        if (!cancelled) setCategoriesLoading(false);
+      }
+    }
+    loadCategories();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
     if (!draftHydrated) return;
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(() => {
@@ -261,6 +286,11 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
   const titleLen = String(course.title || '').length;
   const shortDescriptionLen = String(course.short_description ?? '').length;
   const descriptionLen = String(course.description || '').length;
+
+  function onToggleCategory(categoryId) {
+    const id = Number(categoryId);
+    setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   function onCourseChange(e) {
     const { name, value, type, checked } = e.target;
@@ -303,14 +333,6 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
       const next = sanitizeWizardBatch({ ...base, ...(idx === 0 ? patch : {}) });
       return [next];
     });
-    if (patch.start_date !== undefined || patch.end_date !== undefined) {
-      setCourse((c) => ({
-        ...c,
-        start_date:
-          patch.start_date !== undefined ? toDateInputValue(patch.start_date) || null : c.start_date,
-        end_date: patch.end_date !== undefined ? toDateInputValue(patch.end_date) || null : c.end_date,
-      }));
-    }
   }
 
   function onSubjectChange(idx, patch) {
@@ -373,6 +395,7 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
     setPricing(buildDefaultWizardPricing());
     setBatches([buildDefaultWizardBatch()]);
     setSubjects([buildDefaultWizardSubject()]);
+    setCategoryIds([]);
     setStep(0);
     setStepError('');
     setFieldErrors({});
@@ -507,7 +530,19 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
         /* ignore */
       }
       await clearServerDraft();
-      onCreated(res?.data);
+      const created = res?.data;
+      const createdId = created?.id ?? created?.course?.id;
+      if (createdId && categoryIds.length > 0) {
+        try {
+          await adminApi.updateCourseCategoryAssignments(token, createdId, categoryIds);
+        } catch (catErr) {
+          toast.error(
+            catErr?.message ||
+              'Course was created, but category assignment did not save. Assign categories on the General tab.'
+          );
+        }
+      }
+      onCreated(created);
     } catch (err) {
       // Don't show error if request was cancelled
       if (err.name === 'AbortError' || err.name === 'CanceledError') {
@@ -628,6 +663,11 @@ export default function CourseCreateWizard({ token, onCreated, onCancel }) {
               imageInputRef={imageInputRef}
               onImageChange={onImageFileChange}
               onClearImage={clearCoverImage}
+              allCategories={allCategories}
+              categoryIds={categoryIds}
+              onToggleCategory={onToggleCategory}
+              categoriesLoading={categoriesLoading}
+              categoriesError={categoriesError}
             />
           ) : null}
           {step === 1 ? (

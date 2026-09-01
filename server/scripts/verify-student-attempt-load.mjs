@@ -40,10 +40,10 @@ if (typeof assertStudentOwnsAttempt === 'function') ok('assertStudentOwnsAttempt
 else fail('assertStudentOwnsAttempt missing');
 
 const serviceSrc = await fs.readFile(path.join(root, '../src/services/studentAttemptLoad.service.js'), 'utf8');
-if (serviceSrc.includes('loadComposedTestQuestions') && serviceSrc.includes("audience: 'student'")) {
-  ok('uses composed question_bank load path');
+if (serviceSrc.includes('resolveAttemptExamSnapshot') && serviceSrc.includes('snapshotQuestionsForStudent')) {
+  ok('uses attempt exam snapshot for questions');
 } else {
-  fail('composed question load missing');
+  fail('attempt exam snapshot load missing');
 }
 
 if (serviceSrc.includes('LOAD_SAVED_ANSWERS_SQL')) ok('loads saved answers');

@@ -24,10 +24,10 @@ export function confirmPublishedTestEdit(test) {
 
   return window.confirm(
     `This test is live${test?.title ? `: "${test.title}"` : ''}.\n\n` +
-      'Changes will affect future attempts immediately. Existing attempts keep their original questions.\n\n' +
+      'Changes apply to future attempts immediately. Students who already started keep their original exam.\n\n' +
       'Proceed with saving?'
   );
 }
 
 export const PUBLISHED_EDIT_WARNING =
-  'This test is live. Changes will affect future attempts immediately. Proceed with caution.';
+  'This test is live. Fields that the server allows remain editable. Changes apply to future attempts immediately. Students who already started keep their original exam.';

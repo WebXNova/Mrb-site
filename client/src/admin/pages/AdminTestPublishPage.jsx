@@ -69,9 +69,15 @@ export default function AdminTestPublishPage() {
   const published = Boolean(test && isTestPublishedStatus(test.status));
   const readOnly = layoutReadOnly || published;
 
-  const handleResultsReleasedChange = useCallback((nextReleasedAt) => {
-    setSettings((prev) => ({ ...(prev || {}), results_released_at: nextReleasedAt }));
-  }, []);
+  const handleResultsReleasedChange = useCallback(
+    (nextReleasedAt) => {
+      setSettings((prev) => ({ ...(prev || {}), results_released_at: nextReleasedAt }));
+      if (typeof refreshTest === 'function') {
+        refreshTest();
+      }
+    },
+    [refreshTest]
+  );
 
   return (
     <div>

@@ -5,6 +5,7 @@
  */
 import {
   assertTestAvailabilityWindow,
+  assertTestAvailabilityWindowForTest,
   AVAILABILITY_PHASE,
   evaluateTestAvailabilityWindow,
   formatAvailabilityMetadataIso,
@@ -264,5 +265,37 @@ expectThrowMetadata(
   }
 );
 
+assert(
+  assertTestAvailabilityWindowForTest(
+    { id: 14, course_id: 37, start_date: '2099-01-01T00:00:00.000Z', end_date: '2020-01-01T00:00:00.000Z' },
+    {
+      phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
+      nowMs: Date.parse('2026-01-01T00:00:00.000Z'),
+      context: 'course-linked',
+    }
+  ) === undefined,
+  'course-linked tests skip start/end date gates'
+);
+
+{
+  const exactEnd = Date.parse('2026-06-10T12:00:00.000Z');
+  const snap = evaluateTestAvailabilityWindow(
+    { id: 5, start_date: '2020-01-01T00:00:00.000Z', end_date: '2026-06-10T12:00:00.000Z' },
+    exactEnd
+  );
+  assert(snap.noLongerAvailable === true && snap.insideWindow === false, 'evaluate — now === end_date is expired');
+}
+
+expectThrow(
+  () =>
+    assertTestAvailabilityWindow(
+      { id: 1, start_date: null, end_date: '2026-06-10T12:00:00.000Z' },
+      { phase: AVAILABILITY_PHASE.CREATE_ATTEMPT, nowMs: Date.parse('2026-06-10T12:00:00.000Z') }
+    ),
+  TestNotAccessibleError,
+  'CREATE_ATTEMPT blocks at exact end_date'
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;
+

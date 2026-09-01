@@ -1,11 +1,18 @@
 import { Link } from 'react-router-dom';
 import { adminRoute } from '../../config/adminPaths';
+import SeatInventoryMeter from './SeatInventoryMeter';
 import TestRowActionsMenu from './TestRowActionsMenu';
-import TestStatusBadge from './TestStatusBadge';
+import TestAdminBadges from './TestAdminBadges';
+import { isStandaloneAccessType } from '../constants/testAccessType.js';
 import {
   formatAvgScoreCell,
   formatTestEditedCreatedLine,
 } from '../utils/testListFormatting';
+import {
+  formatCourseLabel,
+  formatScheduleWindow,
+  formatTestAccessTypeLabel,
+} from '../utils/testAdminDisplay.js';
 
 export default function AdminTestMobileCard({
   test,
@@ -18,6 +25,8 @@ export default function AdminTestMobileCard({
   busyAction = '',
 }) {
   const scoreCell = formatAvgScoreCell(test);
+  const standalone = isStandaloneAccessType(test.testAccessType);
+  const windowLabel = formatScheduleWindow(test);
 
   return (
     <article className="admin-test-mobile-card">
@@ -25,18 +34,28 @@ export default function AdminTestMobileCard({
         <h3 className="admin-test-mobile-card__title">
           <Link to={adminRoute(`tests/${test.id}/dashboard`)}>{test.title}</Link>
         </h3>
-        <TestStatusBadge status={test.status} />
       </header>
 
+      <TestAdminBadges test={test} />
+
       <p className="admin-test-mobile-card__dates">{formatTestEditedCreatedLine(test)}</p>
+      {standalone && windowLabel ? <p className="admin-test-mobile-card__dates">{windowLabel}</p> : null}
 
       <dl className="admin-test-mobile-card__meta">
+        <div>
+          <dt>Type</dt>
+          <dd>{formatTestAccessTypeLabel(test.testAccessType)}</dd>
+        </div>
+        <div>
+          <dt>Course</dt>
+          <dd>{standalone ? '—' : formatCourseLabel(test)}</dd>
+        </div>
         <div>
           <dt>Questions</dt>
           <dd>{Number(test.questionCount ?? 0)}</dd>
         </div>
         <div>
-          <dt>Scores</dt>
+          <dt>Attempts</dt>
           <dd>{Number(test.scoresCount ?? 0)}</dd>
         </div>
         <div>
@@ -46,6 +65,14 @@ export default function AdminTestMobileCard({
             {scoreCell.range ? <span className="admin-test-mobile-card__score-range"> {scoreCell.range}</span> : null}
           </dd>
         </div>
+        {standalone ? (
+          <div className="admin-test-mobile-card__seats">
+            <dt>Seats</dt>
+            <dd>
+              <SeatInventoryMeter test={test} compact />
+            </dd>
+          </div>
+        ) : null}
       </dl>
 
       {test.publicLink ? (

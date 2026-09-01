@@ -159,6 +159,7 @@ async function loadEntitledStudentResults(studentId, courseId) {
   });
   return db.rows(
     `SELECT a.id AS attempt_id, t.title AS test_title, t.public_slug, t.results_released_at,
+            t.show_result_immediately,
             a.submitted_at, r.score, r.max_score, r.percentage,
             ${DERIVED_PASS_STATUS_SQL} AS pass_status
      FROM test_attempts a

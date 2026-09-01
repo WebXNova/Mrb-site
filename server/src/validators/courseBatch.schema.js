@@ -117,8 +117,8 @@ export const courseBatchCreateBodySchema = z.preprocess(
         .transform(normalizeTitle)
         .refine((s) => s.length >= 1, 'title required'),
       code: codeSchema,
-      start_date: dateTimeSchema,
-      end_date: dateTimeSchema,
+      start_date: z.preprocess((v) => (v === '' || v == null ? null : v), dateTimeSchema.nullable().optional()),
+      end_date: z.preprocess((v) => (v === '' || v == null ? null : v), dateTimeSchema.nullable().optional()),
       total_seats: z.number().int().min(1).max(100_000),
       seats_fantasy: z.number().int().min(0).max(100_000).optional().default(0),
       instructor_name: z.union([z.string().max(160), z.null()]).optional(),

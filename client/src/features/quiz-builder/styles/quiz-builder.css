@@ -654,6 +654,29 @@
   flex-shrink: 0;
 }
 
+.qb-question-card__status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.qb-question-card__status--ready {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.qb-question-card__status--needs {
+  color: #92400e;
+  background: #fef3c7;
+}
+
 .qb-question-card__title-input {
   flex: 1;
   min-width: 0;
@@ -1235,4 +1258,13 @@
 
 .qb-page__import-btn {
   white-space: nowrap;
+}
+
+.admin-page--quiz-builder-embedded .qb-page {
+  min-height: 0;
+  background: transparent;
+}
+
+.admin-page--quiz-builder-embedded .qb-shell {
+  padding: 0 0 1rem;
 }

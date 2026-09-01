@@ -3,19 +3,32 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import { adminRoute } from '../../config/adminPaths';
-import TestStatusBadge from './TestStatusBadge';
+import { isStandaloneAccessType } from '../constants/testAccessType.js';
+import SeatInventoryMeter from './SeatInventoryMeter';
+import TestAdminBadges from './TestAdminBadges';
+import TestRowActionsMenu from './TestRowActionsMenu';
 import {
   formatAvgScoreCell,
   formatTestEditedCreatedLine,
   nextSortState,
 } from '../utils/testListFormatting';
+import {
+  formatAdminDateTime,
+  formatCourseLabel,
+  formatTestAccessTypeLabel,
+} from '../utils/testAdminDisplay.js';
 
 const COLUMNS = [
   { key: 'title', label: 'Title', sortable: true },
+  { key: 'type', label: 'Type', sortable: false },
+  { key: 'course', label: 'Course', sortable: false },
   { key: 'status', label: 'Status', sortable: true },
+  { key: 'schedule', label: 'Schedule', sortable: false },
+  { key: 'seats', label: 'Seats', sortable: false },
   { key: 'questions', label: 'Questions', sortable: true, align: 'right' },
-  { key: 'scores', label: '# of Scores', sortable: true, align: 'right' },
-  { key: 'avg_score', label: 'Avg Score', sortable: true, align: 'right' },
+  { key: 'scores', label: 'Attempts', sortable: true, align: 'right' },
+  { key: 'avg_score', label: 'Avg %', sortable: true, align: 'right' },
+  { key: 'actions', label: 'Actions', sortable: false },
 ];
 
 function SortIcon({ column, sortBy, sortDirection }) {
@@ -29,8 +42,26 @@ function SortIcon({ column, sortBy, sortDirection }) {
   );
 }
 
+function ScheduleCell({ test }) {
+  if (!isStandaloneAccessType(test.testAccessType)) {
+    return <span className="tests-list-table__muted">Enrollment-based</span>;
+  }
+  const start = formatAdminDateTime(test.startDate ?? test.start_date);
+  const end = formatAdminDateTime(test.endDate ?? test.end_date);
+  if (start === '—' && end === '—') {
+    return <span className="tests-list-table__muted">Schedule not set</span>;
+  }
+  return (
+    <div className="tests-list-table__schedule">
+      <span>{start}</span>
+      <span className="tests-list-table__schedule-sep">to</span>
+      <span>{end}</span>
+    </div>
+  );
+}
+
 /**
- * Testmoz-style sortable tests table with row selection.
+ * Sortable tests table with type, course, availability, seats, and row actions.
  */
 export default function TestsListTable({
   tests,
@@ -42,17 +73,27 @@ export default function TestsListTable({
   onToggleAll,
   allSelected,
   someSelected,
+  onPublish,
+  onDuplicate,
+  onDownloadResults,
+  onExportTest,
+  onDelete,
+  onCopyLink,
+  busyAction = '',
 }) {
   const navigate = useNavigate();
+  const showActions = typeof onPublish === 'function';
 
   function handleSort(column) {
     onSortChange?.(nextSortState(column, { sortBy, sortDirection }));
   }
 
   function handleRowNavigate(testId, event) {
-    if (event.target.closest('input, a, button, label')) return;
+    if (event.target.closest('input, a, button, label, .admin-action-menu')) return;
     navigate(adminRoute(`tests/${testId}/dashboard`));
   }
+
+  const columns = showActions ? COLUMNS : COLUMNS.filter((column) => column.key !== 'actions');
 
   return (
     <div className="tests-list-table-shell">
@@ -71,7 +112,7 @@ export default function TestsListTable({
                   onChange={(event) => onToggleAll?.(event.target.checked)}
                 />
               </th>
-              {COLUMNS.map((column) => (
+              {columns.map((column) => (
                 <th
                   key={column.key}
                   scope="col"
@@ -106,6 +147,7 @@ export default function TestsListTable({
             {tests.map((test) => {
               const scoreCell = formatAvgScoreCell(test);
               const selected = selectedIds.has(Number(test.id));
+              const standalone = isStandaloneAccessType(test.testAccessType);
 
               return (
                 <tr
@@ -127,8 +169,18 @@ export default function TestsListTable({
                     </Link>
                     <p className="tests-list-table__date-line">{formatTestEditedCreatedLine(test)}</p>
                   </td>
+                  <td className="tests-list-table__type-cell">{formatTestAccessTypeLabel(test.testAccessType)}</td>
+                  <td className="tests-list-table__course-cell">
+                    {standalone ? '—' : formatCourseLabel(test)}
+                  </td>
                   <td>
-                    <TestStatusBadge status={test.status} />
+                    <TestAdminBadges test={test} showType={false} />
+                  </td>
+                  <td className="tests-list-table__schedule-cell">
+                    <ScheduleCell test={test} />
+                  </td>
+                  <td className="tests-list-table__seats-cell">
+                    {standalone ? <SeatInventoryMeter test={test} compact /> : <span className="tests-list-table__muted">—</span>}
                   </td>
                   <td className="tests-list-table__num-cell">{Number(test.questionCount ?? 0)}</td>
                   <td className="tests-list-table__num-cell">{Number(test.scoresCount ?? 0)}</td>
@@ -138,6 +190,20 @@ export default function TestsListTable({
                       <span className="tests-list-table__score-range">{scoreCell.range}</span>
                     ) : null}
                   </td>
+                  {showActions ? (
+                    <td className="tests-list-table__actions-cell" onClick={(event) => event.stopPropagation()}>
+                      <TestRowActionsMenu
+                        test={test}
+                        onPublish={onPublish}
+                        onDuplicate={onDuplicate}
+                        onDownloadResults={onDownloadResults}
+                        onExportTest={onExportTest}
+                        onDelete={onDelete}
+                        onCopyLink={onCopyLink}
+                        busyAction={busyAction}
+                      />
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}

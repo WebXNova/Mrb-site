@@ -5,7 +5,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import AdminSearchField from '../AdminSearchField';
 import AdminActionMenu, { AdminActionMenuItem } from '../AdminActionMenu';
-import CourseStatusBadge from './CourseStatusBadge';
+import CourseControlBadges from './CourseControlBadges';
 import CourseLevelBadge from './CourseLevelBadge';
 import CourseCategoryTags from './CourseCategoryTags';
 import AdmissionStaleWarning from './AdmissionStaleWarning';
@@ -393,7 +393,7 @@ export default function CourseDataGrid({
                       <td className="col-price">{formatPricingCell(course.pricing)}</td>
                       <td className="col-students">—</td>
                       <td className="col-status">
-                        <CourseStatusBadge active={course.is_active} />
+                        <CourseControlBadges course={course} compact />
                       </td>
                       <td className="col-updated">{formatDate(course.updated_at)}</td>
                       <td className="col-actions">

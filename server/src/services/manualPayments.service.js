@@ -23,6 +23,12 @@ import {
   resolveStoredScreenshotFilename,
   safeUnlink,
 } from './manualPaymentScreenshotUpload.service.js';
+import {
+  countRecentDifferentTransactionIds,
+  loadPriorSenderNumbers,
+  lockAndLoadScreenshotHashMatches,
+  lockAndLoadTransactionIdMatches,
+} from './manualPaymentFraudLookup.service.js';
 
 const REFERENCE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -317,13 +323,7 @@ export async function submitManualPayment({ studentId, orderId, body, screenshot
       );
     }
 
-    const [trxRows] = await connection.query(
-      `SELECT id, student_id, status, risk_flags, risk_level
-       FROM manual_payments
-       WHERE transaction_id = ?
-       FOR UPDATE`,
-      [fields.transaction_id]
-    );
+    const trxRows = await lockAndLoadTransactionIdMatches(connection, fields.transaction_id);
 
     if (trxRows.some((row) => String(row.status) === 'approved')) {
       throw new ApiError(
@@ -335,31 +335,14 @@ export async function submitManualPayment({ studentId, orderId, body, screenshot
 
     const pendingTrxMatches = trxRows.filter((row) => String(row.status) === 'pending_review');
 
-    const [hashRows] = await connection.query(
-      `SELECT student_id, status
-       FROM manual_payments
-       WHERE screenshot_file_hash = ?
-         AND status <> 'rejected'
-       FOR UPDATE`,
-      [screenshot.sha256]
-    );
+    const hashRows = await lockAndLoadScreenshotHashMatches(connection, screenshot.sha256);
 
-    const [velocityRows] = await connection.query(
-      `SELECT COUNT(*) AS n
-       FROM manual_payments
-       WHERE student_id = ?
-         AND transaction_id <> ?
-         AND created_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
-      [uid, fields.transaction_id]
+    const recentDifferentTrxCount = await countRecentDifferentTransactionIds(
+      connection,
+      uid,
+      fields.transaction_id
     );
-
-    const [senderRows] = await connection.query(
-      `SELECT DISTINCT sender_phone_number AS phone
-       FROM manual_payments
-       WHERE student_id = ?
-         AND status IN ('pending_review', 'approved')`,
-      [uid]
-    );
+    const senderRows = await loadPriorSenderNumbers(connection, uid);
 
     const [activeAccountRows] = await connection.query(
       `SELECT id
@@ -387,8 +370,8 @@ export async function submitManualPayment({ studentId, orderId, body, screenshot
         studentId: Number(row.student_id),
         status: String(row.status),
       })),
-      recentDifferentTrxCount: Number(velocityRows[0]?.n ?? 0),
-      priorSenderNumbers: senderRows.map((row) => String(row.phone)),
+      recentDifferentTrxCount,
+      priorSenderNumbers: senderRows,
       senderPhone: fields.sender_phone_number,
     });
 
@@ -397,8 +380,10 @@ export async function submitManualPayment({ studentId, orderId, body, screenshot
       if (!nextFlags.includes(MANUAL_PAYMENT_RISK_FLAGS.DUPLICATE_TRANSACTION_ID_PENDING)) {
         nextFlags.push(MANUAL_PAYMENT_RISK_FLAGS.DUPLICATE_TRANSACTION_ID_PENDING);
       }
+      const table =
+        row.product === 'standalone_test' ? 'standalone_test_payments' : 'manual_payments';
       await connection.query(
-        `UPDATE manual_payments
+        `UPDATE ${table}
          SET risk_flags = CAST(? AS JSON), risk_level = 'needs_review'
          WHERE id = ?`,
         [JSON.stringify(nextFlags), Number(row.id)]

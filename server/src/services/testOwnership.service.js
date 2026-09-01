@@ -1,8 +1,8 @@
 /**
  * Test ownership foundation (Phase 1C).
  *
- * Boolean check: may this student access this test?
- * Delegates course ownership to enrollments; test must be published and not deleted.
+ * @deprecated Use courseLinkedTestAccess.service.js + assertCourseAccess instead.
+ * Retained for historical tests/scripts only — portal start no longer calls this module.
  */
 
 import { mysqlPool } from '../config/mysql.js';
@@ -33,6 +33,8 @@ export const STUDENT_OWNS_TEST_SQL = `
     WHERE t.id = ?
       AND t.deleted_at IS NULL
       AND t.status = ?
+      AND t.access_mode = 'public'
+      AND t.test_access_type = 'course_locked'
     LIMIT 1
   ) AS owns_test
 `;

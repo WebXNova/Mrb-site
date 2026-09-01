@@ -14,27 +14,32 @@ import { getRedisClient } from '../config/redis.js';
 import { assertCourseAccess } from './entitlement.service.js';
 import { scopedQuery } from '../security/cee/db/scopedQuery.js';
 import {
-  assertTestAccessibleForEntitlement,
   resolveEntitledTestBySlug,
 } from '../security/cee/testEntitlement.service.js';
 import {
   createAttemptScopedQuery,
-  assertQuestionBelongsToAttempt,
-  assertOptionBelongsToQuestion,
   resolveSecureAttemptContext,
 } from './testAttempt/secureAttemptContext.js';
 import { loadTestSubjectPresentation } from './testSubjectPresentation.service.js';
 import {
-  loadTestSectionsForStudentAttempt,
   mapComposedQuestionsForStudentAttempt,
   summarizeComposedQuestionOptions,
 } from './testQuestionComposition.service.js';
 import {
   initializeAttemptDeliveryLayout,
   isShuffleEnabled,
-  loadComposedQuestionsWithAttemptLayout,
 } from './attemptDeliveryLayout.service.js';
+import {
+  persistAttemptExamSnapshot,
+  resolveAttemptExamSnapshot,
+  snapshotQuestionsForStudent,
+  snapshotQuestionsForGrading,
+  snapshotSectionsForStudent,
+  snapshotGradingConfig,
+  assertAnswerBelongsToExamSnapshot,
+} from './attemptExamSnapshot.service.js';
 import { LOAD_SAVED_ANSWERS_SQL } from './studentAttemptLoad.queries.js';
+import { buildPresentationSettings } from '../utils/testPresentation.js';
 import { gradeComposedAttempt, parseSelectedOptionId } from './testAttempt/gradeComposedAttempt.js';
 import {
   AttemptExpiredError,
@@ -63,16 +68,19 @@ import {
 import {
   COUNT_ENTITLED_STUDENT_ATTEMPTS_SQL,
   buildInsertEntitledTestAttemptParams,
+  buildInsertPaidStandaloneTestAttemptParams,
   INSERT_ENTITLED_TEST_ATTEMPT_SQL,
+  INSERT_PAID_STANDALONE_TEST_ATTEMPT_SQL,
   LOCK_ACTIVE_ENTITLED_ATTEMPT_SQL,
   LOCK_ENTITLED_TEST_FOR_START_SQL,
+  LOCK_PAID_STANDALONE_TEST_FOR_START_SQL,
   NEXT_ENTITLED_ATTEMPT_NUMBER_SQL,
 } from './testAttempt.queries.js';
-import { INSERT_TEST_RESULT_SQL } from './testResult.queries.js';
+import { INSERT_TEST_RESULT_SQL, INSERT_PAID_STANDALONE_TEST_RESULT_SQL } from './testResult.queries.js';
 import { derivePassStatus } from '../result/passStatus.js';
 import {
   assertStudentResultVisible,
-  isResultsReleased,
+  isStudentResultVisible,
   sanitizeGradingDetailItems,
 } from './testResultVisibility.service.js';
 import { findMatchingScoreBand } from './testScoreBands.service.js';
@@ -89,8 +97,14 @@ import {
   assertCanCreateNewTestAttempt,
 } from './testRetakePolicy.service.js';
 import { COUNT_STUDENT_ATTEMPTS_FOR_TEST_SQL } from './testRetakePolicy.queries.js';
+import { STANDALONE_TEST_JOIN_SQL, TEST_ACCESS_TYPE_FREE_STANDALONE } from '../constants/testAccessType.constants.js';
+import { FREE_SESSION_IDENTITY } from '../constants/freeSession.constants.js';
+import { assertPaidStandaloneTestAccess } from '../security/cee/paidStandaloneAccess.service.js';
+import { assertFreeStandaloneTestAccess } from '../security/cee/freeStandaloneAccess.service.js';
+import { isStandaloneAccessType } from '../validators/testAccessType.js';
+import { assertNotBlockedByExamIntegrity } from './examIntegrity.store.js';
 import {
-  assertTestAvailabilityWindow,
+  assertTestAvailabilityWindowForTest,
   AVAILABILITY_PHASE,
   fetchUtcNowMs,
   getAvailabilityNowMs,
@@ -104,6 +118,18 @@ import {
 } from './testSubmitRecovery.service.js';
 
 const logger = new StructuredLogger({ service: 'testAttempt' });
+
+async function assertStandaloneStartAccess({ slug, userId, phase, nowMs, executor }) {
+  const db = executor ?? mysqlPool;
+  const [peek] = await db.query(
+    `SELECT test_access_type FROM tests WHERE public_slug = ? AND deleted_at IS NULL LIMIT 1`,
+    [slug]
+  );
+  if (String(peek[0]?.test_access_type || '') === TEST_ACCESS_TYPE_FREE_STANDALONE) {
+    return assertFreeStandaloneTestAccess({ slug, userId, phase, nowMs, executor: db });
+  }
+  return assertPaidStandaloneTestAccess({ slug, userId, phase, nowMs, executor: db });
+}
 
 /**
  * @param {import('./testAttempt/secureAttemptContext.js').SecureAttemptContext} ctx
@@ -122,16 +148,41 @@ function buildSlugSubmitSuccess(ctx, resultId, meta = {}) {
     attemptId: ctx.attempt.id,
     testId: ctx.attempt.test_id,
     metadata: {
-      resultId: Number(resultId),
+      resultId: resultId != null ? Number(resultId) : null,
       recovered: Boolean(meta.recovered),
       recoveryOutcome: meta.outcome ?? null,
+      guest: Boolean(ctx.guest),
+      nextStep: meta.nextStep ?? null,
     },
   });
+  if (ctx.guest) {
+    return {
+      attemptId: ctx.attempt.id,
+      resultId: null,
+      recovered: Boolean(meta.recovered),
+      resultAvailable: false,
+      nextStep: meta.nextStep || 'enrollment',
+      identityStatus: meta.identityStatus || FREE_SESSION_IDENTITY.ENROLLMENT_PENDING,
+    };
+  }
   return {
     attemptId: ctx.attempt.id,
     resultId: Number(resultId),
     recovered: Boolean(meta.recovered),
-    resultAvailable: isResultsReleased(ctx.test),
+    resultAvailable: isStudentResultVisible(ctx.test),
+  };
+}
+
+function standaloneInProgressWhere(ctx) {
+  if (ctx.guest) {
+    return {
+      sql: 'a.id = ? AND a.guest_session_hash = ? AND a.user_id IS NULL AND a.status = \'in_progress\'',
+      params: [ctx.attempt.id, ctx.guestSessionHash],
+    };
+  }
+  return {
+    sql: 'a.id = ? AND a.user_id = ? AND a.status = \'in_progress\'',
+    params: [ctx.attempt.id, ctx.userId],
   };
 }
 
@@ -258,24 +309,35 @@ async function checkVerifyRateLimit(slug, ipAddress) {
 }
 
 /**
- * Bind the attempt JWT to the student, attempt, and exam window.
+ * Bind the attempt JWT to the student (or guest session), attempt, and exam window.
  * Nonce is still present for submit replay protection, but autosave does not rotate it.
  */
-function signAttemptToken({ attemptId, testId, slug, nonce, userId, expiresAt, durationMinutes }) {
+export function signAttemptToken({
+  attemptId,
+  testId,
+  slug,
+  nonce,
+  userId,
+  expiresAt,
+  durationMinutes,
+  guest = false,
+  sessionHash = null,
+}) {
   const expiresIn = resolveAttemptJwtExpiresInSeconds({ expiresAt, durationMinutes });
-  return jwt.sign(
-    {
-      type: 'test_attempt',
-      attemptId: Number(attemptId),
-      testId: Number(testId),
-      slug,
-      nonce,
-      userId: Number(userId),
-      expiresAt: toAvailabilityIso(expiresAt),
-    },
-    env.jwt.accessSecret,
-    { expiresIn }
-  );
+  const payload = {
+    type: 'test_attempt',
+    attemptId: Number(attemptId),
+    testId: Number(testId),
+    slug,
+    nonce,
+    userId: guest ? 0 : Number(userId),
+    expiresAt: toAvailabilityIso(expiresAt),
+  };
+  if (guest) {
+    payload.guest = true;
+    payload.sessionHash = String(sessionHash || '');
+  }
+  return jwt.sign(payload, env.jwt.accessSecret, { expiresIn });
 }
 
 function buildDeviceFingerprint(ipAddress, userAgent) {
@@ -366,15 +428,24 @@ export async function consumeAttemptNonce({ slug, attemptId, tokenNonce, userId,
   });
 
   const nextNonce = nanoid(24);
-  const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.consumeAttemptNonce.rotate');
-
-  await db.execute(
-    `UPDATE test_attempts a
+  if (ctx.paidStandalone) {
+    await mysqlPool.execute(
+      `UPDATE test_attempts a
+       INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+       SET a.attempt_nonce = ?, a.last_activity_at = CURRENT_TIMESTAMP
+       WHERE a.id = ? AND a.user_id = ? AND a.status = 'in_progress'`,
+      [nextNonce, ctx.attempt.id, ctx.userId]
+    );
+  } else {
+    const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.consumeAttemptNonce.rotate');
+    await db.execute(
+      `UPDATE test_attempts a
      INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
      SET a.attempt_nonce = ?, a.last_activity_at = CURRENT_TIMESTAMP
      WHERE a.id = ? AND a.user_id = ? AND a.status = 'in_progress'`,
-    [ctx.courseId, nextNonce, ctx.attempt.id, ctx.userId]
-  );
+      [ctx.courseId, nextNonce, ctx.attempt.id, ctx.userId]
+    );
+  }
 
   return signAttemptToken({
     attemptId: ctx.attempt.id,
@@ -385,6 +456,214 @@ export async function consumeAttemptNonce({ slug, attemptId, tokenNonce, userId,
     expiresAt: ctx.attempt.expires_at,
     durationMinutes: ctx.test.duration_minutes,
   });
+}
+
+export async function createPaidStandaloneTestAttempt({
+  slug,
+  studentId,
+  studentName,
+  ipAddress,
+  userAgent,
+}) {
+  const normalizedSlug = String(slug || '').trim();
+  const normalizedStudentId = assertStudentIdForAttemptInsert(studentId);
+  if (!normalizedSlug) {
+    throw new ApiError(400, 'Cannot create test attempt without test slug');
+  }
+
+  await checkVerifyRateLimit(normalizedSlug, ipAddress);
+  const [peekActive] = await mysqlPool.query(
+    `SELECT a.id
+     FROM test_attempts a
+     INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+     WHERE t.public_slug = ?
+       AND a.status = 'in_progress'
+       AND (a.student_id = ? OR a.user_id = ?)
+     LIMIT 1`,
+    [normalizedSlug, normalizedStudentId, normalizedStudentId]
+  );
+  const initialPhase = peekActive[0] ? AVAILABILITY_PHASE.IN_PROGRESS : AVAILABILITY_PHASE.CREATE_ATTEMPT;
+  const access = await assertStandaloneStartAccess({
+    slug: normalizedSlug,
+    userId: normalizedStudentId,
+    phase: initialPhase,
+  });
+  const testId = Number(access.test.id);
+  const deviceFingerprint = buildDeviceFingerprint(ipAddress, userAgent);
+  const connection = await mysqlPool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const nowMs = await fetchUtcNowMs(connection);
+
+    const [[testWindowRow]] = await connection.query(LOCK_PAID_STANDALONE_TEST_FOR_START_SQL, [testId]);
+    if (!testWindowRow) {
+      throw new ApiError(404, 'Test not found');
+    }
+
+    const [activeRows] = await connection.query(
+      `SELECT a.id, a.attempt_nonce, a.started_at, a.expires_at
+       FROM test_attempts a
+       INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+       WHERE a.test_id = ?
+         AND a.status = 'in_progress'
+         AND (a.student_id = ? OR a.user_id = ?)
+       ORDER BY a.id DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [testId, normalizedStudentId, normalizedStudentId]
+    );
+    const activeAttempt = activeRows[0];
+
+    if (activeAttempt) {
+      const expiredNow = await expireAttemptIfExpired({
+        attemptId: activeAttempt.id,
+        nowMs,
+        executor: connection,
+      });
+      if (!expiredNow) {
+        await assertStandaloneStartAccess({
+          slug: normalizedSlug,
+          userId: normalizedStudentId,
+          phase: AVAILABILITY_PHASE.IN_PROGRESS,
+          nowMs,
+          executor: connection,
+        });
+        assertTestAvailabilityWindowForTest(testWindowRow, {
+          phase: AVAILABILITY_PHASE.IN_PROGRESS,
+          nowMs,
+          attemptStartedAt: activeAttempt.started_at,
+          context: 'testAttempt.createPaidStandaloneTestAttempt.resume',
+        });
+        const resumeNonce = String(activeAttempt.attempt_nonce || '');
+        if (!resumeNonce) {
+          throw new ApiError(500, 'Active attempt is missing security nonce');
+        }
+        await connection.commit();
+        return {
+          attemptId: Number(activeAttempt.id),
+          attemptToken: signAttemptToken({
+            attemptId: Number(activeAttempt.id),
+            testId,
+            slug: normalizedSlug,
+            nonce: resumeNonce,
+            userId: normalizedStudentId,
+            expiresAt: activeAttempt.expires_at,
+            durationMinutes: testWindowRow.duration_minutes,
+          }),
+          testId,
+          startedAt: toAvailabilityIso(activeAttempt.started_at),
+          expiresAt: toAvailabilityIso(activeAttempt.expires_at),
+          startUrl: `${String(env.clientUrl || '').replace(/\/$/, '')}/tests/${normalizedSlug}/start`,
+          resumed: true,
+        };
+      }
+    }
+
+    await assertStandaloneStartAccess({
+      slug: normalizedSlug,
+      userId: normalizedStudentId,
+      phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
+      nowMs,
+      executor: connection,
+    });
+
+    assertTestAvailabilityWindowForTest(testWindowRow, {
+      phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
+      nowMs,
+      context: 'testAttempt.createPaidStandaloneTestAttempt.create',
+    });
+
+    const [[countRow]] = await connection.query(COUNT_STUDENT_ATTEMPTS_FOR_TEST_SQL, [
+      testId,
+      normalizedStudentId,
+      normalizedStudentId,
+    ]);
+    assertCanCreateNewTestAttempt(
+      testWindowRow,
+      { totalAttempts: Number(countRow?.total ?? 0), hasActiveAttempt: false },
+      { testId, context: 'testAttempt.createPaidStandaloneTestAttempt' }
+    );
+
+    const [[nextRow]] = await connection.query(NEXT_ENTITLED_ATTEMPT_NUMBER_SQL, [
+      testId,
+      normalizedStudentId,
+    ]);
+    const attemptNumber = Number(nextRow?.next_attempt ?? 1);
+    const durationMinutes = assertValidTestDurationMinutes(
+      testWindowRow.duration_minutes,
+      { testId, context: 'testAttempt.createPaidStandaloneTestAttempt' }
+    );
+    const attemptNonce = nanoid(24);
+    const insertParams = buildInsertPaidStandaloneTestAttemptParams({
+      testId,
+      studentId: normalizedStudentId,
+      studentName: studentName?.trim() || null,
+      attemptNumber,
+      durationMinutes,
+      ipAddress: ipAddress || null,
+      userAgent: userAgent || null,
+      deviceFingerprint,
+      attemptNonce,
+    });
+
+    const [insertResult] = await connection.execute(INSERT_PAID_STANDALONE_TEST_ATTEMPT_SQL, insertParams);
+    const attemptId = Number(insertResult?.insertId);
+    if (Number(insertResult?.affectedRows ?? 0) === 0 || !Number.isInteger(attemptId) || attemptId <= 0) {
+      throw new ApiError(403, 'Cannot start a new attempt for this test.', {
+        code: 'ATTEMPT_CREATE_DENIED',
+        testId,
+      });
+    }
+
+    await initializeAttemptDeliveryLayout({
+      attemptId,
+      testId,
+      shuffleQuestions: isShuffleEnabled(testWindowRow.shuffle_questions),
+      shuffleOptions: isShuffleEnabled(testWindowRow.shuffle_options),
+      attemptNonce,
+      connection,
+    });
+    await persistAttemptExamSnapshot({
+      attemptId,
+      testId,
+      shuffleQuestions: isShuffleEnabled(testWindowRow.shuffle_questions),
+      shuffleOptions: isShuffleEnabled(testWindowRow.shuffle_options),
+      attemptNonce,
+      testRow: testWindowRow,
+      connection,
+    });
+
+    const [[timingRow]] = await connection.query(
+      `SELECT a.started_at, a.expires_at FROM test_attempts a WHERE a.id = ? LIMIT 1`,
+      [attemptId]
+    );
+    await connection.commit();
+
+    recordAttemptCreation({ stack: 'slug', resumed: false });
+    return {
+      attemptId,
+      attemptToken: signAttemptToken({
+        attemptId,
+        testId,
+        slug: normalizedSlug,
+        nonce: attemptNonce,
+        userId: normalizedStudentId,
+        expiresAt: timingRow?.expires_at,
+        durationMinutes,
+      }),
+      testId,
+      startedAt: toAvailabilityIso(timingRow?.started_at),
+      expiresAt: toAvailabilityIso(timingRow?.expires_at),
+      startUrl: `${String(env.clientUrl || '').replace(/\/$/, '')}/tests/${normalizedSlug}/start`,
+      resumed: false,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 /**
@@ -404,6 +683,20 @@ export async function createEntitledTestAttempt({
 
   if (!normalizedSlug) {
     throw new ApiError(400, 'Cannot create test attempt without test slug');
+  }
+
+  const [accessPeek] = await mysqlPool.query(
+    `SELECT test_access_type FROM tests WHERE public_slug = ? AND deleted_at IS NULL LIMIT 1`,
+    [normalizedSlug]
+  );
+  if (isStandaloneAccessType(accessPeek[0]?.test_access_type)) {
+    return createPaidStandaloneTestAttempt({
+      slug: normalizedSlug,
+      studentId,
+      studentName,
+      ipAddress,
+      userAgent,
+    });
   }
 
   try {
@@ -440,6 +733,7 @@ export async function createEntitledTestAttempt({
 
   await checkVerifyRateLimit(normalizedSlug, ipAddress);
 
+  // Start requires student-visible access_mode (public) plus active course enrollment.
   const test = await resolveEntitledTestBySlug(normalizedSlug, verified.courseId);
   const testId = Number(test?.id);
 
@@ -447,7 +741,7 @@ export async function createEntitledTestAttempt({
     throw new ApiError(404, 'Test not found');
   }
 
-  assertTestAccessibleForEntitlement(verified, test);
+  await assertNotBlockedByExamIntegrity({ testId, userId: normalizedStudentId });
 
   logger.info('ATTEMPT_CREATE_REQUEST', {
     event: 'ATTEMPT_CREATE_REQUEST',
@@ -480,7 +774,7 @@ export async function createEntitledTestAttempt({
       throw new ApiError(404, 'Test not found');
     }
 
-    assertTestAvailabilityWindow(testWindowRow, {
+    assertTestAvailabilityWindowForTest(testWindowRow, {
       phase: AVAILABILITY_PHASE.ANY_ACCESS,
       nowMs,
       context: 'testAttempt.createEntitledTestAttempt',
@@ -502,7 +796,7 @@ export async function createEntitledTestAttempt({
       });
 
       if (!expiredNow) {
-        assertTestAvailabilityWindow(testWindowRow, {
+        assertTestAvailabilityWindowForTest(testWindowRow, {
           phase: AVAILABILITY_PHASE.IN_PROGRESS,
           nowMs,
           attemptStartedAt: activeAttempt.started_at,
@@ -562,7 +856,7 @@ export async function createEntitledTestAttempt({
       }
     }
 
-    assertTestAvailabilityWindow(testWindowRow, {
+    assertTestAvailabilityWindowForTest(testWindowRow, {
       phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
       nowMs,
       context: 'testAttempt.createEntitledTestAttempt.create',
@@ -678,6 +972,16 @@ export async function createEntitledTestAttempt({
       connection,
     });
 
+    await persistAttemptExamSnapshot({
+      attemptId,
+      testId,
+      shuffleQuestions: isShuffleEnabled(testWindowRow.shuffle_questions),
+      shuffleOptions: isShuffleEnabled(testWindowRow.shuffle_options),
+      attemptNonce,
+      testRow: testWindowRow,
+      connection,
+    });
+
     const [[timingRow]] = await connection.query(
       `SELECT a.started_at, a.expires_at
        FROM test_attempts a
@@ -789,42 +1093,97 @@ export async function createEntitledTestAttempt({
 }
 
 /**
- * Loads exam questions via question_bank composition with per-attempt delivery layout (G-RT-05).
+ * Loads exam questions from the attempt snapshot (frozen at start).
  * @param {import('./testAttempt/secureAttemptContext.js').SecureAttemptContext} ctx
  * @param {import('mysql2/promise').PoolConnection} [connection]
  */
-async function loadEntitledQuestions(ctx, connection) {
-  const composed = await loadComposedQuestionsWithAttemptLayout({
+async function loadEntitledExamSnapshot(ctx, connection) {
+  return resolveAttemptExamSnapshot({
     attemptId: ctx.attempt.id,
     testId: ctx.attempt.test_id,
-    shuffleQuestions: isShuffleEnabled(ctx.test.shuffle_questions),
-    shuffleOptions: isShuffleEnabled(ctx.test.shuffle_options),
+    examSnapshotJson: ctx.attempt.exam_snapshot_json,
     deliveryLayoutJson: ctx.attempt.delivery_layout_json,
     attemptNonce: ctx.attempt.attempt_nonce,
-    audience: 'student',
+    shuffleQuestions: isShuffleEnabled(ctx.test.shuffle_questions),
+    shuffleOptions: isShuffleEnabled(ctx.test.shuffle_options),
+    testRow: ctx.test,
     connection,
+    executor: connection,
   });
-  return mapComposedQuestionsForStudentAttempt(composed);
 }
 
 /**
  * Start attempt — load in-progress attempt + questions (getAttempt / loadQuestions).
  * @param {{ slug: string, attemptId: number, userId: number, courseId: number, entitlement?: import('./entitlement.service.js').EntitlementContext, tokenNonce?: string }}
  */
-export async function getAttemptTestForStart({ slug, attemptId, userId, courseId, entitlement, tokenNonce }) {
-  const ctx = await resolveSecureAttemptContext({
-    attemptId,
-    userId,
-    courseId,
-    slug,
-    entitlement,
-    tokenNonce,
-    requireInProgress: true,
-    auditContext: 'testAttempt.getAttemptTestForStart',
-  });
+export async function getAttemptTestForStart({
+  slug,
+  attemptId,
+  userId,
+  courseId,
+  entitlement,
+  tokenNonce,
+  guestSessionHash,
+}) {
+  let ctx;
+  try {
+    ctx = await resolveSecureAttemptContext({
+      attemptId,
+      userId,
+      courseId,
+      slug,
+      entitlement,
+      tokenNonce,
+      guestSessionHash,
+      requireInProgress: true,
+      auditContext: 'testAttempt.getAttemptTestForStart',
+    });
+  } catch (error) {
+    if (String(error?.metadata?.reason || '') !== 'exam_integrity_blocked') {
+      throw error;
+    }
+    const submitted = await submitAttempt({
+      slug,
+      attemptId,
+      userId,
+      courseId,
+      entitlement,
+      tokenNonce,
+    });
+    return {
+      submitted: true,
+      resultAvailable: submitted.resultAvailable !== false,
+      attempt: {
+        id: Number(attemptId),
+        startedAt: null,
+        expiresAt: null,
+        status: 'submitted',
+      },
+      test: {
+        title: '',
+        description: null,
+        subject: null,
+        durationMinutes: 0,
+        showExplanations: false,
+        layoutMode: 'vertical',
+        displayMode: 'all',
+        fullPageMode: false,
+        questionCount: 0,
+        sections: [],
+        questions: [],
+      },
+      savedAnswers: {},
+    };
+  }
 
-  const questions = await loadEntitledQuestions(ctx);
-  const sections = await loadTestSectionsForStudentAttempt(ctx.attempt.test_id);
+  const snapshot = await loadEntitledExamSnapshot(ctx);
+  const questions = mapComposedQuestionsForStudentAttempt(snapshotQuestionsForStudent(snapshot));
+  const sections = snapshotSectionsForStudent(snapshot);
+  const presentation = snapshot.presentation || {};
+  const resolvedPresentation = buildPresentationSettings({
+    ...ctx.test,
+    ...presentation,
+  });
   const optionStats = summarizeComposedQuestionOptions(questions);
 
   logger.info('ATTEMPT_START_QUESTIONS_LOADED', {
@@ -863,13 +1222,14 @@ export async function getAttemptTestForStart({ slug, attemptId, userId, courseId
       status: ctx.attempt.status,
     },
     test: {
-      title: ctx.test.title,
+      title: presentation.title || ctx.test.title,
       description: ctx.test.description,
       subject: ctx.test.subject,
       durationMinutes: ctx.test.duration_minutes,
       showExplanations: !!ctx.test.show_explanations,
-      layoutMode: ctx.test.layout_mode === 'horizontal' ? 'horizontal' : 'vertical',
-      displayMode: ctx.test.display_mode === 'one_per_page' ? 'one_per_page' : 'all',
+      layoutMode: resolvedPresentation.layoutMode,
+      displayMode: resolvedPresentation.displayMode,
+      fullPageMode: resolvedPresentation.fullPageMode,
       questionCount: questions.length,
       sections,
       questions,
@@ -890,6 +1250,7 @@ export async function saveAttemptAnswer({
   slug,
   entitlement,
   tokenNonce,
+  guestSessionHash,
 }) {
   const ctx = await resolveSecureAttemptContext({
     attemptId,
@@ -898,11 +1259,17 @@ export async function saveAttemptAnswer({
     slug,
     entitlement,
     tokenNonce,
+    guestSessionHash,
     requireInProgress: true,
     auditContext: 'testAttempt.saveAttemptAnswer',
   });
 
-  await assertQuestionBelongsToAttempt(ctx, questionId);
+  const snapshot = await loadEntitledExamSnapshot(ctx);
+  await assertAnswerBelongsToExamSnapshot(snapshot, {
+    attemptId: ctx.attempt.id,
+    questionId,
+    optionId: null,
+  });
 
   let selectedOptionId;
   try {
@@ -911,7 +1278,11 @@ export async function saveAttemptAnswer({
     throw new InvalidOptionError({ questionId, selectedOption, reason: 'invalid_option_id' });
   }
 
-  await assertOptionBelongsToQuestion(questionId, selectedOptionId);
+  await assertAnswerBelongsToExamSnapshot(snapshot, {
+    attemptId: ctx.attempt.id,
+    questionId,
+    optionId: selectedOptionId,
+  });
 
   await mysqlPool.query(
     `INSERT INTO student_answers (attempt_id, question_id, selected_option_id, answered_at, updated_at)
@@ -923,13 +1294,25 @@ export async function saveAttemptAnswer({
     [ctx.attempt.id, questionId, selectedOptionId]
   );
 
-  const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.saveAttemptAnswer.touch');
+  const db = ctx.paidStandalone
+    ? {
+        execute: (sql, params) => mysqlPool.execute(sql, params),
+      }
+    : createAttemptScopedQuery(ctx.entitlement, 'testAttempt.saveAttemptAnswer.touch');
+  const owner = standaloneInProgressWhere(ctx);
   await db.execute(
-    `UPDATE test_attempts a
+    ctx.paidStandalone
+      ? `UPDATE test_attempts a
+     INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+     SET a.last_activity_at = CURRENT_TIMESTAMP
+     WHERE ${owner.sql}`
+      : `UPDATE test_attempts a
      INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
      SET a.last_activity_at = CURRENT_TIMESTAMP
      WHERE a.id = ? AND a.user_id = ? AND a.status = 'in_progress'`,
-    [ctx.courseId, ctx.attempt.id, ctx.userId]
+    ctx.paidStandalone
+      ? owner.params
+      : [ctx.courseId, ctx.attempt.id, ctx.userId]
   );
 
   return { success: true };
@@ -939,7 +1322,15 @@ export async function saveAttemptAnswer({
  * Submit in-progress attempt (transaction-safe, scoped reads).
  * @param {{ attemptId: number, userId: number, courseId: number, slug: string, entitlement?: import('./entitlement.service.js').EntitlementContext, tokenNonce?: string }}
  */
-export async function submitAttempt({ attemptId, userId, courseId, slug, entitlement, tokenNonce }) {
+export async function submitAttempt({
+  attemptId,
+  userId,
+  courseId,
+  slug,
+  entitlement,
+  tokenNonce,
+  guestSessionHash,
+}) {
   const connection = await mysqlPool.getConnection();
   try {
     await connection.beginTransaction();
@@ -951,33 +1342,56 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       slug,
       entitlement,
       tokenNonce,
+      guestSessionHash,
       requireInProgress: false,
       forUpdate: true,
       connection,
       auditContext: 'testAttempt.submitAttempt',
     });
 
-    const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.submitAttempt', connection);
+    const db = ctx.paidStandalone
+      ? {
+          execute: (sql, params) => connection.execute(sql, params),
+          rows: async (sql, params) => {
+            const [r] = await connection.query(sql, params);
+            return r;
+          },
+        }
+      : createAttemptScopedQuery(ctx.entitlement, 'testAttempt.submitAttempt', connection);
 
-    const preflight = await resolveSubmitAttemptOutcome(db, {
-      attemptId: ctx.attempt.id,
-      courseId: ctx.courseId,
-      userId: ctx.userId,
-      status: ctx.attempt.status,
-      resultId: ctx.attempt.result_id,
-    });
-
-    const submitRecoveryMeta =
-      preflight.action === 'proceed' && preflight.recovered
-        ? { recovered: preflight.recovered, outcome: preflight.outcome }
-        : null;
-
-    if (preflight.action === 'complete') {
+    if (ctx.guest && ctx.attempt.status === 'submitted') {
       await connection.commit();
-      return buildSlugSubmitSuccess(ctx, preflight.resultId, {
-        recovered: preflight.recovered,
-        outcome: preflight.outcome,
+      const nextStep =
+        ctx.attempt.identity_status === FREE_SESSION_IDENTITY.ACCOUNT_PENDING ? 'account' : 'enrollment';
+      return buildSlugSubmitSuccess(ctx, null, {
+        nextStep,
+        identityStatus: ctx.attempt.identity_status || FREE_SESSION_IDENTITY.ENROLLMENT_PENDING,
       });
+    }
+
+    let submitRecoveryMeta = null;
+    if (!ctx.guest) {
+      const preflight = await resolveSubmitAttemptOutcome(db, {
+        attemptId: ctx.attempt.id,
+        courseId: ctx.courseId,
+        userId: ctx.userId,
+        status: ctx.attempt.status,
+        resultId: ctx.attempt.result_id,
+        paidStandalone: Boolean(ctx.paidStandalone),
+      });
+
+      submitRecoveryMeta =
+        preflight.action === 'proceed' && preflight.recovered
+          ? { recovered: preflight.recovered, outcome: preflight.outcome }
+          : null;
+
+      if (preflight.action === 'complete') {
+        await connection.commit();
+        return buildSlugSubmitSuccess(ctx, preflight.resultId, {
+          recovered: preflight.recovered,
+          outcome: preflight.outcome,
+        });
+      }
     }
 
     const nowMs = await getAvailabilityNowMs(connection);
@@ -989,16 +1403,9 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       });
     }
 
-    const composedQuestions = await loadComposedQuestionsWithAttemptLayout({
-      attemptId: ctx.attempt.id,
-      testId: ctx.attempt.test_id,
-      shuffleQuestions: isShuffleEnabled(ctx.test.shuffle_questions),
-      shuffleOptions: isShuffleEnabled(ctx.test.shuffle_options),
-      deliveryLayoutJson: ctx.attempt.delivery_layout_json,
-      attemptNonce: ctx.attempt.attempt_nonce,
-      audience: 'admin',
-      connection,
-    });
+    const snapshot = await loadEntitledExamSnapshot(ctx, connection);
+    const composedQuestions = snapshotQuestionsForGrading(snapshot);
+    const gradingConfig = snapshotGradingConfig(snapshot);
 
     const [answerRows] = await connection.query(
       `SELECT question_id, selected_option_id FROM student_answers WHERE attempt_id = ?`,
@@ -1008,7 +1415,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       answerRows.map((row) => [Number(row.question_id), Number(row.selected_option_id)])
     );
 
-    const negativeMarking = Number(ctx.test.negative_marking || 0);
+    const negativeMarking = Number(gradingConfig.negativeMarking || 0);
     const {
       score,
       maxScore,
@@ -1021,7 +1428,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       composedQuestions,
       answersMap,
       negativeMarking,
-      ctx.test.passing_marks
+      gradingConfig.passingMarks
     );
     const timeTakenSeconds = computeAttemptTimeTakenSeconds(ctx.attempt.started_at, nowMs);
     logAttemptTimeCalculation(logger, {
@@ -1032,17 +1439,14 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       context: 'testAttempt.submitAttempt',
     });
 
-    const studentId = assertStudentIdForAttemptInsert(
-      ctx.attempt.student_id ?? ctx.userId
-    );
     const totalQuestions = composedQuestions.length;
     const passStatus = derivePassStatus({
       score,
-      passingMarks: ctx.test.passing_marks,
+      passingMarks: gradingConfig.passingMarks,
     });
 
-    try {
-      await db.execute(INSERT_TEST_RESULT_SQL, [
+    if (ctx.guest) {
+      const pending = {
         totalQuestions,
         correctCount,
         wrongCount,
@@ -1050,16 +1454,90 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
         score,
         maxScore,
         percentage,
-        correctCount,
-        wrongCount,
-        skippedCount,
         passStatus,
         timeTakenSeconds,
-        JSON.stringify(details),
-        ctx.courseId,
-        ctx.attempt.id,
-        studentId,
-      ]);
+        details,
+      };
+      const owner = standaloneInProgressWhere(ctx);
+      const [guestSubmit] = await connection.execute(
+        `UPDATE test_attempts a
+         INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+         SET a.status = 'submitted',
+             a.submitted_at = UTC_TIMESTAMP(),
+             a.completion_reason = 'submitted',
+             a.score = ?,
+             a.percentage = ?,
+             a.time_taken_seconds = ?,
+             a.identity_status = ?,
+             a.pending_result_json = ?,
+             a.last_activity_at = CURRENT_TIMESTAMP
+         WHERE ${owner.sql}`,
+        [
+          score,
+          percentage,
+          timeTakenSeconds,
+          FREE_SESSION_IDENTITY.ENROLLMENT_PENDING,
+          JSON.stringify(pending),
+          ...owner.params,
+        ]
+      );
+      if (Number(guestSubmit?.affectedRows ?? 0) === 0) {
+        await connection.commit();
+        return buildSlugSubmitSuccess(ctx, null, {
+          nextStep: 'enrollment',
+          identityStatus: FREE_SESSION_IDENTITY.ENROLLMENT_PENDING,
+        });
+      }
+      await connection.commit();
+      return buildSlugSubmitSuccess(ctx, null, {
+        nextStep: 'enrollment',
+        identityStatus: FREE_SESSION_IDENTITY.ENROLLMENT_PENDING,
+      });
+    }
+
+    const studentId = assertStudentIdForAttemptInsert(
+      ctx.attempt.student_id ?? ctx.userId
+    );
+
+    try {
+      if (ctx.paidStandalone) {
+        await db.execute(INSERT_PAID_STANDALONE_TEST_RESULT_SQL, [
+          totalQuestions,
+          correctCount,
+          wrongCount,
+          skippedCount,
+          score,
+          maxScore,
+          percentage,
+          correctCount,
+          wrongCount,
+          skippedCount,
+          passStatus,
+          timeTakenSeconds,
+          JSON.stringify(details),
+          ctx.attempt.id,
+          studentId,
+        ]);
+      } else {
+        await db.execute(INSERT_TEST_RESULT_SQL, [
+          totalQuestions,
+          correctCount,
+          wrongCount,
+          skippedCount,
+          score,
+          maxScore,
+          percentage,
+          correctCount,
+          wrongCount,
+          skippedCount,
+          passStatus,
+          timeTakenSeconds,
+          JSON.stringify(details),
+          ctx.courseId,
+          ctx.attempt.id,
+          studentId,
+        ]);
+      }
     } catch (error) {
       if (error?.code === 'ER_DUP_ENTRY') {
         const recovery = await resolveSubmitAttemptOutcome(db, {
@@ -1068,6 +1546,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
           userId: ctx.userId,
           status: 'in_progress',
           resultId: ctx.attempt.result_id,
+          paidStandalone: Boolean(ctx.paidStandalone),
         });
         if (recovery.action === 'complete') {
           await connection.commit();
@@ -1081,13 +1560,22 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
     }
 
     const resultRows = await db.rows(
-      `SELECT r.id AS result_id
+      ctx.paidStandalone
+        ? `SELECT r.id AS result_id
+       FROM test_results r
+       INNER JOIN test_attempts a ON a.id = r.attempt_id
+       INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+       WHERE a.id = ? AND a.user_id = ?
+       ORDER BY r.id DESC LIMIT 1`
+        : `SELECT r.id AS result_id
        FROM test_results r
        INNER JOIN test_attempts a ON a.id = r.attempt_id
        INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
        WHERE a.id = ? AND a.user_id = ?
        ORDER BY r.id DESC LIMIT 1`,
-      [ctx.courseId, ctx.attempt.id, ctx.userId]
+      ctx.paidStandalone
+        ? [ctx.attempt.id, ctx.userId]
+        : [ctx.courseId, ctx.attempt.id, ctx.userId]
     );
     const resultId = resultRows[0]?.result_id;
     if (!resultId) {
@@ -1099,6 +1587,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
       courseId: ctx.courseId,
       userId: ctx.userId,
       resultId: Number(resultId),
+      paidStandalone: Boolean(ctx.paidStandalone),
     });
 
     if (affected === 0) {
@@ -1108,6 +1597,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
         userId: ctx.userId,
         status: ctx.attempt.status,
         resultId: ctx.attempt.result_id,
+        paidStandalone: Boolean(ctx.paidStandalone),
       });
       if (recovery.action === 'complete') {
         await connection.commit();
@@ -1121,6 +1611,7 @@ export async function submitAttempt({ attemptId, userId, courseId, slug, entitle
         attemptId: ctx.attempt.id,
         courseId: ctx.courseId,
         userId: ctx.userId,
+        paidStandalone: Boolean(ctx.paidStandalone),
       });
       logger.error('submitAttempt finalize returned zero affected rows', {
         event: 'SUBMIT_FINALIZE_FAILED',
@@ -1167,10 +1658,22 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
     auditContext: 'testAttempt.getAttemptResult',
   });
 
-  const db = createAttemptScopedQuery(ctx.entitlement, 'testAttempt.getAttemptResult');
-
-  const rows = await db.rows(
-    `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
+  const rows = ctx.paidStandalone
+    ? (
+        await mysqlPool.query(
+          `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
+            t.title AS test_title, t.id AS test_id,
+            t.show_result_immediately, t.show_answers_after_submit, t.show_explanations, t.results_released_at
+     FROM test_attempts a
+     INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+     INNER JOIN test_results r ON r.attempt_id = a.id
+     WHERE a.id = ? AND a.user_id = ? AND t.public_slug = ? AND a.status = 'submitted'
+     LIMIT 1`,
+          [ctx.attempt.id, ctx.userId, slug]
+        )
+      )[0]
+    : await createAttemptScopedQuery(ctx.entitlement, 'testAttempt.getAttemptResult').rows(
+        `SELECT r.id, r.score, r.max_score, r.percentage, r.correct_count, r.wrong_count, r.skipped_count, r.time_taken_seconds, r.detail_json,
             t.title AS test_title, t.id AS test_id,
             t.show_result_immediately, t.show_answers_after_submit, t.show_explanations, t.results_released_at
      FROM test_attempts a
@@ -1178,8 +1681,8 @@ export async function getAttemptResult({ slug, attemptId, userId, courseId, enti
      INNER JOIN test_results r ON r.attempt_id = a.id
      WHERE a.id = ? AND a.user_id = ? AND t.public_slug = ? AND a.status = 'submitted'
      LIMIT 1`,
-    [ctx.courseId, ctx.attempt.id, ctx.userId, slug]
-  );
+        [ctx.courseId, ctx.attempt.id, ctx.userId, slug]
+      );
 
   const row = rows[0];
   if (!row) {

@@ -6,6 +6,11 @@ import {
 import { formatSalesDateLong } from '../course/courseSalesPage';
 import StudentIcon from '../student/components/icons/StudentIcons';
 import { useStudentMyCourses } from '../student/hooks/useStudentMyCourses';
+import {
+  isCourseFinishedDisplay,
+  studentAccessLabel,
+  studentEnrollmentStatusLabel,
+} from '../student/utils/studentEnrollmentDisplay';
 import { buildEnrollmentPaymentPath } from '../utils/enrollmentPaymentRoute.js';
 import '../student/styles/student-settings.css';
 
@@ -39,8 +44,9 @@ function getCourseInitials(title) {
     .join('');
 }
 
-function accessTone(accessStatus) {
-  const status = String(accessStatus || '').toLowerCase();
+function accessTone(enrollment) {
+  if (isCourseFinishedDisplay(enrollment)) return 'sp-badge--soft-navy';
+  const status = String(enrollment?.accessStatus || '').toLowerCase();
   if (status === 'active') return 'sp-badge--soft-sage';
   if (status === 'revoked') return 'sp-badge--soft-gold';
   return 'sp-badge--soft-navy';
@@ -107,7 +113,8 @@ function SummaryStat({ label, value, hint }) {
 
 function CourseEnrollmentCard({ enrollment, delay }) {
   const title = enrollment.courseTitle || 'Untitled course';
-  const hasActiveAccess = String(enrollment.accessStatus || '').toLowerCase() === 'active';
+  const finished = isCourseFinishedDisplay(enrollment);
+  const hasActiveAccess = !finished && String(enrollment.accessStatus || '').toLowerCase() === 'active';
   const admissionsOpen = isAdmissionOpen(enrollment);
   const manualStatus = enrollment.manualPaymentStatus;
   const paymentPath = paymentActionPath(enrollment);
@@ -129,13 +136,15 @@ function CourseEnrollmentCard({ enrollment, delay }) {
             <p className="sp-label">Course</p>
             <h2 className="sp-my-courses-card__title">{title}</h2>
           </div>
-          <span className={`sp-badge ${accessTone(enrollment.accessStatus)}`}>
-            {titleCase(enrollment.accessStatus)} access
+          <span className={`sp-badge ${accessTone(enrollment)}`}>
+            {studentAccessLabel(enrollment)}
           </span>
         </div>
 
         <div className="sp-my-courses-card__badges">
-          <span className={`sp-badge sp-badge--burgundy`}>{titleCase(enrollment.status)}</span>
+          <span className={`sp-badge ${isCourseFinishedDisplay(enrollment) ? 'sp-badge--soft-navy' : 'sp-badge--burgundy'}`}>
+            {studentEnrollmentStatusLabel(enrollment)}
+          </span>
           <PaymentStatusBadge enrollment={enrollment} />
           {enrollment.admission_status ? (
             <span className={`sp-badge ${admissionsOpen ? 'sp-badge--soft-sage' : 'sp-badge--soft-gold'}`}>
@@ -178,10 +187,12 @@ function CourseEnrollmentCard({ enrollment, delay }) {
               View course details
             </Link>
           ) : null}
-          <Link to="/dashboard/lectures" className="sp-btn sp-btn--secondary sp-btn--sm">
-            Open lectures
-          </Link>
-          {!hasActiveAccess && enrollment.orderStatus !== 'paid' ? (
+          {hasActiveAccess ? (
+            <Link to="/dashboard/lectures" className="sp-btn sp-btn--secondary sp-btn--sm">
+              Open lectures
+            </Link>
+          ) : null}
+          {!hasActiveAccess && !finished && enrollment.orderStatus !== 'paid' ? (
             showManualPaymentAction ? (
               <Link
                 to={paymentPath}

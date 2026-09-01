@@ -25,9 +25,11 @@ export function buildScoreChartData(items, averagePercentage = null) {
 export function buildDistributionChartData(statistics, items = []) {
   const passed = Number(statistics?.passedTests ?? 0);
   const failed = Number(statistics?.failedTests ?? 0);
-  const total = Number(statistics?.totalTests ?? items.length ?? 0);
-  const pendingFromItems = items.filter((item) => !item.resultAvailable).length;
-  const pending = Math.max(total - passed - failed, pendingFromItems, 0);
+  const pending = Number(
+    statistics?.pendingTests ??
+      Math.max(Number(statistics?.totalTests ?? 0) - passed - failed, 0)
+  );
+  const total = Number(statistics?.totalTests ?? passed + failed + pending);
 
   const slices = [
     { key: 'passed', label: 'Passed', value: passed, color: '#10B981' },

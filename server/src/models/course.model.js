@@ -46,6 +46,7 @@ export const COURSE_MODEL_FIELDS = Object.freeze([
   'start_date',
   'end_date',
   'admission_status',
+  'finished_at',
   'created_at',
   'updated_at',
 ]);

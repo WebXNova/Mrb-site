@@ -87,9 +87,24 @@ export {
 } from './protectedTableRegistry.js';
 export {
   resolveEntitledTestBySlug,
+  resolveEntitledTestById,
   assertTestAccessibleForEntitlement,
   OrphanTestAccessDeniedError,
 } from './testEntitlement.service.js';
+export {
+  isCourseLinkedTest,
+  shouldEnforceScheduleWindow,
+  isPublicAccessMode,
+  assertCourseLinkedTestReleasedToStudents,
+  COURSE_LINKED_STUDENT_VISIBLE_SQL,
+  COURSE_LINKED_ACCESS_TYPE_SQL,
+  assertCourseLinkedTestEligible,
+  assertCourseLinkedTestCourseMatch,
+  assertCourseLinkedTestMetaAccessible,
+  loadCourseLinkedTestAccessRowBySlug,
+  resolveEntitledCourseLinkedTestBySlug,
+  resolveEntitledCourseLinkedTestById,
+} from './courseLinkedTestAccess.service.js';
 export {
   CEE_VIOLATION_TYPES,
   CEE_VIOLATION_SIEM_TAG,

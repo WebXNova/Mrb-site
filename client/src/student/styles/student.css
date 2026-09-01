@@ -9,7 +9,7 @@
 }
 
 .student-content {
-  padding: 1.25rem 1.5rem 5.5rem;
+  padding: 1rem 1.25rem 5rem;
 }
 
 .student-brand {
@@ -39,7 +39,7 @@
 .student-nav__item {
   color: rgba(255, 255, 255, 0.9);
   text-decoration: none;
-  padding: var(--space-3) var(--space-4);
+  padding: 0.4rem 0.65rem;
   border-radius: var(--radius-md);
   transition: var(--transition-base);
 }
@@ -53,7 +53,7 @@
 }
 
 .student-content {
-  padding: 1.25rem 1.5rem 5.5rem;
+  padding: 1rem 1.25rem 5rem;
 }
 
 .student-topbar {
@@ -606,7 +606,7 @@
 
 .student-lecture-player__title {
   margin: 0.35rem 0 0;
-  font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
   line-height: 1.25;
   color: var(--color-ink-900);
 }
@@ -767,8 +767,8 @@
   text-decoration: none;
   color: var(--color-ink-500);
   text-align: center;
-  padding: 0.85rem 0.25rem;
-  font-size: var(--fs-13);
+  padding: 0.55rem 0.2rem;
+  font-size: 0.6875rem;
   font-weight: var(--fw-semibold);
 }
 
@@ -782,8 +782,8 @@
   }
 
   .student-content {
-    padding: var(--space-4);
-    padding-bottom: 5.5rem;
+    padding: 1rem;
+    padding-bottom: 5rem;
   }
 
   .student-feature-grid {

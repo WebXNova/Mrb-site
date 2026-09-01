@@ -122,6 +122,7 @@ export function normalizeCourseRow(row) {
     start_date: row.start_date ?? null,
     end_date: row.end_date ?? null,
     admission_status: row.admission_status ?? 'CLOSED',
+    finished_at: row.finished_at ?? null,
     created_at: row.created_at ?? null,
     updated_at: row.updated_at ?? null,
   };
@@ -171,6 +172,8 @@ export function toCourseAdminApi(n, extras = {}) {
     ...pub,
     is_active: n.is_active,
     created_by: n.created_by != null && Number.isFinite(Number(n.created_by)) ? Number(n.created_by) : null,
+    is_finished: n.finished_at != null && String(n.finished_at).trim() !== '',
+    finished_at: n.finished_at ?? null,
     categories,
     category_ids: categories.map((c) => Number(c.id)),
     /** Admin-only advisory — admissions still OPEN after course end_date */

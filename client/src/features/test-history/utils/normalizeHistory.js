@@ -29,6 +29,7 @@ export function normalizeHistoryPayload(payload) {
       totalTests: Number(data.statistics?.totalTests ?? 0),
       passedTests: Number(data.statistics?.passedTests ?? 0),
       failedTests: Number(data.statistics?.failedTests ?? 0),
+      pendingTests: Number(data.statistics?.pendingTests ?? 0),
       averagePercentage:
         data.statistics?.averagePercentage == null
           ? null

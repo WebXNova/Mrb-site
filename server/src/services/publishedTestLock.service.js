@@ -1,20 +1,20 @@
 /**
- * Published Test Lock — single authority for read-only enforcement.
+ * Published Test Lock — authority for operations that must stay unpublished-only.
  *
- * ENFORCEMENT STACK (all layers required; no client-only protection):
- *   API       — requireUnpublishedTest middleware on wizard + quiz-draft mutations
- *   Service   — enforceUnpublishedTest / assertTestUnpublished in wizard, draft, delete
- *   Questions — enforceQuestionBankMutationAllowed on linked question_bank rows
+ * Publishing does NOT make the test immutable for authorized admins.
+ * In-place admin edits (basic-info, rules, settings, quiz-draft PUT) go through
+ * publishedTestEdit.service.js and keep status = published.
  *
- * BLOCKED when status = published (unless published edit flow with confirmation):
- *   - basic-info, rules, settings updates without confirm_published_edit
- *   - quiz-draft create/update/delete without confirm_published_edit
- *   - test delete
- *   - question bank edit/delete for linked rows
+ * STILL BLOCKED when status = published:
+ *   - DELETE test
+ *   - legacy PUT /admin/tests/:id
+ *   - DELETE quiz-draft
+ *   - question-bank edit/delete for rows linked to a published test
  *
- * ALLOWED:
- *   - GET test, rules, settings, completeness, linked questions
- *   - GET quiz-draft (view)
+ * ALLOWED for authorized admins while published:
+ *   - PATCH basic-info, rules, settings
+ *   - PUT quiz-draft (rematerializes runtime questions)
+ *   - GET test, rules, settings, completeness, linked questions, quiz-draft
  *   - duplicate, results export, student preview
  */
 
@@ -76,7 +76,7 @@ export function assertTestUnpublished(testRow, audit = {}) {
   });
 
   throw new AppError({
-    message: 'Published tests are read-only. Duplicate the test to make changes.',
+    message: 'This action is not allowed on a published test. Duplicate the test or edit it in place from the admin editor.',
     errorCode: TEST_IS_LOCKED,
     httpStatus: 409,
     isOperational: true,

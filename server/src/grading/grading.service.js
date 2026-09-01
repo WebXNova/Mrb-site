@@ -5,6 +5,12 @@
  * Idempotent: existing result rows are returned without re-grading.
  */
 
+import {
+  parseExamSnapshot,
+  resolveAttemptExamSnapshot,
+  snapshotGradingConfig,
+  snapshotToGradingQuestionRows,
+} from '../services/attemptExamSnapshot.service.js';
 import { mysqlPool } from '../config/mysql.js';
 import { ATTEMPT_DB_STATUS } from '../attempt/attempt.constants.js';
 import { StructuredLogger } from '../utils/requestId.js';
@@ -17,7 +23,6 @@ import {
 import {
   findExistingResult,
   insertGradingResult,
-  loadGradingQuestionRows,
   lockSubmittedAttempt,
 } from './grading.repository.js';
 import { calculateMarksBasedResult, normalizeEffectiveMarks } from './gradingCalculation.js';
@@ -189,7 +194,29 @@ async function runGradingPipeline(attemptId, db) {
     return toResultResponse(existing);
   }
 
-  const questionRows = await loadGradingQuestionRows(db, aid, Number(attemptRow.test_id));
+  const snapshotConnection = typeof db.release === 'function' ? db : undefined;
+  const snapshot =
+    parseExamSnapshot(attemptRow.exam_snapshot_json) ??
+    (await resolveAttemptExamSnapshot({
+      attemptId: aid,
+      testId: Number(attemptRow.test_id),
+      examSnapshotJson: attemptRow.exam_snapshot_json,
+      connection: snapshotConnection,
+      executor: db,
+    }));
+
+  const [answerRows] = await db.query(
+    `SELECT question_id, selected_option_id FROM student_answers WHERE attempt_id = ?`,
+    [aid]
+  );
+  const questionRows = snapshotToGradingQuestionRows(snapshot, answerRows);
+  const grading = snapshotGradingConfig(snapshot);
+  const gradingAttemptRow = {
+    ...attemptRow,
+    passing_marks: grading.passingMarks,
+    negative_marking: grading.negativeMarking,
+  };
+
   if (!questionRows.length) {
     throw new GradingDataMissingError({
       attemptId: aid,
@@ -198,7 +225,7 @@ async function runGradingPipeline(attemptId, db) {
     });
   }
 
-  const context = buildGradingContext(attemptRow, questionRows);
+  const context = buildGradingContext(gradingAttemptRow, questionRows);
   const calculated = calculateResult({
     questions: context.questions,
     testConfig: context.testConfig,

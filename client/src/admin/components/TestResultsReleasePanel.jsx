@@ -2,16 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import AdminConfirmDialog from './AdminConfirmDialog';
-
-function formatReleasedAt(iso) {
-  if (!iso) return 'Not Released';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return 'Not Released';
-  return `Released on ${date.toLocaleString()}`;
-}
+import { formatAdminDateTime } from '../utils/testAdminDisplay.js';
 
 /**
- * Manual result release control — shared by Publish and Results pages.
+ * Manual result publication control — shared by Publish and Results pages.
  */
 export default function TestResultsReleasePanel({
   testId,
@@ -41,7 +35,7 @@ export default function TestResultsReleasePanel({
       setConfirmAction(null);
       onChanged?.(next);
     } catch (err) {
-      setError(err.message || 'Failed to release results.');
+      setError(err.message || 'Could not publish results. Try again.');
     } finally {
       setBusy(false);
     }
@@ -56,7 +50,7 @@ export default function TestResultsReleasePanel({
       setConfirmAction(null);
       onChanged?.(null);
     } catch (err) {
-      setError(err.message || 'Failed to unrelease results.');
+      setError(err.message || 'Could not hide results. Try again.');
     } finally {
       setBusy(false);
     }
@@ -69,10 +63,12 @@ export default function TestResultsReleasePanel({
       <div className="admin-test-release-panel__header">
         <div>
           <h3 id="admin-test-release-heading" className="heading-5" style={{ margin: 0 }}>
-            Results Released
+            {isReleased ? 'Results published' : 'Results pending'}
           </h3>
           <p className="admin-field__hint" style={{ margin: 'var(--space-1) 0 0' }}>
-            {formatReleasedAt(releasedAt ?? resultsReleasedAt)}
+            {isReleased
+              ? `Published ${formatAdminDateTime(releasedAt ?? resultsReleasedAt)}. Students can see scores according to review settings. No email is sent.`
+              : 'Students cannot see scores, answers, or explanations until you publish results. Publication happens inside MRB — no email is sent.'}
           </p>
         </div>
         {!disabled ? (
@@ -83,7 +79,7 @@ export default function TestResultsReleasePanel({
               onClick={() => setConfirmAction('unrelease')}
               disabled={busy}
             >
-              Unrelease Results
+              Hide results
             </button>
           ) : (
             <button
@@ -92,7 +88,7 @@ export default function TestResultsReleasePanel({
               onClick={() => setConfirmAction('release')}
               disabled={busy}
             >
-              Release Results
+              Publish results
             </button>
           )
         ) : null}
@@ -102,9 +98,9 @@ export default function TestResultsReleasePanel({
 
       <AdminConfirmDialog
         open={confirmAction === 'release'}
-        title="Release results to students?"
-        message="All submitted attempts for this test will become visible to students. You can hide them again with Unrelease if needed."
-        confirmLabel="Release Results"
+        title="Publish results to students?"
+        message="Submitted attempts for this test will become visible to students on the MRB website, according to the review settings (score, answers, explanations). No email is sent. You can hide results again later if needed."
+        confirmLabel="Publish results"
         cancelLabel="Cancel"
         busy={busy}
         onConfirm={handleRelease}
@@ -114,8 +110,8 @@ export default function TestResultsReleasePanel({
       <AdminConfirmDialog
         open={confirmAction === 'unrelease'}
         title="Hide results from students?"
-        message="Students will no longer see scores, answer review, or explanations until you release results again."
-        confirmLabel="Unrelease Results"
+        message="Students will no longer see scores, answer review, or explanations until you publish results again."
+        confirmLabel="Hide results"
         cancelLabel="Cancel"
         danger
         busy={busy}

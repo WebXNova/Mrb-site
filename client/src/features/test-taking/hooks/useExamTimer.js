@@ -44,7 +44,17 @@ export function useExamTimer(expiresAtIso, { onExpire, enabled = true } = {}) {
 
     tick();
     const intervalId = window.setInterval(tick, 1000);
-    return () => window.clearInterval(intervalId);
+    const resync = () => {
+      if (document.visibilityState === 'hidden') return;
+      tick();
+    };
+    document.addEventListener('visibilitychange', resync);
+    window.addEventListener('focus', resync);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', resync);
+      window.removeEventListener('focus', resync);
+    };
   }, [enabled, expiresAtIso]);
 
   const formatted = secondsRemaining == null ? '--:--' : formatExamTime(secondsRemaining);
@@ -206,11 +216,9 @@ export function useAnswerAutosave({
 
   return {
     selectAnswer,
-    selectAnswer,
     saveStatus,
     saveError,
     hasPendingSaves,
-    retryFailedSaves: flushQueue,
     retryFailedSaves: flushQueue,
     flushPendingSaves,
     resumeAutosave,

@@ -11,6 +11,7 @@ export const LOCK_SUBMITTED_ATTEMPT_SQL = `
     a.status,
     a.started_at,
     a.submitted_at,
+    a.exam_snapshot_json,
     TIMESTAMPDIFF(SECOND, a.started_at, a.submitted_at) AS time_taken_seconds,
     t.course_id,
     t.passing_marks,

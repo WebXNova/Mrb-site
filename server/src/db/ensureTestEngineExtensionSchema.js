@@ -233,6 +233,20 @@ async function ensureTestsExtensionColumns(pool, db, { dryRun = false } = {}) {
     }
   }
 
+  if (!dryRun && (await columnExists(pool, db, 'tests', 'layout_mode')) && (await columnExists(pool, db, 'tests', 'display_mode'))) {
+    const [syncResult] = await pool.query(
+      `UPDATE tests
+       SET display_mode = IF(layout_mode = 'horizontal' OR display_mode = 'one_per_page', 'one_per_page', 'all'),
+           layout_mode = IF(layout_mode = 'horizontal' OR display_mode = 'one_per_page', 'horizontal', 'vertical')
+       WHERE (layout_mode = 'horizontal') <> (display_mode = 'one_per_page')`
+    );
+    const synced = Number(syncResult?.affectedRows ?? 0);
+    if (synced > 0) {
+      applied.push({ table: 'tests', action: 'sync_display_mode', rows: synced });
+      console.log(`[schema] Synced tests.display_mode with layout_mode (${synced} rows)`);
+    }
+  }
+
   return applied;
 }
 

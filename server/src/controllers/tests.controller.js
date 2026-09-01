@@ -22,7 +22,7 @@ import {
   updateTestSettings,
 } from '../services/test.service.js';
 import { getTestResultsAnalytics } from '../services/testResultsAnalytics.service.js';
-import { listAdminTestResults } from '../services/testResultsList.service.js';
+import { getAdminTestAttemptResult, listAdminTestResults } from '../services/testResultsList.service.js';
 import {
   releaseTestResults,
   unreleaseTestResults,
@@ -49,7 +49,11 @@ import {
   logSecurityEventFromRequest,
   TEST_SECURITY_ACTIONS,
 } from '../services/testSecurityAudit.service.js';
-import { assertTestCompletenessAccess } from '../services/testMutationAccess.service.js';
+import {
+  assertTestCompletenessAccess,
+  assertTestMutationAccess,
+  assertTestReadAccess,
+} from '../services/testMutationAccess.service.js';
 import { extractPublishedEditControls } from '../services/publishedTestEdit.service.js';
 import { parseAdminListFilters, resolveHierarchyCourseScope } from '../utils/parseAdminListFilters.js';
 import { mysqlPool } from '../config/mysql.js';
@@ -98,6 +102,7 @@ export const getTests = asyncHandler(async (req, res) => {
 
 export const getTest = asyncHandler(async (req, res) => {
   const testId = parseTestIdParam(req.params);
+  await assertTestReadAccess(testId, req.user?.id, req.user?.role);
   const test = await getTestById(testId);
   if (!test) {
     throw new ApiError(404, 'Test not found');
@@ -153,6 +158,7 @@ export const patchTestBasicInfo = asyncHandler(async (req, res) => {
     metadata: {
       courseId: parsed.data.course_id,
       testType: parsed.data.test_type,
+      testAccessType: parsed.data.test_access_type,
     },
   });
 
@@ -194,6 +200,7 @@ export const postTest = asyncHandler(async (req, res) => {
     metadata: {
       courseId: parsed.data.course_id,
       testType: parsed.data.test_type,
+      testAccessType: parsed.data.test_access_type,
     },
   });
 
@@ -210,6 +217,7 @@ function parseTestIdParam(params) {
 
 export const getTestRules = asyncHandler(async (req, res) => {
   const testId = parseTestIdParam(req.params);
+  await assertTestReadAccess(testId, req.user?.id, req.user?.role);
   const rules = await getTestRulesById(testId);
   sendSuccess(res, rules);
 });
@@ -274,6 +282,7 @@ export const getTestCompletenessHandler = asyncHandler(async (req, res) => {
 
 export const getTestSettings = asyncHandler(async (req, res) => {
   const testId = parseTestIdParam(req.params);
+  await assertTestReadAccess(testId, req.user?.id, req.user?.role);
   const settings = await getTestSettingsById(testId);
   sendSuccess(res, settings);
 });
@@ -452,8 +461,10 @@ export const getTestResultsExport = asyncHandler(async (req, res) => {
 });
 
 export const getTestResultsAnalyticsHandler = asyncHandler(async (req, res) => {
-  const testId = Number(req.params.testId);
-  if (!testId) throw new ApiError(400, 'Invalid test id');
+  const testId = parseTestIdParam(req.params);
+  await assertTestMutationAccess(testId, req.user?.id, req.user?.role, {
+    action: 'results_analytics',
+  });
   const analytics = await getTestResultsAnalytics(testId);
   if (!analytics) throw new ApiError(404, 'Test not found');
   sendSuccess(res, analytics);
@@ -462,7 +473,30 @@ export const getTestResultsAnalyticsHandler = asyncHandler(async (req, res) => {
 export const getTestResultsListHandler = asyncHandler(async (req, res) => {
   const testId = Number(req.params.testId);
   if (!testId) throw new ApiError(400, 'Invalid test id');
-  const payload = await listAdminTestResults(testId, {
+  const payload = await listAdminTestResults(
+    testId,
+    {
+      userId: req.user?.id,
+      role: req.user?.role,
+    },
+    {
+      page: req.query.page,
+      limit: req.query.limit,
+      q: req.query.q,
+      sort: req.query.sort,
+      dir: req.query.dir,
+    }
+  );
+  sendSuccess(res, payload);
+});
+
+export const getTestResultAttemptHandler = asyncHandler(async (req, res) => {
+  const testId = Number(req.params.testId);
+  const attemptId = Number(req.params.attemptId);
+  if (!Number.isInteger(testId) || testId <= 0 || !Number.isInteger(attemptId) || attemptId <= 0) {
+    throw new ApiError(400, 'Invalid id');
+  }
+  const payload = await getAdminTestAttemptResult(testId, attemptId, {
     userId: req.user?.id,
     role: req.user?.role,
   });

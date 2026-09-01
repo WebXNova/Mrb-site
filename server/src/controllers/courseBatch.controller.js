@@ -13,6 +13,7 @@ import {
 } from '../services/courseBatch.service.js';
 import { courseBatchCreateBodySchema, courseBatchUpdateBodySchema } from '../validators/courseBatch.schema.js';
 import { isAdminRole } from '../utils/isAdminRole.js';
+import { assertPublicCourseReadable } from '../services/coursePublicVisibility.service.js';
 
 function invalidCourseId() {
   return new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
@@ -147,6 +148,7 @@ export const postAdminBatchReactivate = asyncHandler(async (req, res) => {
 export const getPublicCourseBatches = asyncHandler(async (req, res) => {
   const courseId = Number(req.params.courseId);
   if (!Number.isFinite(courseId) || courseId <= 0) throw invalidCourseId();
+  await assertPublicCourseReadable(courseId, req);
   const data = await listPublicCourseBatches(courseId);
   sendSuccess(res, data);
 });

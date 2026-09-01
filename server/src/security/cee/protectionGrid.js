@@ -72,6 +72,7 @@ function buildProtectionGridRules() {
     { pattern: /^\/api\/courses\/categories$/i, policy: 'public', label: 'courses_public_categories' },
     { pattern: /^\/api\/courses\/\d+\/batches$/i, policy: 'public', label: 'course_batches_public' },
     { pattern: /^\/api\/courses\/\d+\/subjects$/i, policy: 'public', label: 'course_subjects_public' },
+    { pattern: /^\/api\/courses\/\d+\/leaderboard$/i, policy: 'identity_only', label: 'student_course_leaderboard' },
     { pattern: /^\/api\/courses\/\d+\/lectures\/\d+\/notes$/i, policy: 'identity_only', label: 'student_course_lecture_notes' },
     { pattern: /^\/api\/courses\/\d+\/chapters\/\d+\/notes$/i, policy: 'identity_only', label: 'student_course_chapter_notes' },
     { pattern: /^\/api\/courses\/\d+\/subjects\/\d+\/notes$/i, policy: 'identity_only', label: 'student_course_subject_notes' },
@@ -94,6 +95,14 @@ function buildProtectionGridRules() {
   }
 
   rules.push(
+    { pattern: /^\/api\/standalone-tests\/catalog$/i, policy: 'public', label: 'standalone_tests_catalog' },
+    { pattern: /^\/api\/standalone-tests\/free-catalog$/i, policy: 'public', label: 'standalone_tests_free_catalog' },
+    { pattern: /^\/api\/standalone-tests\/my-tests$/i, policy: 'identity_only', label: 'standalone_my_tests' },
+    { pattern: /^\/api\/standalone-tests\/my-results$/i, policy: 'identity_only', label: 'standalone_my_results' },
+    { pattern: /^\/api\/standalone-tests\/public\/[^/]+$/i, policy: 'public', label: 'standalone_tests_public' },
+    { pattern: /^\/api\/standalone-tests\/[^/]+\/free-session\/claim$/i, policy: 'identity_only', label: 'standalone_free_session_claim' },
+    { pattern: /^\/api\/standalone-tests\/[^/]+\/free-session(?:\/|$)/i, policy: 'public', label: 'standalone_free_session' },
+    { pattern: /^\/api\/standalone-tests(?:\/|$)/i, policy: 'identity_only', label: 'standalone_tests' },
     { pattern: /^\/api\/enrollments(?:\/|$)/i, policy: 'identity_only', label: 'enrollments' },
     { pattern: /^\/api\/payments\/create-session$/i, policy: 'identity_only', label: 'payments_create_session' },
     { pattern: /^\/api\/payments\/manual(?:\/|$)/i, policy: 'identity_only', label: 'payments_manual' },

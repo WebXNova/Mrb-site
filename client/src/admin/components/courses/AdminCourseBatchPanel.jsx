@@ -7,13 +7,12 @@ import {
   batchStatusBadgeClass,
   batchStatusLabel,
   formatSeatLine,
-  fromLocalDatetimeValue,
-  toLocalDatetimeValue,
 } from '../../../course/batchPresentation';
 import AdminToggleSwitch from './AdminToggleSwitch';
 import PremiumFormField from './PremiumFormField';
 import AdminLoadingButton from '../AdminLoadingButton';
 import CourseAdmissionStatusField from '../../course-wizard/CourseAdmissionStatusField';
+import CourseLifecyclePanel from './CourseLifecyclePanel';
 import AdmissionStaleWarning from './AdmissionStaleWarning';
 import { computeAdmissionStale } from '../../utils/courseStaleAdvisory';
 import { toDateInputValue } from '../../course-wizard/courseScheduleValidation';
@@ -61,7 +60,9 @@ export default function AdminCourseBatchPanel({
   onBatchesChange,
   admissionStatus = 'CLOSED',
   courseEndDate = null,
+  isFinished = false,
   onAdmissionUpdated,
+  onCourseFinished,
 }) {
   const toast = useAdminToast();
   const [batches, setBatches] = useState([]);
@@ -138,18 +139,15 @@ export default function AdminCourseBatchPanel({
     }
   }
 
-  async function saveAdmissionStatus(courseDates = {}) {
+  async function saveAdmissionStatus() {
     setSavingAdmission(true);
     setError('');
     try {
       await adminApi.updateCourse(token, courseId, {
         admission_status: admission,
-        ...(courseDates.start_date !== undefined ? { start_date: courseDates.start_date } : {}),
-        ...(courseDates.end_date !== undefined ? { end_date: courseDates.end_date } : {}),
       });
       onAdmissionUpdated?.({
         admission_status: admission,
-        ...courseDates,
       });
       setSuccess('Admission settings saved.');
       toast.success('Admission settings saved.');
@@ -171,8 +169,8 @@ export default function AdminCourseBatchPanel({
       const payload = {
         title: form.title.trim(),
         code: editingId ? form.code.trim() : CREATE_CODE_PLACEHOLDER,
-        start_date: form.start_date.trim(),
-        end_date: form.end_date.trim(),
+        start_date: form.start_date.trim() || null,
+        end_date: form.end_date.trim() || null,
         total_seats: Number(form.total_seats),
         timezone: form.timezone,
         status: form.status,
@@ -192,13 +190,9 @@ export default function AdminCourseBatchPanel({
       }
       await adminApi.updateCourse(token, courseId, {
         admission_status: admission,
-        start_date: toDateInputValue(form.start_date) || null,
-        end_date: toDateInputValue(form.end_date) || null,
       });
       onAdmissionUpdated?.({
         admission_status: admission,
-        start_date: toDateInputValue(form.start_date) || null,
-        end_date: toDateInputValue(form.end_date) || null,
       });
       const successMessage = editingId ? 'Batch and admission settings saved.' : 'Batch created.';
       setSuccess(successMessage);
@@ -283,7 +277,7 @@ export default function AdminCourseBatchPanel({
               admissionStatus={admission}
               onChange={(e) => setAdmission(e.target.value)}
             />
-            {hasBatch && !editingId ? (
+            {!editingId ? (
               <div className="course-edit-admission-actions">
                 <AdminLoadingButton
                   type="button"
@@ -297,6 +291,22 @@ export default function AdminCourseBatchPanel({
               </div>
             ) : null}
           </div>
+
+          <CourseLifecyclePanel
+            token={token}
+            courseId={courseId}
+            isFinished={isFinished}
+            disabled={saving || savingAdmission || Boolean(busyId)}
+            onFinished={(payload) => {
+              onCourseFinished?.(payload);
+              onAdmissionUpdated?.({
+                admission_status: payload?.admission_status || 'CLOSED',
+                is_finished: true,
+                finished_at: payload?.course?.finished_at ?? payload?.finished_at ?? new Date().toISOString(),
+              });
+              loadBatches();
+            }}
+          />
 
           {hasBatch && !editingId ? (
             <div className="course-batch-summary">
@@ -315,13 +325,6 @@ export default function AdminCourseBatchPanel({
                   <span className="course-batch-summary__label">Status</span>
                   <span className={batchStatusBadgeClass(currentBatch.status)}>
                     {batchStatusLabel(currentBatch.status)}
-                  </span>
-                </div>
-                <div className="course-batch-summary__item">
-                  <span className="course-batch-summary__label">Delivery window</span>
-                  <span className="course-batch-summary__value">
-                    {toLocalDatetimeValue(currentBatch.start_date) || '—'} →{' '}
-                    {toLocalDatetimeValue(currentBatch.end_date) || '—'}
                   </span>
                 </div>
                 <div className="course-batch-summary__item">
@@ -438,32 +441,8 @@ export default function AdminCourseBatchPanel({
               </div>
 
               <div className="course-edit-form__group">
-                <h3 className="course-edit-form__group-title">Course schedule</h3>
+                <h3 className="course-edit-form__group-title">Seats & timezone</h3>
                 <div className="premium-form-grid premium-form-grid--2col">
-                  <PremiumFormField id="batch_start" label="Course start date & time" required>
-                    <input
-                      id="batch_start"
-                      className="premium-field__input"
-                      type="datetime-local"
-                      value={toLocalDatetimeValue(form.start_date)}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, start_date: fromLocalDatetimeValue(e.target.value) }))
-                      }
-                      required
-                    />
-                  </PremiumFormField>
-                  <PremiumFormField id="batch_end" label="Course end date & time" required>
-                    <input
-                      id="batch_end"
-                      className="premium-field__input"
-                      type="datetime-local"
-                      value={toLocalDatetimeValue(form.end_date)}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, end_date: fromLocalDatetimeValue(e.target.value) }))
-                      }
-                      required
-                    />
-                  </PremiumFormField>
                   <PremiumFormField id="batch_timezone" label="Timezone">
                     <select
                       id="batch_timezone"
@@ -495,7 +474,7 @@ export default function AdminCourseBatchPanel({
               </div>
 
               <div className="course-edit-form__group">
-                <h3 className="course-edit-form__group-title">Lifecycle & visibility rules</h3>
+                <h3 className="course-edit-form__group-title">Batch status & delivery</h3>
                 <div className="premium-form-grid premium-form-grid--2col">
                   <PremiumFormField id="batch_status" label="Status">
                     <select

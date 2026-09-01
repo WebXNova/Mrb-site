@@ -1,5 +1,3 @@
-import { toDateInputValue } from './courseScheduleValidation.js';
-
 export default function CourseStepReview({
   course,
   pricing,
@@ -29,11 +27,6 @@ export default function CourseStepReview({
       <ul className="admin-courses__muted">
         <li>
           <strong>Status:</strong> {course.admission_status || 'CLOSED'}
-        </li>
-        <li>
-          <strong>Course dates:</strong>{' '}
-          {toDateInputValue(batches[0]?.start_date) || toDateInputValue(course.start_date) || 'Not set'} →{' '}
-          {toDateInputValue(batches[0]?.end_date) || toDateInputValue(course.end_date) || 'Not set'}
         </li>
       </ul>
       <h4 className="heading-4">Pricing</h4>

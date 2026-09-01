@@ -11,10 +11,18 @@ function isStaffPanelPath(pathname) {
   return path === adminBase || path.startsWith(`${adminBase}/`);
 }
 
+function isExamTakingPath(pathname) {
+  const path = String(pathname || '');
+  return (
+    /^\/tests\/[^/]+\/start\/?$/.test(path) ||
+    /^\/free-test\/[^/]+\/start\/?$/.test(path)
+  );
+}
+
 export default function MobileWhatsAppButton() {
   const { pathname } = useLocation();
 
-  if (isStaffPanelPath(pathname)) {
+  if (isStaffPanelPath(pathname) || isExamTakingPath(pathname)) {
     return null;
   }
 

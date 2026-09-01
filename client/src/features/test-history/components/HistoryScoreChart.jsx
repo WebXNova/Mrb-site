@@ -71,7 +71,7 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
           position: 'top',
           align: 'end',
           labels: {
-            color: isDark ? '#8ba3c7' : '#CBD5E1',
+            color: isDark ? '#CBD5E1' : '#334155',
             boxWidth: 12,
             boxHeight: 12,
             usePointStyle: true,
@@ -104,7 +104,7 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
       scales: {
         x: {
           ticks: {
-            color: isDark ? '#8ba3c7' : '#94A3B8',
+            color: isDark ? '#CBD5E1' : '#475569',
             maxRotation: 45,
             minRotation: 0,
           },
@@ -114,7 +114,7 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
           min: 0,
           max: 100,
           ticks: {
-            color: isDark ? '#8ba3c7' : '#94A3B8',
+            color: isDark ? '#CBD5E1' : '#475569',
             callback: (value) => `${value}%`,
           },
           grid: { color: isDark ? 'rgba(30, 64, 91, 0.3)' : 'rgba(148, 163, 184, 0.12)' },
@@ -126,7 +126,7 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
 
   if (!chartData.labels.length) {
     return (
-      <div className="th-chart-card th-chart-card--dark">
+      <div className="th-chart-card">
         <h3 className="th-chart-card__title">Score by test</h3>
         <p className="th-chart-card__empty">No graded results to chart yet.</p>
       </div>
@@ -134,7 +134,7 @@ export default function HistoryScoreChart({ items, averagePercentage = null }) {
   }
 
   return (
-    <div className="th-chart-card th-chart-card--dark">
+    <div className="th-chart-card">
       <h3 className="th-chart-card__title">Score by test</h3>
       <p className="th-chart-card__subtitle">Percentage obtained per test title</p>
       <div className="th-chart-card__canvas">

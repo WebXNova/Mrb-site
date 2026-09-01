@@ -10,6 +10,7 @@ import { adminApi } from '../../api/adminApi';
 import { getAdminToken } from '../../auth/session';
 import AdminSearchField from '../components/AdminSearchField';
 import AdminSectionErrorBoundary from '../components/AdminSectionErrorBoundary';
+import AdminConfirmDialog from '../components/AdminConfirmDialog';
 import AdminTestMobileCard from '../components/AdminTestMobileCard';
 import TestsListTable from '../components/TestsListTable';
 import TestsCourseIdTags from '../components/TestsCourseIdTags';
@@ -59,6 +60,7 @@ function AdminTestsPageContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [accessType, setAccessType] = useState('all');
   const [page, setPage] = useState(1);
   const [listTotal, setListTotal] = useState(0);
   const [sortBy, setSortBy] = useState('updated_at');
@@ -67,6 +69,8 @@ function AdminTestsPageContent() {
   const [busyAction, setBusyAction] = useState('');
   const publishInFlightRef = useRef(null);
   const [publishModalTest, setPublishModalTest] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
@@ -78,7 +82,7 @@ function AdminTestsPageContent() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, selectedCourseId, selectedSubjectId, dateFrom, dateTo, sortBy, sortDirection]);
+  }, [debouncedSearch, selectedCourseId, selectedSubjectId, dateFrom, dateTo, accessType, sortBy, sortDirection]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -86,7 +90,7 @@ function AdminTestsPageContent() {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [currentPage, debouncedSearch, selectedCourseId, selectedSubjectId, dateFrom, dateTo]);
+  }, [currentPage, debouncedSearch, selectedCourseId, selectedSubjectId, dateFrom, dateTo, accessType]);
 
   const loadTests = useCallback(async () => {
     const response = await adminApi.tests(token, {
@@ -95,6 +99,7 @@ function AdminTestsPageContent() {
       search: debouncedSearch || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
+      accessType: accessType !== 'all' ? accessType : undefined,
       sortBy,
       sortDirection,
       limit: PAGE_SIZE,
@@ -116,6 +121,7 @@ function AdminTestsPageContent() {
     debouncedSearch,
     dateFrom,
     dateTo,
+    accessType,
     sortBy,
     sortDirection,
     currentPage,
@@ -133,6 +139,7 @@ function AdminTestsPageContent() {
     if (urlFilters.search) setSearchQuery(urlFilters.search);
     if (urlFilters.dateFrom) setDateFrom(urlFilters.dateFrom);
     if (urlFilters.dateTo) setDateTo(urlFilters.dateTo);
+    if (urlFilters.accessType) setAccessType(urlFilters.accessType);
     if (urlFilters.page) setPage(Math.max(1, Number(urlFilters.page) || 1));
     if (urlFilters.sortBy) setSortBy(urlFilters.sortBy);
     if (urlFilters.sortDirection) setSortDirection(urlFilters.sortDirection);
@@ -149,6 +156,7 @@ function AdminTestsPageContent() {
         search: searchQuery,
         dateFrom,
         dateTo,
+        accessType: accessType === 'all' ? '' : accessType,
         page: String(currentPage),
         sortBy: sortBy === 'updated_at' ? '' : sortBy,
         sortDirection: sortDirection === 'desc' ? '' : sortDirection,
@@ -161,6 +169,7 @@ function AdminTestsPageContent() {
     searchQuery,
     dateFrom,
     dateTo,
+    accessType,
     currentPage,
     sortBy,
     sortDirection,
@@ -209,10 +218,6 @@ function AdminTestsPageContent() {
   async function removeTest(test) {
     const testId = test.id;
     const name = String(test.title || '').trim() || `Test #${testId}`;
-    const confirmed = window.confirm(
-      `Delete "${name}"?\n\nThis permanently removes the test and all linked data. This action cannot be undone.`
-    );
-    if (!confirmed) return;
 
     setBusyAction('delete');
     try {
@@ -223,9 +228,10 @@ function AdminTestsPageContent() {
         next.delete(Number(testId));
         return next;
       });
+      setDeleteTarget(null);
       await loadTests();
     } catch (err) {
-      toast.error(err.message || 'Failed to delete test');
+      toast.error(err.message || 'Could not delete this test. It was not removed.');
     } finally {
       setBusyAction('');
     }
@@ -236,13 +242,9 @@ function AdminTestsPageContent() {
     const deletable = selectedTests.filter((test) => !isTestPublishedStatus(test.status));
     if (!deletable.length) {
       toast.error('Only unpublished tests can be deleted. Deselect published tests.');
+      setBulkDeleteOpen(false);
       return;
     }
-
-    const confirmed = window.confirm(
-      `Delete ${deletable.length} test${deletable.length === 1 ? '' : 's'}?\n\nThis cannot be undone.`
-    );
-    if (!confirmed) return;
 
     setBusyAction('bulk-delete');
     try {
@@ -251,9 +253,10 @@ function AdminTestsPageContent() {
       }
       toast.success(`Deleted ${deletable.length} test${deletable.length === 1 ? '' : 's'}.`);
       setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
       await loadTests();
     } catch (err) {
-      toast.error(err.message || 'Failed to delete selected tests');
+      toast.error(err.message || 'Could not delete the selected tests.');
     } finally {
       setBusyAction('');
     }
@@ -296,17 +299,26 @@ function AdminTestsPageContent() {
     if (!link) return;
     try {
       await navigator.clipboard.writeText(link);
-      toast.success('Public link copied to clipboard.');
+      toast.success(
+        tests.find((row) => row.publicLink === link)?.testAccessType === 'free_standalone'
+          ? 'Test link copied'
+          : 'Public link copied to clipboard.'
+      );
     } catch {
       toast.error('Could not copy link to clipboard.');
     }
   }
 
   async function duplicateExistingTest(testId) {
+    const source = tests.find((row) => Number(row.id) === Number(testId));
     setBusyAction(`duplicate-${testId}`);
     try {
       await adminApi.duplicateTest(token, testId);
-      toast.success('Test duplicated as draft copy.');
+      toast.success(
+        source?.testAccessType === 'paid_standalone'
+          ? 'Test duplicated as a draft copy. Set price and seat capacity on the new test.'
+          : 'Test duplicated as draft copy.'
+      );
       await loadTests();
     } catch (err) {
       toast.error(err.message || 'Failed to duplicate test');
@@ -368,7 +380,7 @@ function AdminTestsPageContent() {
   }
 
   function hasActiveListFilters() {
-    return Boolean(selectedCourseId || selectedSubjectId || debouncedSearch || dateFrom || dateTo);
+    return Boolean(selectedCourseId || selectedSubjectId || debouncedSearch || dateFrom || dateTo || (accessType && accessType !== 'all'));
   }
 
   const showEmpty = !isLoading && listTotal === 0 && !hasActiveListFilters();
@@ -380,6 +392,7 @@ function AdminTestsPageContent() {
     setSearchQuery('');
     setDateFrom('');
     setDateTo('');
+    setAccessType('all');
     setPage(1);
   }
 
@@ -401,7 +414,10 @@ function AdminTestsPageContent() {
       <header className="tests-page__header">
         <div className="tests-page__header-main">
           <h1 className="tests-page__title">Tests</h1>
-          <p className="tests-page__description">All tests — click a title to open its dashboard.</p>
+          <p className="tests-page__description">
+            Manage course-linked, free standalone, and paid standalone tests. Open a title to edit,
+            publish, or review results.
+          </p>
         </div>
         <div className="tests-page__header-actions">
           <Link className="tests-page__btn tests-page__btn--primary" to={adminRoute('tests/new')}>
@@ -427,11 +443,24 @@ function AdminTestsPageContent() {
                 idPrefix={{ course: 'testsCourse', subject: 'testsSubject' }}
               />
               <div className="admin-field">
-                <label htmlFor="testsDateFrom">Start date</label>
+                <label htmlFor="testsAccessType">Test type</label>
+                <select
+                  id="testsAccessType"
+                  value={accessType}
+                  onChange={(e) => setAccessType(e.target.value)}
+                >
+                  <option value="all">All types</option>
+                  <option value="course_locked">Course-linked</option>
+                  <option value="free_standalone">Free standalone</option>
+                  <option value="paid_standalone">Paid standalone</option>
+                </select>
+              </div>
+              <div className="admin-field">
+                <label htmlFor="testsDateFrom">Created from</label>
                 <input id="testsDateFrom" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
               </div>
               <div className="admin-field">
-                <label htmlFor="testsDateTo">End date</label>
+                <label htmlFor="testsDateTo">Created to</label>
                 <input id="testsDateTo" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
               </div>
             </div>
@@ -465,12 +494,9 @@ function AdminTestsPageContent() {
                 type="button"
                 className="tests-page__btn tests-page__btn--secondary"
                 disabled={busyAction === 'bulk-delete'}
-                onClick={bulkDeleteSelected}
+                onClick={() => setBulkDeleteOpen(true)}
               >
                 {busyAction === 'bulk-delete' ? 'Deleting…' : 'Delete selected'}
-              </button>
-              <button type="button" className="tests-page__btn tests-page__btn--tertiary" disabled title="Coming soon">
-                Archive selected
               </button>
             </div>
           </div>
@@ -513,6 +539,13 @@ function AdminTestsPageContent() {
                 onToggleAll={toggleAllOnPage}
                 allSelected={allSelected}
                 someSelected={someSelected}
+                onPublish={handlePublishModalOpen}
+                onDuplicate={duplicateExistingTest}
+                onDownloadResults={downloadResults}
+                onExportTest={exportTestDefinition}
+                onDelete={setDeleteTarget}
+                onCopyLink={copyPublicLink}
+                busyAction={busyAction}
               />
             </div>
 
@@ -525,7 +558,7 @@ function AdminTestsPageContent() {
                   onDuplicate={duplicateExistingTest}
                   onDownloadResults={downloadResults}
                   onExportTest={exportTestDefinition}
-                  onDelete={removeTest}
+                  onDelete={setDeleteTarget}
                   onCopyLink={copyPublicLink}
                   busyAction={busyAction}
                 />
@@ -569,6 +602,36 @@ function AdminTestsPageContent() {
         onClose={closePublishModal}
         onPublished={handlePublishedFromModal}
         onBusyChange={handlePublishBusyChange}
+      />
+
+      <AdminConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete this test?"
+        message={`This permanently removes "${String(deleteTarget?.title || '').trim() || `Test #${deleteTarget?.id}`}" and all linked data. This cannot be undone.`}
+        confirmLabel="Delete test"
+        cancelLabel="Cancel"
+        danger
+        busy={busyAction === 'delete'}
+        onConfirm={() => deleteTarget && removeTest(deleteTarget)}
+        onCancel={() => {
+          if (busyAction === 'delete') return;
+          setDeleteTarget(null);
+        }}
+      />
+
+      <AdminConfirmDialog
+        open={bulkDeleteOpen}
+        title="Delete selected tests?"
+        message="Only unpublished tests in this selection will be deleted. Published tests are skipped. This cannot be undone."
+        confirmLabel="Delete unpublished tests"
+        cancelLabel="Cancel"
+        danger
+        busy={busyAction === 'bulk-delete'}
+        onConfirm={bulkDeleteSelected}
+        onCancel={() => {
+          if (busyAction === 'bulk-delete') return;
+          setBulkDeleteOpen(false);
+        }}
       />
     </section>
   );

@@ -55,7 +55,7 @@ export function usePageSeo(seo) {
     seo?.description,
     seo?.image,
     seo?.noindex,
-    seo?.structuredData,
+    JSON.stringify(seo?.structuredData ?? null),
     setPageSeo,
     clearPageSeo,
   ]);

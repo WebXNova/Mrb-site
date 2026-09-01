@@ -35,7 +35,7 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
             }
             return slice.color;
           }),
-          borderColor: isDark ? '#122b44' : '#0B0E14',
+          borderColor: isDark ? '#1e293b' : '#ffffff',
           borderWidth: 3,
           hoverOffset: 6,
         },
@@ -50,6 +50,9 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
         title: distribution.passRate == null ? 'No graded tests' : 'Overall Pass Rate',
         value: distribution.passRate == null ? '' : `${distribution.passRate}%`,
         sublabel: centerSublabel,
+        titleColor: isDark ? '#94A3B8' : '#64748B',
+        valueColor: isDark ? '#FFFFFF' : '#0F172A',
+        sublabelColor: isDark ? '#94A3B8' : '#64748B',
       }),
     ],
     [distribution.passRate, centerSublabel]
@@ -69,7 +72,7 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
         legend: {
           position: isMobile ? 'bottom' : 'right',
           labels: {
-            color: isDark ? '#8ba3c7' : '#CBD5E1',
+            color: isDark ? '#CBD5E1' : '#334155',
             boxWidth: 12,
             boxHeight: 12,
             padding: isMobile ? 10 : 14,
@@ -113,7 +116,7 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
 
   if (!hasData) {
     return (
-      <div className="th-chart-card th-chart-card--dark">
+      <div className="th-chart-card">
         <h3 className="th-chart-card__title">Result distribution</h3>
         <p className="th-chart-card__empty">No result data to chart yet.</p>
       </div>
@@ -121,7 +124,7 @@ export default function HistoryDistributionChart({ statistics, items = [] }) {
   }
 
   return (
-    <div className="th-chart-card th-chart-card--dark">
+    <div className="th-chart-card">
       <h3 className="th-chart-card__title">Result distribution</h3>
       <p className="th-chart-card__subtitle">Passed, failed, and pending breakdown</p>
       <div className="th-chart-card__canvas th-chart-card__canvas--donut">

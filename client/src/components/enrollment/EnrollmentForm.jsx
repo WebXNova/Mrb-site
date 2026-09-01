@@ -25,7 +25,7 @@ function Field({
 
   return (
     <div className={fieldClass} data-field={fieldName || undefined}>
-      <label>
+      <label htmlFor={fieldName || undefined}>
         {label} {required ? <span>*</span> : null}
         {warning ? (
           <span className="enrollment-prefill-warning-icon" title={warning} aria-label={warning}>
@@ -122,10 +122,12 @@ export default function EnrollmentForm({
           fieldName="email"
         >
           <input
+            id="email"
             type="email"
             value={form.email}
             onChange={(event) => onChangeField('email', event.target.value)}
             placeholder="name@example.com"
+            autoComplete="email"
           />
         </Field>
 
@@ -138,9 +140,11 @@ export default function EnrollmentForm({
           fieldName="applicantFullName"
         >
           <input
+            id="applicantFullName"
             value={form.applicantFullName}
             onChange={(event) => onChangeField('applicantFullName', event.target.value)}
             placeholder="Your full name"
+            autoComplete="name"
           />
         </Field>
 
@@ -153,9 +157,11 @@ export default function EnrollmentForm({
           fieldName="fatherName"
         >
           <input
+            id="fatherName"
             value={form.fatherName}
             onChange={(event) => onChangeField('fatherName', event.target.value)}
             placeholder="Father name"
+            autoComplete="off"
           />
         </Field>
 
@@ -166,6 +172,7 @@ export default function EnrollmentForm({
           fieldName="dateOfBirth"
         >
           <input
+            id="dateOfBirth"
             type="date"
             value={form.dateOfBirth}
             onChange={(event) => onChangeField('dateOfBirth', event.target.value)}
@@ -202,9 +209,13 @@ export default function EnrollmentForm({
           fieldName="whatsappNumber"
         >
           <input
+            id="whatsappNumber"
+            type="tel"
+            inputMode="tel"
             value={form.whatsappNumber}
             onChange={(event) => onChangeField('whatsappNumber', event.target.value)}
             placeholder="+92 3xx xxxxxxx"
+            autoComplete="tel"
           />
         </Field>
       </div>
@@ -234,7 +245,11 @@ export default function EnrollmentForm({
           prefilled={isPrefilled('hsscStatus')}
           fieldName="hsscStatus"
         >
-          <select value={form.hsscStatus} onChange={(event) => onChangeField('hsscStatus', event.target.value)}>
+          <select
+            id="hsscStatus"
+            value={form.hsscStatus}
+            onChange={(event) => onChangeField('hsscStatus', event.target.value)}
+          >
             <option value="">Select status</option>
             {HSSC_OPTIONS.map((item) => (
               <option key={item} value={item}>
@@ -253,6 +268,7 @@ export default function EnrollmentForm({
           fieldName="board_id"
         >
           <select
+            id="board_id"
             value={form.board_id}
             onChange={(event) => onChangeField('board_id', event.target.value)}
             disabled={boardsLoading}

@@ -7,22 +7,21 @@
 import { mysqlPool } from '../config/mysql.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { studentOwnsAttempt } from './attemptOwnership.service.js';
+import { isShuffleEnabled } from './attemptDeliveryLayout.service.js';
 import {
   assertAttemptBelongsToStudent,
   assertAttemptLoadable,
 } from './studentAttemptLoad.service.js';
 import { LOAD_ATTEMPT_WITH_TEST_SQL } from './studentAttemptLoad.queries.js';
 import {
-  OPTION_BELONGS_TO_QUESTION_SQL,
-  QUESTION_BELONGS_TO_TEST_SQL,
   TOUCH_ATTEMPT_LAST_ACTIVITY_SQL,
   UPSERT_STUDENT_ANSWER_SQL,
 } from './studentAnswerSave.queries.js';
+import { AttemptNotFoundError } from '../errors/testAttempt/TestAttemptErrors.js';
 import {
-  AttemptNotFoundError,
-  InvalidOptionError,
-  QuestionNotInTestError,
-} from '../errors/testAttempt/TestAttemptErrors.js';
+  resolveAttemptExamSnapshot,
+  assertAnswerBelongsToExamSnapshot,
+} from './attemptExamSnapshot.service.js';
 
 const logger = new StructuredLogger({ service: 'studentAnswerSave' });
 
@@ -61,24 +60,22 @@ export async function saveStudentAttemptAnswer(input) {
 
   await assertAttemptLoadable(attemptRow);
 
-  const testId = Number(attemptRow.test_id);
+  const snapshot = await resolveAttemptExamSnapshot({
+    attemptId,
+    testId: Number(attemptRow.test_id),
+    examSnapshotJson: attemptRow.exam_snapshot_json,
+    deliveryLayoutJson: attemptRow.delivery_layout_json,
+    attemptNonce: attemptRow.attempt_nonce,
+    shuffleQuestions: isShuffleEnabled(attemptRow.shuffle_questions),
+    shuffleOptions: isShuffleEnabled(attemptRow.shuffle_options),
+    testRow: attemptRow,
+  });
 
-  const [[questionRow]] = await mysqlPool.query(QUESTION_BELONGS_TO_TEST_SQL, [testId, questionId]);
-  if (!questionRow) {
-    throw new QuestionNotInTestError({
-      attemptId,
-      questionId,
-      testId,
-    });
-  }
-
-  const [[optionRow]] = await mysqlPool.query(OPTION_BELONGS_TO_QUESTION_SQL, [
-    selectedOptionId,
+  assertAnswerBelongsToExamSnapshot(snapshot, {
+    attemptId,
     questionId,
-  ]);
-  if (!optionRow) {
-    throw new InvalidOptionError({ questionId, optionId: selectedOptionId });
-  }
+    optionId: selectedOptionId,
+  });
 
   await mysqlPool.query(UPSERT_STUDENT_ANSWER_SQL, [attemptId, questionId, selectedOptionId]);
 

@@ -57,9 +57,15 @@ export const postStudentTestStart = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Authentication required', { code: 'UNAUTHORIZED' });
   }
 
+  const entitlement = req.cee?.entitlement ?? req.entitlement;
+  if (!entitlement?.courseId) {
+    throw new ApiError(403, 'Course entitlement required', { code: 'ENTITLEMENT_REQUIRED' });
+  }
+
   const result = await startOrResumeStudentTest({
     studentId,
     testId: parsed.id,
+    courseId: Number(entitlement.courseId),
     ipAddress: req.ip ?? null,
     userAgent: req.get('user-agent') ?? null,
   });

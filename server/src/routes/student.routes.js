@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { enforcePolicy } from '../auth/securityPolicy.js';
 import { rejectStudentBearerInProduction } from '../middleware/auth.js';
 import { getStudentTestHistoryHandler } from '../controllers/studentTestHistory.controller.js';
+import { getStudentCurrentLeaderboardHandler } from '../controllers/courseLeaderboard.controller.js';
+import { studentLeaderboardReadLimit } from '../middleware/courseLeaderboardRateLimit.js';
 import {
   getStudentDashboardData,
   getStudentEnrollmentStatus,
@@ -34,6 +36,10 @@ import {
   autosaveRateLimit,
   requireRedisForAutosave,
 } from '../middleware/autosaveRateLimit.js';
+import {
+  requireRedisForTestSubmit,
+  testSubmitRateLimit,
+} from '../middleware/testSubmitRateLimit.js';
 import { requireCsrf } from '../middleware/csrf.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
 import {
@@ -63,9 +69,16 @@ router.get('/sessions', getStudentSessions);
 router.get('/progress/:courseId', getCourseProgress);
 router.post('/lectures/:lectureId/complete', requireCsrf, postLectureComplete);
 router.get('/test-history', getStudentTestHistoryHandler);
+router.get('/leaderboard', studentLeaderboardReadLimit, getStudentCurrentLeaderboardHandler);
 router.get('/tests', getStudentTests);
-router.post('/tests/:testId/start', requireCsrf, postStudentTestStart);
-router.get('/attempts/:attemptId', getStudentAttempt);
+router.post(
+  '/tests/:testId/start',
+  requireCsrf,
+  requireRedisForTestSubmit,
+  testSubmitRateLimit,
+  postStudentTestStart
+);
+router.get('/attempts/:attemptId', autosaveRateLimit, getStudentAttempt);
 router.post(
   '/attempts/:attemptId/answer',
   requireCsrf,
@@ -135,6 +148,6 @@ router.get(
   studentQuestionReadIpLimit,
   getStudentQuestionById
 );
-router.get('/results/:attemptId', getStudentResultDetail);
+router.get('/results/:attemptId', autosaveRateLimit, getStudentResultDetail);
 
 export default router;

@@ -10,6 +10,7 @@ import {
   createEntitledTestAttempt,
   resolveStudentIdFromRequest,
 } from '../services/testAttempt.service.js';
+import { recordExamIntegrityStrike } from '../services/examIntegrity.service.js';
 import {
   readAttemptTokenString,
   sanitizeAttemptTokenResponse,
@@ -21,21 +22,31 @@ import { loadPublishedTestMetaBySlug } from '../services/testQuestionComposition
 import { loadTestInstructionsPrep } from '../services/testInstructionsPrep.service.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
 import { StructuredLogger } from '../utils/requestId.js';
-import { AttemptTokenInvalidError } from '../errors/testAttempt/TestAttemptErrors.js';
+import { AttemptTokenInvalidError, TestNotFoundError } from '../errors/testAttempt/TestAttemptErrors.js';
+import { assertStudentIdentity } from '../security/cee/identityGuard.js';
+import { resolveActiveEntitlement } from '../services/entitlement.service.js';
+import {
+  assertCourseLinkedTestMetaAccessible,
+  loadCourseLinkedTestAccessRowBySlug,
+} from '../security/cee/courseLinkedTestAccess.service.js';
 
 const logger = new StructuredLogger({ service: 'publicTestsController' });
 
-const verifyCodeSchema = z.object({
-  studentName: z.string().min(2).max(120).optional().nullable(),
-});
+const verifyCodeSchema = z
+  .object({
+    studentName: z.string().min(2).max(120).optional().nullable(),
+  })
+  .strict();
 
-const saveAnswerSchema = z.object({
-  questionId: z.number().int().min(1),
-  selectedOption: z
-    .union([z.string(), z.number()])
-    .transform((value) => String(value).trim())
-    .pipe(z.string().min(1).max(32)),
-});
+const saveAnswerSchema = z
+  .object({
+    questionId: z.number().int().min(1),
+    selectedOption: z
+      .union([z.string(), z.number()])
+      .transform((value) => String(value).trim())
+      .pipe(z.string().min(1).max(32)),
+  })
+  .strict();
 
 function getCeeContext(req) {
   if (!req.user) {
@@ -93,8 +104,29 @@ export const getPublicTestMeta = asyncHandler(async (req, res) => {
   const slug = String(req.params.slug || '').trim();
   if (!slug) throw new ApiError(400, 'Invalid test link');
 
+  const accessRow = await loadCourseLinkedTestAccessRowBySlug(slug);
+
+  let viewerUserId = null;
+  let viewerCourseId = null;
+  try {
+    await assertStudentIdentity(req, res, { requireVerified: true });
+    const uid = Number(req.user?.id);
+    if (Number.isInteger(uid) && uid > 0) {
+      viewerUserId = uid;
+      const entitlement = await resolveActiveEntitlement(uid);
+      viewerCourseId = entitlement?.courseId ?? null;
+    }
+  } catch {
+    viewerUserId = null;
+    viewerCourseId = null;
+  }
+
+  assertCourseLinkedTestMetaAccessible(accessRow, viewerUserId, viewerCourseId);
+
   const meta = await loadPublishedTestMetaBySlug(slug);
-  if (!meta) throw new ApiError(404, 'Test not found');
+  if (!meta) {
+    throw new TestNotFoundError({ slug, reason: 'test_not_found' });
+  }
 
   sendSuccess(res, meta);
 });
@@ -264,4 +296,35 @@ export const getTestResult = asyncHandler(async (req, res) => {
     entitlement,
   });
   sendAttemptSuccess(res, data, { token: null });
+});
+
+export const postTestIntegrityEvent = asyncHandler(async (req, res) => {
+  const slug = String(req.params.slug || '').trim();
+  const { userId, courseId, entitlement } = getCeeContext(req);
+  const attemptPayload = getAttemptPayload(req, userId);
+  const attemptId = Number(req.params.attemptId);
+  if (!attemptId || attemptPayload.attemptId !== attemptId || attemptPayload.slug !== slug) {
+    throw new ApiError(403, 'Attempt access denied');
+  }
+  const strike = await recordExamIntegrityStrike({
+    attemptId,
+    userId,
+    slug,
+    courseId,
+    entitlement,
+    tokenNonce: attemptPayload.nonce,
+  });
+  if (strike.shouldSubmit) {
+    const submitted = await submitAttempt({
+      attemptId,
+      userId,
+      courseId,
+      slug,
+      entitlement,
+      tokenNonce: attemptPayload.nonce,
+    });
+    sendAttemptSuccess(res, { ...submitted, ...strike }, { token: null });
+    return;
+  }
+  sendAttemptSuccess(res, strike);
 });

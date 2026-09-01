@@ -14,9 +14,11 @@ export default function ExamHeader({
   onRetrySave,
   onOpenPalette,
   showPaletteToggle,
-  displayMode = 'one_per_page',
+  displayMode = 'all',
+  isFullscreen = false,
+  onToggleFullscreen,
 }) {
-  const isScrollAll = displayMode === 'all';
+  const isScrollAll = displayMode !== 'one_per_page';
   const progressPct =
     totalQuestions > 0
       ? isScrollAll
@@ -33,13 +35,19 @@ export default function ExamHeader({
           <p className="tt-header__progress">
             {isScrollAll ? (
               <>
-                <strong>{answeredCount}</strong> of <strong>{totalQuestions}</strong> answered
+                <strong>{answeredCount}</strong>
+                {' of '}
+                <strong>{totalQuestions}</strong>
+                {' answered'}
               </>
             ) : (
               <>
-                Question <strong>{currentIndex + 1}</strong> of <strong>{totalQuestions}</strong>
+                {'Question '}
+                <strong>{currentIndex + 1}</strong>
+                {' of '}
+                <strong>{totalQuestions}</strong>
                 <span className="tt-header__divider" aria-hidden="true">
-                  ·
+                  {' · '}
                 </span>
                 <span>{answeredCount} answered</span>
               </>
@@ -56,9 +64,20 @@ export default function ExamHeader({
             aria-live="polite"
             aria-label={`Time remaining: ${timerFormatted}`}
           >
-            <span className="tt-timer__label">Time left</span>
+            <span className="tt-timer__label">Time remaining</span>
             <span className="tt-timer__value">{timerFormatted}</span>
           </div>
+
+          {onToggleFullscreen ? (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm tt-header__fs-btn"
+              onClick={onToggleFullscreen}
+              aria-pressed={isFullscreen}
+            >
+              {isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            </button>
+          ) : null}
 
           {showPaletteToggle ? (
             <button

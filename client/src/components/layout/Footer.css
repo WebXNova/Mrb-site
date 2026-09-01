@@ -1,44 +1,47 @@
 .footer {
-  background: var(--color-bg-alt);
-  border-top: 1px solid var(--color-ink-100);
+  background: #070b18;
+  color: rgba(226, 232, 240, 0.78);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   margin-top: auto;
 }
 
 .footer__inner {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-10);
-  padding-block: clamp(var(--space-16), 5vw, var(--space-20)) var(--space-12);
+  gap: var(--space-8);
+  padding-block: clamp(2.5rem, 5vw, 3.75rem) var(--space-8);
 }
 
 @media (min-width: 768px) {
   .footer__inner {
-    grid-template-columns: 1.4fr 2fr;
-    gap: var(--space-16);
+    grid-template-columns: 1.25fr 2fr;
+    gap: var(--space-12);
   }
 }
 
 .footer__brand {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  max-width: 26rem;
+  gap: var(--space-4);
+  max-width: 24rem;
 }
 
 .footer .logo__name {
   font-size: 1.5rem;
+  color: #f8fafc;
 }
 
 .footer .logo__subtitle {
   font-size: var(--text-footer-meta);
   letter-spacing: 0.06em;
+  color: rgba(226, 232, 240, 0.5);
 }
 
 .footer__tagline {
   font-size: var(--text-footer-body);
   font-weight: var(--fw-regular);
-  line-height: 1.7;
-  color: var(--color-ink-600);
+  line-height: 1.65;
+  color: rgba(226, 232, 240, 0.68);
 }
 
 .footer__social {
@@ -48,70 +51,71 @@
 .footer__links {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-8);
+  gap: var(--space-6);
 }
 
 @media (min-width: 640px) {
   .footer__links {
     grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-10);
+    gap: var(--space-8);
   }
 }
 
 .footer__section-title {
   font-family: var(--font-sans);
-  font-size: var(--text-nav);
+  font-size: 0.75rem;
   font-weight: var(--fw-semibold);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-ink-500);
-  margin-bottom: var(--space-5);
+  color: rgba(226, 232, 240, 0.48);
+  margin-bottom: var(--space-4);
 }
 
 .footer__list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .footer__list--legal {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-4) var(--space-6);
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: var(--space-3);
 }
 
 .footer__link {
   font-size: var(--text-footer-link);
   font-weight: var(--fw-regular);
   letter-spacing: 0.01em;
-  color: var(--color-ink-700);
-  transition: color var(--transition-base);
+  color: rgba(226, 232, 240, 0.78);
+  transition: color var(--transition-base), transform var(--transition-fast);
 }
 
 .footer__link:hover {
-  color: var(--color-primary);
+  color: #7dd3fc;
+  transform: translateX(2px);
 }
 
 .footer__credit {
   margin-top: var(--space-5);
   font-size: var(--text-footer-meta);
-  color: var(--color-ink-500);
+  color: rgba(226, 232, 240, 0.45);
   line-height: 1.6;
 }
 
 .footer__credit-link {
-  color: var(--color-ink-700);
+  color: rgba(226, 232, 240, 0.78);
   transition: color var(--transition-base);
 }
 
 .footer__credit-link:hover {
-  color: var(--color-primary);
+  color: #7dd3fc;
 }
 
 .footer__bottom {
-  border-top: 1px solid var(--color-ink-100);
-  padding-block: var(--space-6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-block: var(--space-5);
 }
 
 .footer__bottom-inner {
@@ -134,7 +138,7 @@
 .footer__made {
   font-size: var(--text-footer-meta);
   font-weight: var(--fw-regular);
-  color: var(--color-ink-500);
+  color: rgba(226, 232, 240, 0.45);
   line-height: 1.5;
 }
 
@@ -144,20 +148,32 @@
 }
 
 .footer__made-link:hover {
-  color: var(--color-primary);
+  color: #7dd3fc;
 }
 
-.footer .social-links {
-  gap: 0.85rem;
+.footer .social-links--compact {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: visible;
+  padding-bottom: 0;
+  gap: 0.65rem;
 }
 
-.footer .social-links__text strong {
-  font-size: var(--text-footer-link);
-  font-weight: var(--fw-semibold);
+.footer .social-links--compact .social-links__item {
+  min-width: 0;
+  flex-direction: row;
 }
 
-.footer .social-links__text small {
-  font-size: var(--text-footer-meta);
+.footer .social-links__item {
+  transform: none;
+}
+
+.footer .social-links__item:hover {
+  transform: translateY(-2px);
+}
+
+.footer .social-links__text {
+  display: none;
 }
 
 .footer .social-links__icon {
@@ -165,7 +181,11 @@
   height: 40px;
 }
 
+.footer .social-links__icon--tiktok {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
 .footer .social-links__icon svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }

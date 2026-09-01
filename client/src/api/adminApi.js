@@ -49,6 +49,19 @@ export const adminApi = {
   saveCourseDraft: (token, payload) => http.post(ap('course-drafts/save'), payload, { token }),
   updateCourse: (token, courseId, payload) =>
     http.put(ap(`courses/${courseId}`), payload, { token }),
+  courseLeaderboard: (token, courseId) =>
+    http.get(ap(`courses/${encodeURIComponent(String(courseId))}/leaderboard`), { token }),
+  studentCourseDetail: (token, studentId, courseId) =>
+    http.get(
+      ap(
+        `students/${encodeURIComponent(String(studentId))}/course/${encodeURIComponent(String(courseId))}/detail`
+      ),
+      { token }
+    ),
+  courseFinishPreview: (token, courseId) =>
+    http.get(ap(`courses/${courseId}/finish-preview`), { token }),
+  markCourseFinished: (token, courseId, payload) =>
+    http.post(ap(`courses/${courseId}/mark-finished`), payload, { token }),
   coursePricing: (token, courseId) =>
     http.get(ap(`courses/${courseId}/pricing`), { token }),
   updateCoursePricing: (token, courseId, payload) =>
@@ -192,7 +205,18 @@ export const adminApi = {
   getTestCompleteness: (token, testId) => http.get(ap(`tests/${testId}/completeness`), { token }),
   getTestResultsAnalytics: (token, testId) =>
     http.get(ap(`tests/${testId}/results/analytics`), { token }),
-  getTestResults: (token, testId) => http.get(ap(`tests/${testId}/results`), { token }),
+  getTestResults: (token, testId, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.page != null) query.set('page', String(params.page));
+    if (params.limit != null) query.set('limit', String(params.limit));
+    if (params.q) query.set('q', String(params.q));
+    if (params.sort) query.set('sort', String(params.sort));
+    if (params.dir) query.set('dir', String(params.dir));
+    const qs = query.toString();
+    return http.get(ap(`tests/${testId}/results${qs ? `?${qs}` : ''}`), { token });
+  },
+  getTestResultAttempt: (token, testId, attemptId) =>
+    http.get(ap(`tests/${testId}/results/${attemptId}`), { token }),
   releaseTestResults: (token, testId) =>
     http.post(ap(`tests/${testId}/release-results`), {}, { token }),
   unreleaseTestResults: (token, testId) =>
@@ -487,6 +511,38 @@ export const adminApi = {
       { token, authScope: 'admin' }
     ),
 
+  standaloneTestPayments: (token, filters = {}) => {
+    const sp = new URLSearchParams();
+    if (filters.status) sp.set('status', String(filters.status));
+    if (filters.limit != null) sp.set('limit', String(filters.limit));
+    if (filters.offset != null) sp.set('offset', String(filters.offset));
+    const qs = sp.toString();
+    return http.get(ap(`standalone-test-payments${qs ? `?${qs}` : ''}`), { token, authScope: 'admin' });
+  },
+  standaloneTestPayment: (token, submissionId) =>
+    http.get(ap(`standalone-test-payments/${encodeURIComponent(String(submissionId))}`), {
+      token,
+      authScope: 'admin',
+    }),
+  approveStandaloneTestPayment: (token, submissionId) =>
+    http.put(ap(`standalone-test-payments/${encodeURIComponent(String(submissionId))}/approve`), {}, {
+      token,
+      authScope: 'admin',
+    }),
+  rejectStandaloneTestPayment: (token, submissionId, adminNote) =>
+    http.put(
+      ap(`standalone-test-payments/${encodeURIComponent(String(submissionId))}/reject`),
+      { admin_note: adminNote },
+      { token, authScope: 'admin' }
+    ),
+  standaloneTestPaymentScreenshot: async (_token, submissionId) => {
+    const { blob } = await adminAuthenticatedDownload(
+      `standalone-test-payments/${encodeURIComponent(String(submissionId))}/screenshot`,
+      { method: 'GET', accept: 'image/*' }
+    );
+    return blob;
+  },
+
   suspendEnrollmentStudent: (token, enrollmentId, payload) =>
     http.post(ap(`enrollments/${enrollmentId}/suspend-student`), payload, {
       token,
@@ -591,6 +647,11 @@ export const testsApi = {
     }),
   getResult: (slug, attemptId) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/result`, {
+      authScope: 'student',
+      retryOnUnauthorized: false,
+    }),
+  reportIntegrityEvent: (slug, attemptId) =>
+    http.post(`/tests/${slug}/attempts/${attemptId}/integrity-events`, {}, {
       authScope: 'student',
       retryOnUnauthorized: false,
     }),

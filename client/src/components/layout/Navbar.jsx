@@ -14,6 +14,7 @@ import './Navbar.css';
 const navLinks = [
   { to: '/', label: 'Home', end: true },
   { to: '/courses', label: 'Courses' },
+  { to: '/paid-tests', label: 'Tests' },
   { to: '/about', label: 'About' },
   { to: '/contact', label: 'Contact' },
 ];
@@ -34,6 +35,15 @@ export default function Navbar() {
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function onKeyDown(event) {
+      if (event.key === 'Escape') setMenuOpen(false);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (menuOpen) {
@@ -86,9 +96,15 @@ export default function Navbar() {
                   key={link.to}
                   to={link.to}
                   end={link.end}
-                  className={({ isActive }) =>
-                    `navbar__link ${isActive ? 'navbar__link--active' : ''}`
-                  }
+                  className={({ isActive }) => {
+                    const testsActive =
+                      link.to === '/paid-tests' &&
+                      (location.pathname === '/tests/my-results' ||
+                        location.pathname === '/tests/my-tests' ||
+                        location.pathname.startsWith('/free-test/') ||
+                        location.pathname.startsWith('/paid-tests'));
+                    return `navbar__link ${isActive || testsActive ? 'navbar__link--active' : ''}`;
+                  }}
                 >
                   {link.label}
                 </NavLink>
@@ -97,7 +113,7 @@ export default function Navbar() {
 
             <div className="navbar__actions">
               {isStudentLoggedIn ? (
-                <Button as={NavLink} to="/dashboard" variant="primary" size="sm">
+                <Button as={NavLink} to="/dashboard" variant="primary" size="sm" className="navbar__portal">
                   Student Portal
                 </Button>
               ) : (
@@ -105,7 +121,7 @@ export default function Navbar() {
                   <Button as={NavLink} to="/login" variant="ghost" size="sm">
                     Sign In
                   </Button>
-                  <Button as={NavLink} to="/register" variant="primary" size="sm">
+                  <Button as={NavLink} to="/register" variant="primary" size="sm" className="navbar__portal">
                     Create Account
                   </Button>
                 </>
@@ -140,9 +156,15 @@ export default function Navbar() {
                 key={link.to}
                 to={link.to}
                 end={link.end}
-                className={({ isActive }) =>
-                  `navbar__mobile-link ${isActive ? 'navbar__mobile-link--active' : ''}`
-                }
+                className={({ isActive }) => {
+                  const testsActive =
+                    link.to === '/paid-tests' &&
+                    (location.pathname === '/tests/my-results' ||
+                      location.pathname === '/tests/my-tests' ||
+                      location.pathname.startsWith('/free-test/') ||
+                      location.pathname.startsWith('/paid-tests'));
+                  return `navbar__mobile-link ${isActive || testsActive ? 'navbar__mobile-link--active' : ''}`;
+                }}
               >
                 {link.label}
               </NavLink>
@@ -150,7 +172,7 @@ export default function Navbar() {
           </nav>
           <div className="navbar__mobile-actions">
             {isStudentLoggedIn ? (
-              <Button as={NavLink} to="/dashboard" variant="primary" size="md" fullWidth>
+              <Button as={NavLink} to="/dashboard" variant="primary" size="md" fullWidth className="navbar__portal">
                 Student Portal
               </Button>
             ) : (
@@ -158,7 +180,7 @@ export default function Navbar() {
                 <Button as={NavLink} to="/login" variant="secondary" size="md" fullWidth>
                   Sign In
                 </Button>
-                <Button as={NavLink} to="/register" variant="primary" size="md" fullWidth>
+                <Button as={NavLink} to="/register" variant="primary" size="md" fullWidth className="navbar__portal">
                   Create Account
                 </Button>
               </>

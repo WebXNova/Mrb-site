@@ -3,6 +3,16 @@ import { TestWizardProgress } from './TestWizardProgress';
 import TestPublishActions from './TestPublishActions';
 import TestResultsReleasePanel from './TestResultsReleasePanel';
 import TestWizardMissingHint from './TestWizardMissingHint';
+import { isStandaloneAccessType } from '../constants/testAccessType.js';
+import { isTestPublishedStatus } from '../utils/testBasicInfoValidation.js';
+import {
+  formatAdminDateTime,
+  formatCourseLabel,
+  formatPkrAmount,
+  formatSeatInventoryLine,
+  formatTestAccessTypeLabel,
+  getAccessModeOptionCopy,
+} from '../utils/testAdminDisplay.js';
 
 function DetailRow({ label, value }) {
   return (
@@ -52,8 +62,11 @@ export default function TestDetailsView({
 }) {
   const subjectIds = Array.isArray(test?.subjectIds) ? test.subjectIds.join(', ') : '—';
   const canPublish = Boolean(completeness?.can_publish) && !readOnly;
-  const showReleasePanel = readOnly && Boolean(testId);
+  const showReleasePanel = Boolean(testId) && isTestPublishedStatus(test?.status);
   const showPublishPanel = !readOnly && Boolean(completeness);
+  const accessType = test?.testAccessType || settings?.test_access_type || 'course_locked';
+  const standalone = isStandaloneAccessType(accessType);
+  const accessCopy = getAccessModeOptionCopy(accessType, settings?.access_mode);
 
   return (
     <div className="admin-test-details">
@@ -101,9 +114,10 @@ export default function TestDetailsView({
         <DetailRow label="Test ID" value={test?.id} />
         <DetailRow label="Status" value={<TestStatusBadge status={test?.status} />} />
         <DetailRow label="Lifecycle" value={formatTestStatusLabel(completeness?.lifecycle_status)} />
-        <DetailRow label="Course" value={courseTitle} />
+        <DetailRow label="Type" value={formatTestAccessTypeLabel(accessType)} />
+        <DetailRow label="Course" value={standalone ? '—' : courseTitle || formatCourseLabel(test)} />
         <DetailRow label="Category" value={test?.category} />
-        <DetailRow label="Test type" value={test?.testType} />
+        <DetailRow label="Subject mix" value={test?.testType} />
         <DetailRow label="Subjects" value={test?.subjectLabel || subjectIds} />
         <DetailRow label="Questions" value={questionCount} />
         <DetailRow label="Description" value={test?.description || '—'} />
@@ -121,7 +135,25 @@ export default function TestDetailsView({
       </DetailSection>
 
       <DetailSection title="Settings & access">
-        <DetailRow label="Access mode" value={settings?.access_mode} />
+        <DetailRow label="Access mode" value={accessCopy.label} />
+        <DetailRow label="Student access" value={accessCopy.hint} />
+        {standalone ? (
+          <>
+            {accessType === 'paid_standalone' ? (
+              <DetailRow label="Price" value={formatPkrAmount(settings?.price_pkr ?? test?.pricePkr)} />
+            ) : null}
+            <DetailRow
+              label="Seats"
+              value={formatSeatInventoryLine({
+                testAccessType: accessType,
+                seatCapacity: settings?.seat_capacity ?? test?.seatCapacity,
+                confirmedSeats: settings?.confirmed_seats ?? test?.confirmedSeats,
+              })}
+            />
+            <DetailRow label="Starts" value={formatAdminDateTime(settings?.start_date ?? test?.startDate)} />
+            <DetailRow label="Ends" value={formatAdminDateTime(settings?.end_date ?? test?.endDate)} />
+          </>
+        ) : null}
         <DetailRow label="Shuffle questions" value={formatBool(settings?.shuffle_questions)} />
         <DetailRow label="Shuffle options" value={formatBool(settings?.shuffle_options)} />
         <DetailRow label="Show explanations" value={formatBool(settings?.show_explanations)} />
@@ -131,11 +163,9 @@ export default function TestDetailsView({
           value={
             settings?.results_released_at
               ? formatDate(settings.results_released_at)
-              : 'Not Released'
+              : 'Not published'
           }
         />
-        <DetailRow label="Start date" value={formatDate(settings?.start_date)} />
-        <DetailRow label="End date" value={formatDate(settings?.end_date)} />
       </DetailSection>
     </div>
   );

@@ -42,8 +42,8 @@ export default function TestHistoryPage() {
     Boolean(submittedDate);
 
   const subjects = data?.filterOptions?.subjects ?? [];
-  const totalCount = data?.statistics?.totalTests ?? data?.pagination?.totalItems ?? 0;
-  const resultCount = data?.pagination?.totalItems ?? 0;
+  const resultCount = Number(data?.pagination?.totalItems ?? 0);
+  const totalCount = Math.max(Number(data?.statistics?.totalTests ?? 0), resultCount);
 
   function resetPage() {
     setPage(1);
@@ -89,8 +89,8 @@ export default function TestHistoryPage() {
     <div className="th-page th-page--dashboard">
       <header className="th-header">
         <div>
-          <h1 className="th-title th-title--light">Results</h1>
-          <p className="th-subtitle th-subtitle--light">
+          <h1 className="th-title">Results</h1>
+          <p className="th-subtitle">
             Filter by subject, submission date, or pass/fail — search by test name, subject, or exact date.
           </p>
         </div>
@@ -128,7 +128,7 @@ export default function TestHistoryPage() {
           />
 
           {isLoading ? (
-            <p className="th-loading-note th-loading-note--light" role="status" aria-live="polite">
+            <p className="th-loading-note" role="status" aria-live="polite">
               Updating…
             </p>
           ) : null}

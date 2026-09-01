@@ -105,8 +105,8 @@ function createMockConnection(plan) {
           [],
         ];
       }
-      if (/SELECT subject_id FROM test_subjects/i.test(normalized)) {
-        return [[{ subject_id: 7 }], []];
+      if (/SELECT subject_id FROM test_subjects/i.test(normalized) || /FROM test_subjects ts INNER JOIN subjects/i.test(normalized)) {
+        return [[{ subject_id: 7, title: 'Biology' }], []];
       }
       if (/SELECT question_id[\s\S]*FROM test_questions WHERE test_id = \?/i.test(normalized)) {
         return [
@@ -120,6 +120,12 @@ function createMockConnection(plan) {
         const removed = inserts.test_questions.length;
         inserts.test_questions = [];
         return [{ affectedRows: removed }, []];
+      }
+      if (/DELETE FROM test_sections WHERE test_id/i.test(normalized)) {
+        return [{ affectedRows: 0 }, []];
+      }
+      if (/INSERT INTO test_sections/i.test(normalized)) {
+        return [{ insertId: 1 }, []];
       }
       if (/UPDATE question_bank qb[\s\S]*superseded|UPDATE question_bank qb[\s\S]*student_answers/i.test(normalized)) {
         return [{ affectedRows: params.length - 1 }, []];
@@ -145,7 +151,7 @@ function createMockConnection(plan) {
             question_id: questionId,
             option_key: row[1],
             option_text: row[2],
-            is_correct: row[4],
+            is_correct: row[5],
           }));
         return [options, []];
       }
@@ -184,6 +190,7 @@ mustContain(
     'clearTestQuestionLinks',
     'softDeleteSupersededMaterializedQuestions',
     'supersededCleanup',
+    'isStandaloneAccessType',
   ],
   'materialization service orchestrates runtime tables'
 );
@@ -202,6 +209,53 @@ mustContain(
   assert(connection.inserts.question_options.length === 2, 'creates question_options rows');
   assert(connection.inserts.test_questions.length === 1, 'creates test_questions link');
   assert(summary.supersededCleanup?.deletedCount === 0, 'first materialization has no superseded rows');
+}
+
+{
+  const connection = createMockConnection([
+    {
+      match: /FROM tests WHERE id = \? .* FOR UPDATE/i,
+      rows: [
+        {
+          id: 14,
+          course_id: null,
+          title: 'Free standalone',
+          status: 'READY_FOR_PUBLISH',
+          test_access_type: 'free_standalone',
+        },
+      ],
+    },
+  ]);
+  const summary = await materializeQuizDraftToRuntimeTables(14, 5, connection);
+  assert(summary.questionCount === 1, 'materializes standalone draft without a course');
+  assert(connection.inserts.question_bank[0]?.params?.[0] == null, 'standalone question_bank.course_id is null');
+}
+
+{
+  const connection = createMockConnection([
+    {
+      match: /FROM tests WHERE id = \? .* FOR UPDATE/i,
+      rows: [
+        {
+          id: 14,
+          course_id: null,
+          title: 'Course locked missing course',
+          status: 'READY_FOR_PUBLISH',
+          test_access_type: 'course_locked',
+        },
+      ],
+    },
+  ]);
+  let caught = null;
+  try {
+    await materializeQuizDraftToRuntimeTables(14, 5, connection);
+  } catch (error) {
+    caught = error;
+  }
+  assert(
+    caught instanceof QuizDraftMaterializationError,
+    'course-locked tests still require a course before materialization'
+  );
 }
 
 {

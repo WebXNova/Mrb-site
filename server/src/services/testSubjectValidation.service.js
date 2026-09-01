@@ -7,6 +7,7 @@ import { AppError } from '../errors/base/AppError.js';
 import { VALIDATION_ERROR } from '../errors/codes/ErrorCodes.js';
 
 import { DEFAULT_TEST_CATEGORY, TEST_TYPE_VALUES } from '../constants/testMetadata.constants.js';
+import { isStandaloneAccessType } from '../validators/testAccessType.js';
 
 export { DEFAULT_TEST_CATEGORY, TEST_TYPE_VALUES };
 
@@ -116,6 +117,77 @@ export async function validateSubjectsForTest(courseId, testType, subjectIds, ex
   }
 
   return ids;
+}
+
+/**
+ * Standalone tests: subjects must exist and be active (not bound to a test course).
+ * @param {string} testType
+ * @param {number[]} subjectIds
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
+ */
+export async function validateActiveSubjectIds(testType, subjectIds, executor = mysqlPool) {
+  const type = String(testType || '').trim();
+  const ids = [...new Set(subjectIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+
+  if (type === 'subject_wise') {
+    if (ids.length !== 1) {
+      throw new AppError({
+        message: 'subject_wise tests require exactly one subject_id.',
+        errorCode: TEST_SUBJECT_ERROR_CODES.SUBJECT_ID_REQUIRED,
+        httpStatus: 422,
+        isOperational: true,
+      });
+    }
+  } else if (type === 'mixed_subject') {
+    if (!ids.length) {
+      throw new AppError({
+        message: 'mixed_subject tests require at least one subject_id.',
+        errorCode: TEST_SUBJECT_ERROR_CODES.SUBJECT_IDS_REQUIRED,
+        httpStatus: 422,
+        isOperational: true,
+      });
+    }
+  } else {
+    throw new AppError({
+      message: 'Invalid test_type.',
+      errorCode: VALIDATION_ERROR,
+      httpStatus: 422,
+      isOperational: true,
+    });
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const [rows] = await executor.query(
+    `SELECT id FROM subjects WHERE is_active = TRUE AND id IN (${placeholders})`,
+    ids
+  );
+  const found = new Set(rows.map((row) => Number(row.id)));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length) {
+    throw new AppError({
+      message: 'One or more subjects are invalid or inactive.',
+      errorCode: TEST_SUBJECT_ERROR_CODES.INVALID_SUBJECT_FOR_COURSE,
+      httpStatus: 422,
+      isOperational: true,
+      metadata: { invalidSubjectIds: missing },
+    });
+  }
+
+  return ids;
+}
+
+/**
+ * @param {string} accessType
+ * @param {number|null} courseId
+ * @param {string} testType
+ * @param {number[]} subjectIds
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
+ */
+export async function validateSubjectsForTestAccess(accessType, courseId, testType, subjectIds, executor = mysqlPool) {
+  if (isStandaloneAccessType(accessType)) {
+    return validateActiveSubjectIds(testType, subjectIds, executor);
+  }
+  return validateSubjectsForTest(courseId, testType, subjectIds, executor);
 }
 
 /**

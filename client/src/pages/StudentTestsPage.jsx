@@ -22,6 +22,7 @@ function normaliseApiTest(row) {
     public_slug: row.public_slug,
     slug: row.public_slug,
     duration_minutes: row.duration_minutes,
+    question_count: row.question_count,
     max_attempts: row.max_attempts,
     start_date: row.start_date,
     end_date: row.end_date,
@@ -97,14 +98,14 @@ export default function StudentTestsPage() {
   return (
     <section className="student-tests-page sp-panel sp-card">
       <div className="student-page-header student-tests-page__header">
-        <div>
+        <div className="student-tests-page__header-copy">
           <h2 className="heading-3 student-tests-page__title">Practice tests</h2>
           <p className="student-tests-page__lead">
             Filter by subject or date, search by name, and see what is new versus already completed.
           </p>
         </div>
         <div className="student-page-header__actions">
-          <Link className="btn btn--secondary btn--sm" to="/dashboard/tests/history">
+          <Link className="sp-btn sp-btn--secondary sp-btn--sm" to="/dashboard/tests/history">
             View results
           </Link>
         </div>

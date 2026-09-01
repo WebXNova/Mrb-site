@@ -8,7 +8,7 @@ import { useTestCompleteness } from '../hooks/useTestCompleteness';
 import { testPageHeading } from '../hooks/useTestTitle';
 import { isTestPublishedStatus } from '../utils/testBasicInfoValidation';
 import AdminTestPageHeader from './AdminTestPageHeader';
-import PublishedTestReadOnlyBanner from './PublishedTestReadOnlyBanner';
+import PublishedTestEditBanner from './PublishedTestEditBanner';
 import TestWizardNav from './TestWizardNav';
 import { TestWizardProgress } from './TestWizardProgress';
 import '../styles/admin-test-setup-redesign.css';
@@ -62,25 +62,23 @@ export default function TestSetupLayout({ testId, children }) {
 
         <TestWizardNav testId={testId} activeStep="setup" />
 
-        <TestWizardProgress completeness={completeness} readOnly={isPublished} testId={testId} activeStep="setup" />
+        <TestWizardProgress completeness={completeness} testId={testId} activeStep="setup" />
 
-        {isPublished ? <PublishedTestReadOnlyBanner /> : null}
+        {isPublished ? <PublishedTestEditBanner testTitle={testTitle} /> : null}
 
         {loadError ? <p className="admin-error">{loadError}</p> : null}
 
         <div className="admin-test-edit-body">
           {typeof children === 'function'
-            ? children({ readOnly: isPublished, reloadCompleteness, completeness })
+            ? children({ readOnly: false, isPublished, reloadCompleteness, completeness })
             : children}
         </div>
 
-        {!isPublished ? (
-          <p className="admin-test-edit-footer-hint">
-            <Link className="admin-test-edit-footer-hint__link" to={adminRoute(`tests/${testId}/questions`)}>
-              {TEST_WIZARD_BUTTONS.continueToQuestions} →
-            </Link>
-          </p>
-        ) : null}
+        <p className="admin-test-edit-footer-hint">
+          <Link className="admin-test-edit-footer-hint__link" to={adminRoute(`tests/${testId}/questions`)}>
+            {TEST_WIZARD_BUTTONS.continueToQuestions} →
+          </Link>
+        </p>
       </section>
     </section>
   );

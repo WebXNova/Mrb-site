@@ -71,8 +71,10 @@ export function isPublishDbStatusValue(dbOrLifecycleStatus) {
  */
 function evaluateStep1(testRow, subjectIds, missingFields) {
   let complete = true;
+  const accessType = String(testRow.test_access_type ?? 'course_locked').trim().toLowerCase();
+  const isStandalone = accessType === 'free_standalone' || accessType === 'paid_standalone';
   const courseId = Number(testRow.course_id);
-  if (!Number.isInteger(courseId) || courseId <= 0) {
+  if (!isStandalone && (!Number.isInteger(courseId) || courseId <= 0)) {
     missingFields.push('course_id');
     complete = false;
   }
@@ -122,7 +124,10 @@ function evaluateStep2(testRow, missingFields) {
   }
 
   const maxAttempts = Number(testRow.max_attempts);
-  if (!Number.isInteger(maxAttempts) || maxAttempts <= 0 || maxAttempts > 50) {
+  // 0 = unlimited retakes (matches testRetakePolicy.normalizeMaxAttempts).
+  const attemptsConfigured =
+    Number.isInteger(maxAttempts) && (maxAttempts === 0 || (maxAttempts >= 1 && maxAttempts <= 50));
+  if (!attemptsConfigured) {
     missingFields.push('max_attempts');
     complete = false;
   }
@@ -206,6 +211,23 @@ function evaluateStep4(testRow, authorityMeta, missingFields) {
  *   emptySectionWarnings?: string[],
  * }} [extras]
  */
+const MISSING_FIELD_MESSAGES = Object.freeze({
+  course_id: 'No course assigned — select a course in General Info.',
+  title: 'Test title is missing or too short (minimum 3 characters).',
+  test_type: 'Test type is not set — choose Subject-wise or Mixed Subject.',
+  category: 'Category is not set — select a category in General Info.',
+  subject_id: 'A single subject must be selected for a Subject-wise test.',
+  subject_ids: 'At least one subject must be selected for a Mixed Subject test.',
+  duration_minutes: 'Duration is not configured — set a time limit in Settings.',
+  max_attempts: 'Max attempts is not set — configure attempt limits in Settings.',
+  passing_marks: 'Passing marks is not configured — set a passing score in Settings.',
+  access_mode: 'Access mode is not set — choose Admin only or Available to enrolled students in Settings.',
+  questions: 'No questions added — add at least one complete question.',
+  quiz_draft: 'Questions have not been saved to the server — open the Questions tab and save.',
+  section_labels: 'One or more section markers are missing a subject label.',
+  invalid_mcq: 'One or more MCQ questions are invalid — fix them in the Questions tab.',
+});
+
 export function buildMissingRequirementItems(missingFields = [], extras = {}) {
   const fields = [...new Set((missingFields || []).map((field) => String(field)))];
   const invalidSections = Array.isArray(extras.invalidSections) ? extras.invalidSections : [];
@@ -228,7 +250,12 @@ export function buildMissingRequirementItems(missingFields = [], extras = {}) {
       });
       continue;
     }
-    items.push({ code, blocking: true, key: code });
+    items.push({
+      code,
+      blocking: true,
+      key: code,
+      message: MISSING_FIELD_MESSAGES[code] || `"${code.replace(/_/g, ' ')}" is required but not set.`,
+    });
   }
 
   emptySectionWarnings.forEach((warning, index) => {
@@ -304,7 +331,7 @@ export function evaluateTestCompleteness(
 export async function loadTestCompletenessRow(testId, executor = mysqlPool) {
   const tid = Number(testId);
   const [rows] = await executor.query(
-    `SELECT id, course_id, title, category, test_type, duration_minutes, max_attempts, passing_marks, access_mode, status
+    `SELECT id, course_id, test_access_type, title, category, test_type, duration_minutes, max_attempts, passing_marks, access_mode, status
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
      LIMIT 1`,

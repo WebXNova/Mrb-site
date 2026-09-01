@@ -5,7 +5,8 @@ import { useAdminToast } from '../../context/AdminToastContext';
 import AdminCourseSubjectsPanel from '../../pages/AdminCourseSubjectsPanel';
 import CourseDetailsNav from './CourseDetailsNav';
 import CourseHealthPanel from './CourseHealthPanel';
-import CourseStatusBadge from './CourseStatusBadge';
+import CourseControlBadges from './CourseControlBadges';
+import { isCourseFinished } from './CourseFinishedBadge';
 import CourseLevelBadge from './CourseLevelBadge';
 import AdminCourseBatchPanel from './AdminCourseBatchPanel';
 import AdminCourseNotesPanel from './AdminCourseNotesPanel';
@@ -43,6 +44,8 @@ const initialForm = {
   start_date: null,
   end_date: null,
   admission_status: 'CLOSED',
+  is_finished: false,
+  finished_at: null,
 };
 
 const initialPricingForm = {
@@ -67,6 +70,8 @@ function courseRowToForm(course) {
     start_date: course.start_date ?? null,
     end_date: course.end_date ?? null,
     admission_status: course.admission_status ?? 'CLOSED',
+    is_finished: Boolean(course.is_finished) || Boolean(course.finished_at),
+    finished_at: course.finished_at ?? null,
   };
 }
 
@@ -416,7 +421,7 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
             <div className="course-edit-header__titles">
               <h1 className="course-edit-header__title">{form.title || 'Untitled course'}</h1>
               <div className="course-edit-header__meta">
-                <CourseStatusBadge active={form.is_active} />
+                <CourseControlBadges course={form} />
                 <CourseLevelBadge level={form.level} />
                 <span className="course-edit-header__id">ID {courseId}</span>
               </div>
@@ -495,7 +500,7 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
                     checked={form.is_active}
                     onChange={onChange}
                     label="Active in catalog"
-                    hint="Inactive courses are hidden from public listings."
+                    hint="Controls whether this course is visible in the public catalog and general listings."
                   />
                 </PremiumFormField>
                 <PremiumFormField
@@ -745,8 +750,19 @@ export default function AdminCourseEditView({ courseId, token, activeTab, onTabC
               onBatchesChange={setBatches}
               admissionStatus={form.admission_status}
               courseEndDate={form.end_date}
+              isFinished={isCourseFinished(form)}
               onAdmissionUpdated={(patch) => {
                 setForm((prev) => ({ ...prev, ...patch }));
+                onUpdated?.();
+              }}
+              onCourseFinished={(payload) => {
+                const course = payload?.course;
+                setForm((prev) => ({
+                  ...prev,
+                  admission_status: payload?.admission_status || course?.admission_status || 'CLOSED',
+                  is_finished: true,
+                  finished_at: course?.finished_at ?? payload?.finished_at ?? prev.finished_at,
+                }));
                 onUpdated?.();
               }}
             />

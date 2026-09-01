@@ -1,40 +1,37 @@
 /**
  * MRB Student Portal — Design Tokens
- * Mobile-first spacing, typography, breakpoints, motion
+ * Scoped to .student-shell so global/admin tokens are never affected.
  */
 
-:root {
-  /* Spacing scale */
+.student-shell {
+  /* Spacing — denser SaaS rhythm (4/8/12/16/20/24) */
   --sp-space-1: 4px;
   --sp-space-2: 8px;
-  --sp-space-3: 16px;
-  --sp-space-4: 24px;
-  --sp-space-5: 32px;
-  --sp-space-6: 48px;
-  --sp-space-7: 64px;
+  --sp-space-3: 12px;
+  --sp-space-4: 16px;
+  --sp-space-5: 20px;
+  --sp-space-6: 24px;
+  --sp-space-7: 32px;
 
-  /* Breakpoints (reference) */
   --sp-bp-tablet: 768px;
   --sp-bp-desktop: 1024px;
   --sp-bp-lg: 1280px;
 
-  /* Container padding */
-  --sp-container-px: var(--sp-space-3);
+  --sp-container-px: 16px;
 
-  /* Typography — mobile first */
-  --sp-text-hero: 1.5rem;
+  /* Compact type — matches admin dashboard density */
+  --sp-text-hero: 1.25rem;
   --sp-text-stat: 1.25rem;
-  --sp-text-card-title: 1rem;
-  --sp-text-body: 0.875rem;
+  --sp-text-card-title: 0.9375rem;
+  --sp-text-body: 0.8125rem;
   --sp-text-label: 0.6875rem;
+  --sp-text-small: 0.75rem;
 
-  /* Layout */
-  --sp-sidebar-width: 280px;
-  --sp-header-height: 64px;
-  --sp-bottom-nav-height: 64px;
+  --sp-sidebar-width: 232px;
+  --sp-header-height: 52px;
+  --sp-bottom-nav-height: 56px;
   --sp-content-max: 1280px;
 
-  /* Motion */
   --sp-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --sp-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --sp-transition: 0.3s var(--sp-ease);
@@ -44,10 +41,8 @@
   --sp-duration-progress: 1000ms;
   --sp-duration-route: 400ms;
 
-  /* Touch */
-  --sp-touch-min: 44px;
+  --sp-touch-min: 40px;
 
-  /* Z-index */
   --sp-z-header: 90;
   --sp-z-sidebar: 100;
   --sp-z-overlay: 95;
@@ -56,29 +51,21 @@
 }
 
 @media (min-width: 768px) {
-  :root {
-    --sp-container-px: var(--sp-space-5);
-    --sp-text-hero: 1.75rem;
-    --sp-text-stat: 1.5rem;
-    --sp-text-card-title: 1.125rem;
-    --sp-text-body: 0.9375rem;
-    --sp-text-label: 0.75rem;
+  .student-shell {
+    --sp-container-px: 20px;
+    --sp-text-hero: 1.375rem;
+    --sp-text-stat: 1.375rem;
+    --sp-text-card-title: 1rem;
+    --sp-text-body: 0.8125rem;
+    --sp-text-label: 0.6875rem;
   }
 }
 
 @media (min-width: 1024px) {
-  :root {
-    --sp-container-px: var(--sp-space-6);
-    --sp-text-hero: 2rem;
-    --sp-text-stat: 1.75rem;
-    --sp-text-card-title: 1.25rem;
-    --sp-text-body: 1rem;
-    --sp-text-label: 0.8125rem;
-  }
-}
-
-@media (min-width: 1280px) {
-  :root {
-    --sp-container-px: var(--sp-space-7);
+  .student-shell {
+    --sp-container-px: 24px;
+    --sp-text-hero: 1.375rem;
+    --sp-text-stat: 1.375rem;
+    --sp-touch-min: 36px;
   }
 }

@@ -55,8 +55,10 @@ function isStudentTestWritePath(path) {
 /** Slug runtime attempt writes (`PATCH|POST /tests/:slug/attempts/:attemptId/*`). */
 function isSlugTestWritePath(path) {
   return (
+    /^\/tests\/[^/]+\/verify-code$/.test(path) ||
     /^\/tests\/[^/]+\/attempts\/[^/]+\/answers$/.test(path) ||
-    /^\/tests\/[^/]+\/attempts\/[^/]+\/submit$/.test(path)
+    /^\/tests\/[^/]+\/attempts\/[^/]+\/submit$/.test(path) ||
+    /^\/tests\/[^/]+\/attempts\/[^/]+\/integrity-events$/.test(path)
   );
 }
 
@@ -87,6 +89,18 @@ export function shouldAttachCsrf(path, method = 'GET') {
   /** Manual JazzCash / EasyPaisa payment proof */
   if (/^\/payments\/manual\/[^/]+\/submit$/.test(p)) return true;
   if (p === '/payments/manual/validate-coupon') return true;
+  if (/^\/standalone-tests\/[^/]+\/register$/.test(p)) return true;
+  if (/^\/standalone-tests\/orders\/[^/]+\/submit$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/verify-code$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/free-session\/start$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/free-session\/enrollment$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/free-session\/claim$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/free-session\/attempts\/[^/]+\/answers$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/free-session\/attempts\/[^/]+\/submit$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/free-session\/attempts\/[^/]+\/integrity-events$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/attempts\/[^/]+\/answers$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/attempts\/[^/]+\/submit$/.test(p)) return true;
+  if (/^\/standalone-tests\/[^/]+\/attempts\/[^/]+\/integrity-events$/.test(p)) return true;
   /** Slug test runtime autosave + submit */
   if (isSlugTestWritePath(p)) return true;
   /** Student Q&A mutations */

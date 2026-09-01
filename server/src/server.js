@@ -36,6 +36,7 @@ import { ensureCouponsSchema } from './db/ensureCouponsSchema.js';
 import { ensureSuperAdminBootstrap } from './db/ensureSuperAdminBootstrap.js';
 import { ensureTestsCourseSchema } from './db/ensureTestsCourseSchema.js';
 import { ensureTestsApplicationSchema } from './db/ensureTestsApplicationSchema.js';
+import { ensurePaidStandaloneSchema } from './db/ensurePaidStandaloneSchema.js';
 import { ensurePerformanceIndexesSchema } from './db/ensurePerformanceIndexesSchema.js';
 import { ensureTestSubjectsSchema } from './db/ensureTestSubjectsSchema.js';
 import { ensureTeacherSubjectsSchema } from './db/ensureTeacherSubjectsSchema.js';
@@ -56,6 +57,8 @@ import { ensureTestEngineExtensionSchema } from './db/ensureTestEngineExtensionS
 import { ensureCeeDbConstraints } from './db/ensureCeeDbConstraints.js';
 import { ensureCourseDraftsSchema } from './db/ensureCourseDraftsSchema.js';
 import { ensureCourseCatalogSchema } from './db/ensureCourseCatalogSchema.js';
+import { ensureCourseFinishedSchema } from './db/ensureCourseFinishedSchema.js';
+import { ensureCourseBatchScheduleNullableSchema } from './db/ensureCourseBatchScheduleNullableSchema.js';
 import { ensureCourseEnrollmentRefactorSchema } from './db/runEnrollmentRefactorMigration.js';
 import { ensureLectureProgressSchema } from './db/ensureLectureProgressSchema.js';
 import { ensureLectureGatingSchema } from './db/ensureLectureGatingSchema.js';
@@ -207,6 +210,8 @@ async function startServer() {
   await ensureRemoveDivisionAndEnrollmentBatchSchema(mysqlPool);
   await seedLocationTables(mysqlPool);
   await ensureCourseCatalogSchema(mysqlPool);
+  await ensureCourseFinishedSchema(mysqlPool);
+  await ensureCourseBatchScheduleNullableSchema(mysqlPool);
   await ensureCourseEnrollmentRefactorSchema(mysqlPool);
   await ensureCourseDraftsSchema(mysqlPool);
   await ensureLectureProgressSchema(mysqlPool);
@@ -230,6 +235,7 @@ async function startServer() {
   await ensureSuperAdminBootstrap(mysqlPool);
   await ensureTestsCourseSchema(mysqlPool);
   await ensureTestsApplicationSchema(mysqlPool);
+  await ensurePaidStandaloneSchema(mysqlPool);
 //  await ensurePerformanceIndexesSchema(mysqlPool);
   await ensureTestSubjectsSchema(mysqlPool);
   await ensureTeacherSubjectsSchema(mysqlPool);

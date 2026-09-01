@@ -5,7 +5,8 @@ import { getStoredUser, setStudentAuth } from '../auth/session';
 import PageLayout from '../components/layout/PageLayout';
 import AuthBrandHeader from '../components/auth/AuthBrandHeader';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton';
-import { safeRedirectPath } from '../utils/authRedirect';
+import { safeRedirectPath, withSafeFromQuery } from '../utils/authRedirect';
+import { isFreeSessionReturnPath } from '../features/free-session/freeSessionNav';
 import '../styles/auth-pages.css';
 
 export default function StudentRegisterPage() {
@@ -26,7 +27,7 @@ export default function StudentRegisterPage() {
     };
     setStudentAuth('__cookie_session__', studentUser);
     const next = safeRedirectPath(searchParams.get('from')) || '/dashboard';
-    if (payload?.student?.isVerified !== true) {
+    if (payload?.student?.isVerified !== true && !isFreeSessionReturnPath(next)) {
       navigate('/verify-email', { replace: true });
     } else {
       navigate(next, { replace: true });
@@ -136,7 +137,8 @@ export default function StudentRegisterPage() {
           </form>
 
           <p className="auth-footer">
-            Already have an account? <Link to="/login">Sign in</Link>
+            Already have an account?{' '}
+            <Link to={withSafeFromQuery('/login', searchParams.get('from'))}>Sign in</Link>
           </p>
           <div className="auth-social auth-social--footer">
             <GoogleSignInButton onCredential={onGoogleCredential} disabled={isBusy} text="signup_with" />

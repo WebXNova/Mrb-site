@@ -45,19 +45,22 @@ function expectThrow(fn, ErrorType, message) {
 console.log('testResultVisibility.service — G-RT-07\n');
 
 assert(isShowResultImmediatelyEnabled(1) && !isShowResultImmediatelyEnabled(0), 'show_result_immediately flags');
-assert(isShowAnswersAfterSubmitEnabled(0) && isShowAnswersAfterSubmitEnabled(1), 'show_answers_after_submit deprecated — always enabled');
+assert(!isShowAnswersAfterSubmitEnabled(0) && isShowAnswersAfterSubmitEnabled(1), 'show_answers_after_submit gates review');
 
 expectThrow(
-  () => assertStudentResultVisible({ show_result_immediately: 0 }, { attemptId: 9 }),
+  () => assertStudentResultVisible({ show_result_immediately: 0, results_released_at: null }, { attemptId: 9 }),
   ResultNotAccessibleError,
-  'withheld results throw ResultNotAccessibleError'
+  'withheld results throw when show_result_immediately is off and not released'
 );
 
-expectThrow(
-  () => assertStudentResultVisible({ show_result_immediately: 1 }, { attemptId: 9 }),
-  ResultNotAccessibleError,
-  'show_result_immediately alone does not grant access without release'
-);
+try {
+  assertStudentResultVisible({ show_result_immediately: 1, results_released_at: null });
+  passed += 1;
+  console.log('  ✓ show_result_immediately grants access when results_released_at is null');
+} catch {
+  failed += 1;
+  console.error('  ✗ show_result_immediately grants access when results_released_at is null');
+}
 
 try {
   assertStudentResultVisible({ results_released_at: '2026-08-21T00:00:00.000Z' });
@@ -78,11 +81,27 @@ try {
     pass_status: 'PASS',
   });
   assert(
-    redacted.resultAvailable === false &&
-      redacted.score === null &&
-      redacted.percentage === null &&
-      redacted.status === null,
-    'list item redacts scores when results withheld'
+    redacted.resultAvailable === true &&
+      redacted.score === 18 &&
+      redacted.percentage === 90,
+    'list item shows scores when show_result_immediately is on and not admin-released'
+  );
+}
+
+{
+  const withheld = redactStudentResultListItem({
+    results_released_at: null,
+    show_result_immediately: 0,
+    score: 18,
+    max_score: 20,
+    percentage: 90,
+    pass_status: 'PASS',
+  });
+  assert(
+    withheld.resultAvailable === false &&
+      withheld.score === null &&
+      withheld.percentage === null,
+    'list item redacts scores when show_result_immediately is off and not released'
   );
 }
 
@@ -102,8 +121,8 @@ try {
     { show_answers_after_submit: 0, show_explanations: 1, results_released_at: '2026-01-01T00:00:00.000Z' }
   );
   assert(
-    details?.length === 1 && details[0].correctOptionText === 'B',
-    'answer review always returned (show_answers_after_submit deprecated)'
+    details == null,
+    'answer review omitted when show_answers_after_submit is off'
   );
 }
 

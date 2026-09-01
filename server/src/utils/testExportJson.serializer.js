@@ -37,6 +37,12 @@ function mapExportQuestion(question) {
     explanation_html: question.explanation_html ?? question.explanation ?? null,
     explanation: question.explanation_html ?? question.explanation ?? null,
     marks: Number(question.marks ?? 1),
+    subject_id: question.subject_id == null ? null : Number(question.subject_id),
+    section_label: question.section_label == null ? null : String(question.section_label),
+    section_display_order:
+      question.section_display_order == null ? null : Number(question.section_display_order),
+    section_subject_id:
+      question.section_subject_id == null ? null : Number(question.section_subject_id),
     correct_answer: correctAnswer,
     options,
   };
@@ -123,6 +129,10 @@ export function normalizeExportJsonForImport(parsed) {
       explanation_html: q.explanation_html ?? q.explanation ?? null,
       explanation: q.explanation_html ?? q.explanation ?? null,
       marks: q.marks ?? 1,
+      subject_id: q.subject_id ?? null,
+      section_label: q.section_label ?? null,
+      section_display_order: q.section_display_order ?? null,
+      section_subject_id: q.section_subject_id ?? null,
       options: Array.isArray(q.options)
         ? q.options.map((o, index) => ({
             option_key: o.option_key ?? ['A', 'B', 'C', 'D'][index],

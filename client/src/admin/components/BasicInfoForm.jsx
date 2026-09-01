@@ -2,6 +2,8 @@
  * Shared Step 1 basic-info form for create and edit test flows.
  */
 import PremiumCheckboxGroup from './ui/PremiumCheckboxGroup';
+import PremiumRadioGroup from './ui/PremiumRadioGroup';
+import { isStandaloneAccessType, TEST_ACCESS_TYPE_OPTIONS } from '../constants/testAccessType.js';
 
 export default function BasicInfoForm({
   form,
@@ -26,7 +28,9 @@ export default function BasicInfoForm({
 }) {
   const titleLen = String(form.title ?? '').trim().length;
   const descriptionLen = String(form.description ?? '').trim().length;
-  const showSubjectSection = Boolean(form.course_id);
+  const standalone = isStandaloneAccessType(form.test_access_type);
+  const showCourseField = !standalone;
+  const showSubjectSection = standalone || Boolean(form.course_id);
   const pageBlocked = isLoadingOptions || Boolean(optionsError);
   const disabled = isSubmitting || pageBlocked || readOnly;
 
@@ -42,7 +46,24 @@ export default function BasicInfoForm({
     <>
       <h2 className="heading-4">General</h2>
 
+      <PremiumRadioGroup
+        legend="Test type"
+        name="test_access_type"
+        value={form.test_access_type}
+        disabled={disabled}
+        options={TEST_ACCESS_TYPE_OPTIONS.map((option) => ({
+          value: option.value,
+          label: option.label,
+          hint: option.description,
+        }))}
+        onChange={(value) => onChange({ target: { name: 'test_access_type', value } })}
+      />
+      {fieldErrors.test_access_type ? (
+        <div className="admin-field__error">{fieldErrors.test_access_type}</div>
+      ) : null}
+
       <div className="admin-form-grid" style={{ marginTop: 'var(--space-4)' }}>
+        {showCourseField ? (
         <div className="admin-field">
           <label htmlFor="course_id">Course</label>
           <select
@@ -63,6 +84,7 @@ export default function BasicInfoForm({
           </select>
           {fieldErrors.course_id ? <div className="admin-field__error">{fieldErrors.course_id}</div> : null}
         </div>
+        ) : null}
 
         <div className="admin-field">
           <label htmlFor="title">Title</label>
@@ -82,7 +104,7 @@ export default function BasicInfoForm({
         </div>
 
         <div className="admin-field">
-          <label htmlFor="test_type">Test Type</label>
+          <label htmlFor="test_type">Subject mix</label>
           <select
             id="test_type"
             name="test_type"
@@ -90,7 +112,7 @@ export default function BasicInfoForm({
             onChange={onChange}
             required
             aria-invalid={Boolean(fieldErrors.test_type)}
-            disabled={disabled || !form.course_id}
+            disabled={disabled || (!standalone && !form.course_id)}
           >
             {createOptions.testTypes.map((type) => (
               <option key={type.value} value={type.value}>
@@ -105,7 +127,9 @@ export default function BasicInfoForm({
       {showSubjectSection ? (
         <div className="admin-test-form__subjects">
           {isLoadingSubjects ? (
-            <p className="body-md admin-courses__muted">Loading subjects for this course…</p>
+            <p className="body-md admin-courses__muted">
+              {standalone ? 'Loading subjects…' : 'Loading subjects for this course…'}
+            </p>
           ) : subjectsError ? (
             <p className="admin-error">{subjectsError}</p>
           ) : form.test_type === 'subject_wise' ? (
@@ -121,7 +145,11 @@ export default function BasicInfoForm({
                 aria-invalid={Boolean(fieldErrors.subject_id)}
               >
                 <option value="">
-                  {subjects.length ? 'Select one subject' : 'No subjects found for this course'}
+                  {subjects.length
+                    ? 'Select one subject'
+                    : standalone
+                      ? 'No active subjects found'
+                      : 'No subjects found for this course'}
                 </option>
                 {subjects.map((subject) => (
                   <option key={subject.id} value={subject.id}>
@@ -149,9 +177,15 @@ export default function BasicInfoForm({
                   });
                 }}
                 disabled={disabled}
-                emptyMessage="No subjects found for this course."
+                emptyMessage={
+                  standalone ? 'No active subjects found.' : 'No subjects found for this course.'
+                }
               />
-              <p className="admin-field__hint">Select one or more subjects from the course.</p>
+              <p className="admin-field__hint">
+                {standalone
+                  ? 'Select one or more subjects for this test.'
+                  : 'Select one or more subjects from the course.'}
+              </p>
               {fieldErrors.subject_ids ? <div className="admin-field__error">{fieldErrors.subject_ids}</div> : null}
             </div>
           )}

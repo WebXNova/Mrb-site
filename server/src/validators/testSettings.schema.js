@@ -17,12 +17,15 @@ export const TEST_SETTINGS_ALLOWED_KEYS = Object.freeze([
   'score_bands',
   'start_date',
   'end_date',
+  'price_pkr',
+  'seat_capacity',
   ...PUBLISHED_EDIT_CONTROL_KEYS,
 ]);
 
 export const TEST_ACCESS_MODES = Object.freeze(['public', 'private']);
-export const TEST_LAYOUT_MODES = Object.freeze(['vertical', 'horizontal']);
 export const TEST_DISPLAY_MODES = Object.freeze(['all', 'one_per_page']);
+/** Compatibility mirror of display_mode. Accepted on write; not an independent product setting. */
+export const TEST_LAYOUT_MODES = Object.freeze(['vertical', 'horizontal']);
 
 const strictBoolean = z.boolean({
   required_error: 'Boolean value is required',
@@ -60,24 +63,13 @@ export const testSettingsBodySchema = z
     score_bands: scoreBandsPayloadSchema.optional(),
     start_date: nullableIsoDateSchema.optional(),
     end_date: nullableIsoDateSchema.optional(),
+    price_pkr: z.coerce.number().int().min(0).max(10_000_000).optional(),
+    seat_capacity: z.coerce.number().int().min(0).max(100_000).optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
-    const nowMs = Date.now();
-
-    if (data.start_date != null) {
-      const startMs = new Date(data.start_date).getTime();
-      if (Number.isNaN(startMs)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'start_date is invalid', path: ['start_date'] });
-      } else if (startMs < nowMs - 60_000) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'start_date must not be in the past',
-          path: ['start_date'],
-        });
-      }
-    }
-
+    // start_date / end_date are optional and unused as access gates for course-linked tests.
+    // Do not require them. If both are sent (future standalone), end must not precede start.
     if (data.start_date != null && data.end_date != null) {
       const startMs = new Date(data.start_date).getTime();
       const endMs = new Date(data.end_date).getTime();

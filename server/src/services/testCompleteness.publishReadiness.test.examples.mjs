@@ -139,7 +139,7 @@ console.log('testCompleteness.publishReadiness — G-03\n');
     {
       ...completeWizardRow,
       duration_minutes: 0,
-      max_attempts: 0,
+      max_attempts: 99,
     },
     0,
     'publish',
@@ -161,6 +161,25 @@ console.log('testCompleteness.publishReadiness — G-03\n');
     multi.missing_requirement_items.length >= 2,
     'missing_requirement_items lists multiple issues at once'
   );
+}
+
+{
+  const unlimitedAttempts = evaluateTestCompleteness(
+    { ...completeWizardRow, max_attempts: 0 },
+    2,
+    'publish',
+    [1],
+    {
+      source: QUESTION_AUTHORITY_SOURCES.QUIZ_DRAFT,
+      questionCount: 2,
+      runtimeComposedCount: 0,
+      draftQuestionCount: 2,
+      draftTotalCount: 2,
+      hasQuizDraft: true,
+    }
+  );
+  assert(unlimitedAttempts.step2_complete === true, 'max_attempts 0 (unlimited) completes step 2');
+  assert(!unlimitedAttempts.missing_fields.includes('max_attempts'), 'unlimited attempts is not a missing field');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

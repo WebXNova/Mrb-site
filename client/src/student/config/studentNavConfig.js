@@ -2,8 +2,10 @@ export const studentNavItems = [
   { to: '/dashboard', label: 'Dashboard', end: true, icon: 'dashboard' },
   { to: '/dashboard/lectures', label: 'Lectures', icon: 'video' },
   { to: '/dashboard/tests', label: 'Tests', icon: 'clipboard-check' },
+  { to: '/tests/my-results', label: 'My Results', icon: 'clipboard-check' },
   { to: '/dashboard/notes', label: 'Notes', icon: 'file-text' },
   { to: '/dashboard/tests/history', label: 'Results', icon: 'bar-chart' },
+  { to: '/dashboard/leaderboard', label: 'Leaderboard', icon: 'trophy' },
   { to: '/student/questions', label: 'Doubts', icon: 'help-circle' },
 ];
 
@@ -22,6 +24,8 @@ export function getStudentPageTitle(pathname) {
   if (pathname.startsWith('/dashboard/my-course')) return 'Course Details';
   if (pathname.startsWith('/dashboard/lectures/')) return 'Lecture';
   if (pathname.startsWith('/dashboard/lectures')) return 'Lectures';
+  if (pathname.startsWith('/dashboard/leaderboard')) return 'Leaderboard';
+  if (pathname.startsWith('/tests/my-results') || pathname.startsWith('/tests/my-tests')) return 'My Results';
   if (pathname.startsWith('/dashboard/tests/history')) return 'Results';
   if (pathname.match(/\/dashboard\/tests\/[^/]+\/results\//)) return 'Result detail';
   if (pathname.startsWith('/dashboard/tests')) return 'Tests';

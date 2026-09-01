@@ -302,7 +302,8 @@ export async function loadPublishedTestMetaBySlug(publicSlug) {
 
   const [rows] = await mysqlPool.query(
     `SELECT id, title, description, introduction_html, duration_minutes, public_slug, course_id,
-            passing_marks, negative_marking, max_attempts
+            passing_marks, negative_marking, max_attempts,
+            show_result_immediately, show_answers_after_submit, show_explanations
      FROM tests
      WHERE public_slug = ? AND status = 'published' AND deleted_at IS NULL
      LIMIT 1`,
@@ -342,6 +343,9 @@ export async function loadPublishedTestMetaBySlug(publicSlug) {
     maxAttempts: Number(test.max_attempts ?? 1),
     description: customInstructions,
     customInstructions,
+    showResultImmediately: Boolean(Number(test.show_result_immediately ?? 1)),
+    showAnswersAfterSubmit: Boolean(Number(test.show_answers_after_submit ?? 0)),
+    showExplanations: Boolean(Number(test.show_explanations ?? 0)),
     standardInstructions: [...STANDARD_TEST_INSTRUCTIONS],
   };
 }

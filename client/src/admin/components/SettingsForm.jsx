@@ -69,9 +69,9 @@ export default function SettingsForm({
 
       <div className="test-setup-section test-setup-section--access">
         <div className="test-setup-section__head">
-          <h2 className="test-setup-section__title">Access &amp; timing</h2>
+          <h2 className="test-setup-section__title">Access control</h2>
           <p className="test-setup-section__lead">
-            Who can take this test and when it is available. Retake limits are set under Rules &amp; scoring.
+            Who can see this test. Access mode does not publish the test — use Publish when the paper is ready.
           </p>
         </div>
         <div className="test-setup-fields">
@@ -85,44 +85,16 @@ export default function SettingsForm({
               disabled={disabled}
               aria-invalid={Boolean(fieldErrors.access_mode)}
             >
-              <option value="private">Private</option>
-              <option value="public">Public</option>
+              <option value="private">Private — admin only</option>
+              <option value="public">Public — enrolled students of the assigned course</option>
             </select>
             <p className="admin-field__hint">
-              Public controls who may take this test after you publish it. Use the <strong>Publish test</strong>{' '}
-              button (below when ready, or Tests list → More) to go live — saving Public here does not publish.
+              {form.access_mode === 'public'
+                ? 'The test information can be publicly visible, but only students actively enrolled in the assigned course can start/access the test.'
+                : 'Only administrators can view this test. Switching to Public still does not allow non-enrolled students to take it.'}{' '}
+              Changing access mode does not publish the test.
             </p>
             {fieldErrors.access_mode ? <div className="admin-field__error">{fieldErrors.access_mode}</div> : null}
-          </div>
-
-          <div className="admin-field">
-            <label htmlFor="start_date">Start date</label>
-            <input
-              id="start_date"
-              name="start_date"
-              type="datetime-local"
-              value={form.start_date}
-              onChange={onChange}
-              disabled={disabled}
-              aria-invalid={Boolean(fieldErrors.start_date)}
-            />
-            <p className="admin-field__hint">Optional. Leave blank for no start restriction.</p>
-            {fieldErrors.start_date ? <div className="admin-field__error">{fieldErrors.start_date}</div> : null}
-          </div>
-
-          <div className="admin-field">
-            <label htmlFor="end_date">End date</label>
-            <input
-              id="end_date"
-              name="end_date"
-              type="datetime-local"
-              value={form.end_date}
-              onChange={onChange}
-              disabled={disabled}
-              aria-invalid={Boolean(fieldErrors.end_date)}
-            />
-            <p className="admin-field__hint">Must be on or after start date (equal is allowed).</p>
-            {fieldErrors.end_date ? <div className="admin-field__error">{fieldErrors.end_date}</div> : null}
           </div>
         </div>
       </div>

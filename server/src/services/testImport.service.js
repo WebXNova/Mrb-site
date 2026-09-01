@@ -34,6 +34,7 @@ import {
   insertImportedQuestionBankRow,
   insertImportedQuestionOptions,
   insertImportedTestQuestionLink,
+  insertImportedTestSection,
   insertImportedTestRow,
   insertImportedTestSubjects,
 } from '../repositories/testRichContentImport.repository.js';
@@ -341,16 +342,41 @@ export async function confirmTestImport(request, userId, role = 'admin') {
 
     await insertImportedTestSubjects(connection, testId, pkg.subject_ids);
 
+    const sectionIdByKey = new Map();
+    let fallbackSectionOrder = 0;
+
     for (const item of preparedQuestions) {
       const questionId = await insertImportedQuestionBankRow(connection, item.prepared, userId);
       await insertImportedQuestionOptions(connection, questionId, item.prepared.options);
       await assertImportedQuestionIntegrity(connection, questionId);
+
+      let sectionId = null;
+      const sectionKey = item.section_label
+        ? `label:${item.section_label}`
+        : item.section_subject_id != null
+          ? `subject:${item.section_subject_id}`
+          : null;
+      if (sectionKey) {
+        if (!sectionIdByKey.has(sectionKey)) {
+          const createdSectionId = await insertImportedTestSection(connection, testId, {
+            subject_label: item.section_label || `Section ${fallbackSectionOrder + 1}`,
+            subject_id: item.section_subject_id != null ? Number(item.section_subject_id) : null,
+            display_order:
+              item.section_display_order != null ? Number(item.section_display_order) : fallbackSectionOrder,
+          });
+          sectionIdByKey.set(sectionKey, createdSectionId);
+          fallbackSectionOrder += 1;
+        }
+        sectionId = sectionIdByKey.get(sectionKey);
+      }
+
       await insertImportedTestQuestionLink(
         connection,
         testId,
         questionId,
         item.display_order,
-        item.marks_override ?? null
+        item.marks_override ?? null,
+        sectionId
       );
     }
 

@@ -10,7 +10,7 @@ const SESSION_PREFIX = 'test_attempt_';
 
 /**
  * @param {string} slug
- * @returns {{ attemptId?: number|null, expiresAt?: string|null }}
+ * @returns {{ attemptId?: number|null, expiresAt?: string|null, accessKind?: string|null }}
  */
 export function getAttemptSession(slug) {
   try {
@@ -18,6 +18,7 @@ export function getAttemptSession(slug) {
     return {
       attemptId: raw.attemptId ?? null,
       expiresAt: raw.expiresAt ?? null,
+      accessKind: raw.accessKind ?? null,
     };
   } catch {
     return {};
@@ -26,12 +27,22 @@ export function getAttemptSession(slug) {
 
 /**
  * @param {string} slug
- * @param {{ attemptId: number, expiresAt?: string|null }} payload
+ * @param {{ attemptId: number, expiresAt?: string|null, accessKind?: string|null }} payload
  */
 export function setAttemptSession(slug, payload) {
+  let accessKind = payload.accessKind ?? null;
+  if (!accessKind) {
+    try {
+      const prev = JSON.parse(sessionStorage.getItem(`${SESSION_PREFIX}${slug}`) || '{}');
+      accessKind = prev.accessKind ?? null;
+    } catch {
+      accessKind = null;
+    }
+  }
   const safe = {
     attemptId: payload.attemptId ?? null,
     expiresAt: payload.expiresAt ?? null,
+    accessKind,
   };
   sessionStorage.setItem(`${SESSION_PREFIX}${slug}`, JSON.stringify(safe));
 }

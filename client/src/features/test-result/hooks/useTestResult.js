@@ -4,7 +4,7 @@ import { getStudentToken } from '../../../auth/session';
 import { testResultApi } from '../api/testResultApi';
 import { getResultErrorState, normalizeResultPayload } from '../utils/normalizeResult';
 
-export function useTestResult({ slug, attemptId }) {
+export function useTestResult({ slug, attemptId, accessKind }) {
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
   const [status, setStatus] = useState('loading');
@@ -20,9 +20,12 @@ export function useTestResult({ slug, attemptId }) {
 
     const token = getStudentToken();
     if (!token) {
-      const from = slug
-        ? `/tests/${slug}/result`
-        : `/dashboard/tests/history`;
+      const from =
+        typeof window !== 'undefined' && window.location
+          ? `${window.location.pathname}${window.location.search || ''}`
+          : slug
+            ? `/tests/${slug}/result`
+            : `/tests/my-results`;
       navigate(`/login?from=${encodeURIComponent(from)}`, { replace: true });
       return;
     }
@@ -31,7 +34,7 @@ export function useTestResult({ slug, attemptId }) {
     setErrorState(null);
 
     try {
-      const response = await testResultApi.fetchResult(aid);
+      const response = await testResultApi.fetchResult({ slug, attemptId: aid, accessKind });
       const normalized = normalizeResultPayload(response);
 
       if (!normalized) {
@@ -48,7 +51,7 @@ export function useTestResult({ slug, attemptId }) {
       setErrorState(getResultErrorState(err));
       setStatus('error');
     }
-  }, [attemptId, navigate, slug]);
+  }, [accessKind, attemptId, navigate, slug]);
 
   useEffect(() => {
     let cancelled = false;

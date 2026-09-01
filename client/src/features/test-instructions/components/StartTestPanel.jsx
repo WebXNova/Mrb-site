@@ -9,9 +9,21 @@ export default function StartTestPanel({
   studentName,
   onStudentNameChange,
   onSubmit,
+  accessKind,
+  hasActiveAttempt = false,
+  seatConfirmed,
 }) {
-  const loginHref = `/login?from=${encodeURIComponent(`/tests/${slug}`)}`;
-  const registerHref = `/register?from=${encodeURIComponent(`/tests/${slug}`)}`;
+  const standalone = accessKind === 'free_standalone' || accessKind === 'paid_standalone';
+  const paidUnseated = accessKind === 'paid_standalone' && seatConfirmed === false;
+  const fromPath =
+    accessKind === 'free_standalone'
+      ? `/tests/${slug}?access=free`
+      : accessKind === 'paid_standalone'
+        ? `/tests/${slug}?access=paid`
+        : `/tests/${slug}`;
+  const loginHref = `/login?from=${encodeURIComponent(fromPath)}`;
+  const registerHref = `/register?from=${encodeURIComponent(fromPath)}`;
+  const paidHref = `/paid-tests/${encodeURIComponent(slug)}`;
   const startDisabled = isStarting || !isAuthenticated || canStart === false;
 
   return (
@@ -22,7 +34,9 @@ export default function StartTestPanel({
 
       {!isAuthenticated ? (
         <div className="ti-callout ti-callout--warn" role="status">
-          Sign in with your student account to start this test.{' '}
+          {standalone
+            ? 'Sign in with your student account to start this test. Course enrolment is not required.'
+            : 'Sign in with your student account to start this test. Course tests require an active enrolment. We do not start tests without an account.'}{' '}
           <Link to={loginHref}>Go to sign in</Link>
         </div>
       ) : null}
@@ -50,13 +64,20 @@ export default function StartTestPanel({
           </p>
         ) : null}
 
+        {paidUnseated && isAuthenticated ? (
+          <p className="ti-callout ti-callout--warn" role="status">
+            Complete registration and payment first.{' '}
+            <Link to={paidHref}>Open paid test registration</Link>
+          </p>
+        ) : null}
+
         <button
           type="submit"
           className="btn btn--primary ti-start__button"
           disabled={startDisabled}
           aria-busy={isStarting}
         >
-          {isStarting ? 'Starting…' : 'Start test'}
+          {isStarting ? 'Starting…' : hasActiveAttempt ? 'Continue test' : 'Start test'}
         </button>
       </form>
 

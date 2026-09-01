@@ -15,13 +15,13 @@ export function getQuestionStatus({ questionId, currentId, answers, visited }) {
 export function getQuestionStatusLabel(status) {
   switch (status) {
     case 'current':
-      return 'Current question';
+      return 'current';
     case 'answered':
-      return 'Answered';
+      return 'answered';
     case 'visited':
-      return 'Visited, not answered';
+      return 'not answered';
     default:
-      return 'Not visited';
+      return 'not visited';
   }
 }
 

@@ -32,7 +32,7 @@ export default function HistoryFilters({
     Boolean(submittedDate);
 
   return (
-    <section className="th-filters th-filters--dark" aria-label="Filter results">
+    <section className="th-filters" aria-label="Filter results">
       <div className="th-filters__row th-filters__row--enhanced">
         <label className="th-filters__field th-filters__field--search">
           <span className="th-filters__label">Search</span>

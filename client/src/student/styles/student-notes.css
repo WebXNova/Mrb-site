@@ -62,7 +62,7 @@
 
 .student-notes__empty {
   margin: 0;
-  padding: 2rem 1.25rem;
+  padding: 1.25rem 1rem;
   text-align: center;
   border: 1px dashed var(--sp-border, var(--color-ink-200));
   border-radius: var(--radius-lg, 14px);
@@ -71,7 +71,7 @@
 }
 
 .student-notes__empty-icon {
-  font-size: 2rem !important;
+  font-size: 1.25rem !important;
   color: var(--sp-text-muted, var(--color-ink-400));
   margin-bottom: 0.5rem;
 }
@@ -332,8 +332,9 @@
   max-width: 28rem;
 }
 
-.student-notes-page__search-input {
+.student-shell .student-notes-page__search input[type='search'] {
   width: 100%;
+  padding: 0.45rem 1.1rem 0.45rem 2.75rem;
 }
 
 .student-notes-page__count {

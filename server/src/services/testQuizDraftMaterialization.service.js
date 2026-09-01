@@ -58,6 +58,7 @@ import {
   materializationFailedError,
   QuizDraftMaterializationError,
 } from '../errors/testQuizDraftMaterialization.errors.js';
+import { isStandaloneAccessType } from '../validators/testAccessType.js';
 import { logActivity } from './activityLog.service.js';
 import { logSecurityEvent, TEST_SECURITY_ACTIONS } from './testSecurityAudit.service.js';
 
@@ -138,8 +139,15 @@ export async function materializeQuizDraftToRuntimeTables(
     );
   }
 
-  const courseId = Number(testRow.course_id);
-  if (!Number.isInteger(courseId) || courseId <= 0) {
+  const standalone = isStandaloneAccessType(testRow.test_access_type);
+  const courseIdRaw = testRow.course_id;
+  const courseId =
+    courseIdRaw == null || courseIdRaw === '' ? null : Number(courseIdRaw);
+  if (standalone) {
+    if (courseId != null) {
+      throw materializationFailedError(tid, 'Standalone tests cannot be assigned to a course.');
+    }
+  } else if (!Number.isInteger(courseId) || courseId <= 0) {
     throw materializationFailedError(tid, 'Test must belong to a course before materialization.');
   }
 

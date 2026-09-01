@@ -72,10 +72,10 @@ expectThrow(
 
 assert(
   assertTestWithinAvailabilityWindow(
-    { id: 1, start_date: null, end_date: null },
-    new Date()
+    { id: 1, course_id: 7, start_date: '2099-01-01T00:00:00.000Z' },
+    new Date('2026-01-01T00:00:00.000Z')
   ) === undefined,
-  'open window passes'
+  'course-linked test ignores leftover future start_date'
 );
 
 expectThrow(

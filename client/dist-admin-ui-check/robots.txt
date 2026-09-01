@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /student
+Disallow: /student/
+Disallow: /teacher
+Disallow: /teacher/
+Disallow: /enroll/
+Disallow: /enrollment/payment
+
+Sitemap: https://mrbclasses.com/sitemap.xml

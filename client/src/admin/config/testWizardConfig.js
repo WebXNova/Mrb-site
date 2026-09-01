@@ -36,10 +36,11 @@ export const TEST_WIZARD_BUTTONS = {
  * @param {string} stepKey
  */
 export function getWizardPhaseKey(stepKey) {
-  if (stepKey === 'questions') return 'questions';
-  if (stepKey === 'details' || stepKey === 'publish' || stepKey === 'review') return 'publish';
-  if (stepKey === 'dashboard' || stepKey === 'setup' || stepKey === 'settings') return 'settings';
-  if (stepKey === 'results') return 'results';
+  const key = String(stepKey || '');
+  if (key === 'questions') return 'questions';
+  if (key === 'details' || key === 'publish' || key === 'review') return 'publish';
+  if (key === 'settings' || key === 'setup') return 'settings';
+  if (key === 'results') return 'results';
   return 'dashboard';
 }
 
@@ -55,13 +56,11 @@ export function getWizardStepEyebrow(phaseKey) {
  * @param {string} activeStep
  * @param {string|number} testId
  */
-export function getWizardPreviousPhase(activeStep, testId, editMode = false) {
+export function getWizardPreviousPhase(activeStep, testId, _editMode = false) {
   if (!testId) return null;
   const phaseKey = getWizardPhaseKey(activeStep);
-  const items = editMode ? TEST_WIZARD_EDIT_PHASES : TEST_NAV_ITEMS;
-  const normalizedKey = phaseKey === 'settings' ? 'settings' : phaseKey;
-  const index = items.findIndex((item) => item.key === normalizedKey || (normalizedKey === 'dashboard' && item.key === 'dashboard'));
+  const index = TEST_NAV_ITEMS.findIndex((item) => item.key === phaseKey);
   if (index <= 0) return null;
-  const previous = items[index - 1];
+  const previous = TEST_NAV_ITEMS[index - 1];
   return { label: previous.label, to: previous.path(testId) };
 }

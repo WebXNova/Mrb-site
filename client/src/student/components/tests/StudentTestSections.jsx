@@ -1,8 +1,15 @@
+import StudentIcon from '../icons/StudentIcons';
 import StudentTestCard from './StudentTestCard.jsx';
 
-function TestGrid({ tests, emptyMessage }) {
+function TestGrid({ tests, emptyTitle, emptyMessage }) {
   if (!tests.length) {
-    return <p className="student-test-sections__empty">{emptyMessage}</p>;
+    return (
+      <div className="student-test-sections__empty" role="status">
+        <StudentIcon name="clipboard-check" size={28} className="student-test-sections__empty-icon" />
+        <p className="student-test-sections__empty-title">{emptyTitle}</p>
+        <p className="student-test-sections__empty-hint">{emptyMessage}</p>
+      </div>
+    );
   }
   return (
     <div className="student-test-sections__grid">
@@ -16,7 +23,13 @@ function TestGrid({ tests, emptyMessage }) {
 export default function StudentTestSections({ available, completed, showGrouped }) {
   if (!showGrouped) {
     const all = [...available, ...completed];
-    return <TestGrid tests={all} emptyMessage="No tests match your filters." />;
+    return (
+      <TestGrid
+        tests={all}
+        emptyTitle="No matching tests"
+        emptyMessage="No tests match your filters."
+      />
+    );
   }
 
   return (
@@ -32,7 +45,8 @@ export default function StudentTestSections({ available, completed, showGrouped 
         </header>
         <TestGrid
           tests={available}
-          emptyMessage="No new tests right now. Check back later or clear your filters."
+          emptyTitle="No new tests right now"
+          emptyMessage="Check back later or clear your filters."
         />
       </section>
 
@@ -47,7 +61,8 @@ export default function StudentTestSections({ available, completed, showGrouped 
         </header>
         <TestGrid
           tests={completed}
-          emptyMessage="No completed tests yet. Start a practice test above."
+          emptyTitle="No completed tests yet"
+          emptyMessage="Start a practice test above."
         />
       </section>
     </div>

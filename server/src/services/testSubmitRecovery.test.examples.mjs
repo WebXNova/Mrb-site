@@ -85,6 +85,15 @@ function createSubmissionCrashStore(initial = {}) {
           return [row];
         }
 
+        if (/paid_standalone/.test(normalized) && /t\.course_id IS NULL/.test(normalized)) {
+          const attemptId = Number(params[0]);
+          const userId = Number(params[1]);
+          if (attemptId !== state.attempt.id || userId !== state.attempt.user_id) {
+            return [];
+          }
+          return [row];
+        }
+
         const courseId = Number(params[0]);
         const attemptId = Number(params[1]);
         const userId = Number(params[2]);
@@ -108,8 +117,9 @@ function createSubmissionCrashStore(initial = {}) {
     async execute(sql, params = []) {
       const normalized = String(sql).replace(/\s+/g, ' ').trim();
       if (/^UPDATE test_attempts a/i.test(normalized)) {
-        const resultId = Number(params[2]);
-        const attemptId = Number(params[3]);
+        const paidStandalone = /paid_standalone/.test(normalized) && /t\.course_id IS NULL/.test(normalized);
+        const resultId = Number(paidStandalone ? params[1] : params[2]);
+        const attemptId = Number(paidStandalone ? params[2] : params[3]);
         if (attemptId !== state.attempt.id) {
           return [{ affectedRows: 0 }, []];
         }
@@ -211,6 +221,23 @@ console.log('Crash simulation — result inserted, attempt status not updated');
   eq('recovery outcome', recovery.outcome, SUBMIT_RECOVERY_OUTCOMES.RECOVERED_IN_PROGRESS);
   eq('attempt finalized to submitted', store.getSnapshot().status, 'submitted');
   eq('attempt linked to result', store.getSnapshot().resultId, resultId);
+}
+
+console.log('\nPaid standalone crash recovery — course_id is null');
+{
+  const store = createSubmissionCrashStore();
+  const resultId = store.insertResultWithoutFinalizingAttempt();
+  const recovery = await resolveSubmitAttemptOutcome(store.db, {
+    attemptId: 501,
+    courseId: null,
+    userId: 77,
+    status: 'in_progress',
+    resultId: null,
+    paidStandalone: true,
+  });
+  eq('paid standalone recovery completes submit', recovery.action, 'complete');
+  eq('paid standalone recovery uses existing result row', recovery.resultId, resultId);
+  eq('paid standalone attempt finalized', store.getSnapshot().status, 'submitted');
 }
 
 console.log('\nIdempotent retry — already submitted with linked result');

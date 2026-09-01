@@ -9,6 +9,8 @@ import AdminTestPageHeader from '../components/AdminTestPageHeader';
 import { buildTestBasicInfoPayload, createDefaultTestBasicInfoForm } from '../utils/testBasicInfoValidation';
 import { useTestCreateOptions } from '../hooks/useTestCreateOptions';
 import PremiumCheckboxGroup from '../components/ui/PremiumCheckboxGroup';
+import PremiumRadioGroup from '../components/ui/PremiumRadioGroup';
+import { isStandaloneAccessType, TEST_ACCESS_TYPE_OPTIONS } from '../constants/testAccessType.js';
 
 /**
  * Minimal create flow — name + course + one or more subjects, then Dashboard.
@@ -20,16 +22,21 @@ export default function AdminTestCreatePage() {
   const { options, isLoading: optionsLoading, error: optionsError } = useTestCreateOptions(token);
 
   const [title, setTitle] = useState('');
+  const [testAccessType, setTestAccessType] = useState('course_locked');
   const [courseId, setCourseId] = useState('');
   const [subjectIds, setSubjectIds] = useState(/** @type {number[]} */ ([]));
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [subjects, setSubjects] = useState([]);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const standalone = isStandaloneAccessType(testAccessType);
+
   useEffect(() => {
+    if (!token) return undefined;
     let cancelled = false;
     setCoursesLoading(true);
     adminApi
@@ -38,7 +45,7 @@ export default function AdminTestCreatePage() {
         if (cancelled) return;
         const list = Array.isArray(response?.data) ? response.data : [];
         setCourses(list);
-        if (list.length === 1) {
+        if (list.length === 1 && !isStandaloneAccessType(testAccessType)) {
           setCourseId(String(list[0].id));
         }
       })
@@ -51,9 +58,30 @@ export default function AdminTestCreatePage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, testAccessType]);
 
   useEffect(() => {
+    if (standalone) {
+      let cancelled = false;
+      setSubjectsLoading(true);
+      adminApi
+        .uniqueActiveSubjects(token)
+        .then((response) => {
+          if (cancelled) return;
+          const list = Array.isArray(response?.data) ? response.data : [];
+          setSubjects(list);
+        })
+        .catch(() => {
+          if (!cancelled) setSubjects([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSubjectsLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!courseId) {
       setSubjects([]);
       setSubjectIds([]);
@@ -82,31 +110,32 @@ export default function AdminTestCreatePage() {
     return () => {
       cancelled = true;
     };
-  }, [token, courseId]);
-
-  function toggleSubject(rawId) {
-    const id = Number(rawId);
-    if (!Number.isInteger(id) || id <= 0) return;
-    setSubjectIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
-  }
+  }, [token, courseId, standalone]);
 
   async function onSubmit(event) {
     event.preventDefault();
     setError('');
+    setFieldErrors({});
 
+    const nextErrors = {};
     const trimmed = String(title).replace(/\s+/g, ' ').trim();
     if (trimmed.length < 3) {
-      setError('Test name must be at least 3 characters.');
-      return;
+      nextErrors.title = 'Test name must be at least 3 characters.';
     }
 
-    if (!courseId) {
-      setError('Select a course for this test.');
-      return;
+    if (!standalone && !courseId) {
+      nextErrors.course_id = 'Select a course for this test.';
     }
 
     if (!subjectIds.length) {
-      setError('Select at least one subject for this test.');
+      nextErrors.subject_ids = standalone
+        ? 'Select at least one subject for this standalone test.'
+        : 'Select at least one subject for this test.';
+    }
+
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors);
+      setError('Fix the highlighted fields, then try again.');
       return;
     }
 
@@ -114,7 +143,8 @@ export default function AdminTestCreatePage() {
       defaultCategory: options.defaultCategory,
       defaultTestType: options.defaultTestType,
     });
-    form.course_id = courseId;
+    form.test_access_type = testAccessType;
+    form.course_id = standalone ? '' : courseId;
     form.title = trimmed;
 
     if (subjectIds.length === 1) {
@@ -136,7 +166,11 @@ export default function AdminTestCreatePage() {
       if (!testId) {
         throw new Error('Test was created but no test id was returned.');
       }
-      toast.success('Test created.');
+      toast.success(
+        standalone
+          ? 'Test created. Set the schedule, seats, and timer in Settings before publishing.'
+          : 'Test created.'
+      );
       navigate(adminRoute(`tests/${testId}/dashboard`));
     } catch (err) {
       setError(err.message || 'Failed to create test.');
@@ -146,85 +180,122 @@ export default function AdminTestCreatePage() {
   }
 
   const loading = optionsLoading || coursesLoading;
-  const showSubjectPicker = Boolean(courseId);
+  const showSubjectPicker = standalone || Boolean(courseId);
 
   return (
-    <section className="admin-page admin-page--tests">
+    <section className="admin-page admin-page--test-setup">
       <section className="admin-card">
         <AdminTestPageHeader title="Create test" backLabel={TEST_WIZARD_BUTTONS.backToTests} />
 
-        <p className="admin-field__hint" style={{ marginBottom: 'var(--space-6)' }}>
-          Enter a name and choose one or more subjects. You can add labeled sections for each subject
-          on the Questions page.
+        <p className="test-setup-section__lead" style={{ marginBottom: 'var(--space-6)' }}>
+          Choose the test type, enter a name, and select subjects. Scheduling, seats, and price for
+          standalone tests are configured in Settings after creation.
         </p>
 
         {loading ? <p className="body-md admin-courses__muted">Loading…</p> : null}
         {optionsError ? <p className="admin-error">{optionsError}</p> : null}
 
-        <form className="admin-test-form" onSubmit={onSubmit} noValidate style={{ maxWidth: '32rem' }}>
-          <div className="admin-field">
-            <label htmlFor="new-test-title">Test name</label>
-            <input
-              id="new-test-title"
-              name="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              maxLength={120}
-              autoFocus
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {courses.length > 1 ? (
-            <div className="admin-field">
-              <label htmlFor="new-test-course">Course</label>
-              <select
-                id="new-test-course"
-                value={courseId}
-                onChange={(e) => setCourseId(e.target.value)}
-                required
-                disabled={isSubmitting || loading}
-              >
-                <option value="">Select course</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-
-          {showSubjectPicker ? (
-            <div className="admin-field">
-              <PremiumCheckboxGroup
-                legend="Subjects"
-                options={
-                  subjectsLoading
-                    ? []
-                    : subjects.map((subject) => ({
-                        value: Number(subject.id),
-                        label: subject.title ?? subject.name ?? `Subject #${subject.id}`,
-                      }))
-                }
-                selectedValues={subjectIds}
-                onChange={(nextIds) => setSubjectIds(nextIds)}
+        <div className="admin-test-form-section">
+          <form className="admin-test-form admin-test-form--unified" onSubmit={onSubmit} noValidate>
+            <div className="test-setup-fields">
+              <PremiumRadioGroup
+                legend="Test type"
+                name="create_test_access_type"
+                value={testAccessType}
                 disabled={isSubmitting}
-                emptyMessage={subjectsLoading ? 'Loading subjects…' : 'No subjects found for this course.'}
+                options={TEST_ACCESS_TYPE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                  hint: option.description,
+                }))}
+                onChange={(nextType) => {
+                  setTestAccessType(nextType);
+                  setSubjectIds([]);
+                  if (isStandaloneAccessType(nextType)) {
+                    setCourseId('');
+                  }
+                }}
               />
-              <p className="admin-field__hint">Select every subject this test will include.</p>
+
+              <div className="admin-field">
+                <label htmlFor="new-test-title">Test name</label>
+                <input
+                  id="new-test-title"
+                  name="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  maxLength={120}
+                  autoFocus
+                  disabled={isSubmitting}
+                  placeholder="e.g. Mathematics Final Exam 2026"
+                  aria-invalid={Boolean(fieldErrors.title)}
+                />
+                {fieldErrors.title ? <div className="admin-field__error">{fieldErrors.title}</div> : null}
+              </div>
+
+              {!standalone && (courses.length > 1 || !courseId) ? (
+                <div className="admin-field">
+                  <label htmlFor="new-test-course">Course</label>
+                  <select
+                    id="new-test-course"
+                    value={courseId}
+                    onChange={(e) => setCourseId(e.target.value)}
+                    required
+                    disabled={isSubmitting || loading}
+                    aria-invalid={Boolean(fieldErrors.course_id)}
+                  >
+                    <option value="">Select course</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
+                  {fieldErrors.course_id ? <div className="admin-field__error">{fieldErrors.course_id}</div> : null}
+                </div>
+              ) : null}
             </div>
-          ) : null}
 
-          {error ? <p className="admin-error">{error}</p> : null}
+            {showSubjectPicker ? (
+              <div className="admin-field">
+                <PremiumCheckboxGroup
+                  legend="Subjects"
+                  options={
+                    subjectsLoading
+                      ? []
+                      : subjects.map((subject) => ({
+                          value: Number(subject.id),
+                          label: subject.title ?? subject.name ?? `Subject #${subject.id}`,
+                        }))
+                  }
+                  selectedValues={subjectIds}
+                  onChange={(nextIds) => setSubjectIds(nextIds)}
+                  disabled={isSubmitting}
+                  emptyMessage={
+                    subjectsLoading
+                      ? 'Loading subjects…'
+                      : standalone
+                        ? 'No active subjects found.'
+                        : 'No subjects found for this course.'
+                  }
+                />
+                <p className="admin-field__hint">Select every subject this test will include.</p>
+                {fieldErrors.subject_ids ? (
+                  <div className="admin-field__error">{fieldErrors.subject_ids}</div>
+                ) : null}
+              </div>
+            ) : null}
 
-          <div className="admin-test-form__footer">
-            <button className="btn btn--primary" type="submit" disabled={isSubmitting || loading}>
-              {isSubmitting ? 'Creating…' : 'Create test'}
-            </button>
-          </div>
-        </form>
+            {error ? <p className="admin-error">{error}</p> : null}
+
+            <div className="admin-test-form__footer admin-test-form__footer--unified">
+              <button className="btn btn--primary" type="submit" disabled={isSubmitting || loading}>
+                {isSubmitting ? 'Creating…' : 'Create test'}
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
     </section>
   );

@@ -1,4 +1,4 @@
-import { getAdminShellSegment, isAdminShellConfigured } from '../config/adminShellConfig.js';
+import { getAdminShellSegment, isAdminShellConfigured, isLegacyAdminUiPath } from '../config/adminShellConfig.js';
 
 /** Production site origin — used for canonical URLs and absolute OG image paths. */
 export const SITE_ORIGIN = 'https://mrbclasses.com';
@@ -54,6 +54,11 @@ export const ROUTE_SEO = {
     title: 'Refund Policy | MRB Classes',
     description: 'Refund and cancellation policy for MRB Classes paid courses.',
   },
+  '/paid-tests': {
+    title: 'MDCAT Tests | MRB Classes',
+    description:
+      'Register for paid standalone tests and find free practice tests included with MRB Classes courses.',
+  },
 };
 
 /**
@@ -70,10 +75,16 @@ export function getRouteSeoConfig(pathname) {
     };
   }
 
-  if (pathname.startsWith('/tests/')) {
+  if (pathname === '/paid-tests' || pathname.startsWith('/paid-tests/')) {
+    if (/\/(register|pay)$/.test(pathname)) {
+      return {
+        title: 'Test registration | MRB Classes',
+        description: 'Complete paid test registration with MRB Classes.',
+      };
+    }
     return {
-      title: 'Practice Test | MRB Classes',
-      description: 'Take a free MDCAT practice test on MRB Classes.',
+      title: 'Paid Test | MRB Classes',
+      description: 'Register for a paid standalone test at MRB Classes. Payment is reviewed before a seat is confirmed.',
     };
   }
 
@@ -96,6 +107,8 @@ export function isPrivateRoute(pathname) {
 
   if (pathname.startsWith('/teacher')) return true;
 
+  if (isLegacyAdminUiPath(pathname)) return true;
+
   if (isAdminShellConfigured()) {
     const adminSegment = getAdminShellSegment();
     if (pathname === `/${adminSegment}` || pathname.startsWith(`/${adminSegment}/`)) {
@@ -105,6 +118,11 @@ export function isPrivateRoute(pathname) {
 
   if (pathname.startsWith('/enrollment/payment')) return true;
   if (pathname.startsWith('/enroll/')) return true;
+  if (pathname === '/login' || pathname.startsWith('/login')) return true;
+  if (pathname === '/tests/my-results' || pathname.startsWith('/tests/my-results')) return true;
+  if (pathname === '/tests/my-tests' || pathname.startsWith('/tests/my-tests')) return true;
+  if (pathname.startsWith('/tests/')) return true;
+  if (/^\/paid-tests\/.+\/(register|pay)$/.test(pathname)) return true;
 
   return false;
 }

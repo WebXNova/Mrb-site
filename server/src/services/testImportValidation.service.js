@@ -225,6 +225,9 @@ export function validateRichContentQuestions(pkg, courseId) {
       preparedQuestions.push({
         display_order: question.display_order,
         marks_override: question.marks_override ?? null,
+        section_label: question.section_label ?? null,
+        section_display_order: question.section_display_order ?? null,
+        section_subject_id: question.section_subject_id ?? question.subject_id ?? null,
         prepared: attachRichHtmlMirrorFields({
           ...normalized,
           question_text: normalized.question_text,
@@ -263,6 +266,9 @@ export function validateRichContentQuestions(pkg, courseId) {
     preparedQuestions.push({
       display_order: question.display_order,
       marks_override: question.marks_override ?? null,
+      section_label: question.section_label ?? null,
+      section_display_order: question.section_display_order ?? null,
+      section_subject_id: question.section_subject_id ?? question.subject_id ?? null,
       prepared: attachRichHtmlMirrorFields(validation.payload),
     });
   }
@@ -563,6 +569,9 @@ export function validateTestImportWithDiagnostics(rawPackage, courseId) {
     preparedQuestions.push({
       display_order: question.display_order,
       marks_override: question.marks_override ?? null,
+      section_label: question.section_label ?? null,
+      section_display_order: question.section_display_order ?? null,
+      section_subject_id: question.section_subject_id ?? question.subject_id ?? null,
       prepared: attachRichHtmlMirrorFields(validation.payload),
     });
   }

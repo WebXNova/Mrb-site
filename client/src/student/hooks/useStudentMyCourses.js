@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { enrollmentApi } from '../../api/enrollmentApi';
+import { studentApi } from '../../api/studentApi';
 import {
   buildStudentLoginRedirect,
   hasLocalStudentSession,
@@ -30,10 +31,28 @@ export function useStudentMyCourses() {
       setAuthState('loading');
 
       try {
-        const response = await enrollmentApi.listMine();
+        const [listResponse, statusResponse] = await Promise.all([
+          enrollmentApi.listMine(),
+          studentApi.studentEnrollmentStatus().catch(() => null),
+        ]);
         if (cancelled) return;
-        const rows = response?.data?.enrollments ?? [];
-        setEnrollments(rows);
+        const rows = listResponse?.data?.enrollments ?? [];
+        const status = statusResponse?.data ?? null;
+        const statusCourseId = Number(status?.courseId ?? status?.course_id);
+        const merged = rows.map((row) => {
+          if (!status || Number(row.courseId) !== statusCourseId) return row;
+          return {
+            ...row,
+            accessDisplayStatus: status.accessDisplayStatus ?? row.accessDisplayStatus,
+            accessDisplayLabel: status.accessDisplayLabel ?? row.accessDisplayLabel,
+            finished_at: status.courseFinishedAt ?? status.finished_at ?? row.finished_at,
+            is_finished:
+              row.is_finished ||
+              String(status.accessDisplayStatus || '').toLowerCase() === 'course_finished' ||
+              Boolean(status.courseFinishedAt ?? status.finished_at),
+          };
+        });
+        setEnrollments(merged);
         setAuthState('ok');
       } catch (err) {
         if (cancelled) return;

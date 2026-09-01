@@ -1,6 +1,6 @@
 import { mysqlPool } from '../config/mysql.js';
 import { ApiError } from '../utils/apiError.js';
-import { deriveCourseAdmissionFromBatch, resolveAdmissionStatusFromDates } from '../models/course.model.js';
+import { ADMISSION_STATUS, normalizeAdmissionStatus } from '../models/course.model.js';
 import { toCourseAdminDto } from '../dto/course.dto.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
 import { insertActiveCoursePricingWithConnection } from './coursePricing.service.js';
@@ -65,20 +65,11 @@ export async function createCourseWizardTransaction(payload, actorUserId = null,
     logger.debug('Transaction started');
 
     // Step 1: Create course with RESOLVED active state
-    const primaryBatch = resolved.batches[0] ?? payload.batches?.[0] ?? null;
-    const admissionFromCourse = {
-      start_date: payload.course.start_date,
-      end_date: payload.course.end_date,
-      admission_status: payload.course.admission_status,
-    };
-    const derived = deriveCourseAdmissionFromBatch(primaryBatch);
-    const start_date = admissionFromCourse.start_date ?? derived.start_date;
-    const end_date = admissionFromCourse.end_date ?? derived.end_date;
-    const admission_status = resolveAdmissionStatusFromDates({
-      start_date,
-      end_date,
-      admission_status: admissionFromCourse.admission_status ?? derived.admission_status,
-    });
+    const start_date = payload.course.start_date ?? null;
+    const end_date = payload.course.end_date ?? null;
+    const admission_status = normalizeAdmissionStatus(
+      payload.course.admission_status ?? ADMISSION_STATUS.CLOSED
+    );
 
     logger.debug('Creating course record', { courseActive: resolved.courseActive, admission_status });
     const courseStatus = resolved.publish ? 'published' : 'draft';

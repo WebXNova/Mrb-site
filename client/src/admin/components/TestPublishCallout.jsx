@@ -33,8 +33,7 @@ export default function TestPublishCallout({
         <>
           <p className="admin-publish-callout__text">
             <strong>Publish test</strong> makes this exam live for students and creates the shareable link.
-            Setting access mode to <strong>Public</strong> in Settings only controls who can take it{' '}
-            <em>after</em> you publish — it does not publish by itself.
+            Access mode controls who can <em>view</em> the instructions page — starting always requires course enrollment.
           </p>
           <button
             type="button"

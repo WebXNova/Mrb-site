@@ -27,6 +27,14 @@ const EnrollmentPaymentPage = lazy(() => import('../pages/EnrollmentPaymentPage'
 const EnrollmentPaymentSuccessPage = lazy(() => import('../pages/EnrollmentPaymentSuccessPage'));
 const EnrollmentPaymentFailedPage = lazy(() => import('../pages/EnrollmentPaymentFailedPage'));
 const EnrollmentStatusPage = lazy(() => import('../pages/EnrollmentStatusPage'));
+const PaidTestPage = lazy(() => import('../pages/PaidTestPage'));
+const PaidTestRegisterPage = lazy(() => import('../pages/PaidTestRegisterPage'));
+const PaidTestPaymentPage = lazy(() => import('../pages/PaidTestPaymentPage'));
+const PublicTestsHubPage = lazy(() => import('../pages/PublicTestsHubPage'));
+const MyTestsPage = lazy(() => import('../pages/MyTestsPage'));
+const FreeTestLandingPage = lazy(() => import('../pages/FreeTestLandingPage'));
+const FreeTestEnrollPage = lazy(() => import('../pages/FreeTestEnrollPage'));
+const FreeTestClaimPage = lazy(() => import('../pages/FreeTestClaimPage'));
 const StudentForgotPasswordPage = lazy(() => import('../pages/StudentForgotPasswordPage'));
 const StudentResetPasswordPage = lazy(() => import('../pages/StudentResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('../pages/VerifyEmailPage'));
@@ -45,6 +53,7 @@ const StudentNotificationsPage = lazy(() => import('../pages/StudentNotification
 const StudentResultDetailPage = lazy(() => import('../pages/StudentResultDetailPage'));
 const StudentLecturePlayerPage = lazy(() => import('../pages/StudentLecturePlayerPage'));
 const StudentTestHistoryPage = lazy(() => import('../pages/StudentTestHistoryPage'));
+const StudentLeaderboardPage = lazy(() => import('../pages/StudentLeaderboardPage'));
 const StudentLayout = lazy(() => import('../student/components/StudentLayout'));
 const PublicTestPage = lazy(() => import('../pages/PublicTestPage'));
 const TestAttemptPage = lazy(() => import('../pages/TestAttemptPage'));
@@ -69,6 +78,7 @@ const AdminTeacherCreatePage = lazy(() => import('../admin/pages/AdminTeacherCre
 const AdminTeacherEditPage = lazy(() => import('../admin/pages/AdminTeacherEditPage'));
 const AdminLogsPage = lazy(() => import('../admin/pages/AdminLogsPage'));
 const AdminTestsPage = lazy(() => import('../admin/pages/AdminTestsPage'));
+const AdminLeaderboardPage = lazy(() => import('../admin/pages/AdminLeaderboardPage'));
 const AdminTestImportWizardPage = lazy(() => import('../admin/pages/AdminTestImportWizardPage'));
 const AdminTestTransferPage = lazy(() => import('../admin/pages/AdminTestTransferPage'));
 const AdminTestCreatePage = lazy(() => import('../admin/pages/AdminTestCreatePage'));
@@ -91,6 +101,7 @@ const AdminPaymentAccountsPage = lazy(() => import('../admin/pages/AdminPaymentA
 const AdminCourseCategoriesPage = lazy(() => import('../admin/pages/AdminCourseCategoriesPage'));
 const AdminCouponsPage = lazy(() => import('../admin/pages/AdminCouponsPage'));
 const AdminManualPaymentsPage = lazy(() => import('../admin/pages/AdminManualPaymentsPage'));
+const AdminStandalonePaymentsPage = lazy(() => import('../admin/pages/AdminStandalonePaymentsPage'));
 const AdminNotesPage = lazy(() => import('../admin/pages/AdminNotesPage'));
 const AdminRemarksPage = lazy(() => import('../admin/pages/AdminRemarksPage'));
 const AdminQaMonitoringPage = lazy(() => import('../admin/pages/AdminQaMonitoringPage'));
@@ -181,8 +192,11 @@ function RequireStudent({ children, authStatus }) {
         const enrollment = await studentApi.studentEnrollmentStatus();
         if (cancelled) return;
 
-        const enrolled = enrollment?.data?.enrolled === true;
-        if (!enrolled && location.pathname.startsWith('/dashboard')) {
+        const status = enrollment?.data ?? {};
+        const enrolled = status.enrolled === true;
+        const courseFinished =
+          String(status.accessDisplayStatus || '').toLowerCase() === 'course_finished';
+        if (!enrolled && !courseFinished && location.pathname.startsWith('/dashboard')) {
           setGate({ status: 'enroll' });
           return;
         }
@@ -375,6 +389,7 @@ export default function AppRouter({ authStatus }) {
             <Route path="my-course" element={<StudentMyCoursePage />} />
             <Route path="tests" element={<StudentTestsPage />} />
             <Route path="tests/history" element={<StudentTestHistoryPage />} />
+            <Route path="leaderboard" element={<StudentLeaderboardPage />} />
             <Route path="notes" element={<StudentNotesPage />} />
             <Route path="lectures" element={<StudentLecturesPage />} />
             <Route path="lectures/:id" element={<StudentLecturePlayerPage />} />
@@ -386,7 +401,19 @@ export default function AppRouter({ authStatus }) {
             <Route path="profile" element={<Navigate to="/dashboard/settings/profile" replace />} />
             <Route path="notifications" element={<StudentNotificationsPage />} />
           </Route>
+          <Route path="/tests/my-results" element={<MyTestsPage />} />
+          <Route path="/tests/my-tests" element={<Navigate to="/tests/my-results" replace />} />
           <Route path="/tests/:slug" element={<PublicTestPage />} />
+          <Route path="/free-test/:slug" element={<FreeTestLandingPage />} />
+          <Route path="/free-test/:slug/start" element={<TestAttemptPage />} />
+          <Route path="/free-test/:slug/enroll" element={<FreeTestEnrollPage />} />
+          <Route path="/free-test/:slug/claim" element={<FreeTestClaimPage />} />
+          <Route path="/free-test/:slug/result" element={<TestResultPage />} />
+          <Route path="/free-test/:slug/submitted" element={<TestSubmittedPage />} />
+          <Route path="/paid-tests" element={<PublicTestsHubPage />} />
+          <Route path="/paid-tests/:slug" element={<PaidTestPage />} />
+          <Route path="/paid-tests/:slug/register" element={<PaidTestRegisterPage />} />
+          <Route path="/paid-tests/:slug/pay" element={<PaidTestPaymentPage />} />
           <Route
             path="/tests/:slug/start"
             element={
@@ -479,6 +506,7 @@ export default function AppRouter({ authStatus }) {
             <Route path="tests/:testId/rules" element={<LegacyTestSetupRedirect />} />
             <Route path="tests/:testId/quiz-builder" element={<QuizBuilderLegacyRedirect />} />
             <Route path="tests" element={<AdminTestsPage />} />
+            <Route path="leaderboard" element={<AdminLeaderboardPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="teachers" element={<AdminTeachersPage />} />
             <Route path="teachers/create" element={<AdminTeacherCreatePage />} />
@@ -488,6 +516,7 @@ export default function AppRouter({ authStatus }) {
             <Route path="remarks" element={<AdminRemarksPage />} />
             <Route path="registrations" element={<AdminRegistrationsPage />} />
             <Route path="manual-payments" element={<AdminManualPaymentsPage />} />
+            <Route path="standalone-test-payments" element={<AdminStandalonePaymentsPage />} />
             <Route path="logs" element={<AdminLogsPage />} />
             <Route path="notes" element={<AdminNotesPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />

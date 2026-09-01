@@ -134,6 +134,11 @@ export default function QuestionCard({
             <span className="qb-question-card__number" aria-hidden="true">
               {questionNumber}.
             </span>
+            <span
+              className={`qb-question-card__status ${validation.valid ? 'qb-question-card__status--ready' : 'qb-question-card__status--needs'}`}
+            >
+              {validation.valid ? 'Ready' : 'Needs work'}
+            </span>
             <label className="visually-hidden" htmlFor={titleId}>
               Question {questionNumber} title
             </label>

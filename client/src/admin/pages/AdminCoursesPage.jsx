@@ -12,7 +12,7 @@ import CourseCreateWizard from '../course-wizard/CourseCreateWizard.jsx';
 import '../styles/admin-courses-page-redesign.css';
 import './AdminCoursesPage.css';
 
-const VALID_TABS = new Set(['general', 'pricing', 'subjects', 'batch', 'health']);
+const VALID_TABS = new Set(['general', 'pricing', 'subjects', 'batch', 'notes', 'health']);
 
 export default function AdminCoursesPage() {
   const token = getAdminToken();

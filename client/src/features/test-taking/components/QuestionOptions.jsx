@@ -1,5 +1,6 @@
 import { memo, useCallback } from 'react';
 import { sanitizeStudentRichHtml } from '../../../security/sanitizeStudentRichHtml.js';
+import { stripExamContentLabels } from '../utils/examContentDisplay.js';
 
 function QuestionOptions({
   questionId,
@@ -7,7 +8,6 @@ function QuestionOptions({
   selectedOptionId,
   onSelectOption,
   disabled,
-  layoutMode = 'vertical',
 }) {
   const handleKeyDown = useCallback(
     (event, optionId) => {
@@ -27,24 +27,24 @@ function QuestionOptions({
     );
   }
 
-  const layoutClass =
-    layoutMode === 'horizontal' ? 'tt-options tt-options--horizontal' : 'tt-options';
-
   return (
-    <fieldset className={layoutClass} disabled={disabled}>
+    <fieldset className="tt-options" disabled={disabled}>
       <legend className="visually-hidden">Select one answer</legend>
       {options.map((option, index) => {
         const optionId = String(option.id);
         const isSelected = selectedOptionId === optionId;
         const letter = String.fromCharCode(65 + index);
-        const optionHtml = option.text ?? '';
+        const optionHtml = stripExamContentLabels(option.text ?? '');
+        const optionLooksLikeHtml = /<[a-z][\s\S]*>/i.test(optionHtml);
 
         return (
           <label
             key={optionId}
             className={`tt-option ${isSelected ? 'tt-option--selected' : ''}`}
+            htmlFor={`tt-option-${questionId}-${optionId}`}
           >
             <input
+              id={`tt-option-${questionId}-${optionId}`}
               type="radio"
               name={`question-${questionId}`}
               value={optionId}
@@ -57,7 +57,7 @@ function QuestionOptions({
               {letter}
             </span>
             <span className="tt-option__text">
-              {optionHtml.includes('<') ? (
+              {optionLooksLikeHtml ? (
                 <span
                   dangerouslySetInnerHTML={{
                     __html: sanitizeStudentRichHtml(optionHtml),

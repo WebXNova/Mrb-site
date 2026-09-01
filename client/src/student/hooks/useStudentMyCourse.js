@@ -16,6 +16,7 @@ export function useStudentMyCourse() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [authState, setAuthState] = useState('loading');
+  const [accessDisplay, setAccessDisplay] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,12 +30,14 @@ export function useStudentMyCourse() {
       setLoading(true);
       setError('');
       setAuthState('loading');
+      setAccessDisplay(null);
 
       try {
         await studentApi.me();
         const response = await studentApi.myCourse();
         if (cancelled) return;
         setData(response?.data ?? null);
+        setAccessDisplay(null);
         setAuthState('ok');
       } catch (err) {
         if (cancelled) return;
@@ -47,11 +50,24 @@ export function useStudentMyCourse() {
         }
 
         if (isStudentEntitlementFailure(err)) {
+          let display = null;
+          try {
+            const statusRes = await studentApi.studentEnrollmentStatus();
+            display = statusRes?.data ?? null;
+          } catch {
+            display = null;
+          }
+          if (cancelled) return;
+          const finished =
+            String(display?.accessDisplayStatus || '').toLowerCase() === 'course_finished';
           setError(
-            err?.message ||
-              'No active course enrollment was found. Complete enrollment and payment to unlock My Course.'
+            finished
+              ? 'This course has ended. You can still review your enrollment on My Courses.'
+              : err?.message ||
+                  'No active course enrollment was found. Complete enrollment and payment to unlock My Course.'
           );
           setAuthState('no_entitlement');
+          setAccessDisplay(display);
           setData(null);
           return;
         }
@@ -73,5 +89,5 @@ export function useStudentMyCourse() {
     };
   }, [location.pathname, location.search, navigate]);
 
-  return { data, loading, error, authState };
+  return { data, loading, error, authState, accessDisplay };
 }

@@ -2,6 +2,10 @@
  * Parameterized SQL for student test listing (Phase 1C).
  *
  * Architecture: Student → Owned Courses (enrollments) → Published Tests
+ *
+ * Discovery is enrollment-based. Admin-only (private) tests never appear.
+ * Available (public) tests appear only for the student's actively enrolled course.
+ * start_date / end_date are selected for display only — they are not list filters.
  */
 
 import { BLOCKING_ENROLLMENT_STATUSES } from '../errors/entitlement/index.js';
@@ -23,6 +27,8 @@ export const STUDENT_OWNED_COURSES_BLOCKING_PARAMS = BLOCKING_ENROLLMENT_STATUSE
 export const STUDENT_ELIGIBLE_TEST_WHERE_SQL = `
   WHERE t.deleted_at IS NULL
     AND t.status = ?
+    AND t.access_mode = 'public'
+    AND t.test_access_type = 'course_locked'
 `;
 
 /**
@@ -55,7 +61,8 @@ export const STUDENT_TEST_ATTEMPT_AGGREGATE_JOIN_SQL = `
 export const STUDENT_TEST_TOTAL_MARKS_JOIN_SQL = `
   LEFT JOIN (
     SELECT tq.test_id,
-           COALESCE(SUM(COALESCE(tq.marks_override, qb.marks, 1)), 0) AS total_marks
+           COALESCE(SUM(COALESCE(tq.marks_override, qb.marks, 1)), 0) AS total_marks,
+           COUNT(*) AS question_count
     FROM test_questions tq
     INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
     GROUP BY tq.test_id
@@ -76,6 +83,7 @@ export const LIST_STUDENT_ELIGIBLE_TESTS_SQL = `
     t.allow_retake,
     t.passing_marks,
     COALESCE(tm.total_marks, 0) AS total_marks,
+    COALESCE(tm.question_count, 0) AS question_count,
     t.public_slug,
     t.start_date,
     t.end_date,

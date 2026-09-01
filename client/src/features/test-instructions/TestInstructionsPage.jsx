@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import PageLayout from '../../components/layout/PageLayout';
+import { usePageSeo } from '../../seo/SeoContext';
 import { useStartTest, useTestInstructions } from './hooks/useTestInstructions';
 import AttemptInfoCard from './components/AttemptInfoCard';
+import ExamFocusNote from './components/ExamFocusNote';
 import InstructionsSection from './components/InstructionsSection';
+import ResultPolicySection from './components/ResultPolicySection';
 import StartTestPanel from './components/StartTestPanel';
 import TestInstructionsEmpty from './components/TestInstructionsEmpty';
 import TestInstructionsError from './components/TestInstructionsError';
@@ -14,11 +17,20 @@ import './styles/test-instructions.css';
 
 function TestInstructionsContent() {
   const { slug } = useParams();
-  const { meta, prep, status, error, isAuthenticated, reload } = useTestInstructions(slug);
-  const { startTest, isStarting, startError, clearStartError } = useStartTest(slug);
+  const { meta, prep, status, error, isAuthenticated, accessKind, reload } = useTestInstructions(slug);
+  const { startTest, isStarting, startError, clearStartError } = useStartTest(slug, accessKind);
   const [studentName, setStudentName] = useState('');
 
-  const canStart = prep?.canStart ?? true;
+  usePageSeo({
+    title: meta?.title ? `${meta.title} | MRB Classes` : 'Test | MRB Classes',
+    description:
+      accessKind === 'free_standalone' || accessKind === 'paid_standalone'
+        ? 'Test instructions for this MRB Classes standalone test. Sign in is required. Course enrolment is not.'
+        : 'Test instructions for enrolled MRB Classes students.',
+    noindex: true,
+  });
+
+  const canStart = !isAuthenticated || prep?.canStart === true;
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -56,6 +68,10 @@ function TestInstructionsContent() {
     );
   }
 
+  if (accessKind === 'free_standalone' && slug) {
+    return <Navigate to={`/free-test/${encodeURIComponent(slug)}`} replace />;
+  }
+
   return (
     <PageLayout>
       <div className="ti-shell">
@@ -73,6 +89,8 @@ function TestInstructionsContent() {
           <TestMetaGrid meta={meta} />
           <AttemptInfoCard meta={meta} prep={prep} isAuthenticated={isAuthenticated} />
           <InstructionsSection meta={meta} />
+          <ResultPolicySection meta={meta} />
+          <ExamFocusNote />
           <StartTestPanel
             slug={slug}
             isAuthenticated={isAuthenticated}
@@ -82,6 +100,9 @@ function TestInstructionsContent() {
             studentName={studentName}
             onStudentNameChange={setStudentName}
             onSubmit={handleSubmit}
+            accessKind={accessKind}
+            hasActiveAttempt={Boolean(prep?.hasActiveAttempt)}
+            seatConfirmed={prep?.seatConfirmed}
           />
         </div>
       </div>

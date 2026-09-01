@@ -1,5 +1,4 @@
 import { COURSE_WIZARD_BATCH_TIMEZONES } from '@course-wizard-schema';
-import { fromLocalDatetimeValue, toLocalDatetimeValue } from '../../course/batchPresentation';
 import CourseAdmissionStatusField from './CourseAdmissionStatusField.jsx';
 import AdminToggleSwitch from '../components/courses/AdminToggleSwitch';
 
@@ -33,11 +32,11 @@ export default function CourseStepBatches({
   return (
     <div className="admin-course-wizard-step">
       <p className="admin-courses__muted">
-        Configure cohort delivery and whether new students can enroll. Course run dates are taken from
-        the batch schedule below.
+        Configure cohort delivery and whether new students can enroll. Catalog visibility (Active /
+        Inactive) is set after create, on the course General tab.
       </p>
 
-      <div style={{ marginTop: '1rem' }}>
+      <div className="admin-course-wizard-step__admission">
         <CourseAdmissionStatusField
           admissionStatus={course.admission_status}
           onChange={onCourseChange}
@@ -45,22 +44,19 @@ export default function CourseStepBatches({
         />
       </div>
 
-      <fieldset className="admin-card" style={{ marginTop: '1.25rem', padding: '1rem' }}>
-        <legend className="heading-4" style={{ padding: '0 0.25rem' }}>
+      <fieldset className="admin-card admin-course-wizard-step__batch">
+        <legend className="heading-4 admin-course-wizard-step__legend">
           Batch delivery
         </legend>
         {errorMessage ? (
-          <div className="admin-field__error" role="alert" style={{ marginBottom: '0.75rem' }}>
+          <div className="admin-field__error" role="alert">
             {errorMessage}
           </div>
         ) : null}
         <div className="admin-form-grid">
           <div className="admin-field">
             <label>Title</label>
-            <input
-              value={b.title}
-              onChange={(e) => onBatchChange(0, { title: e.target.value })}
-            />
+            <input value={b.title} onChange={(e) => onBatchChange(0, { title: e.target.value })} />
           </div>
           <div className="admin-field">
             <label>Instructor</label>
@@ -79,43 +75,18 @@ export default function CourseStepBatches({
               ))}
             </select>
           </div>
-
-          {/* Date/time row — side by side on desktop */}
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: 'var(--space-4)',
-            }}
-          >
-            <div className="admin-field">
-              <label>Course start date & time</label>
-              <input
-                type="datetime-local"
-                value={toLocalDatetimeValue(b.start_date)}
-                onChange={(e) => onBatchChange(0, { start_date: fromLocalDatetimeValue(e.target.value) })}
-              />
-            </div>
-            <div className="admin-field">
-              <label>Course end date & time</label>
-              <input
-                type="datetime-local"
-                value={toLocalDatetimeValue(b.end_date)}
-                onChange={(e) => onBatchChange(0, { end_date: fromLocalDatetimeValue(e.target.value) })}
-              />
-            </div>
+          <div className="admin-field">
+            <label>Status</label>
+            <select value={b.status} onChange={(e) => onBatchChange(0, { status: e.target.value })}>
+              {BATCH_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Seats row — three fields side by side on desktop */}
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: 'var(--space-4)',
-            }}
-          >
+          <div className="admin-course-wizard-step__seats">
             <div className="admin-field">
               <label>Seats</label>
               <input
@@ -143,28 +114,7 @@ export default function CourseStepBatches({
             </div>
           </div>
 
-          <div className="admin-field">
-            <label>Status</label>
-            <select value={b.status} onChange={(e) => onBatchChange(0, { status: e.target.value })}>
-              {BATCH_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Toggles row — horizontal on desktop */}
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 'var(--space-5)',
-              alignItems: 'center',
-              paddingTop: 'var(--space-2)',
-            }}
-          >
+          <div className="admin-course-wizard-step__toggles">
             <AdminToggleSwitch
               id="batch-is-active"
               name="is_active"

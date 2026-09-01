@@ -1,3 +1,5 @@
+import { buildPresentationSettings } from '../../../utils/testPresentation.js';
+
 /** @param {Record<string, unknown>|null|undefined} raw */
 export function normalizeAttemptQuestion(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -5,7 +7,8 @@ export function normalizeAttemptQuestion(raw) {
   const id = raw.id ?? raw.questionId ?? raw.question_id;
   if (id == null) return null;
 
-  const questionText = raw.questionText ?? raw.question_text ?? '';
+  const questionText =
+    raw.questionText ?? raw.question_text ?? raw.questionHtml ?? raw.question_html ?? '';
   const rawOptions = Array.isArray(raw.options) ? raw.options : [];
   const options = rawOptions
     .map((option) => ({
@@ -49,18 +52,7 @@ export function normalizeAttemptSections(sections) {
 
 /** @param {Record<string, unknown>|null|undefined} test */
 export function normalizeTestDisplaySettings(test) {
-  if (!test || typeof test !== 'object') {
-    return { layoutMode: 'vertical', displayMode: 'one_per_page' };
-  }
-
-  const layoutRaw = test.layoutMode ?? test.layout_mode ?? 'vertical';
-  const displayRaw = test.displayMode ?? test.display_mode ?? 'one_per_page';
-
-  return {
-    layoutMode: layoutRaw === 'horizontal' ? 'horizontal' : 'vertical',
-    // Legacy tests without display_mode in payload keep paginated UX (production default).
-    displayMode: displayRaw === 'all' ? 'all' : 'one_per_page',
-  };
+  return buildPresentationSettings(test);
 }
 
 /** @param {unknown[]} questions */

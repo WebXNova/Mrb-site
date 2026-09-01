@@ -35,7 +35,8 @@ assertNoMatch('attempt service — options_json', attemptService, /options_json/
 assertNoMatch('attempt service — order_index on test_questions', attemptService, /order_index/);
 assertNoMatch('attempt service — test_attempt_answers', attemptService, /test_attempt_answers/);
 assertNoMatch('attempt service — embedded correct_option', attemptService, /correct_option/);
-assertMatch('attempt service — loadComposedTestQuestions', attemptService, /loadComposedTestQuestions/);
+assertMatch('attempt service — persistAttemptExamSnapshot', attemptService, /persistAttemptExamSnapshot/);
+assertMatch('attempt service — snapshotQuestionsForGrading', attemptService, /snapshotQuestionsForGrading/);
 assertMatch('attempt service — student_answers', attemptService, /student_answers/);
 assertMatch('attempt service — mapComposedQuestionsForStudentAttempt', attemptService, /mapComposedQuestionsForStudentAttempt/);
 

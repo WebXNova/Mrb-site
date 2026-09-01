@@ -20,6 +20,7 @@ export const APPLICATION_API_MOUNTS = Object.freeze([
   Object.freeze({ mountPath: '/api/email', isProtectedNamespace: false, namespace: null }),
   Object.freeze({ mountPath: '/api/contact', isProtectedNamespace: false, namespace: null }),
   Object.freeze({ mountPath: '/api/enrollments', isProtectedNamespace: false, namespace: null }),
+  Object.freeze({ mountPath: '/api/standalone-tests', isProtectedNamespace: false, namespace: null }),
   Object.freeze({ mountPath: '/api/courses', isProtectedNamespace: false, namespace: null }),
   Object.freeze({ mountPath: '/api/locations', isProtectedNamespace: false, namespace: null }),
 ]);

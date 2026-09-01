@@ -1,15 +1,8 @@
 /**
- * Start or resume a student test attempt (Phase 2A).
+ * Start or resume a student test attempt (portal runtime — deprecated UI path).
  *
- * Validation order:
- * 1. Authenticated student (controller)
- * 2. Valid testId (controller)
- * 3. Test exists
- * 4. Test published & not deleted
- * 5. Student authorized (assertStudentOwnsTest)
- * 6. Test within availability window (G-RT-03)
- * 7. Attempts remaining
- * 8. Resume active attempt if present
+ * Uses the same canonical CEE access checks as the slug runtime (assertCourseAccess +
+ * resolveEntitledTestById). Availability windows are enforced in JS and on INSERT.
  */
 
 import { mysqlPool } from '../config/mysql.js';
@@ -20,11 +13,14 @@ import {
   logAttemptTimeCalculation,
 } from './attemptTiming.service.js';
 import { assertStudentIdForAttemptInsert } from './testAttempt.service.js';
-import { STUDENT_ELIGIBLE_TEST_STATUS } from '../constants/studentEligibleTest.constants.js';
-import { assertStudentOwnsTest } from './testOwnership.service.js';
+import { assertCourseAccess } from './entitlement.service.js';
+import { resolveEntitledTestById } from '../security/cee/testEntitlement.service.js';
+import {
+  assertCourseLinkedTestEligible,
+  assertCourseLinkedTestReleasedToStudents,
+} from '../security/cee/courseLinkedTestAccess.service.js';
 import { expireAttemptIfExpired } from './attemptExpiry.service.js';
 import {
-  TestNotAccessibleError,
   TestNotFoundError,
 } from '../errors/testAttempt/TestAttemptErrors.js';
 import {
@@ -41,15 +37,14 @@ import {
   initializeAttemptDeliveryLayout,
   isShuffleEnabled,
 } from './attemptDeliveryLayout.service.js';
+import { persistAttemptExamSnapshot } from './attemptExamSnapshot.service.js';
 import {
-  assertTestAvailabilityWindow,
+  assertTestAvailabilityWindowForTest,
   AVAILABILITY_PHASE,
-  fetchUtcNowMs,
   getAvailabilityNowMs,
   toAvailabilityIso,
 } from './testAvailabilityWindow.service.js';
 import {
-  LOAD_TEST_BY_ID_SQL,
   LOCK_TEST_BY_ID_SQL,
   LOCK_ACTIVE_ATTEMPT_SQL,
   COUNT_STUDENT_TEST_ATTEMPTS_SQL,
@@ -68,9 +63,9 @@ function toIsoDateTime(value) {
   return toAvailabilityIso(value);
 }
 
-/** @deprecated Use assertTestAvailabilityWindow from testAvailabilityWindow.service.js */
+/** @deprecated Use assertTestAvailabilityWindowForTest from testAvailabilityWindow.service.js */
 export function assertTestWithinAvailabilityWindow(testRow, now = new Date()) {
-  assertTestAvailabilityWindow(testRow, {
+  assertTestAvailabilityWindowForTest(testRow, {
     phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
     nowMs: now.getTime(),
     context: 'studentTestStart.assertTestWithinAvailabilityWindow',
@@ -81,21 +76,7 @@ export function assertTestWithinAvailabilityWindow(testRow, now = new Date()) {
  * @param {Record<string, unknown>|null|undefined} row
  */
 export function validateTestExistsAndPublished(row) {
-  if (!row) {
-    throw new TestNotFoundError({ reason: 'test_not_found' });
-  }
-
-  if (row.deleted_at != null) {
-    throw new TestNotFoundError({ testId: row.id, reason: 'test_deleted' });
-  }
-
-  if (String(row.status) !== STUDENT_ELIGIBLE_TEST_STATUS) {
-    throw new TestNotAccessibleError({
-      testId: row.id,
-      reason: 'test_not_published',
-      status: row.status,
-    });
-  }
+  assertCourseLinkedTestEligible(row);
 }
 
 /**
@@ -131,6 +112,7 @@ export function assertAttemptsRemaining(maxAttempts, attemptsUsed, testId) {
  * @param {{
  *   studentId: number,
  *   testId: number,
+ *   courseId: number,
  *   ipAddress?: string|null,
  *   userAgent?: string|null,
  * }} input
@@ -139,34 +121,35 @@ export function assertAttemptsRemaining(maxAttempts, attemptsUsed, testId) {
 export async function startOrResumeStudentTest(input) {
   const studentId = Number(input.studentId);
   const testId = Number(input.testId);
+  const courseId = Number(input.courseId);
   const ipAddress = input.ipAddress ?? null;
   const userAgent = input.userAgent ?? null;
 
-  logger.info('student test start requested', { studentId, testId });
+  if (!Number.isInteger(courseId) || courseId <= 0) {
+    throw new ApiError(403, 'Course entitlement required', { code: 'ENTITLEMENT_REQUIRED' });
+  }
 
-  const [[previewRow]] = await mysqlPool.query(LOAD_TEST_BY_ID_SQL, [testId]);
-  validateTestExistsAndPublished(previewRow);
-  await assertStudentOwnsTest(studentId, testId);
+  logger.info('student test start requested', { studentId, testId, courseId });
 
-  const previewNowMs = await getAvailabilityNowMs(mysqlPool);
-  assertTestAvailabilityWindow(previewRow, {
-    phase: AVAILABILITY_PHASE.ANY_ACCESS,
-    nowMs: previewNowMs,
-    context: 'studentTestStart.preview',
-  });
+  const verified = await assertCourseAccess(studentId, courseId);
+  await resolveEntitledTestById(testId, verified.courseId);
 
   const connection = await mysqlPool.getConnection();
 
   try {
     await connection.beginTransaction();
 
-    const nowMs = await fetchUtcNowMs(connection);
+    const previewNowMs = await getAvailabilityNowMs(connection);
 
     const [[testRow]] = await connection.query(LOCK_TEST_BY_ID_SQL, [testId]);
-    validateTestExistsAndPublished(testRow);
-    assertTestAvailabilityWindow(testRow, {
+    if (!testRow) {
+      throw new TestNotFoundError({ testId, reason: 'test_not_found' });
+    }
+    assertCourseLinkedTestEligible(testRow, { testId, studentId });
+    assertCourseLinkedTestReleasedToStudents(testRow, { testId });
+    assertTestAvailabilityWindowForTest(testRow, {
       phase: AVAILABILITY_PHASE.ANY_ACCESS,
-      nowMs,
+      nowMs: previewNowMs,
       context: 'studentTestStart.lock',
     });
 
@@ -180,14 +163,14 @@ export async function startOrResumeStudentTest(input) {
     if (activeAttempt) {
       const expiredNow = await expireAttemptIfExpired({
         attemptId: activeAttempt.id,
-        nowMs,
+        nowMs: previewNowMs,
         executor: connection,
       });
 
       if (!expiredNow) {
-        assertTestAvailabilityWindow(testRow, {
+        assertTestAvailabilityWindowForTest(testRow, {
           phase: AVAILABILITY_PHASE.IN_PROGRESS,
-          nowMs,
+          nowMs: previewNowMs,
           attemptStartedAt: activeAttempt.started_at,
           context: 'studentTestStart.resume',
         });
@@ -219,9 +202,9 @@ export async function startOrResumeStudentTest(input) {
       }
     }
 
-    assertTestAvailabilityWindow(testRow, {
+    assertTestAvailabilityWindowForTest(testRow, {
       phase: AVAILABILITY_PHASE.CREATE_ATTEMPT,
-      nowMs,
+      nowMs: previewNowMs,
       context: 'studentTestStart.create',
     });
 
@@ -281,6 +264,16 @@ export async function startOrResumeStudentTest(input) {
       shuffleQuestions: isShuffleEnabled(testRow.shuffle_questions),
       shuffleOptions: isShuffleEnabled(testRow.shuffle_options),
       attemptNonce: null,
+      connection,
+    });
+
+    await persistAttemptExamSnapshot({
+      attemptId,
+      testId,
+      shuffleQuestions: isShuffleEnabled(testRow.shuffle_questions),
+      shuffleOptions: isShuffleEnabled(testRow.shuffle_options),
+      attemptNonce: null,
+      testRow,
       connection,
     });
 

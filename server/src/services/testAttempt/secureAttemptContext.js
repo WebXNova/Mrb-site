@@ -13,7 +13,6 @@ import {
   AttemptExpiredError,
   AttemptInvalidStateError,
   AttemptNotFoundError,
-  AttemptNotOwnedError,
   AttemptTokenInvalidError,
   CourseScopeViolationError,
   EntitlementRequiredError,
@@ -25,11 +24,18 @@ import {
 import { mysqlPool } from '../../config/mysql.js';
 import { loadTestSubjectPresentation } from '../testSubjectPresentation.service.js';
 import {
-  assertTestAvailabilityWindow,
+  assertTestAvailabilityWindowForTest,
   AVAILABILITY_PHASE,
   getAvailabilityNowMs,
   parseTestAvailabilityInstant,
 } from '../testAvailabilityWindow.service.js';
+import { STANDALONE_TEST_JOIN_SQL } from '../../constants/testAccessType.constants.js';
+import { PAID_STANDALONE_ACCESS_TYPE } from '../../constants/paidStandalone.constants.js';
+import { TEST_ACCESS_TYPE_FREE_STANDALONE } from '../../constants/testAccessType.constants.js';
+import { loadConfirmedPaidStandaloneSeat } from '../../security/cee/paidStandaloneAccess.service.js';
+import { isStandaloneAccessType } from '../../validators/testAccessType.js';
+import { assertNotBlockedByExamIntegrity } from '../examIntegrity.store.js';
+import { buildPresentationSettings } from '../../utils/testPresentation.js';
 
 /**
  * @typedef {import('../entitlement.service.js').EntitlementContext} EntitlementContext
@@ -47,6 +53,7 @@ import {
  * @property {string|null} completion_reason
  * @property {string|null} attempt_nonce
  * @property {unknown|null} delivery_layout_json
+ * @property {unknown|null} exam_snapshot_json
  * @property {number|null} result_id
  */
 
@@ -84,6 +91,7 @@ import {
  * @typedef {object} ResolveSecureAttemptInput
  * @property {number} attemptId
  * @property {number} userId
+ * @property {string} [guestSessionHash]
  * @property {number} [courseId]
  * @property {string} [slug]
  * @property {EntitlementContext} [entitlement]
@@ -109,6 +117,7 @@ const ATTEMPT_TEST_SELECT = `
          a.completion_reason,
          a.attempt_nonce,
          a.delivery_layout_json,
+         a.exam_snapshot_json,
          a.result_id,
          t.id AS t_id,
          t.course_id,
@@ -127,6 +136,7 @@ const ATTEMPT_TEST_SELECT = `
          t.results_released_at,
          t.layout_mode,
          t.display_mode,
+         t.full_page_mode,
          t.start_date,
          t.end_date
   FROM test_attempts a
@@ -136,6 +146,100 @@ const ATTEMPT_TEST_SELECT = `
     AND t.status = 'published'
   WHERE a.id = ?
     AND a.user_id = ?`;
+
+const ATTEMPT_PAID_TEST_SELECT = `
+  SELECT a.id,
+         a.test_id,
+         a.student_id,
+         a.user_id,
+         a.status,
+         a.started_at,
+         a.expires_at,
+         a.submitted_at,
+         a.completion_reason,
+         a.attempt_nonce,
+         a.delivery_layout_json,
+         a.exam_snapshot_json,
+         a.result_id,
+         a.guest_session_hash,
+         a.identity_status,
+         t.id AS t_id,
+         t.course_id,
+         t.public_slug,
+         t.status AS test_status,
+         t.title,
+         t.description,
+         t.duration_minutes,
+         t.show_explanations,
+         t.negative_marking,
+         t.max_attempts,
+         t.passing_marks,
+         t.shuffle_questions,
+         t.shuffle_options,
+         t.show_result_immediately,
+         t.results_released_at,
+         t.layout_mode,
+         t.display_mode,
+         t.full_page_mode,
+         t.start_date,
+         t.end_date,
+         t.access_mode,
+         t.test_access_type
+  FROM test_attempts a
+  INNER JOIN tests t ON t.id = a.test_id
+    AND ${STANDALONE_TEST_JOIN_SQL}
+    AND t.status = 'published'
+  WHERE a.id = ?
+    AND a.user_id = ?`;
+
+const ATTEMPT_GUEST_FREE_SELECT = `
+  SELECT a.id,
+         a.test_id,
+         a.student_id,
+         a.user_id,
+         a.status,
+         a.started_at,
+         a.expires_at,
+         a.submitted_at,
+         a.completion_reason,
+         a.attempt_nonce,
+         a.delivery_layout_json,
+         a.exam_snapshot_json,
+         a.result_id,
+         a.guest_session_hash,
+         a.identity_status,
+         t.id AS t_id,
+         t.course_id,
+         t.public_slug,
+         t.status AS test_status,
+         t.title,
+         t.description,
+         t.duration_minutes,
+         t.show_explanations,
+         t.negative_marking,
+         t.max_attempts,
+         t.passing_marks,
+         t.shuffle_questions,
+         t.shuffle_options,
+         t.show_result_immediately,
+         t.results_released_at,
+         t.layout_mode,
+         t.display_mode,
+         t.full_page_mode,
+         t.start_date,
+         t.end_date,
+         t.access_mode,
+         t.test_access_type
+  FROM test_attempts a
+  INNER JOIN tests t ON t.id = a.test_id
+    AND ${STANDALONE_TEST_JOIN_SQL}
+    AND t.status = 'published'
+    AND t.test_access_type = '${TEST_ACCESS_TYPE_FREE_STANDALONE}'
+  WHERE a.id = ?
+    AND a.guest_session_hash = ?
+    AND a.user_id IS NULL
+    AND a.student_id IS NULL`;
+
 
 /**
  * @param {EntitlementContext} entitlement
@@ -166,12 +270,16 @@ function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
     submitted_at: row.submitted_at ?? null,
     attempt_nonce: row.attempt_nonce ?? null,
     delivery_layout_json: row.delivery_layout_json ?? null,
+    exam_snapshot_json: row.exam_snapshot_json ?? null,
     result_id: row.result_id != null ? Number(row.result_id) : null,
+    guest_session_hash: row.guest_session_hash ? String(row.guest_session_hash) : null,
+    identity_status: row.identity_status ? String(row.identity_status) : null,
   };
 
+  const presentation = buildPresentationSettings(row);
   const test = {
     id: Number(row.t_id),
-    course_id: Number(row.course_id),
+    course_id: row.course_id == null ? null : Number(row.course_id),
     public_slug: String(row.public_slug || ''),
     status: String(row.test_status),
     title: String(row.title || ''),
@@ -186,8 +294,9 @@ function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
     shuffle_options: Number(row.shuffle_options ?? 0),
     show_result_immediately: Number(row.show_result_immediately ?? 1),
     results_released_at: row.results_released_at ?? null,
-    layout_mode: row.layout_mode === 'horizontal' ? 'horizontal' : 'vertical',
-    display_mode: row.display_mode === 'one_per_page' ? 'one_per_page' : 'all',
+    layout_mode: presentation.layoutMode,
+    display_mode: presentation.displayMode,
+    full_page_mode: presentation.fullPageMode,
     start_date: row.start_date ?? null,
     end_date: row.end_date ?? null,
   };
@@ -196,8 +305,12 @@ function mapRowToSecureContext(row, entitlement, subjectLabel = null) {
     attempt,
     test,
     entitlement,
-    courseId: entitlement.courseId,
-    userId: entitlement.userId,
+    courseId: entitlement?.courseId ?? null,
+    userId: entitlement?.userId ?? Number(row.user_id),
+    paidStandalone: Boolean(entitlement?.paidStandalone),
+    accessKind: entitlement?.accessKind ?? 'course_locked',
+    guest: Boolean(entitlement?.guest),
+    guestSessionHash: attempt.guest_session_hash,
   });
 }
 
@@ -222,15 +335,241 @@ function auditAttemptDenial(reason, input, extra = {}) {
  * @param {ResolveSecureAttemptInput} input
  * @returns {Promise<SecureAttemptContext>}
  */
+async function resolvePaidStandaloneAttemptContext(input, attemptId, userId) {
+  const executor = input.connection ?? mysqlPool;
+  let sql = ATTEMPT_PAID_TEST_SELECT;
+  if (input.forUpdate) {
+    sql = `${sql} FOR UPDATE`;
+  }
+  const [rows] = await executor.query(sql, [attemptId, userId]);
+  const row = rows[0];
+  if (!row) {
+    auditAttemptDenial('paid_standalone_attempt_not_found', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
+    throw new AttemptNotFoundError({ attemptId, userId, slug: input.slug ?? null });
+  }
+
+  const normalizedSlug = input.slug != null ? String(input.slug).trim() : null;
+  if (normalizedSlug && String(row.public_slug) !== normalizedSlug) {
+    throw new AttemptNotFoundError({ attemptId, userId, slug: normalizedSlug });
+  }
+
+  if (input.tokenNonce != null) {
+    const expected = String(input.tokenNonce);
+    if (!expected || String(row.attempt_nonce) !== expected) {
+      throw new AttemptTokenInvalidError({ attemptId, userId, reason: 'nonce_mismatch' });
+    }
+  }
+
+  const accessType = String(row.test_access_type || '');
+  if (accessType === PAID_STANDALONE_ACCESS_TYPE) {
+    const seat = await loadConfirmedPaidStandaloneSeat({
+      testId: Number(row.t_id),
+      userId,
+      executor,
+    });
+    if (!seat) {
+      throw new TestNotAccessibleError({
+        attemptId,
+        userId,
+        reason: 'paid_standalone_seat_not_confirmed',
+      });
+    }
+  } else if (accessType !== TEST_ACCESS_TYPE_FREE_STANDALONE) {
+    throw new AttemptNotFoundError({ attemptId, userId, slug: input.slug ?? null });
+  }
+
+  if (input.requireInProgress) {
+    await assertNotBlockedByExamIntegrity({
+      testId: Number(row.t_id),
+      userId,
+      executor,
+    });
+  }
+
+  const entitlement = Object.freeze({
+    accessKind: accessType === TEST_ACCESS_TYPE_FREE_STANDALONE ? 'free_standalone' : 'paid_standalone',
+    paidStandalone: true,
+    standalone: true,
+    userId,
+    courseId: null,
+  });
+  const subjectPresentation = await loadTestSubjectPresentation(Number(row.t_id));
+  const ctx = mapRowToSecureContext(row, entitlement, subjectPresentation.displayLabel);
+
+  const nowMs =
+    input.nowMs != null && Number.isFinite(input.nowMs)
+      ? input.nowMs
+      : await getAvailabilityNowMs(executor);
+
+  if (input.requireInProgress) {
+    if (ctx.attempt.status !== 'in_progress') {
+      throw new AttemptInvalidStateError({
+        attemptId,
+        status: ctx.attempt.status,
+        required: 'in_progress',
+      });
+    }
+    const expiresMs = parseTestAvailabilityInstant(ctx.attempt.expires_at);
+    const graceMs = Number(input.expiryGraceMs);
+    const allowedUntilMs = expiresMs + (Number.isFinite(graceMs) && graceMs > 0 ? graceMs : 0);
+    if (expiresMs != null && nowMs > allowedUntilMs) {
+      throw new AttemptExpiredError({ attemptId, expiresAt: ctx.attempt.expires_at });
+    }
+  }
+
+  if (input.requireSubmitted) {
+    if (ctx.attempt.status !== 'submitted') {
+      throw new AttemptInvalidStateError({
+        attemptId,
+        status: ctx.attempt.status,
+        required: 'submitted',
+      });
+    }
+  } else if (input.requireInProgress || input.enforceAvailabilityWindow !== false) {
+    assertTestAvailabilityWindowForTest(
+      {
+        id: ctx.test.id,
+        course_id: null,
+        test_access_type: accessType || PAID_STANDALONE_ACCESS_TYPE,
+        start_date: row.start_date,
+        end_date: row.end_date,
+      },
+      {
+        phase: AVAILABILITY_PHASE.IN_PROGRESS,
+        nowMs,
+        attemptStartedAt: ctx.attempt.started_at,
+        context: input.auditContext ?? 'testAttempt.resolvePaidStandaloneAttemptContext',
+      }
+    );
+  }
+
+  return ctx;
+}
+
+async function resolveGuestFreeSessionAttemptContext(input, attemptId, guestSessionHash) {
+  const executor = input.connection ?? mysqlPool;
+  let sql = ATTEMPT_GUEST_FREE_SELECT;
+  if (input.forUpdate) {
+    sql = `${sql} FOR UPDATE`;
+  }
+  const [rows] = await executor.query(sql, [attemptId, guestSessionHash]);
+  const row = rows[0];
+  if (!row) {
+    auditAttemptDenial('guest_free_session_attempt_not_found', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
+    throw new AttemptNotFoundError({ attemptId, slug: input.slug ?? null, reason: 'guest_attempt_not_found' });
+  }
+
+  const normalizedSlug = input.slug != null ? String(input.slug).trim() : null;
+  if (normalizedSlug && String(row.public_slug) !== normalizedSlug) {
+    throw new AttemptNotFoundError({ attemptId, slug: normalizedSlug });
+  }
+
+  if (input.tokenNonce != null) {
+    const expected = String(input.tokenNonce);
+    if (!expected || String(row.attempt_nonce) !== expected) {
+      throw new AttemptTokenInvalidError({ attemptId, reason: 'nonce_mismatch' });
+    }
+  }
+
+  const entitlement = Object.freeze({
+    accessKind: 'free_standalone',
+    paidStandalone: true,
+    standalone: true,
+    guest: true,
+    userId: 0,
+    courseId: null,
+  });
+  const subjectPresentation = await loadTestSubjectPresentation(Number(row.t_id));
+  const ctx = mapRowToSecureContext(row, entitlement, subjectPresentation.displayLabel);
+
+  const nowMs =
+    input.nowMs != null && Number.isFinite(input.nowMs)
+      ? input.nowMs
+      : await getAvailabilityNowMs(executor);
+
+  if (input.requireInProgress) {
+    if (ctx.attempt.status !== 'in_progress') {
+      throw new AttemptInvalidStateError({
+        attemptId,
+        status: ctx.attempt.status,
+        required: 'in_progress',
+      });
+    }
+    const expiresMs = parseTestAvailabilityInstant(ctx.attempt.expires_at);
+    const graceMs = Number(input.expiryGraceMs);
+    const allowedUntilMs = expiresMs + (Number.isFinite(graceMs) && graceMs > 0 ? graceMs : 0);
+    if (expiresMs != null && nowMs > allowedUntilMs) {
+      throw new AttemptExpiredError({ attemptId, expiresAt: ctx.attempt.expires_at });
+    }
+  }
+
+  if (input.requireSubmitted) {
+    if (ctx.attempt.status !== 'submitted') {
+      throw new AttemptInvalidStateError({
+        attemptId,
+        status: ctx.attempt.status,
+        required: 'submitted',
+      });
+    }
+  } else if (input.requireInProgress || input.enforceAvailabilityWindow !== false) {
+    assertTestAvailabilityWindowForTest(
+      {
+        id: ctx.test.id,
+        course_id: null,
+        test_access_type: TEST_ACCESS_TYPE_FREE_STANDALONE,
+        start_date: row.start_date,
+        end_date: row.end_date,
+      },
+      {
+        phase: AVAILABILITY_PHASE.IN_PROGRESS,
+        nowMs,
+        attemptStartedAt: ctx.attempt.started_at,
+        context: input.auditContext ?? 'testAttempt.resolveGuestFreeSessionAttemptContext',
+      }
+    );
+  }
+
+  return ctx;
+}
+
+/**
+ * Resolve and validate a test attempt as a security boundary (fail-closed).
+ *
+ * @param {ResolveSecureAttemptInput} input
+ * @returns {Promise<SecureAttemptContext>}
+ */
 export async function resolveSecureAttemptContext(input) {
   const attemptId = Number(input.attemptId);
-  const userId = Number(input.userId);
+  const guestHash = input.guestSessionHash ? String(input.guestSessionHash).trim() : '';
 
   if (!Number.isInteger(attemptId) || attemptId <= 0) {
     throw new AttemptNotFoundError({ reason: 'invalid_attempt_id', attemptId: input.attemptId });
   }
+
+  if (guestHash) {
+    if (!/^[a-f0-9]{64}$/i.test(guestHash)) {
+      throw new AttemptNotFoundError({ reason: 'invalid_guest_session', attemptId });
+    }
+    return resolveGuestFreeSessionAttemptContext(input, attemptId, guestHash);
+  }
+
+  const userId = Number(input.userId);
+
   if (!Number.isInteger(userId) || userId <= 0) {
     throw new EntitlementRequiredError({ reason: 'invalid_user_id', userId: input.userId });
+  }
+
+  const peekExecutor = input.connection ?? mysqlPool;
+  const [peekRows] = await peekExecutor.query(
+    `SELECT t.test_access_type
+     FROM test_attempts a
+     INNER JOIN tests t ON t.id = a.test_id
+     WHERE a.id = ? AND a.user_id = ?
+     LIMIT 1`,
+    [attemptId, userId]
+  );
+  if (isStandaloneAccessType(peekRows[0]?.test_access_type)) {
+    return resolvePaidStandaloneAttemptContext(input, attemptId, userId);
   }
 
   let entitlement = input.entitlement ?? null;
@@ -283,8 +622,13 @@ export async function resolveSecureAttemptContext(input) {
   }
 
   if (Number(row.user_id) !== userId) {
-    auditAttemptDenial('attempt_user_mismatch', input, { errorCode: 'ATTEMPT_NOT_OWNED' });
-    throw new AttemptNotOwnedError({ attemptId, userId, ownerId: row.user_id });
+    auditAttemptDenial('attempt_user_mismatch', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
+    throw new AttemptNotFoundError({
+      attemptId,
+      userId,
+      courseId: entitlement.courseId,
+      slug: input.slug ?? null,
+    });
   }
 
   if (Number(row.course_id) !== entitlement.courseId) {
@@ -347,6 +691,11 @@ export async function resolveSecureAttemptContext(input) {
     if (expiresMs != null && nowMs > allowedUntilMs) {
       throw new AttemptExpiredError({ attemptId, expiresAt: ctx.attempt.expires_at });
     }
+    await assertNotBlockedByExamIntegrity({
+      testId: Number(row.t_id),
+      userId,
+      executor,
+    });
   }
 
   if (input.requireSubmitted) {
@@ -358,9 +707,10 @@ export async function resolveSecureAttemptContext(input) {
       });
     }
   } else if (input.requireInProgress || input.enforceAvailabilityWindow !== false) {
-    assertTestAvailabilityWindow(
+    assertTestAvailabilityWindowForTest(
       {
         id: ctx.test.id,
+        course_id: row.course_id,
         start_date: row.start_date,
         end_date: row.end_date,
       },

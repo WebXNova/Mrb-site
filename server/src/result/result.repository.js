@@ -23,6 +23,7 @@ export const LOAD_RESULT_CONTEXT_SQL = `
     ${DERIVED_PASS_STATUS_SQL} AS pass_status,
     r.time_taken_seconds,
     r.max_score,
+    r.detail_json,
     t.title AS test_title,
     t.show_result_immediately,
     t.show_answers_after_submit,

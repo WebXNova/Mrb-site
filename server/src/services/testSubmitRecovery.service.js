@@ -7,6 +7,7 @@
  * - duplicate submit retries (idempotent complete response)
  */
 
+import { STANDALONE_TEST_JOIN_SQL } from '../constants/testAccessType.constants.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { AttemptInvalidStateError } from '../errors/testAttempt/TestAttemptErrors.js';
 
@@ -39,17 +40,21 @@ export const SUBMIT_RECOVERY_OUTCOMES = Object.freeze({
  * @param {ScopedDb} db
  * @param {{ attemptId: number, courseId: number, userId: number }} params
  */
-export async function loadAttemptSubmissionState(db, { attemptId, courseId, userId }) {
+export async function loadAttemptSubmissionState(db, { attemptId, courseId, userId, paidStandalone = false }) {
+  const join = paidStandalone
+    ? `INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}`
+    : `INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?`;
+  const params = paidStandalone ? [attemptId, userId] : [courseId, attemptId, userId];
   const rows = await db.rows(
     `SELECT a.status,
             a.result_id AS attempt_result_id,
             r.id AS result_id
      FROM test_attempts a
-     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+     ${join}
      LEFT JOIN test_results r ON r.attempt_id = a.id
      WHERE a.id = ? AND a.user_id = ?
      LIMIT 1`,
-    [courseId, attemptId, userId]
+    params
   );
   return rows[0] ?? null;
 }
@@ -68,10 +73,24 @@ export async function loadAttemptSubmissionState(db, { attemptId, courseId, user
  */
 export async function finalizeAttemptAfterResult(
   db,
-  { attemptId, courseId, userId, resultId, completionReason = 'submitted' }
+  { attemptId, courseId, userId, resultId, completionReason = 'submitted', paidStandalone = false }
 ) {
   const raw = await db.execute(
-    `UPDATE test_attempts a
+    paidStandalone
+      ? `UPDATE test_attempts a
+     INNER JOIN tests t ON t.id = a.test_id AND ${STANDALONE_TEST_JOIN_SQL}
+     SET a.status = 'submitted',
+         a.submitted_at = COALESCE(a.submitted_at, UTC_TIMESTAMP()),
+         a.completion_reason = COALESCE(a.completion_reason, ?),
+         a.result_id = ?,
+         a.updated_at = CURRENT_TIMESTAMP
+     WHERE a.id = ?
+       AND a.user_id = ?
+       AND (
+         a.status = 'in_progress'
+         OR (a.status = 'submitted' AND (a.result_id IS NULL OR a.result_id = ?))
+       )`
+      : `UPDATE test_attempts a
      INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
      SET a.status = 'submitted',
          a.submitted_at = COALESCE(a.submitted_at, UTC_TIMESTAMP()),
@@ -84,7 +103,9 @@ export async function finalizeAttemptAfterResult(
          a.status = 'in_progress'
          OR (a.status = 'submitted' AND (a.result_id IS NULL OR a.result_id = ?))
        )`,
-    [courseId, completionReason, resultId, attemptId, userId, resultId]
+    paidStandalone
+      ? [completionReason, resultId, attemptId, userId, resultId]
+      : [courseId, completionReason, resultId, attemptId, userId, resultId]
   );
   return readExecuteAffectedRows(raw);
 }
@@ -113,7 +134,12 @@ export async function resolveSubmitAttemptOutcome(db, params) {
   const attemptResultId =
     params.resultId == null || params.resultId === undefined ? null : Number(params.resultId);
 
-  const row = await loadAttemptSubmissionState(db, { attemptId, courseId, userId });
+  const row = await loadAttemptSubmissionState(db, {
+    attemptId,
+    courseId,
+    userId,
+    paidStandalone: Boolean(params.paidStandalone),
+  });
   const existingResultId = row?.result_id != null ? Number(row.result_id) : null;
 
   if (existingResultId != null) {
@@ -135,6 +161,7 @@ export async function resolveSubmitAttemptOutcome(db, params) {
       courseId,
       userId,
       resultId: existingResultId,
+      paidStandalone: Boolean(params.paidStandalone),
     });
 
     if (affected > 0 || currentStatus === 'submitted') {

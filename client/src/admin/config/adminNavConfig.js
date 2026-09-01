@@ -5,6 +5,7 @@ import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import PlayCircleOutlineOutlinedIcon from '@mui/icons-material/PlayCircleOutlineOutlined';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
+import EmojiEventsOutlinedIcon from '@mui/icons-material/EmojiEventsOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
@@ -22,8 +23,10 @@ export function getAdminNavItems() {
   return [
     { to: adminRoute(), label: 'Dashboard', end: true, Icon: DashboardOutlinedIcon },
     { to: adminRoute('manual-payments'), label: 'New Admissions', Icon: PaymentsOutlinedIcon },
+    { to: adminRoute('standalone-test-payments'), label: 'Paid Test Payments', Icon: AssignmentOutlinedIcon },
     { to: adminRoute('registrations'), label: 'Registrations', Icon: HowToRegOutlinedIcon },
     { to: adminRoute('tests'), label: 'Tests', Icon: AssignmentOutlinedIcon },
+    { to: adminRoute('leaderboard'), label: 'Leaderboard', Icon: EmojiEventsOutlinedIcon },
     { to: adminRoute('lectures'), label: 'Lectures', Icon: PlayCircleOutlineOutlinedIcon },
     { to: adminRoute('courses'), label: 'Courses', Icon: SchoolOutlinedIcon },
     { to: adminRoute('chapters'), label: 'Chapters', Icon: MenuBookOutlinedIcon },
@@ -75,6 +78,7 @@ export function buildAdminBreadcrumbs(pathname) {
     chapters: 'Chapters',
     lectures: 'Lectures',
     tests: 'Tests',
+    leaderboard: 'Leaderboard',
     users: 'Users',
     teachers: 'Teachers',
     'qa-monitoring': 'Q&A Monitoring',
@@ -82,6 +86,7 @@ export function buildAdminBreadcrumbs(pathname) {
     remarks: 'Remarks',
     registrations: 'Registrations',
     'manual-payments': 'New Admissions',
+    'standalone-test-payments': 'Paid Test Payments',
     logs: 'Logs',
     notes: 'Notes',
     settings: 'Settings',

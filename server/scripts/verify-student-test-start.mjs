@@ -60,10 +60,10 @@ if (queriesSrc.includes('attempt_number') && queriesSrc.includes('student_id')) 
 }
 
 if (
-  queriesSrc.includes('DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? MINUTE)') &&
-  queriesSrc.includes('CURRENT_TIMESTAMP')
+  queriesSrc.includes('DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MINUTE)') &&
+  queriesSrc.includes('UTC_TIMESTAMP()')
 ) {
-  ok('insert derives expires_at from MySQL clock');
+  ok('insert derives expires_at from MySQL UTC clock');
 } else {
   fail('insert missing MySQL DATE_ADD expiry strategy');
 }
@@ -75,7 +75,12 @@ if (serviceSrc.includes('beginTransaction') && serviceSrc.includes('LOCK_ACTIVE_
   fail('transaction strategy missing');
 }
 
-if (serviceSrc.includes('assertStudentOwnsTest') && serviceSrc.includes('validateTestExistsAndPublished')) {
+if (
+  serviceSrc.includes('assertCourseAccess') &&
+  serviceSrc.includes('resolveEntitledTestById') &&
+  serviceSrc.includes('assertCourseLinkedTestEligible') &&
+  serviceSrc.includes('persistAttemptExamSnapshot')
+) {
   ok('validation flow present');
 } else {
   fail('validation flow missing');

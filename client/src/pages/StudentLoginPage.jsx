@@ -5,7 +5,8 @@ import { getStoredUser, setStudentAuth } from '../auth/session';
 import PageLayout from '../components/layout/PageLayout';
 import AuthBrandHeader from '../components/auth/AuthBrandHeader';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton';
-import { safeRedirectPath } from '../utils/authRedirect';
+import { safeRedirectPath, withSafeFromQuery } from '../utils/authRedirect';
+import { isFreeSessionReturnPath } from '../features/free-session/freeSessionNav';
 import '../styles/auth-pages.css';
 
 export default function StudentLoginPage() {
@@ -24,7 +25,7 @@ export default function StudentLoginPage() {
     };
     setStudentAuth('__cookie_session__', studentUser);
     const next = safeRedirectPath(searchParams.get('from')) || '/dashboard';
-    if (payload?.student?.isVerified !== true) {
+    if (payload?.student?.isVerified !== true && !isFreeSessionReturnPath(next)) {
       navigate('/verify-email', { replace: true });
     } else {
       navigate(next, { replace: true });
@@ -77,7 +78,9 @@ export default function StudentLoginPage() {
           <AuthBrandHeader subtitle="Student sign in" compact />
           <h1 className="heading-2">Student Login</h1>
           <p className="auth-subtitle">
-            Sign in with your email or username and password.
+            {isFreeSessionReturnPath(safeRedirectPath(searchParams.get('from')) || '')
+              ? 'Sign in or create an account to save your test result.'
+              : 'Sign in with your email or username and password.'}
           </p>
           <form onSubmit={onSubmit} className="auth-form">
             <div className="admin-field">
@@ -107,7 +110,8 @@ export default function StudentLoginPage() {
             </button>
           </form>
           <p className="auth-footer">
-            New student? <Link to="/register">Create account</Link>
+            New student?{' '}
+            <Link to={withSafeFromQuery('/register', searchParams.get('from'))}>Create account</Link>
           </p>
           <p className="auth-footer auth-footer--compact">
             Forgot password? <Link to="/forgot-password">Reset it</Link>

@@ -92,7 +92,7 @@ export default function TestDashboardPrimaryAction({ testId, testStatus, onPubli
   if (published) {
     return (
       <Link className="btn btn--primary" to={adminRoute(`tests/${testId}/publish`)}>
-        Update
+        Publish & results
       </Link>
     );
   }

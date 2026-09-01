@@ -17,10 +17,9 @@ function StatusBadge({ status, available }) {
 
 function HistoryRow({ item }) {
   const detailPath = `/dashboard/tests/${item.testId}/results/${item.attemptId}`;
-  const isDark = Boolean(item.resultAvailable);
 
   return (
-    <tr className={isDark ? 'th-table__row th-table__row--dark' : 'th-table__row'}>
+    <tr className="th-table__row">
       <td data-label="Test">{item.testTitle}</td>
       <td data-label="Subject">{item.subjectLabel || '—'}</td>
       <td data-label="Score">{formatHistoryScore(item.score, item.maxScore)}</td>
@@ -44,10 +43,9 @@ function HistoryRow({ item }) {
 
 function HistoryCard({ item }) {
   const detailPath = `/dashboard/tests/${item.testId}/results/${item.attemptId}`;
-  const isDark = Boolean(item.resultAvailable);
 
   return (
-    <article className={`th-card ${isDark ? 'th-card--dark' : ''}`.trim()}>
+    <article className="th-card">
       <header className="th-card__header">
         <h3 className="th-card__title">{item.testTitle}</h3>
         <StatusBadge status={item.status} available={item.resultAvailable} />
@@ -86,8 +84,8 @@ export default function HistoryList({ items }) {
 
   return (
     <>
-      <div className="th-table-wrap th-table-wrap--dark" role="region" aria-label="Results table">
-        <table className="th-table th-table--dark">
+      <div className="th-table-wrap" role="region" aria-label="Results table">
+        <table className="th-table">
           <thead>
             <tr>
               <th scope="col">Test</th>

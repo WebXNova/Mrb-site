@@ -163,3 +163,44 @@
   width: 100%;
   padding: var(--space-5);
 }
+
+.admin-course-wizard-step__admission {
+  margin-top: var(--space-4);
+}
+
+.admin-course-wizard-step__batch {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+}
+
+.admin-course-wizard-step__legend {
+  padding: 0 0.25rem;
+}
+
+.admin-course-wizard-step__batch .admin-field__error {
+  margin-bottom: var(--space-3);
+}
+
+.admin-course-wizard-step__seats {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4);
+}
+
+.admin-course-wizard-step__toggles {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: center;
+  padding-top: var(--space-2);
+}
+
+@media (max-width: 767px) {
+  .admin-course-wizard-step__toggles {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+}

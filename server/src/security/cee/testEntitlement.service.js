@@ -3,9 +3,12 @@
  */
 
 import { AppError } from '../../errors/base/AppError.js';
-import { ACCESS_DENIED, COURSE_ACCESS_MISMATCH } from '../../errors/codes/ErrorCodes.js';
+import { ACCESS_DENIED } from '../../errors/codes/ErrorCodes.js';
 import { assertCourseScope } from './scopedQueryGuard.js';
-import { scopedQuery } from './db/scopedQuery.js';
+import {
+  resolveEntitledCourseLinkedTestById,
+  resolveEntitledCourseLinkedTestBySlug,
+} from './courseLinkedTestAccess.service.js';
 
 export class OrphanTestAccessDeniedError extends AppError {
   constructor(metadata = null) {
@@ -28,72 +31,40 @@ export class OrphanTestAccessDeniedError extends AppError {
  * @property {string|null} publicSlug
  * @property {number} durationMinutes
  * @property {number} maxAttempts
+ * @property {string} accessMode
  */
 
 /**
- * Load published test by slug — MUST have course_id; never global listing.
+ * Load published course-linked test by slug for an entitled course.
+ *
  * @param {string} slug
  * @param {number} entitledCourseId
  * @returns {Promise<EntitledTestRow>}
  */
 export async function resolveEntitledTestBySlug(slug, entitledCourseId) {
-  const cid = assertCourseScope(entitledCourseId, { context: 'resolveEntitledTestBySlug' });
-  const normalizedSlug = String(slug || '').trim();
-  if (!normalizedSlug) {
-    throw new OrphanTestAccessDeniedError({ reason: 'missing_slug' });
-  }
-
-  const db = scopedQuery({ courseId: cid, context: 'testEntitlement.resolveEntitledTestBySlug' });
-  const row = await db.first(
-    `SELECT id, course_id, title, status, public_slug, duration_minutes, max_attempts, access_mode
-     FROM tests
-     WHERE public_slug = ?
-       AND status = 'published'
-       AND course_id = ?
-     LIMIT 1`,
-    [normalizedSlug, cid]
-  );
-
-  if (!row) {
-    throw new OrphanTestAccessDeniedError({
-      slug: normalizedSlug,
-      courseId: cid,
-      reason: 'not_found_or_not_published',
-    });
-  }
-
-  if (row.course_id == null) {
-    throw new OrphanTestAccessDeniedError({ testId: row.id, reason: 'null_course_id' });
-  }
-
-  return {
-    id: Number(row.id),
-    courseId: Number(row.course_id),
-    title: String(row.title),
-    status: String(row.status),
-    publicSlug: row.public_slug ?? null,
-    durationMinutes: Number(row.duration_minutes || 0),
-    maxAttempts: Number(row.max_attempts ?? 1),
-  };
+  assertCourseScope(entitledCourseId, { context: 'resolveEntitledTestBySlug' });
+  return resolveEntitledCourseLinkedTestBySlug(slug, entitledCourseId);
 }
 
 /**
- * @param {import('../../services/entitlement.service.js').EntitlementContext} entitlement
- * @param {EntitledTestRow} test
+ * Load published course-linked test by id for an entitled course.
+ *
+ * @param {number} testId
+ * @param {number} entitledCourseId
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [executor]
+ * @returns {Promise<EntitledTestRow>}
  */
-export function assertTestAccessibleForEntitlement(entitlement, test) {
-  if (Number(test.courseId) !== Number(entitlement.courseId)) {
-    const err = new AppError({
-      message: 'You do not have access to this test.',
-      errorCode: COURSE_ACCESS_MISMATCH,
-      httpStatus: 403,
-      isOperational: true,
-      metadata: {
-        testId: test.id,
-        testCourseId: test.courseId,
-        entitledCourseId: entitlement.courseId,
-      },
-    });
-    throw err;
-  }
+export async function resolveEntitledTestById(testId, entitledCourseId, executor) {
+  assertCourseScope(entitledCourseId, { context: 'resolveEntitledTestById' });
+  return resolveEntitledCourseLinkedTestById(testId, entitledCourseId, executor);
+}
+
+/**
+ * @deprecated Redundant after resolveEntitledTestBySlug SQL course_id filter + assertCourseAccess.
+ *
+ * @param {import('../../services/entitlement.service.js').EntitlementContext} _entitlement
+ * @param {EntitledTestRow} _test
+ */
+export function assertTestAccessibleForEntitlement(_entitlement, _test) {
+  // Intentionally no-op — course match is enforced in resolveEntitledTestBySlug/ById + assertCourseAccess.
 }

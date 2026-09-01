@@ -19,8 +19,8 @@ export function validateTestRulesForm(form, context = {}) {
   }
 
   const maxAttempts = Number(form.max_attempts);
-  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 50) {
-    errors.max_attempts = 'Max attempts must be between 1 and 50.';
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 0 || maxAttempts > 50) {
+    errors.max_attempts = 'Max attempts must be 0 (unlimited) or between 1 and 50.';
   }
 
   const passingMarksRaw = String(form.passing_marks ?? '').trim();

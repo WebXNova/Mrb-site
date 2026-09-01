@@ -18,8 +18,13 @@
     "test:quiz-draft-conflict": "node src/features/quiz-builder/persistence/quizDraftConflict.test.examples.mjs",
     "test:quiz-draft-recovery": "node src/features/quiz-builder/persistence/quizDraftRecovery.test.examples.mjs",
     "test:quiz-mcq-client-validation": "node src/features/quiz-builder/validation/quizMcqClientValidation.test.examples.mjs",
+    "test:test-basic-info-validation": "node src/admin/utils/testBasicInfoValidation.test.examples.mjs",
+    "test:test-settings-page-validation": "node src/admin/utils/testSettingsPageValidation.test.examples.mjs",
+    "test:test-admin-display": "node src/admin/utils/testAdminDisplay.test.examples.mjs",
     "test:publish-busy-ui": "node src/admin/utils/testPublishBusyState.test.examples.mjs",
-    "test:aiken-import-workflow": "node src/features/quiz-builder/utils/aikenImportWorkflow.test.examples.mjs"
+    "test:aiken-import-workflow": "node src/features/quiz-builder/utils/aikenImportWorkflow.test.examples.mjs",
+    "test:exam-runtime": "node src/utils/testPresentation.test.examples.mjs && node src/features/test-taking/utils/examContentDisplay.test.examples.mjs && node src/features/test-taking/utils/examRuntimeWiring.test.examples.mjs && node src/features/test-taking/utils/examDisplayModes.test.examples.mjs && node src/features/test-taking/utils/examFullscreenNavigation.test.examples.mjs && node src/features/test-taking/utils/apiErrors.test.examples.mjs",
+    "test:catalog-availability": "node src/utils/testCatalogAvailability.test.examples.mjs"
   },
   "dependencies": {
     "@ckeditor/ckeditor5-react": "^11.1.2",

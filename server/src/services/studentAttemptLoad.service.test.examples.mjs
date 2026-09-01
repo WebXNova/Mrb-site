@@ -16,7 +16,6 @@ import { parseStudentAttemptIdParam } from '../validators/studentAttemptLoad.sch
 import {
   AttemptInvalidStateError,
   AttemptNotFoundError,
-  AttemptNotOwnedError,
   AttemptExpiredStateError,
 } from '../errors/testAttempt/TestAttemptErrors.js';
 
@@ -102,7 +101,7 @@ await expectThrowAsync(
 
 expectThrow(
   () => assertAttemptBelongsToStudent({ id: 1, user_id: 2, student_id: 2 }, 1),
-  AttemptNotOwnedError,
+  AttemptNotFoundError,
   'wrong student blocked'
 );
 

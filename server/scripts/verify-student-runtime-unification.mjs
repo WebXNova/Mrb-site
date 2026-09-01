@@ -2,6 +2,7 @@
  * Static verification — student runtime unification (G-RT-01 / G-RT-02).
  * Run: node scripts/verify-student-runtime-unification.mjs
  */
+import '../src/config/env.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

@@ -2,6 +2,7 @@ import CourseCard from '../../../components/ui/CourseCard';
 import { mapCatalogCourseToCardProps } from '../../../course/coursePresentation';
 import CourseStatusBadge from './CourseStatusBadge';
 import CourseLevelBadge from './CourseLevelBadge';
+import CourseAdmissionBadge from './CourseAdmissionBadge';
 
 function formatPricingPreview(pricing) {
   if (!pricing) return 'Not set';
@@ -20,8 +21,6 @@ export default function CourseLivePreviewPanel({ course, pricing, stepIndex = 0 
     short_description: course.short_description,
     level: course.level || 'beginner',
     thumbnail_url: course.thumbnail_url,
-    start_date: course.start_date ?? null,
-    end_date: course.end_date ?? null,
     admission_status: course.admission_status || 'CLOSED',
     is_enrollment_open: String(course.admission_status || 'CLOSED').toUpperCase() === 'OPEN',
     pricing:
@@ -64,8 +63,10 @@ export default function CourseLivePreviewPanel({ course, pricing, stepIndex = 0 
               <div className="course-live-preview__stat-value">{formatPricingPreview(pricing)}</div>
             </div>
             <div className="course-live-preview__stat">
-              <div className="course-live-preview__stat-label">Students</div>
-              <div className="course-live-preview__stat-value">—</div>
+              <div className="course-live-preview__stat-label">Admissions</div>
+              <div className="course-live-preview__stat-value">
+                <CourseAdmissionBadge status={course.admission_status} compact />
+              </div>
             </div>
           </div>
         </div>

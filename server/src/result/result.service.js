@@ -20,10 +20,9 @@ import {
 import { findMatchingScoreBand } from '../services/testScoreBands.service.js';
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
 import {
-  loadDetailedAnswerRows,
   loadResultContextRow,
-  loadTestQuestionOptions,
 } from './result.repository.js';
+import { parseResultDetailItems } from '../services/attemptExamSnapshot.service.js';
 
 const logger = new StructuredLogger({ service: 'resultApi' });
 
@@ -91,20 +90,78 @@ export function getResultSummary(row) {
 }
 
 /**
+ * @param {Array<Record<string, unknown>>} details
+ */
+export function mapGradingDetailsToPortalRows(details) {
+  return (details || []).map((item) => {
+    const selectedId = item.selectedOptionId ?? item.selectedOption ?? null;
+    const answered = selectedId != null && selectedId !== '' && selectedId !== 0;
+    const isCorrect = item.isCorrect === true;
+    return {
+      question_id: Number(item.questionId),
+      question_text: item.questionText ?? '',
+      question_image_url: item.questionImageUrl ?? null,
+      selected_option_id: answered ? Number(selectedId) : null,
+      selected_option_text: item.selectedOptionText ?? '',
+      selected_option_key: item.selectedOptionKey ?? null,
+      correct_option_text: item.correctOptionText ?? '',
+      correct_option_key: item.correctOptionKey ?? null,
+      explanation: item.explanation ?? '',
+      answer_status: !answered ? 'unanswered' : isCorrect ? 'correct' : 'wrong',
+    };
+  });
+}
+
+/**
+ * @param {Array<Record<string, unknown>>} details
+ */
+export function optionsMapFromGradingDetails(details) {
+  const map = new Map();
+  for (const item of details || []) {
+    const qid = Number(item.questionId);
+    if (!Array.isArray(item.options)) continue;
+    map.set(
+      qid,
+      item.options.map((option) => ({
+        optionId: Number(option.id ?? option.optionId),
+        optionKey: option.key ?? option.optionKey ?? null,
+        optionText: String(option.text ?? option.optionText ?? ''),
+        imageUrl: option.imageUrl ?? null,
+        isCorrect: Boolean(option.isCorrect ?? option.is_correct),
+      }))
+    );
+  }
+  return map;
+}
+
+/**
  * @param {ResultContextRow} context
  * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} [db]
  */
 export async function getDetailedResult(context, db = mysqlPool) {
   const attemptId = Number(context.attempt_id);
   const testId = Number(context.test_id);
-  const optionsMap = await loadTestQuestionOptions(db, testId);
+  const details = parseResultDetailItems(context.detail_json);
+
+  if (details.length) {
+    return loadSanitizedPortalAnswerReview(
+      context,
+      db,
+      attemptId,
+      testId,
+      async () => mapGradingDetailsToPortalRows(details),
+      optionsMapFromGradingDetails(details)
+    );
+  }
+
+  // No frozen review payload — do not rebuild from the live question bank.
   return loadSanitizedPortalAnswerReview(
     context,
     db,
     attemptId,
     testId,
-    loadDetailedAnswerRows,
-    optionsMap
+    async () => [],
+    new Map()
   );
 }
 

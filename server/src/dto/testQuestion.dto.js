@@ -60,9 +60,14 @@ export function toLinkedTestQuestionAdminDto(linkRow, optionRows = []) {
       resolveExplanationHtml(linkRow) == null
         ? null
         : sanitizeRichHtml(resolveExplanationHtml(linkRow)),
+    tipHtml:
+      linkRow.tip_html != null && String(linkRow.tip_html).trim() !== ''
+        ? sanitizeRichHtml(String(linkRow.tip_html))
+        : null,
     marks: bankMarks,
     difficulty: linkRow.difficulty == null ? null : String(linkRow.difficulty),
     topic: linkRow.topic == null ? null : String(linkRow.topic),
+    sectionId: linkRow.section_id == null ? null : Number(linkRow.section_id),
     subjectId: linkRow.subject_id == null ? null : Number(linkRow.subject_id),
     questionType: String(linkRow.question_type ?? 'mcq'),
     options: optionRows.map(toTestQuestionOptionAdminDto),

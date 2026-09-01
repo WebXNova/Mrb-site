@@ -122,3 +122,28 @@ export function computePrepCanStart(evaluation, hasActiveAttempt) {
   }
   return evaluation.canCreateNew;
 }
+
+/**
+ * Prep.canStart for standalone tests: exam-open + schedule window + retake policy.
+ * Do not pass `{ availability, retake }` into computePrepCanStart — that object has no canCreateNew.
+ *
+ * @param {{
+ *   examOpen?: boolean,
+ *   availability: { canCreateAttempt?: boolean, canResumeInProgress?: boolean },
+ *   retake: RetakePolicyEvaluation,
+ *   hasActiveAttempt: boolean,
+ * }} input
+ */
+export function computeEligiblePrepCanStart({
+  examOpen = true,
+  availability,
+  retake,
+  hasActiveAttempt,
+}) {
+  if (!availability || !retake) return false;
+  if (hasActiveAttempt) {
+    return Boolean(retake.canResumeActive) && availability.canResumeInProgress !== false;
+  }
+  if (!examOpen) return false;
+  return Boolean(availability.canCreateAttempt) && Boolean(retake.canCreateNew);
+}

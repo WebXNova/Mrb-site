@@ -131,6 +131,11 @@ const dateTimeSchema = z
   .min(1)
   .refine((s) => !Number.isNaN(Date.parse(s)), 'invalid ISO datetime');
 
+const optionalBatchDateTime = z.preprocess(
+  (v) => (v === '' || v == null ? null : v),
+  dateTimeSchema.nullable().optional()
+);
+
 function addBatchScheduleIssues(val, ctx) {
   const result = validateBatchScheduleWindow(val);
   if (!result.ok) {
@@ -181,8 +186,8 @@ export const courseWizardBatchItemSchema = z
     z
   .object({
     title: z.string().trim().min(1).max(180),
-    start_date: dateTimeSchema,
-    end_date: dateTimeSchema,
+    start_date: optionalBatchDateTime,
+    end_date: optionalBatchDateTime,
     total_seats: z.number().int().min(1).max(100_000),
     seats_fantasy: z.number().int().min(0).max(100_000).optional().default(0),
     instructor_name: z.union([z.string().max(160), z.null()]).optional(),

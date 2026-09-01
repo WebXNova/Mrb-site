@@ -12,6 +12,7 @@ export const LOAD_ATTEMPT_WITH_TEST_SQL = `
     a.started_at,
     a.expires_at,
     a.delivery_layout_json,
+    a.exam_snapshot_json,
     a.attempt_nonce,
     t.status AS test_status,
     t.deleted_at AS test_deleted_at,

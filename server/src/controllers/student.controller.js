@@ -3,6 +3,8 @@ import { ApiError } from '../utils/apiError.js';
 import { getStudentDashboard, getStudentMyCourse, getStudentResultByAttempt } from '../services/studentPortal.service.js';
 import { listAuthSessionsForUser } from '../services/authSession.service.js';
 import { resolveActiveEntitlement } from '../services/entitlement.service.js';
+import { mysqlPool } from '../config/mysql.js';
+import { mapEnrollmentAccessDisplay } from '../dto/enrollmentAccessDisplay.dto.js';
 import { EnrollmentNotFoundError, MultipleActiveEnrollmentsError } from '../errors/entitlement/EntitlementErrors.js';
 import { resolveRequestEntitlement } from '../security/cee/requireEntitlement.js';
 import { sendSuccess } from '../utils/httpEnvelope.js';
@@ -15,13 +17,51 @@ export const getStudentEnrollmentStatus = asyncHandler(async (req, res) => {
 
   try {
     const entitlement = await resolveActiveEntitlement(studentId);
+    if (entitlement) {
+      const [finishedRows] = await mysqlPool.query(
+        `SELECT finished_at FROM courses WHERE id = ? LIMIT 1`,
+        [entitlement.courseId]
+      );
+      const display = mapEnrollmentAccessDisplay({
+        accessStatus: entitlement.accessStatus,
+        enrollmentStatus: entitlement.enrollmentStatus,
+        courseFinishedAt: finishedRows[0]?.finished_at ?? null,
+      });
+      sendSuccess(res, {
+        enrolled: true,
+        hasActiveAccess: true,
+        courseId: entitlement.courseId ?? null,
+        enrollmentId: entitlement.enrollmentId ?? null,
+        accessStatus: entitlement.accessStatus ?? null,
+        enrollmentStatus: entitlement.enrollmentStatus ?? null,
+        ...display,
+      });
+      return;
+    }
+
+    const [rows] = await mysqlPool.query(
+      `SELECT e.id, e.course_id, e.access_status, e.status, c.finished_at
+       FROM enrollments e
+       INNER JOIN courses c ON c.id = e.course_id
+       WHERE e.user_id = ?
+       ORDER BY e.updated_at DESC, e.id DESC
+       LIMIT 1`,
+      [studentId]
+    );
+    const latest = rows[0];
+    const display = mapEnrollmentAccessDisplay({
+      accessStatus: latest?.access_status,
+      enrollmentStatus: latest?.status,
+      courseFinishedAt: latest?.finished_at,
+    });
     sendSuccess(res, {
-      enrolled: Boolean(entitlement),
-      hasActiveAccess: Boolean(entitlement),
-      courseId: entitlement?.courseId ?? null,
-      enrollmentId: entitlement?.enrollmentId ?? null,
-      accessStatus: entitlement?.accessStatus ?? null,
-      enrollmentStatus: entitlement?.enrollmentStatus ?? null,
+      enrolled: false,
+      hasActiveAccess: false,
+      courseId: latest ? Number(latest.course_id) : null,
+      enrollmentId: latest ? Number(latest.id) : null,
+      accessStatus: latest?.access_status ?? null,
+      enrollmentStatus: latest?.status ?? null,
+      ...display,
     });
   } catch (error) {
     if (error instanceof MultipleActiveEnrollmentsError) {

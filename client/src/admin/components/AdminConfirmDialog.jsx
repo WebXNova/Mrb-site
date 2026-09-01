@@ -6,6 +6,7 @@ export default function AdminConfirmDialog({
   cancelLabel = 'Cancel',
   danger = false,
   busy = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }) {
@@ -30,7 +31,7 @@ export default function AdminConfirmDialog({
             type="button"
             className={danger ? 'btn--course-danger' : 'btn--course-primary'}
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             aria-busy={busy || undefined}
           >
             {busy ? (

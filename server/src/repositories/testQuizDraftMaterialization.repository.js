@@ -211,7 +211,7 @@ export async function insertMaterializedQuestionOptions(connection, questionId, 
  */
 export async function loadTestPublishScopeRow(connection, testId) {
   const [rows] = await connection.query(
-    `SELECT id, course_id, title, status
+    `SELECT id, course_id, title, status, test_access_type
      FROM tests
      WHERE id = ? AND deleted_at IS NULL
      LIMIT 1

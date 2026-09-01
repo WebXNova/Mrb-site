@@ -6,6 +6,7 @@ import {
   patchSaveAnswer,
   postSubmitAttempt,
   postVerifyTestCode,
+  postTestIntegrityEvent,
 } from '../controllers/publicTests.controller.js';
 import {
   autosaveRateLimit,
@@ -23,8 +24,14 @@ import { requireCsrf } from '../middleware/csrf.js';
 const router = Router();
 
 router.get('/:slug/prep', getTestInstructionsPrep);
-router.post('/:slug/verify-code', postVerifyTestCode);
-router.get('/:slug/attempts/:attemptId/start', getStartTest);
+router.post(
+  '/:slug/verify-code',
+  requireCsrf,
+  requireRedisForTestSubmit,
+  testSubmitRateLimit,
+  postVerifyTestCode
+);
+router.get('/:slug/attempts/:attemptId/start', autosaveRateLimit, getStartTest);
 router.patch(
   '/:slug/attempts/:attemptId/answers',
   requireCsrf,
@@ -39,6 +46,13 @@ router.post(
   testSubmitRateLimit,
   postSubmitAttempt
 );
-router.get('/:slug/attempts/:attemptId/result', getTestResult);
+router.get('/:slug/attempts/:attemptId/result', autosaveRateLimit, getTestResult);
+router.post(
+  '/:slug/attempts/:attemptId/integrity-events',
+  requireCsrf,
+  requireRedisForAutosave,
+  autosaveRateLimit,
+  postTestIntegrityEvent
+);
 
 export default router;

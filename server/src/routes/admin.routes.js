@@ -10,6 +10,15 @@ import {
 } from '../controllers/admin.controller.js';
 import { postCourse, putCourse, removeCourse } from '../controllers/courses.controller.js';
 import { publishCourse, archiveCourse, unarchiveCourse } from '../controllers/courseLifecycle.controller.js';
+import {
+  getCourseFinishPreviewHandler,
+  postMarkCourseFinished,
+} from '../controllers/courseMarkFinished.controller.js';
+import {
+  getAdminCourseLeaderboardHandler,
+  getAdminStudentCourseDetailHandler,
+} from '../controllers/courseLeaderboard.controller.js';
+import { adminLeaderboardReadLimit } from '../middleware/courseLeaderboardRateLimit.js';
 import { requireEditableCourse } from '../middleware/courseStatusAccess.js';
 import { postCourseImage } from '../controllers/courseImageUpload.controller.js';
 import { postCourseWizard } from '../controllers/courseWizard.controller.js';
@@ -30,6 +39,7 @@ import {
   getTestCreateOptions,
   getTestResultsAnalyticsHandler,
   getTestResultsListHandler,
+  getTestResultAttemptHandler,
   postReleaseTestResultsHandler,
   postUnreleaseTestResultsHandler,
   postClearTestResultsHandler,
@@ -127,6 +137,7 @@ import {
 } from '../middleware/qaMonitoringRateLimit.js';
 import paymentAccountsRoutes from './paymentAccounts.routes.js';
 import manualPaymentReviewRoutes from './manualPaymentReview.routes.js';
+import paidStandaloneReviewRoutes from './paidStandaloneReview.routes.js';
 import courseCategoriesRoutes from './courseCategories.routes.js';
 import couponsRoutes from './coupons.routes.js';
 import courseNotesRoutes from './courseNotes.routes.js';
@@ -187,6 +198,18 @@ router.delete('/courses/:courseId', removeCourse);
 router.post('/courses/:courseId/publish', publishCourse);
 router.post('/courses/:courseId/archive', archiveCourse);
 router.post('/courses/:courseId/unarchive', unarchiveCourse);
+router.get('/courses/:courseId/finish-preview', getCourseFinishPreviewHandler);
+router.post('/courses/:courseId/mark-finished', postMarkCourseFinished);
+router.get(
+  '/courses/:courseId/leaderboard',
+  adminLeaderboardReadLimit,
+  getAdminCourseLeaderboardHandler
+);
+router.get(
+  '/students/:studentId/course/:courseId/detail',
+  adminLeaderboardReadLimit,
+  getAdminStudentCourseDetailHandler
+);
 
 router.get('/courses/:courseId/pricing', getCoursePricing);
 router.put('/courses/:courseId/pricing', putCoursePricing);
@@ -241,11 +264,12 @@ router.post('/tests/:testId/publish', testWriteRateLimit, idempotencyMiddleware,
 router.put('/tests/:testId/publish', testWriteRateLimit, putTestPublish);
 router.post('/tests/:testId/duplicate', testWriteRateLimit, postDuplicateTest);
 router.get('/tests/:testId/results/analytics', getTestResultsAnalyticsHandler);
+router.get('/tests/:testId/results/export', testWriteRateLimit, getTestResultsExport);
+router.get('/tests/:testId/results/:attemptId', getTestResultAttemptHandler);
 router.get('/tests/:testId/results', getTestResultsListHandler);
 router.post('/tests/:testId/release-results', testWriteRateLimit, postReleaseTestResultsHandler);
 router.post('/tests/:testId/unrelease-results', testWriteRateLimit, postUnreleaseTestResultsHandler);
 router.post('/tests/:testId/clear-results', testWriteRateLimit, postClearTestResultsHandler);
-router.get('/tests/:testId/results/export', testWriteRateLimit, getTestResultsExport);
 
 router.get('/tests/:testId/questions', getLinkedTestQuestions);
 
@@ -318,6 +342,7 @@ router.use('/payment-accounts', paymentAccountsRoutes);
 router.use('/course-categories', courseCategoriesRoutes);
 router.use('/coupons', couponsRoutes);
 router.use('/payment-submissions', manualPaymentReviewRoutes);
+router.use('/standalone-test-payments', paidStandaloneReviewRoutes);
 router.use('/courses/:courseId/notes', courseNotesRoutes);
 router.use('/notes', notesRoutes);
 

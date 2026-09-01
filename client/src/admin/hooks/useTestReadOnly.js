@@ -4,7 +4,7 @@ import { getAdminToken } from '../../auth/session';
 import { isTestPublishedStatus } from '../utils/testBasicInfoValidation';
 
 /**
- * Resolves whether a test is published (read-only) from server truth.
+ * Loads admin test status. Published tests stay editable by authorized admins.
  *
  * @param {string|number|null|undefined} testId
  */
@@ -34,12 +34,8 @@ export function useTestReadOnly(testId) {
         if (cancelled) return;
         const test = response?.data;
         const status = test?.status ?? '';
-        const locked =
-          Boolean(test?.isReadOnly) ||
-          Boolean(test?.isLocked) ||
-          isTestPublishedStatus(status);
         setTestStatus(status);
-        setReadOnly(locked);
+        setReadOnly(false);
       })
       .catch((err) => {
         if (!cancelled) {
@@ -56,5 +52,11 @@ export function useTestReadOnly(testId) {
     };
   }, [testId]);
 
-  return { readOnly, testStatus, loading, error };
+  return {
+    readOnly,
+    testStatus,
+    isPublished: isTestPublishedStatus(testStatus),
+    loading,
+    error,
+  };
 }

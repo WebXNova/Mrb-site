@@ -64,7 +64,7 @@ export function formatMissingFields(missingFields = []) {
     subject_ids: 'subjects (Setup → General)',
     duration_minutes: 'duration (Setup → Rules & scoring)',
     max_attempts: 'max attempts (Setup → Rules & scoring)',
-    passing_marks: 'passing marks (Setup → Rules & scoring)',
+    passing_marks: 'passing marks (Settings → Scoring)',
     access_mode: 'access mode (Setup → Access & timing)',
     basic_info: 'test title and course (Setup → General)',
     rules: 'rules and scoring (Setup)',

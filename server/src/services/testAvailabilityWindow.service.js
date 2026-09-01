@@ -8,6 +8,7 @@
 
 import { TestNotAccessibleError } from '../errors/testAttempt/TestAttemptErrors.js';
 import { StructuredLogger } from '../utils/requestId.js';
+import { shouldEnforceScheduleWindow } from '../security/cee/courseLinkedTestAccess.service.js';
 
 const availabilityClockLogger = new StructuredLogger({ service: 'testAvailabilityWindow' });
 
@@ -87,14 +88,16 @@ export function evaluateTestAvailabilityWindow(testRow, nowMs) {
   const endMs = parseTestAvailabilityInstant(testRow?.end_date);
 
   const notYetAvailable = startMs != null && nowMs < startMs;
-  const pastEnd = endMs != null && nowMs > endMs;
+  const pastEnd = endMs != null && nowMs >= endMs;
+  const insideWindow = !notYetAvailable && !pastEnd;
 
   return {
     testId,
     notYetAvailable,
     noLongerAvailable: pastEnd,
+    insideWindow,
     canAccess: !notYetAvailable,
-    canCreateAttempt: !notYetAvailable && !pastEnd,
+    canCreateAttempt: insideWindow,
     canResumeInProgress: !notYetAvailable,
     startDate: formatAvailabilityMetadataIso(startMs),
     endDate: formatAvailabilityMetadataIso(endMs),
@@ -106,7 +109,7 @@ export function evaluateTestAvailabilityWindow(testRow, nowMs) {
  *
  * Rules:
  * - ANY_ACCESS: block before start_date
- * - CREATE_ATTEMPT: block before start or after end_date (no new attempts)
+ * - CREATE_ATTEMPT: block before start or when now >= end_date (no new attempts)
  * - IN_PROGRESS: block before start; after end allow only attempts started on/before end_date
  *
  * @param {Record<string, unknown>|null|undefined} testRow
@@ -137,7 +140,7 @@ export function assertTestAvailabilityWindow(testRow, options) {
     });
   }
 
-  if (phase === AVAILABILITY_PHASE.CREATE_ATTEMPT && endMs != null && nowMs > endMs) {
+  if (phase === AVAILABILITY_PHASE.CREATE_ATTEMPT && endMs != null && nowMs >= endMs) {
     throw new TestNotAccessibleError({
       testId,
       reason: 'test_no_longer_available',
@@ -147,7 +150,7 @@ export function assertTestAvailabilityWindow(testRow, options) {
     });
   }
 
-  if (phase === AVAILABILITY_PHASE.IN_PROGRESS && endMs != null && nowMs > endMs) {
+  if (phase === AVAILABILITY_PHASE.IN_PROGRESS && endMs != null && nowMs >= endMs) {
     const attemptStartMs = parseTestAvailabilityInstant(options.attemptStartedAt);
     if (attemptStartMs == null || attemptStartMs > endMs) {
       throw new TestNotAccessibleError({
@@ -160,6 +163,19 @@ export function assertTestAvailabilityWindow(testRow, options) {
       });
     }
   }
+}
+
+/**
+ * Enforce schedule window only for non-course-linked tests (Phase 3/4 standalone).
+ *
+ * @param {Record<string, unknown>|null|undefined} testRow
+ * @param {Parameters<typeof assertTestAvailabilityWindow>[1]} options
+ */
+export function assertTestAvailabilityWindowForTest(testRow, options) {
+  if (!shouldEnforceScheduleWindow(testRow)) {
+    return;
+  }
+  assertTestAvailabilityWindow(testRow, options);
 }
 
 /**

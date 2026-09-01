@@ -90,7 +90,7 @@ export async function listPublicSubjectsForCourse(courseId) {
   if (!Number.isFinite(cid) || cid <= 0) {
     throw new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
   }
-  const course = await getCourseRowById(cid, { activeOnly: true });
+  const course = await getCourseRowById(cid);
   if (!course) throw courseNotFound();
   const [rows] = await mysqlPool.query(
     `SELECT id, course_id, title, description, order_index, is_active, created_at, updated_at

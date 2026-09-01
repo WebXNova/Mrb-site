@@ -92,6 +92,12 @@ function mapQuestionForExport(linkRow, optionRows) {
     explanation_html: explanationHtml,
     explanation: explanationHtml,
     marks: Number(linkRow.marks ?? 1),
+    subject_id: linkRow.subject_id == null ? null : Number(linkRow.subject_id),
+    section_label: linkRow.section_label == null ? null : String(linkRow.section_label),
+    section_display_order:
+      linkRow.section_display_order == null ? null : Number(linkRow.section_display_order),
+    section_subject_id:
+      linkRow.section_subject_id == null ? null : Number(linkRow.section_subject_id),
     correct_answer: correctAnswer,
     options,
   };

@@ -59,13 +59,19 @@ mustContain(
 mustContain(
   'src/routes/admin.routes.js',
   ['requireUnpublishedTest', 'patchTestBasicInfo', 'patchTestRules', 'patchTestSettings'],
-  'admin routes guarded'
+  'admin routes still guard unpublished-only ops'
 );
 
 mustContain(
   'src/routes/testQuizDraft.routes.js',
-  ['requireUnpublishedTest', 'putTestQuizDraftHandler'],
-  'quiz draft mutations guarded'
+  ['putTestQuizDraftHandler'],
+  'quiz draft PUT remains available'
+);
+
+mustContain(
+  'src/services/publishedTestEdit.service.js',
+  ['resolvePublishedEditContext', 'auditPublishedTestEdit'],
+  'published edit authority'
 );
 
 mustContain(
@@ -86,7 +92,7 @@ mustContain(
   'legacy putTest guarded'
 );
 
-ok('published status is read-only', isTestReadOnlyStatus('published') === true);
+ok('published status still flags unpublished-only ops', isTestReadOnlyStatus('published') === true);
 ok('draft status is editable', isTestReadOnlyStatus('DRAFT') === false);
 
 {
@@ -112,7 +118,8 @@ ok('draft status is editable', isTestReadOnlyStatus('DRAFT') === false);
 {
   const testService = readFileSync(path.join(serverRoot, 'src/services/test.service.js'), 'utf8');
   ok('settings update no longer bypasses lock', !testService.includes('allowPublishedMaintenance'));
-  ok('test DTO exposes isReadOnly', testService.includes('isReadOnly'));
+  ok('admin DTO does not mark published tests read-only', testService.includes('isReadOnly: false'));
+  ok('wizard writes allow published edit', testService.includes('allowPublishedEdit: publishContext.isPublished'));
 }
 
 {
@@ -121,27 +128,27 @@ ok('draft status is editable', isTestReadOnlyStatus('DRAFT') === false);
     'utf8'
   );
   ok('quiz builder uses useTestReadOnly', quizView.includes('useTestReadOnly'));
-  ok('quiz builder disables question list when read-only', quizView.includes('disabled={readOnly}'));
+  ok('quiz builder stays editable for published tests', quizView.includes('const readOnly = false'));
+  ok('quiz builder enables published edit hydration', quizView.includes('editingPublished'));
   ok('quiz builder uses read-only action guard', quizView.includes('useReadOnlyQuizActions'));
-  ok('quiz builder shows published banner', quizView.includes('PublishedTestReadOnlyBanner'));
+  ok('quiz builder shows published edit banner', quizView.includes('PublishedTestEditBanner'));
 }
 
 {
-  const rulesPage = readFileSync(
-    path.join(serverRoot, '../client/src/admin/pages/AdminTestRulesPage.jsx'),
+  const workspace = readFileSync(
+    path.join(serverRoot, '../client/src/admin/components/test-workspace/TestWorkspaceLayout.jsx'),
     'utf8'
   );
-  ok('wizard rules page uses read-only hook', rulesPage.includes('useTestReadOnly'));
-  ok('wizard rules form respects readOnly', rulesPage.includes('readOnly={readOnly}'));
+  ok('workspace does not lock published tests', workspace.includes('readOnly: false'));
+  ok('workspace shows published edit banner', workspace.includes('PublishedTestEditBanner'));
 }
 
 {
-  const settingsPage = readFileSync(
-    path.join(serverRoot, '../client/src/admin/pages/AdminTestSettingsPage.jsx'),
+  const settingsForm = readFileSync(
+    path.join(serverRoot, '../client/src/admin/components/test-settings/TestSettingsForm.jsx'),
     'utf8'
   );
-  ok('wizard settings page uses read-only hook', settingsPage.includes('useTestReadOnly'));
-  ok('wizard settings form respects readOnly', settingsPage.includes('readOnly={readOnly}'));
+  ok('settings form sends published edit controls', settingsForm.includes('withPublishedEditControls'));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

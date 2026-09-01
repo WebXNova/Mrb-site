@@ -74,10 +74,10 @@ assertMatch(
   /toTestQuestionOptionStudentDto/
 );
 
-  assertMatch(
-    'client dashboard respects resultAvailable',
-    read('../client/src/pages/StudentPortalPage.jsx'),
-    /resultAvailable/
-  );
+assertMatch(
+  'client dashboard respects resultAvailable',
+  read('../client/src/student/components/dashboard/StudentLatestResultSection.jsx'),
+  /resultAvailable/
+);
 
   console.log('\nAll G-RT-07 result visibility checks passed.');

@@ -32,6 +32,7 @@ console.log('testOwnership.service — unit test examples\n');
 
 assert(STUDENT_OWNS_TEST_SQL.includes('enrollments'), 'SQL uses enrollments ownership join');
 assert(STUDENT_OWNS_TEST_SQL.includes("status = ?"), 'published status is parameterized');
+assert(STUDENT_OWNS_TEST_SQL.includes("access_mode = 'public'"), 'SQL excludes admin-only tests');
 
 {
   const pool = createMockPool([{ owns_test: 1 }]);

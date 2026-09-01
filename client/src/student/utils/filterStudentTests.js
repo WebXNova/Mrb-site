@@ -42,7 +42,6 @@ export function filterStudentTests(tests, filters = {}) {
   const subjectId = filters.subjectId || 'all';
   const dateFilter = filters.dateFilter || 'all';
   const attemptFilter = filters.attemptFilter || 'all';
-  const now = Date.now();
 
   return (tests || []).filter((test) => {
     const status = String(test.status || 'available');
@@ -64,18 +63,9 @@ export function filterStudentTests(tests, filters = {}) {
     }
 
     if (dateFilter !== 'all') {
-      const start = test.start_date ? Date.parse(String(test.start_date)) : NaN;
-      const end = test.end_date ? Date.parse(String(test.end_date)) : NaN;
-
-      if (dateFilter === 'upcoming') {
-        if (!Number.isFinite(start) || start <= now) return false;
-      } else if (dateFilter === 'active') {
-        const afterStart = !Number.isFinite(start) || start <= now;
-        const beforeEnd = !Number.isFinite(end) || end >= now;
-        if (!(afterStart && beforeEnd)) return false;
-      } else if (dateFilter === 'past') {
-        if (!Number.isFinite(end) || end >= now) return false;
-      }
+      // Course-linked tests do not use start/end as access. Leftover schedule columns
+      // must not hide enrolled tests from Active / Upcoming / Past filters.
+      if (dateFilter === 'upcoming' || dateFilter === 'past') return false;
     }
 
     return true;

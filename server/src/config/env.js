@@ -164,8 +164,12 @@ function buildTrustedOrigins() {
   if (nodeEnv !== 'production') {
     origins.add('http://localhost:5173');
     origins.add('http://localhost:5174');
+    origins.add('http://localhost:5175');
+    origins.add('http://localhost:5176');
     origins.add('http://127.0.0.1:5173');
     origins.add('http://127.0.0.1:5174');
+    origins.add('http://127.0.0.1:5175');
+    origins.add('http://127.0.0.1:5176');
   }
 
   return [...origins];
@@ -322,7 +326,7 @@ export const env = {
     attemptTokenMode: process.env.ATTEMPT_TOKEN_MODE || (nodeEnv === 'production' ? 'cookie' : 'dual'),
     attemptCookieSameSite: parseSameSite(process.env.ATTEMPT_COOKIE_SAMESITE, 'strict'),
     attemptCookieSecure: parseBoolean(process.env.ATTEMPT_COOKIE_SECURE, nodeEnv === 'production'),
-    attemptCookiePath: process.env.ATTEMPT_COOKIE_PATH || '/api/tests',
+    attemptCookiePath: process.env.ATTEMPT_COOKIE_PATH || '/api',
     trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
     authChallengeKey: process.env.AUTH_CHALLENGE_KEY || '',
   },

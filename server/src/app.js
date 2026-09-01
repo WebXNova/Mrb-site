@@ -13,6 +13,7 @@ import adminRoutes from './routes/admin.routes.js';
 import adminCoursesReadRoutes from './routes/adminCoursesRead.routes.js';
 import testQuizDraftRoutes from './routes/testQuizDraft.routes.js';
 import testsRoutes from './routes/tests.routes.js';
+import paidStandaloneRoutes from './routes/paidStandalone.routes.js';
 import studentRoutes from './routes/student.routes.js';
 import teacherRoutes from './routes/teacher.routes.js';
 import emailProviderRoutes, { emailProviderWebhookRouter } from './routes/emailProvider.routes.js';
@@ -177,6 +178,7 @@ for (const previousSegment of getAdminSecretPathSegments().slice(1)) {
 }
 
 app.use('/api/tests', testsRoutes);
+app.use('/api/standalone-tests', paidStandaloneRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/teacher', teacherRoutes);
 /**

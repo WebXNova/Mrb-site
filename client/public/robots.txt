@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /paid-tests
+Allow: /paid-tests/
 
 Disallow: /dashboard
 Disallow: /dashboard/
@@ -9,5 +11,11 @@ Disallow: /teacher
 Disallow: /teacher/
 Disallow: /enroll/
 Disallow: /enrollment/payment
+Disallow: /login
+Disallow: /tests/
+Disallow: /tests/my-results
+Disallow: /tests/my-tests
+Disallow: /paid-tests/*/register
+Disallow: /paid-tests/*/pay
 
 Sitemap: https://mrbclasses.com/sitemap.xml

@@ -26,7 +26,7 @@ export default function PopularCourses() {
   const [courses, setCourses] = useState([]);
   const [error, setError] = useState('');
   const [sectionRef, inView] = useInView({ threshold: 0.1 });
-  const { paid, free } = useMemo(() => splitCourses(courses), [courses]);
+  const { paid } = useMemo(() => splitCourses(courses), [courses]);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +48,10 @@ export default function PopularCourses() {
     };
   }, []);
 
-  const hasCourses = paid.length > 0 || free.length > 0;
+  const hasCourses = paid.length > 0;
+  if (!error && !hasCourses) {
+    return null;
+  }
 
   return (
     <section
@@ -73,7 +76,7 @@ export default function PopularCourses() {
               Courses students are loving.
             </h2>
             <p className="popular-courses__lead">
-              Premium MDCAT prep and free mock tests — pick your path and start today.
+              Premium MDCAT prep — pick your path and start today.
             </p>
           </div>
           <Link to="/courses" className="popular-courses__view-all">
@@ -104,33 +107,6 @@ export default function PopularCourses() {
                   badge={PAID_BADGES[index] || 'Trending'}
                   badgeTone="red"
                   buttonStyle={index === 0 ? 'primary' : 'outline'}
-                  style={{ '--card-i': index }}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {free.length > 0 ? (
-          <div className="popular-courses__free-zone" style={{ '--zone-i': paid.length }}>
-            <div className="popular-courses__free-head">
-              <span className="popular-courses__free-badge">FREE</span>
-              <div>
-                <h3 className="popular-courses__free-title">MDCAT Grand Free Tests</h3>
-                <p className="popular-courses__free-desc">
-                  Practice under real exam conditions — no payment required.
-                </p>
-              </div>
-            </div>
-            <div className="popular-courses__grid popular-courses__grid--free">
-              {free.slice(0, 3).map((course, index) => (
-                <PopularCourseCard
-                  key={String(course.id)}
-                  course={course}
-                  badge="FREE"
-                  badgeTone="blue"
-                  buttonStyle="free"
-                  showSubject={false}
                   style={{ '--card-i': index }}
                 />
               ))}

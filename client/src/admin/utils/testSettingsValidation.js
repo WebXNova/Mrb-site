@@ -6,8 +6,6 @@ export const defaultTestSettingsForm = {
   show_explanations: true,
   show_result_immediately: true,
   access_mode: 'private',
-  start_date: '',
-  end_date: '',
 };
 
 /**
@@ -42,8 +40,6 @@ export function mapTestSettingsToForm(settings) {
     show_explanations: settings.show_explanations !== false,
     show_result_immediately: settings.show_result_immediately !== false,
     access_mode: settings.access_mode === 'public' ? 'public' : 'private',
-    start_date: isoToDatetimeLocalValue(settings.start_date),
-    end_date: isoToDatetimeLocalValue(settings.end_date),
   };
 }
 
@@ -58,30 +54,6 @@ export function validateTestSettingsForm(form) {
     errors.access_mode = 'Access mode must be public or private.';
   }
 
-  const startIso = datetimeLocalToIso(form.start_date);
-  const endIso = datetimeLocalToIso(form.end_date);
-
-  if (String(form.start_date ?? '').trim() && !startIso) {
-    errors.start_date = 'Start date is invalid.';
-  }
-
-  if (String(form.end_date ?? '').trim() && !endIso) {
-    errors.end_date = 'End date is invalid.';
-  }
-
-  if (startIso) {
-    const startMs = new Date(startIso).getTime();
-    if (startMs < Date.now() - 60_000) {
-      errors.start_date = 'Start date must not be in the past.';
-    }
-  }
-
-  if (startIso && endIso) {
-    if (new Date(endIso).getTime() < new Date(startIso).getTime()) {
-      errors.end_date = 'End date must be on or after start date.';
-    }
-  }
-
   if (Object.keys(errors).length) {
     return { ok: false, errors };
   }
@@ -94,8 +66,6 @@ export function validateTestSettingsForm(form) {
       show_explanations: Boolean(form.show_explanations),
       show_result_immediately: Boolean(form.show_result_immediately),
       access_mode: form.access_mode,
-      start_date: startIso,
-      end_date: endIso,
     },
   };
 }

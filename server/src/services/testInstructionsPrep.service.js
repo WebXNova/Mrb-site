@@ -6,11 +6,12 @@ import { mysqlPool } from '../config/mysql.js';
 import { scopedQuery } from '../security/cee/db/scopedQuery.js';
 import { resolveEntitledTestBySlug } from '../security/cee/testEntitlement.service.js';
 import {
-  assertTestAvailabilityWindow,
+  assertTestAvailabilityWindowForTest,
   AVAILABILITY_PHASE,
   evaluateTestAvailabilityWindow,
   getAvailabilityNowMs,
 } from './testAvailabilityWindow.service.js';
+import { shouldEnforceScheduleWindow } from '../security/cee/courseLinkedTestAccess.service.js';
 import {
   computePrepCanStart,
   evaluateRetakePolicy,
@@ -37,19 +38,29 @@ export async function loadTestInstructionsPrep({ slug, studentId, courseId }) {
 
   const nowMs = await getAvailabilityNowMs(mysqlPool);
 
-  assertTestAvailabilityWindow(
-    { id: testId, start_date: settingsRow?.start_date, end_date: settingsRow?.end_date },
-    { phase: AVAILABILITY_PHASE.ANY_ACCESS, nowMs, context: 'testInstructionsPrep' }
-  );
+  const scheduleRow = {
+    id: testId,
+    course_id: cid,
+    start_date: settingsRow?.start_date,
+    end_date: settingsRow?.end_date,
+  };
 
-  const availability = evaluateTestAvailabilityWindow(
-    {
-      id: testId,
-      start_date: settingsRow?.start_date,
-      end_date: settingsRow?.end_date,
-    },
-    nowMs
-  );
+  assertTestAvailabilityWindowForTest(scheduleRow, {
+    phase: AVAILABILITY_PHASE.ANY_ACCESS,
+    nowMs,
+    context: 'testInstructionsPrep',
+  });
+
+  const availability = shouldEnforceScheduleWindow(scheduleRow)
+    ? evaluateTestAvailabilityWindow(scheduleRow, nowMs)
+    : {
+        notYetAvailable: false,
+        noLongerAvailable: false,
+        canCreateAttempt: true,
+        canResumeInProgress: true,
+        startDate: null,
+        endDate: null,
+      };
 
   const countRow = await db.first(
     `SELECT COUNT(*) AS total

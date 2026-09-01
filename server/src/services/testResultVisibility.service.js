@@ -1,11 +1,12 @@
 /**
  * G-RT-07 — Authoritative student result visibility.
  *
- * Master gate: `results_released_at` on the test row. When NULL, students must not
- * see scores, answer review, or explanations — regardless of `show_result_immediately`.
- * (Legacy immediate-display tests now require an explicit admin release.)
+ * When `results_released_at` is set, students may view results (admin release).
+ * When `results_released_at` is NULL, fall back to `show_result_immediately`
+ * (schema contract on tests.results_released_at).
  *
- * `show_answers_after_submit` is deprecated — answer review is shown whenever results are visible.
+ * `show_answers_after_submit` gates per-question review (keys, outline, options).
+ * Score visibility is controlled separately by `show_result_immediately` / release.
  */
 
 import { sanitizeRichHtml } from '../utils/htmlSanitizer.js';
@@ -45,15 +46,22 @@ export function isResultsReleased(settings) {
  * @returns {boolean}
  */
 export function isStudentResultVisible(settings) {
-  return isResultsReleased(settings);
+  if (isResultsReleased(settings)) {
+    return true;
+  }
+  if (settings?.results_released_at == null) {
+    return isShowResultImmediatelyEnabled(settings?.show_result_immediately);
+  }
+  return false;
 }
 
 /**
- * Deprecated column — answer review always shown when results are visible.
+ * Per-question review (correct keys, options, outline). Independent of score release.
+ * @param {unknown} value
  * @returns {boolean}
  */
-export function isShowAnswersAfterSubmitEnabled(_value) {
-  return true;
+export function isShowAnswersAfterSubmitEnabled(value) {
+  return Boolean(Number(value ?? 0));
 }
 
 /**
@@ -71,7 +79,7 @@ export function isShowExplanationsEnabled(value) {
  * @param {{ attemptId?: number, context?: string }} [options]
  */
 export function assertStudentResultVisible(settings, options = {}) {
-  if (isResultsReleased(settings)) {
+  if (isStudentResultVisible(settings)) {
     return;
   }
 
@@ -218,7 +226,7 @@ export async function loadSanitizedPortalAnswerReview(
  * @param {Record<string, unknown>} row
  */
 export function redactStudentResultListItem(row) {
-  const resultVisible = isResultsReleased(row);
+  const resultVisible = isStudentResultVisible(row);
 
   return {
     resultAvailable: resultVisible,

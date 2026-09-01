@@ -2,17 +2,18 @@
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: saturate(180%) blur(14px);
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
   border-bottom: 1px solid transparent;
   transition: border-color var(--transition-base), box-shadow var(--transition-base),
     background var(--transition-base);
 }
 
 .navbar--scrolled {
-  border-color: var(--color-ink-100);
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
 
 .navbar__inner {
@@ -160,7 +161,7 @@
 
 .navbar__link:hover {
   color: var(--color-ink-900);
-  background: var(--color-bg-soft);
+  background: transparent;
 }
 
 .navbar__link--active {
@@ -168,22 +169,46 @@
   font-weight: var(--fw-semibold);
 }
 
-.navbar__link--active::after {
+.navbar__link::after {
   content: '';
   position: absolute;
-  left: 50%;
-  bottom: 4px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  transform: translateX(-50%);
+  left: 22%;
+  right: 22%;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 999px;
+  background: #e11d48;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.22s ease;
+}
+
+.navbar__link--active::after,
+.navbar__link:hover::after {
+  transform: scaleX(1);
+}
+
+.navbar__link:hover::after {
+  opacity: 0.45;
+}
+
+.navbar__link--active:hover::after {
+  opacity: 1;
 }
 
 .navbar__actions {
   display: none;
   align-items: center;
   gap: var(--space-2);
+}
+
+.navbar__portal.btn {
+  background: #070b18;
+  box-shadow: 0 8px 20px rgba(7, 11, 24, 0.18);
+}
+
+.navbar__portal.btn:hover:not(:disabled) {
+  background: #111827;
 }
 
 @media (min-width: 768px) {
@@ -323,7 +348,7 @@
 }
 
 .navbar__mobile-link--active {
-  color: #000000;
+  color: #e11d48;
   font-weight: var(--fw-bold);
 }
 

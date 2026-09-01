@@ -1,0 +1,7 @@
+.tests-hub {
+  background: var(--color-bg);
+}
+
+#main-content:has(.tests-hub) {
+  background: var(--color-bg);
+}

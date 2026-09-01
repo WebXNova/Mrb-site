@@ -5,6 +5,11 @@ import { batchStatusLabel } from '../course/batchPresentation';
 import StudentDashboardSkeleton from '../student/components/dashboard/StudentDashboardSkeleton';
 import StudentNotesSection from '../student/components/notes/StudentNotesSection';
 import { useStudentMyCourse } from '../student/hooks/useStudentMyCourse';
+import {
+  isCourseFinishedDisplay,
+  studentAccessLabel,
+  studentEnrollmentStatusLabel,
+} from '../student/utils/studentEnrollmentDisplay';
 import '../student/styles/student-dashboard.css';
 
 function phaseLabel(phase) {
@@ -59,7 +64,7 @@ function StatCard({ label, value, hint, to }) {
 }
 
 export default function StudentMyCoursePage() {
-  const { data, loading, error, authState } = useStudentMyCourse();
+  const { data, loading, error, authState, accessDisplay } = useStudentMyCourse();
 
   const schedule = data?.schedule ?? {};
   const stats = data?.stats ?? {};
@@ -85,18 +90,19 @@ export default function StudentMyCoursePage() {
   }
 
   if (authState === 'no_entitlement' || error || !course) {
+    const finished = isCourseFinishedDisplay(accessDisplay);
     return (
       <section className="student-my-course">
         <article className="admin-card">
-          <h2 className="heading-3">My Course</h2>
+          <h2 className="heading-3">{finished ? 'Course Finished' : 'My Course'}</h2>
           <p className="student-lectures-page__status">
             {error || 'Course details are not available yet.'}
           </p>
           {authState === 'no_entitlement' ? (
             <div className="student-my-course__action-row" style={{ marginTop: '1rem' }}>
-              <Link className="student-feature-card" to="/courses">
+              <Link className="student-feature-card" to="/dashboard/my-courses">
                 <p className="student-feature-card__label">Enrollment</p>
-                <p className="student-feature-card__title">Browse courses</p>
+                <p className="student-feature-card__title">View my courses</p>
               </Link>
               <Link className="student-feature-card" to="/contact">
                 <p className="student-feature-card__label">Support</p>
@@ -251,11 +257,19 @@ export default function StudentMyCoursePage() {
             </div>
             <div>
               <dt>Enrollment status</dt>
-              <dd>{enrollment?.status || '—'}</dd>
+              <dd>{studentEnrollmentStatusLabel(enrollment || accessDisplay)}</dd>
             </div>
             <div>
               <dt>Access</dt>
-              <dd>{enrollment?.accessStatus || data?.entitlement?.accessStatus || '—'}</dd>
+              <dd>
+                {studentAccessLabel({
+                  ...(enrollment || {}),
+                  accessStatus: enrollment?.accessStatus || data?.entitlement?.accessStatus,
+                  accessDisplayStatus: enrollment?.accessDisplayStatus || accessDisplay?.accessDisplayStatus,
+                  accessDisplayLabel: enrollment?.accessDisplayLabel || accessDisplay?.accessDisplayLabel,
+                  finished_at: enrollment?.finished_at || accessDisplay?.finished_at || accessDisplay?.courseFinishedAt,
+                })}
+              </dd>
             </div>
             <div>
               <dt>Approved on</dt>

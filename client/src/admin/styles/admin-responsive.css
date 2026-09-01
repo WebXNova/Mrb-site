@@ -318,6 +318,10 @@
   color: var(--color-ink-900);
 }
 
+.admin-test-mobile-card .test-admin-badges {
+  margin: 0 0 var(--space-3);
+}
+
 .admin-test-mobile-card__course {
   margin: 0 0 var(--space-3);
   font-size: 0.8125rem;
@@ -332,7 +336,7 @@
 }
 
 .admin-test-mobile-card__meta dt {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-ink-400);

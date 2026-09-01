@@ -40,8 +40,34 @@ async function addColumn(pool, db, tableName, columnName, ddl) {
   console.log(`[schema] Added ${tableName}.${columnName}`);
 }
 
+async function ensureTestsCourseIdNullable(pool, db) {
+  const [meta] = await pool.query(
+    `SELECT IS_NULLABLE AS is_nullable
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tests' AND COLUMN_NAME = 'course_id'`,
+    [db]
+  );
+  if (!meta[0]) return;
+  if (String(meta[0].is_nullable).toUpperCase() === 'YES') return;
+  await pool.query('ALTER TABLE tests MODIFY COLUMN course_id BIGINT NULL');
+  console.log('[schema] tests.course_id is nullable (standalone tests)');
+}
+
 async function ensureTestsColumns(pool, db) {
   if (!(await tableExists(pool, db, 'tests'))) return;
+
+  await ensureTestsCourseIdNullable(pool, db);
+  await addColumn(
+    pool,
+    db,
+    'tests',
+    'test_access_type',
+    "test_access_type VARCHAR(32) NOT NULL DEFAULT 'course_locked' AFTER course_id"
+  );
+  if (!(await indexExists(pool, db, 'tests', 'idx_tests_access_type'))) {
+    await pool.query('ALTER TABLE tests ADD KEY idx_tests_access_type (test_access_type)');
+    console.log('[schema] Added tests.idx_tests_access_type');
+  }
 
   await addColumn(pool, db, 'tests', 'subject', 'subject VARCHAR(80) NULL AFTER description');
   await addColumn(pool, db, 'tests', 'category', 'category VARCHAR(80) NULL AFTER subject');
@@ -70,9 +96,65 @@ async function ensureTestsColumns(pool, db) {
   }
 }
 
+async function ensureTestAttemptsStudentIdNullable(pool, db) {
+  const [meta] = await pool.query(
+    `SELECT IS_NULLABLE AS is_nullable
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'test_attempts' AND COLUMN_NAME = 'student_id'`,
+    [db]
+  );
+  if (!meta[0]) return;
+  if (String(meta[0].is_nullable).toUpperCase() === 'YES') return;
+
+  const [fks] = await pool.query(
+    `SELECT CONSTRAINT_NAME AS name
+     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'test_attempts'
+       AND COLUMN_NAME = 'student_id'
+       AND REFERENCED_TABLE_NAME IS NOT NULL`,
+    [db]
+  );
+  for (const fk of fks) {
+    const name = String(fk.name || '').trim();
+    if (!name) continue;
+    await pool.query(`ALTER TABLE test_attempts DROP FOREIGN KEY \`${name.replace(/`/g, '')}\``);
+  }
+  await pool.query('ALTER TABLE test_attempts MODIFY COLUMN student_id BIGINT NULL');
+  await pool.query(
+    `ALTER TABLE test_attempts
+     ADD CONSTRAINT fk_attempt_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE`
+  );
+  console.log('[schema] test_attempts.student_id is nullable (free session guests)');
+}
+
+async function ensureAttemptStudentForeignKey(pool, db) {
+  const [fks] = await pool.query(
+    `SELECT CONSTRAINT_NAME AS name
+     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'test_attempts'
+       AND COLUMN_NAME = 'student_id'
+       AND REFERENCED_TABLE_NAME IS NOT NULL`,
+    [db]
+  );
+  if (fks.length) return;
+  try {
+    await pool.query(
+      `ALTER TABLE test_attempts
+       ADD CONSTRAINT fk_attempt_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE`
+    );
+    console.log('[schema] Restored test_attempts.fk_attempt_student');
+  } catch (error) {
+    console.warn('[schema] Could not restore fk_attempt_student:', error.message);
+  }
+}
+
 async function ensureTestAttemptsColumns(pool, db) {
   if (!(await tableExists(pool, db, 'test_attempts'))) return;
 
+  await ensureTestAttemptsStudentIdNullable(pool, db);
+  await ensureAttemptStudentForeignKey(pool, db);
   await addColumn(pool, db, 'test_attempts', 'user_id', 'user_id BIGINT NULL AFTER student_id');
   await addColumn(pool, db, 'test_attempts', 'student_name', 'student_name VARCHAR(255) NULL AFTER user_id');
   await addColumn(pool, db, 'test_attempts', 'access_code_label', "access_code_label VARCHAR(64) NULL DEFAULT 'DIRECT' AFTER student_name");
@@ -84,8 +166,45 @@ async function ensureTestAttemptsColumns(pool, db) {
   await addColumn(pool, db, 'test_attempts', 'used_code_hash', 'used_code_hash VARCHAR(128) NULL AFTER device_fingerprint');
   await addColumn(pool, db, 'test_attempts', 'attempt_nonce', 'attempt_nonce VARCHAR(64) NULL AFTER used_code_hash');
   await addColumn(pool, db, 'test_attempts', 'delivery_layout_json', 'delivery_layout_json JSON NULL AFTER attempt_nonce');
-  await addColumn(pool, db, 'test_attempts', 'result_id', 'result_id BIGINT NULL AFTER delivery_layout_json');
+  await addColumn(pool, db, 'test_attempts', 'exam_snapshot_json', 'exam_snapshot_json JSON NULL AFTER delivery_layout_json');
+  await addColumn(pool, db, 'test_attempts', 'result_id', 'result_id BIGINT NULL AFTER exam_snapshot_json');
   await addColumn(pool, db, 'test_attempts', 'completion_reason', 'completion_reason VARCHAR(50) NULL AFTER submitted_at');
+  await addColumn(
+    pool,
+    db,
+    'test_attempts',
+    'guest_session_hash',
+    'guest_session_hash CHAR(64) NULL AFTER completion_reason'
+  );
+  await addColumn(
+    pool,
+    db,
+    'test_attempts',
+    'identity_status',
+    'identity_status VARCHAR(32) NULL AFTER guest_session_hash'
+  );
+  await addColumn(
+    pool,
+    db,
+    'test_attempts',
+    'enrollment_profile_json',
+    'enrollment_profile_json JSON NULL AFTER identity_status'
+  );
+  await addColumn(
+    pool,
+    db,
+    'test_attempts',
+    'pending_result_json',
+    'pending_result_json JSON NULL AFTER enrollment_profile_json'
+  );
+  await addColumn(pool, db, 'test_attempts', 'claimed_at', 'claimed_at DATETIME NULL AFTER pending_result_json');
+
+  if (!(await indexExists(pool, db, 'test_attempts', 'idx_test_attempts_guest_session'))) {
+    await pool.query(
+      'ALTER TABLE test_attempts ADD KEY idx_test_attempts_guest_session (guest_session_hash, test_id)'
+    );
+    console.log('[schema] Added test_attempts.idx_test_attempts_guest_session');
+  }
 
   if (
     (await columnExists(pool, db, 'test_attempts', 'user_id')) &&
@@ -108,6 +227,25 @@ async function ensureTestResultsColumns(pool, db) {
   await addColumn(pool, db, 'test_results', 'detail_json', 'detail_json LONGTEXT NULL AFTER time_taken_seconds');
 }
 
+async function ensureTestIntegrityBlocksTable(pool, db) {
+  if (await tableExists(pool, db, 'test_integrity_blocks')) return;
+  if (!(await tableExists(pool, db, 'tests')) || !(await tableExists(pool, db, 'users'))) return;
+  await pool.query(`
+CREATE TABLE test_integrity_blocks (
+  test_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  strike_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  blocked_at DATETIME NULL,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (test_id, user_id),
+  KEY idx_tib_user (user_id),
+  CONSTRAINT fk_tib_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tib_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  console.log('[schema] Created test_integrity_blocks');
+}
+
 export async function ensureTestsApplicationSchema(mysqlPool) {
   const [dbRows] = await mysqlPool.query('SELECT DATABASE() AS db');
   const db = dbRows[0]?.db;
@@ -116,6 +254,7 @@ export async function ensureTestsApplicationSchema(mysqlPool) {
   await ensureTestsColumns(mysqlPool, db);
   await ensureTestAttemptsColumns(mysqlPool, db);
   await ensureTestResultsColumns(mysqlPool, db);
+  await ensureTestIntegrityBlocksTable(mysqlPool, db);
 
   const migrationResult = await ensurePassingMarksMigration(mysqlPool);
   if (migrationResult?.steps?.length) {

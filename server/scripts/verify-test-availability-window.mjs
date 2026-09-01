@@ -88,4 +88,11 @@ assertMatch(
   /availability:/
 );
 
+assertMatch(
+  'course-linked INSERT skips schedule window',
+  read('src/services/testAvailabilityWindow.queries.js'),
+  /t\.course_id IS NOT NULL AND t\.course_id > 0/
+);
+
 console.log('\nAll G-RT-03 availability window checks passed.');
+

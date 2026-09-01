@@ -11,7 +11,6 @@ import {
   AttemptExpiredStateError,
   AttemptInvalidStateError,
   AttemptNotFoundError,
-  AttemptNotOwnedError,
 } from '../errors/testAttempt/TestAttemptErrors.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { ATTEMPT_DB_STATUS } from './attempt.constants.js';
@@ -77,7 +76,7 @@ export async function validateAttemptAccess(db, attemptId, studentId, options = 
       studentId: sid,
       event: 'ATTEMPT_ACCESS_DENIED',
     });
-    throw new AttemptNotOwnedError({ attemptId: aid, studentId: sid });
+    throw new AttemptNotFoundError({ attemptId: aid, studentId: sid, reason: 'not_authorized' });
   }
 
   const requireToken = options.requireToken !== false;

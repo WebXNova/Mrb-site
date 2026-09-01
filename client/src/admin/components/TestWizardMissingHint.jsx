@@ -117,9 +117,10 @@ export function getMissingFieldItems(missingFields = [], context = {}) {
   return records.map((record, index) => {
     const field = String(record.code || record.field || record.key || '');
     const mapped = mapMissingField(field, { activeStep, setupPath, questionsPath, testId });
+    const serverMessage = typeof record.message === 'string' && record.message.trim() ? record.message : null;
     return {
       field: String(record.key || field || index),
-      text: record.message || mapped.text,
+      text: serverMessage || mapped.text,
       link: mapped.link || null,
       linkLabel: mapped.linkLabel,
       blocking: record.blocking !== false,

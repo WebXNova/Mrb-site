@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
- * Paginated navigation over exam items (sections + questions) for one_per_page mode.
+ * Paginated navigation over exam items (sections + questions) for one-question-per-page display.
  *
  * @param {Array<{ type: string, key: string }>} examItems
  */

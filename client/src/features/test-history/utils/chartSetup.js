@@ -82,6 +82,21 @@ export function createCenterTextPlugin(configOrLabel, legacySublabel = '') {
     sublabel = String(configOrLabel?.sublabel || '').trim();
   }
 
+  const colors = {
+    title:
+      typeof configOrLabel === 'object' && configOrLabel?.titleColor
+        ? String(configOrLabel.titleColor)
+        : '#64748B',
+    value:
+      typeof configOrLabel === 'object' && configOrLabel?.valueColor
+        ? String(configOrLabel.valueColor)
+        : '#0F172A',
+    sublabel:
+      typeof configOrLabel === 'object' && configOrLabel?.sublabelColor
+        ? String(configOrLabel.sublabelColor)
+        : '#64748B',
+  };
+
   return {
     id: 'historyCenterText',
     afterDraw(chart) {
@@ -109,14 +124,14 @@ export function createCenterTextPlugin(configOrLabel, legacySublabel = '') {
         const hasSublabel = Boolean(sublabel);
 
         if (hasTitle) {
-          ctx.fillStyle = '#94A3B8';
-          ctx.font = `500 ${Math.min(12, Math.max(10, maxTextWidth / 10))}px system-ui, sans-serif`;
-          const titleY = hasValue ? centerY - (hasSublabel ? 18 : 12) : centerY;
-          drawWrappedText(ctx, title, centerX, titleY, maxTextWidth, 13);
+        ctx.fillStyle = colors.title;
+        ctx.font = `500 ${Math.min(12, Math.max(10, maxTextWidth / 10))}px system-ui, sans-serif`;
+        const titleY = hasValue ? centerY - (hasSublabel ? 18 : 12) : centerY;
+        drawWrappedText(ctx, title, centerX, titleY, maxTextWidth, 13);
         }
 
         if (hasValue) {
-          ctx.fillStyle = '#FFFFFF';
+          ctx.fillStyle = colors.value;
           const valueFontSize = Math.min(26, Math.max(15, maxTextWidth / 2.8));
           ctx.font = `700 ${valueFontSize}px system-ui, sans-serif`;
           const valueY = hasTitle ? centerY + 2 : centerY - (hasSublabel ? 6 : 0);
@@ -124,7 +139,7 @@ export function createCenterTextPlugin(configOrLabel, legacySublabel = '') {
         }
 
         if (hasSublabel) {
-          ctx.fillStyle = '#94A3B8';
+          ctx.fillStyle = colors.sublabel;
           ctx.font = '500 11px system-ui, sans-serif';
           const subY = hasValue ? centerY + 20 : centerY + 12;
           drawWrappedText(ctx, sublabel, centerX, subY, maxTextWidth, 12);

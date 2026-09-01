@@ -45,15 +45,15 @@ assertMatch(
 );
 
 assertMatch(
-  'slug load uses attempt layout',
+  'slug load uses attempt exam snapshot',
   read('src/services/testAttempt.service.js'),
-  /loadComposedQuestionsWithAttemptLayout/
+  /resolveAttemptExamSnapshot|loadEntitledExamSnapshot/
 );
 
 assertMatch(
-  'slug submit grades with layout',
+  'slug submit grades from exam snapshot',
   read('src/services/testAttempt.service.js'),
-  /loadComposedQuestionsWithAttemptLayout/
+  /snapshotQuestionsForGrading/
 );
 
 assertMatch(
@@ -63,9 +63,15 @@ assertMatch(
 );
 
 assertMatch(
-  'portal load uses attempt layout',
-  read('src/services/studentAttemptLoad.service.js'),
+  'snapshot capture uses composed layout',
+  read('src/services/attemptExamSnapshot.service.js'),
   /loadComposedQuestionsWithAttemptLayout/
+);
+
+assertMatch(
+  'portal load uses attempt exam snapshot',
+  read('src/services/studentAttemptLoad.service.js'),
+  /resolveAttemptExamSnapshot/
 );
 
 assertMatch(

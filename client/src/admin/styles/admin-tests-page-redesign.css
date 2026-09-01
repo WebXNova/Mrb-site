@@ -35,9 +35,9 @@
   --tp-space-6: 24px;
   --tp-space-8: 32px;
 
-  --tp-text-xs: 11px;
-  --tp-text-sm: 12px;
-  --tp-text-base: 13px;
+  --tp-text-xs: 12px;
+  --tp-text-sm: 13px;
+  --tp-text-base: 14px;
   --tp-text-md: 14px;
   --tp-text-lg: 16px;
   --tp-text-xl: 18px;
@@ -941,8 +941,8 @@
   max-width: none;
   padding: 4px 9px;
   border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 650;
   letter-spacing: 0.01em;
   line-height: 1.25;
   white-space: nowrap;
@@ -1220,6 +1220,7 @@
 
 .tests-list-table {
   width: 100%;
+  min-width: 1240px;
   border-collapse: collapse;
   font-size: var(--tp-text-md);
 }
@@ -1322,10 +1323,18 @@
 }
 
 .tests-list-table__date-line {
-  margin: var(--tp-space-1) 0 0;
+  margin: 2px 0 0;
   font-size: var(--tp-text-sm);
-  color: var(--tp-ink-muted);
-  line-height: 1.4;
+  color: var(--tp-ink-secondary);
+  line-height: 1.35;
+}
+
+.tests-list-table__type-cell,
+.tests-list-table__course-cell {
+  font-size: 0.8125rem;
+  color: var(--tp-ink-secondary);
+  max-width: 160px;
+  overflow-wrap: anywhere;
 }
 
 .tests-list-table__num-cell {
@@ -1375,6 +1384,40 @@
   margin-top: 2px;
   font-size: var(--tp-text-sm);
   color: var(--tp-ink-muted);
+}
+
+.tests-list-table__schedule-cell,
+.tests-list-table__seats-cell,
+.tests-list-table__actions-cell {
+  padding: var(--tp-space-3) var(--tp-space-4);
+  vertical-align: top;
+}
+
+.tests-list-table__schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--tp-text-sm);
+  line-height: 1.4;
+  color: var(--tp-ink);
+}
+
+.tests-list-table__schedule-sep {
+  color: var(--tp-ink-muted);
+  font-size: var(--tp-text-xs);
+}
+
+.tests-list-table__muted {
+  color: var(--tp-ink-muted);
+  font-size: var(--tp-text-sm);
+}
+
+.tests-list-table__actions-cell {
+  min-width: 12rem;
+}
+
+.tests-list-table__seats-cell {
+  min-width: 11rem;
 }
 
 @media (max-width: 480px) {

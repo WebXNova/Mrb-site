@@ -71,16 +71,8 @@ export function validatePublishRequirements(payload) {
     }
   }
 
-  // All batches must have valid schedules
   if (payload.batches) {
     payload.batches.forEach((batch, index) => {
-      if (!batch.start_date || !batch.end_date) {
-        errors.push({
-          field: `batches[${index}]`,
-          message: `Batch ${index + 1} must have start and end dates`,
-        });
-      }
-
       if (!batch.total_seats || batch.total_seats <= 0) {
         errors.push({
           field: `batches[${index}]`,

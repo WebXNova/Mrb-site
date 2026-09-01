@@ -424,7 +424,7 @@
 .courses-table th.col-students,
 .courses-table td.col-students { width: 4%; }
 .courses-table th.col-status,
-.courses-table td.col-status { width: 8%; }
+.courses-table td.col-status { width: 16%; }
 .courses-table th.col-updated,
 .courses-table td.col-updated { width: 10%; }
 .courses-table th.col-actions,
@@ -570,6 +570,47 @@
   color: var(--badge-neutral-text);
   background: var(--badge-neutral-bg);
   border-color: var(--badge-neutral-border);
+}
+
+.courses-page .course-status-badge--finished,
+.admin-shell .courses-page .course-status-badge--finished {
+  color: var(--badge-danger-text);
+  background: var(--badge-danger-bg);
+  border-color: var(--badge-danger-border);
+}
+
+.courses-page .course-admission-badge,
+.admin-shell .courses-page .course-admission-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: none;
+  overflow: visible;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+
+.courses-page .course-admission-badge--open {
+  color: var(--badge-info-text);
+  background: var(--badge-info-bg);
+  border-color: var(--badge-info-border);
+}
+
+.courses-page .course-admission-badge--closed {
+  color: var(--badge-warning-text);
+  background: var(--badge-warning-bg);
+  border-color: var(--badge-warning-border);
+}
+
+.courses-page .course-control-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
 }
 
 .courses-page .course-level-badge,

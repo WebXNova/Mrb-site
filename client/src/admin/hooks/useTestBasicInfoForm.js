@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import { useCourseSubjects } from './useCourseSubjects';
 import { useTestCreateOptions } from './useTestCreateOptions';
+import { isStandaloneAccessType } from '../constants/testAccessType.js';
 import {
   createDefaultTestBasicInfoForm,
   isTestBasicInfoFormReady,
@@ -27,10 +28,52 @@ export function useTestBasicInfoForm(token, { initialForm, applyCreateDefaults =
     error: optionsError,
   } = useTestCreateOptions(token);
 
-  const { subjects, subjectIds, isLoading: isLoadingSubjects, error: subjectsError } = useCourseSubjects(
+  const { subjects: courseSubjects, subjectIds: courseSubjectIds, isLoading: isLoadingCourseSubjects, error: courseSubjectsError } = useCourseSubjects(
     token,
     form.course_id
   );
+
+  const standalone = isStandaloneAccessType(form.test_access_type);
+  const [uniqueSubjects, setUniqueSubjects] = useState([]);
+  const [isLoadingUniqueSubjects, setIsLoadingUniqueSubjects] = useState(false);
+  const [uniqueSubjectsError, setUniqueSubjectsError] = useState('');
+
+  useEffect(() => {
+    if (!standalone) {
+      setUniqueSubjects([]);
+      setUniqueSubjectsError('');
+      setIsLoadingUniqueSubjects(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setIsLoadingUniqueSubjects(true);
+    setUniqueSubjectsError('');
+    adminApi
+      .uniqueActiveSubjects(token)
+      .then((response) => {
+        if (cancelled) return;
+        setUniqueSubjects(Array.isArray(response?.data) ? response.data : []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setUniqueSubjects([]);
+          setUniqueSubjectsError(err?.message || 'Failed to load subjects.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingUniqueSubjects(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [standalone, token]);
+
+  const subjects = standalone ? uniqueSubjects : courseSubjects;
+  const subjectIds = standalone
+    ? uniqueSubjects.map((subject) => Number(subject.id)).filter((id) => Number.isInteger(id) && id > 0)
+    : courseSubjectIds;
+  const isLoadingSubjects = standalone ? isLoadingUniqueSubjects : isLoadingCourseSubjects;
+  const subjectsError = standalone ? uniqueSubjectsError : courseSubjectsError;
 
   useEffect(() => {
     if (!applyCreateDefaults || !isLoadingOptions || !createOptions.defaultCategory) return;
@@ -78,6 +121,13 @@ export function useTestBasicInfoForm(token, { initialForm, applyCreateDefaults =
       if (name === 'test_type') {
         next.subject_id = '';
         next.subject_ids = [];
+      }
+      if (name === 'test_access_type') {
+        next.subject_id = '';
+        next.subject_ids = [];
+        if (isStandaloneAccessType(value)) {
+          next.course_id = '';
+        }
       }
       return next;
     });

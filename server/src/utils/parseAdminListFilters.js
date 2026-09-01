@@ -35,6 +35,14 @@ function parseStatus(value) {
   return 'all';
 }
 
+function parseTestAccessType(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'course_locked' || normalized === 'free_standalone' || normalized === 'paid_standalone') {
+    return normalized;
+  }
+  return '';
+}
+
 /**
  * Shared admin list filter query parser (course hierarchy, dates, search, status, pagination).
  *
@@ -63,6 +71,7 @@ export function parseAdminListFilters(query = {}, options = {}) {
     dateTo: parseIsoDate(query.dateTo, 'dateTo'),
     search: parseSearch(query.search),
     status: parseStatus(query.status),
+    accessType: parseTestAccessType(query.accessType ?? query.test_access_type ?? query.testAccessType),
     sortBy: parseSortBy(query.sortBy ?? query.sort_by),
     sortDirection: parseSortDirection(query.sortDirection ?? query.sort_dir ?? query.order),
     limit,

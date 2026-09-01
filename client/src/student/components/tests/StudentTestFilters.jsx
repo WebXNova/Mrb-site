@@ -107,7 +107,7 @@ export default function StudentTestFilters({
         ) : null}
       </div>
 
-      <p className="student-lecture-filters__count">
+      <p className="student-lecture-filters__count student-test-filters__count">
         Showing {resultCount} of {totalCount} test{totalCount === 1 ? '' : 's'}
       </p>
     </div>

@@ -4,9 +4,12 @@ export {
   AttemptNotOwnedError,
   CourseScopeViolationError,
   TestNotAccessibleError,
+  TestNotFoundError,
   AttemptInvalidStateError,
   AttemptExpiredError,
   AttemptExpiredStateError,
   AttemptTokenInvalidError,
   AttemptAccessDeniedError,
+  TEST_ACCESS_REASON_MESSAGES,
+  resolveTestAccessReasonMessage,
 } from './TestAttemptErrors.js';

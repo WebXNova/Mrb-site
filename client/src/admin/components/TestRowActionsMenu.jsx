@@ -42,7 +42,7 @@ export default function TestRowActionsMenu({
         <Link
           className="tests-row-actions__link"
           to={adminRoute(`tests/${test.id}/settings`)}
-          title="View settings"
+          title="Edit settings"
         >
           Settings
         </Link>
@@ -51,7 +51,7 @@ export default function TestRowActionsMenu({
       <Link
         className="tests-row-actions__link"
         to={adminRoute(`tests/${test.id}/questions`)}
-        title={published ? 'View questions' : 'Questions'}
+        title={published ? 'Edit questions' : 'Questions'}
         aria-busy={busyAction === 'questions' || undefined}
       >
         {questionsLabel}
@@ -124,7 +124,7 @@ export default function TestRowActionsMenu({
                     onCopyLink(test.publicLink);
                   }}
                 >
-                  Copy public link
+                  Copy {test.testAccessType === 'free_standalone' ? 'Test Link' : 'public link'}
                 </AdminActionMenuItem>
               </>
             ) : null}

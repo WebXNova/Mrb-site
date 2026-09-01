@@ -84,7 +84,50 @@ function testSlugTestWriteMutations() {
     !shouldAttachCsrf('/tests/my-slug/attempts/1001/start', 'GET'),
     'GET /tests/:slug/attempts/:attemptId/start does not attach CSRF'
   );
-  assert(!shouldAttachCsrf('/tests/my-slug/verify-code', 'POST'), 'POST verify-code still excluded');
+  assert(
+    shouldAttachCsrf('/tests/my-slug/verify-code', 'POST'),
+    'POST /tests/:slug/verify-code attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/tests/my-slug/attempts/1001/integrity-events', 'POST'),
+    'POST /tests/:slug/attempts/:attemptId/integrity-events attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/verify-code', 'POST'),
+    'POST /standalone-tests/:slug/verify-code attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/attempts/1001/integrity-events', 'POST'),
+    'POST /standalone-tests/:slug/attempts/:attemptId/integrity-events attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/free-session/start', 'POST'),
+    'POST /standalone-tests/:slug/free-session/start attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/free-session/enrollment', 'POST'),
+    'POST /standalone-tests/:slug/free-session/enrollment attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/free-session/claim', 'POST'),
+    'POST /standalone-tests/:slug/free-session/claim attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/free-session/attempts/1001/answers', 'PATCH'),
+    'PATCH free-session answers attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/free-session/attempts/1001/submit', 'POST'),
+    'POST free-session submit attaches CSRF'
+  );
+  assert(
+    shouldAttachCsrf('/standalone-tests/my-slug/free-session/attempts/1001/integrity-events', 'POST'),
+    'POST free-session integrity-events attaches CSRF'
+  );
+  assert(
+    !shouldAttachCsrf('/standalone-tests/my-slug/free-session', 'GET'),
+    'GET free-session status does not attach CSRF'
+  );
 }
 
 function testPaymentCheckoutMutation() {
@@ -125,7 +168,7 @@ function testQuizDraftMutations() {
   assert(shouldAttachCsrf(`${secretPrefix}/tests/29/quiz-draft`, 'PATCH'), 'PATCH secret quiz-draft attaches CSRF');
   assert(shouldAttachCsrf(`${secretPrefix}/tests/29/quiz-draft`, 'POST'), 'POST secret quiz-draft attaches CSRF');
   assert(!shouldAttachCsrf(`${secretPrefix}/tests/29/quiz-draft`, 'GET'), 'GET secret quiz-draft does not attach CSRF');
-  assert(!shouldAttachCsrf('/tests/my-slug/verify-code', 'POST'), 'student slug routes unchanged');
+  assert(!shouldAttachCsrf('/tests/my-slug/prep', 'GET'), 'GET /tests/:slug/prep does not attach CSRF');
 }
 
 function testRequestClientWiring() {

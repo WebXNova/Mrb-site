@@ -7,7 +7,7 @@ Authoritative enforcement lives in `src/services/testAvailabilityWindow.service.
 | Phase | Used for | Rules |
 |-------|----------|-------|
 | `any_access` | Prep, preview | Block before `start_date` |
-| `create_attempt` | New attempt (slug + portal) | Block before start or after end |
+| `create_attempt` | New attempt (slug + portal) | Block before start or when `now >= end_date` |
 | `in_progress` | Resume, load, save, submit, auto-submit | Block before start; after end allow only if `attempt.started_at <= end_date` |
 
 ## Enforcement points

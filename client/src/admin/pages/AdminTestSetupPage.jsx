@@ -11,6 +11,7 @@ import { useTestCompleteness } from '../hooks/useTestCompleteness';
 import { TEST_WIZARD_BUTTONS } from '../config/testWizardConfig';
 import { useTestBasicInfoForm } from '../hooks/useTestBasicInfoForm';
 import { mapTestToBasicInfoForm } from '../utils/testBasicInfoValidation';
+import { withPublishedEditControls } from '../utils/publishedTestEdit';
 import {
   defaultTestRulesForm,
   mapTestRulesToForm,
@@ -30,6 +31,7 @@ function UnifiedTestSetupForm({
   readOnly,
   onSaved,
   totalMarks = null,
+  isPublished = false,
 }) {
   const token = getAdminToken();
   const basicState = useTestBasicInfoForm(token, { initialForm: initialBasicForm, applyCreateDefaults: false });
@@ -125,9 +127,10 @@ function UnifiedTestSetupForm({
 
     setIsSubmitting(true);
     try {
-      await adminApi.patchTestBasicInfo(token, testId, basicPayload);
-      await adminApi.patchTestRules(token, testId, rulesValidation.payload);
-      await adminApi.patchTestSettings(token, testId, settingsValidation.payload);
+      const controls = isPublished ? { confirmPublishedEdit: true } : {};
+      await adminApi.patchTestBasicInfo(token, testId, withPublishedEditControls(basicPayload, controls));
+      await adminApi.patchTestRules(token, testId, withPublishedEditControls(rulesValidation.payload, controls));
+      await adminApi.patchTestSettings(token, testId, withPublishedEditControls(settingsValidation.payload, controls));
       setSuccess('Test saved');
       onSaved?.();
     } catch (err) {
@@ -256,7 +259,7 @@ export default function AdminTestSetupPage() {
 
   return (
     <TestSetupLayout testId={testId}>
-      {({ readOnly, reloadCompleteness, completeness }) =>
+      {({ readOnly, isPublished, reloadCompleteness, completeness }) =>
         isLoading ? (
           <p className="body-md admin-courses__muted">Loading test setup…</p>
         ) : loadError ? (
@@ -269,6 +272,7 @@ export default function AdminTestSetupPage() {
             initialRulesForm={initialRulesForm}
             initialSettingsForm={initialSettingsForm}
             readOnly={readOnly}
+            isPublished={Boolean(isPublished)}
             onSaved={reloadCompleteness}
             totalMarks={completeness?.publish_summary?.total_marks ?? null}
           />

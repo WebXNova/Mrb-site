@@ -9,6 +9,11 @@ import {
   loadCategoriesByCourseIds,
 } from '../services/courseCategories.service.js';
 import { parsePublicCatalogCategoryId } from '../validators/publicCatalogCategory.schema.js';
+import {
+  canViewPublicCourseDetail,
+  tryResolvePublicViewerUserId,
+  assertPublicCourseReadable,
+} from '../services/coursePublicVisibility.service.js';
 
 function invalidCourseId() {
   return new ApiError(400, 'Invalid course id', { code: 'INVALID_COURSE_ID' });
@@ -62,8 +67,12 @@ export const getCoursePublicById = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id) || id <= 0) throw invalidCourseId();
 
-  const row = await getCourseRowById(id, { activeOnly: true });
+  const row = await getCourseRowById(id);
   if (!row) throw new ApiError(404, 'Course not found', { code: 'COURSE_NOT_FOUND' });
+
+  const viewerUserId = await tryResolvePublicViewerUserId(req);
+  const allowed = await canViewPublicCourseDetail(row, viewerUserId);
+  if (!allowed) throw new ApiError(404, 'Course not found', { code: 'COURSE_NOT_FOUND' });
 
   const dto = toCoursePublicDto(row);
   let categories = [];
@@ -92,6 +101,7 @@ export const getCoursePublicById = asyncHandler(async (req, res) => {
 export const getPublicCourseSubjects = asyncHandler(async (req, res) => {
   const id = Number(req.params.courseId);
   if (!Number.isFinite(id) || id <= 0) throw invalidCourseId();
+  await assertPublicCourseReadable(id, req);
   const data = await listPublicSubjectsForCourse(id);
   sendSuccess(res, data);
 });

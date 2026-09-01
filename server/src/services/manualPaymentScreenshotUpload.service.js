@@ -7,6 +7,7 @@ import { validateSecureRasterImageUpload } from '../utils/secureRasterImageValid
 import { reencodeValidatedRasterImage } from '../utils/rasterImageReencode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOG_PREFIX = '[manual-payment-screenshot]';
 
 export const MANUAL_PAYMENT_UPLOAD_NAMESPACE = 'manual-payments';
 export const MANUAL_PAYMENT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -56,6 +57,51 @@ export function resolveStoredScreenshotFilename(screenshotUrl) {
 }
 
 /**
+ * Multer originalname may be empty or extensionless on mobile. Infer from MIME when needed.
+ * @param {{ originalname?: string, mimetype?: string } | null | undefined} file
+ * @returns {string}
+ */
+export function resolveManualPaymentScreenshotOriginalName(file) {
+  const raw = path.basename(String(file?.originalname || '').split('?')[0]);
+  if (raw && !raw.includes('..') && !/[\\/]/.test(raw)) {
+    const ext = path.extname(raw).toLowerCase();
+    if (ext === '.jpg' || ext === '.jpeg' || ext === '.png') return raw;
+  }
+  const mime = String(file?.mimetype || '').toLowerCase();
+  if (mime === 'image/png') return 'screenshot.png';
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'screenshot.jpg';
+  return raw || 'screenshot.bin';
+}
+
+/**
+ * Map a multer disk file to the finalize() contract. Do not pass `req.file` through unchanged —
+ * multer uses `path` / `originalname` / `mimetype`, not `filePath` / `originalName` / `claimedMime`.
+ *
+ * @param {{ path?: string, originalname?: string, mimetype?: string, size?: number } | null | undefined} file
+ * @returns {{ filePath: string, originalName: string, claimedMime: string, size: number }}
+ */
+export function mapMulterFileToScreenshotInput(file) {
+  if (!file || typeof file !== 'object') {
+    throw new UploadRejectedError('Screenshot is required.');
+  }
+  const filePath = String(file.path || '').trim();
+  if (!filePath) {
+    console.error(LOG_PREFIX, 'multer file missing path', {
+      originalName: file.originalname || null,
+      mime: file.mimetype || null,
+      size: file.size ?? null,
+    });
+    throw new UploadRejectedError('Screenshot upload failed. Please try again.');
+  }
+  return {
+    filePath,
+    originalName: resolveManualPaymentScreenshotOriginalName(file),
+    claimedMime: String(file.mimetype || ''),
+    size: Number(file.size) || 0,
+  };
+}
+
+/**
  * @param {string} filePath
  */
 export async function safeUnlink(filePath) {
@@ -67,21 +113,73 @@ export async function safeUnlink(filePath) {
   }
 }
 
+function logScreenshotFailure(stage, details, error) {
+  console.error(LOG_PREFIX, stage, {
+    originalName: details.originalName || null,
+    size: details.size ?? null,
+    mime: details.claimedMime || null,
+    code: error?.code || null,
+    message: error?.message || String(error || ''),
+  });
+}
+
+function studentScreenshotRejectionMessage(error) {
+  const code = error?.code;
+  if (code === 'FILE_TOO_LARGE') return 'Screenshot must be 5 MB or smaller.';
+  if (
+    code === 'BLOCKED_EXTENSION' ||
+    code === 'INVALID_SIGNATURE' ||
+    code === 'EXTENSION_SIGNATURE_MISMATCH' ||
+    code === 'INVALID_KIND' ||
+    code === 'INVALID_IMAGE_DECODE' ||
+    code === 'INVALID_IMAGE_REENCODE'
+  ) {
+    return 'Screenshot must be a JPG or PNG image.';
+  }
+  if (code === 'IMAGE_DIMENSIONS_EXCEEDED') {
+    return 'Screenshot image dimensions are too large.';
+  }
+  if (code === 'POLYGLOT_REJECTED') {
+    return 'Screenshot was rejected.';
+  }
+  const msg = String(error?.message || '').trim();
+  return msg || 'Screenshot was rejected.';
+}
+
 /**
  * Validate magic bytes, reject WebP, re-encode, write random filename.
  *
  * @param {{ filePath: string, originalName: string, claimedMime: string, size: number }} input
- * @returns {Promise<{ url: string, filename: string, kind: string, sha256: string }>}
+ * @returns {Promise<{ url: string, filename: string, kind: string, sha256: string, storedPath: string }>}
  */
 export async function finalizeManualPaymentScreenshot(input) {
-  const { filePath, originalName, claimedMime, size } = input;
+  const filePath = String(input?.filePath || '').trim();
+  const originalName = String(input?.originalName || '');
+  const claimedMime = String(input?.claimedMime || '');
+  const size = Number(input?.size);
+
+  if (!filePath) {
+    logScreenshotFailure('missing filePath', { originalName, claimedMime, size }, null);
+    throw new UploadRejectedError('Screenshot upload failed. Please try again.');
+  }
+
+  if (!Number.isFinite(size) || size <= 0) {
+    await safeUnlink(filePath);
+    throw new UploadRejectedError('The selected file is empty. Choose another screenshot.');
+  }
+
+  if (size > MANUAL_PAYMENT_UPLOAD_MAX_BYTES) {
+    await safeUnlink(filePath);
+    throw new UploadRejectedError('Screenshot must be 5 MB or smaller.');
+  }
 
   let sha256;
   try {
     sha256 = await hashUploadedFileSha256(filePath);
-  } catch {
+  } catch (error) {
+    logScreenshotFailure('hash/read failed', { originalName, claimedMime, size }, error);
     await safeUnlink(filePath);
-    throw new UploadRejectedError('Could not read uploaded screenshot.');
+    throw new UploadRejectedError('Screenshot upload failed. Please try again.');
   }
 
   let validation;
@@ -94,8 +192,9 @@ export async function finalizeManualPaymentScreenshot(input) {
       maxBytes: MANUAL_PAYMENT_UPLOAD_MAX_BYTES,
     });
   } catch (error) {
+    logScreenshotFailure('validation failed', { originalName, claimedMime, size }, error);
     await safeUnlink(filePath);
-    throw new UploadRejectedError(error?.message || 'Screenshot was rejected.');
+    throw new UploadRejectedError(studentScreenshotRejectionMessage(error));
   }
 
   if (!MANUAL_PAYMENT_ALLOWED_KINDS.has(validation.kind)) {
@@ -115,8 +214,9 @@ export async function finalizeManualPaymentScreenshot(input) {
   try {
     outputBuffer = await reencodeValidatedRasterImage(filePath, validation.kind);
   } catch (error) {
+    logScreenshotFailure('reencode failed', { originalName, claimedMime, size }, error);
     await safeUnlink(filePath);
-    throw new UploadRejectedError(error?.message || 'Screenshot was rejected.');
+    throw new UploadRejectedError(studentScreenshotRejectionMessage(error));
   } finally {
     await safeUnlink(filePath);
   }
@@ -127,7 +227,8 @@ export async function finalizeManualPaymentScreenshot(input) {
 
   try {
     await fs.writeFile(finalPath, outputBuffer, { flag: 'wx' });
-  } catch {
+  } catch (error) {
+    logScreenshotFailure('store failed', { originalName, claimedMime, size }, error);
     await safeUnlink(finalPath);
     throw new UploadRejectedError('Failed to store screenshot.');
   }
@@ -137,5 +238,6 @@ export async function finalizeManualPaymentScreenshot(input) {
     filename: finalName,
     kind: validation.kind,
     sha256,
+    storedPath: finalPath,
   };
 }

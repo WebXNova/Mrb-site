@@ -763,6 +763,71 @@
   background: var(--color-ink-50);
 }
 
+.course-status-badge--finished {
+  color: var(--badge-danger-text);
+  background: var(--badge-danger-bg);
+  border: 1px solid var(--badge-danger-border);
+}
+
+.course-admission-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.course-admission-badge--open {
+  color: var(--badge-info-text);
+  background: var(--badge-info-bg);
+  border-color: var(--badge-info-border);
+}
+
+.course-admission-badge--closed {
+  color: var(--badge-warning-text);
+  background: var(--badge-warning-bg);
+  border-color: var(--badge-warning-border);
+}
+
+.course-control-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+
+.course-lifecycle-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.course-lifecycle-panel__text {
+  margin: 0;
+  font-size: var(--fs-13);
+  line-height: 1.5;
+  color: var(--admin-text-secondary);
+}
+
+.course-lifecycle-panel__actions {
+  margin-top: var(--space-4);
+}
+
+.course-lifecycle-confirm p {
+  margin: 0 0 var(--space-3);
+}
+
+.course-lifecycle-confirm p:last-child {
+  margin-bottom: 0;
+}
+
 .course-level-badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;

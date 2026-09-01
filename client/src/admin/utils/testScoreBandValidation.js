@@ -1,3 +1,32 @@
+function isBlankScoreBandField(value) {
+  const text = String(value ?? '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text === '';
+}
+
+/**
+ * Empty "Add band" rows must not block saving other settings.
+ * A row is a placeholder only when min, max, and message are all empty.
+ */
+export function isPlaceholderScoreBand(band) {
+  return (
+    isBlankScoreBandField(band?.min_score) &&
+    isBlankScoreBandField(band?.max_score) &&
+    isBlankScoreBandField(band?.message_html)
+  );
+}
+
+/**
+ * @param {Array<{ min_score?: unknown, max_score?: unknown, message_html?: unknown }>} bands
+ */
+export function selectCompletableScoreBands(bands) {
+  if (!Array.isArray(bands)) return [];
+  return bands.filter((band) => !isPlaceholderScoreBand(band));
+}
+
 /**
  * Client-side score band overlap validation (mirrors server testScoreBands.schema.js).
  * @param {Array<{ min_score: number|string, max_score: number|string }>} bands
@@ -40,24 +69,28 @@ export function validateScoreBandsClient(bands) {
     return ['Score bands must be a list.'];
   }
 
-  bands.forEach((band, index) => {
+  const complete = selectCompletableScoreBands(bands);
+
+  complete.forEach((band, index) => {
+    const minRaw = String(band.min_score ?? '').trim();
+    const maxRaw = String(band.max_score ?? '').trim();
     const min = Number(band.min_score);
     const max = Number(band.max_score);
-    if (!Number.isFinite(min) || min < 0) {
+    if (minRaw === '' || !Number.isFinite(min) || min < 0) {
       errors.push(`Band ${index + 1}: min score is invalid.`);
     }
-    if (!Number.isFinite(max) || max < 0) {
+    if (maxRaw === '' || !Number.isFinite(max) || max < 0) {
       errors.push(`Band ${index + 1}: max score is invalid.`);
     }
-    if (Number.isFinite(min) && Number.isFinite(max) && min > max) {
+    if (Number.isFinite(min) && Number.isFinite(max) && minRaw !== '' && maxRaw !== '' && min > max) {
       errors.push(`Band ${index + 1}: min must be ≤ max.`);
     }
-    if (!String(band.message_html ?? '').trim()) {
+    if (isBlankScoreBandField(band.message_html)) {
       errors.push(`Band ${index + 1}: message is required.`);
     }
   });
 
-  const overlaps = findScoreBandOverlapsClient(bands);
+  const overlaps = findScoreBandOverlapsClient(complete);
   overlaps.forEach((o) => errors.push(o.message));
 
   return errors;
