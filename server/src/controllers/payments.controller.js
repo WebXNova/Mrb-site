@@ -110,6 +110,7 @@ export const postPaymentWebhook = asyncHandler(async (req, res) => {
   });
 
   const headers = flattenIncomingHeaders(req);
+  console.log('[DEBUG headers]', JSON.stringify(headers));
 
   /** Byte-exact signing input: set in `express.raw({ verify })` and reconciled in `attachSafepayWebhookRawBody`. */
   const rawBodyBuffer =

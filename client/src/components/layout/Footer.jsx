@@ -62,15 +62,7 @@ export default function Footer() {
               </ul>
               {section.title === 'Legal' && (
                 <p className="footer__credit">
-                  Built by{' '}
-                  <a
-                    href="https://www.webxnova.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="footer__credit-link"
-                  >
-                    WebX Nova
-                  </a>
+                  Made by Moiz Web Solutions (MWS)
                 </p>
               )}
             </div>
@@ -83,14 +75,9 @@ export default function Footer() {
           <span className="footer__copy">
             &copy; {new Date().getFullYear()} MRB Classes. All rights reserved.
           </span>
-          <a
-            href="https://webxnova.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="footer__made footer__made-link"
-          >
-            Build By WebX Nova
-          </a>
+          <span className="footer__made">
+            Made by Moiz Web Solutions (MWS)
+          </span>
         </div>
       </div>
     </footer>
