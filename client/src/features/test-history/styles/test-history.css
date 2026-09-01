@@ -450,6 +450,7 @@
   border-bottom: 1px solid var(--sp-border, var(--color-ink-100));
   font-size: var(--fs-14);
   color: var(--sp-text-primary, var(--color-ink-800));
+  overflow-wrap: anywhere;
 }
 
 .th-table th {
@@ -552,13 +553,17 @@
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+  min-width: 0;
 }
 
 .th-card__title {
   margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-900);
+  overflow-wrap: anywhere;
 }
 
 .th-card__meta {
@@ -581,6 +586,7 @@
   font-size: var(--fs-15);
   font-weight: var(--fw-medium);
   color: var(--color-ink-800);
+  overflow-wrap: anywhere;
 }
 
 .th-card__pending {
@@ -591,6 +597,7 @@
 .th-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
   font-size: var(--fs-12);
@@ -598,6 +605,10 @@
   letter-spacing: var(--ls-wide);
   background: var(--color-bg-soft);
   color: var(--color-ink-600);
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .th-badge--pass {
@@ -846,7 +857,7 @@
   }
 
   .th-filters__row {
-    grid-template-columns: minmax(12rem, 1.5fr) repeat(3, minmax(8rem, 1fr)) auto;
+    grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)) auto;
   }
 
   .th-table-wrap {

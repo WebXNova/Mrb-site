@@ -112,6 +112,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   font-family: var(--font-display);
   font-size: var(--fs-20);
   color: var(--color-ink-900);
+  overflow-wrap: anywhere;
 }
 
 .tt-fs-gate__card p {
@@ -119,6 +120,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   color: var(--color-ink-600);
   font-size: var(--fs-14);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .tt-fs-gate__error {
@@ -187,6 +189,11 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   gap: var(--space-4);
 }
 
+.tt-header__info {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
 .tt-header__eyebrow {
   margin: 0 0 var(--space-1);
   font-size: var(--fs-12);
@@ -203,6 +210,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   font-weight: var(--fw-bold);
   color: var(--color-ink-900);
   line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
 }
 
 .tt-header__progress {
@@ -436,6 +444,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   font-weight: var(--fw-semibold);
   color: var(--color-ink-800);
   line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
 }
 
 .tt-question__heading-total {
@@ -608,6 +617,14 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   word-break: break-word;
 }
 
+.tt-option__text img,
+.tt-option__text video,
+.tt-option__text iframe,
+.tt-option__text table {
+  max-width: 100%;
+  height: auto;
+}
+
 .tt-options__empty {
   margin: 0;
   padding: var(--space-3);
@@ -615,6 +632,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   background: rgba(239, 68, 68, 0.08);
   color: #b91c1c;
   font-size: var(--fs-14);
+  overflow-wrap: anywhere;
 }
 
 /* Section dividers */
@@ -1273,9 +1291,10 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
 .tt-submit-modal__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-5) var(--space-3);
+  min-width: 0;
 }
 
 .tt-submit-modal__icon {
@@ -1293,11 +1312,13 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
 .tt-submit-modal__title {
   margin: 0;
+  min-width: 0;
   font-family: var(--font-display);
   font-size: var(--fs-22);
   font-weight: var(--fw-bold);
   color: var(--color-ink-900);
   line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
 }
 
 .tt-submit-modal__body {
@@ -1310,6 +1331,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   line-height: var(--lh-relaxed);
   color: var(--color-ink-700);
   font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
 }
 
 .tt-submit-modal__stats {

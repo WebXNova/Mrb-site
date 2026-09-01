@@ -91,6 +91,8 @@
   font-weight: 600;
   line-height: 1.25;
   color: var(--sp-charcoal, #1c1c1e);
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .student-profile-menu__username {
@@ -98,6 +100,7 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--sp-text-secondary, #4a4a4e);
+  overflow-wrap: anywhere;
 }
 
 .student-profile-menu__details {
@@ -173,8 +176,10 @@
   position: relative;
   z-index: 1;
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.65rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .student-profile-menu__item-icon {

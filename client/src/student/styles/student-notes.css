@@ -16,6 +16,8 @@
 .student-notes__head-copy {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .student-notes__count {
@@ -139,12 +141,13 @@
 
 .student-notes__block-summary {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   padding: 0.85rem 1rem;
   cursor: pointer;
   list-style: none;
   user-select: none;
+  min-width: 0;
 }
 
 .student-notes__block-summary::-webkit-details-marker {
@@ -210,6 +213,7 @@
   font-weight: var(--fw-semibold, 600);
   line-height: 1.35;
   color: var(--sp-text-primary, var(--color-ink-900));
+  overflow-wrap: anywhere;
 }
 
 .student-notes-card__desc {
@@ -217,6 +221,7 @@
   font-size: var(--fs-13, 0.8125rem);
   line-height: 1.45;
   color: var(--sp-text-muted, var(--color-ink-500));
+  overflow-wrap: anywhere;
 }
 
 .student-notes-card__meta {
@@ -314,6 +319,7 @@
   color: var(--sp-text-muted, var(--color-ink-500));
   line-height: 1.5;
   max-width: 40rem;
+  overflow-wrap: anywhere;
 }
 
 .student-notes-page__course-tabs {
@@ -377,12 +383,13 @@
 
 .student-notes-hierarchy__summary {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   padding: 0.85rem 1rem;
   cursor: pointer;
   list-style: none;
   user-select: none;
+  min-width: 0;
 }
 
 .student-notes-hierarchy__summary::-webkit-details-marker {
@@ -400,13 +407,18 @@
 }
 
 .student-notes-hierarchy__title {
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: var(--fs-15, 0.9375rem);
   font-weight: var(--fw-semibold, 600);
   color: var(--sp-text-primary, var(--color-ink-900));
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .student-notes-hierarchy__count {
   margin-left: auto;
+  flex: 0 0 auto;
   font-size: var(--fs-12, 0.75rem);
   font-weight: var(--fw-semibold, 600);
   color: var(--sp-text-muted, var(--color-ink-500));
@@ -414,6 +426,7 @@
   border: 1px solid var(--sp-border, var(--color-ink-100));
   border-radius: var(--radius-full, 999px);
   padding: 2px 9px;
+  white-space: nowrap;
 }
 
 .student-notes-hierarchy__body {

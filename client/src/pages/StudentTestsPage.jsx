@@ -11,6 +11,8 @@ import {
 } from '../student/utils/filterStudentTests';
 import '../student/styles/student-tests.css';
 
+const LIST_PAGE_SIZE = 50;
+
 function normaliseApiTest(row) {
   if (!row || typeof row !== 'object') return null;
   return {
@@ -32,8 +34,43 @@ function normaliseApiTest(row) {
   };
 }
 
+function extractTestListPayload(response) {
+  const payload = response?.data && typeof response.data === 'object' ? response.data : response;
+  const items = Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload?.tests)
+      ? payload.tests
+      : [];
+  const pagination = payload?.pagination && typeof payload.pagination === 'object' ? payload.pagination : {};
+  const total = Number(pagination.total);
+  return {
+    items,
+    total: Number.isFinite(total) && total >= 0 ? total : items.length,
+    limit: Number(pagination.limit) > 0 ? Number(pagination.limit) : LIST_PAGE_SIZE,
+  };
+}
+
+async function fetchAllStudentTests() {
+  const first = await studentApi.listTests({ page: 1, limit: LIST_PAGE_SIZE });
+  const parsed = extractTestListPayload(first);
+  const items = [...parsed.items];
+  const pageSize = parsed.limit;
+  const totalPages = pageSize > 0 ? Math.ceil(parsed.total / pageSize) : 1;
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    const next = await studentApi.listTests({ page, limit: pageSize });
+    items.push(...extractTestListPayload(next).items);
+  }
+
+  return {
+    items: items.map(normaliseApiTest).filter(Boolean),
+    total: Math.max(parsed.total, items.length),
+  };
+}
+
 export default function StudentTestsPage() {
   const [tests, setTests] = useState([]);
+  const [catalogTotal, setCatalogTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -48,15 +85,16 @@ export default function StudentTestsPage() {
       setLoading(true);
       setError('');
       try {
-        const response = await studentApi.listTests({ page: 1, limit: 50 });
-        const items = Array.isArray(response?.data?.items) ? response.data.items : [];
+        const { items, total } = await fetchAllStudentTests();
         if (mounted) {
-          setTests(items.map(normaliseApiTest).filter(Boolean));
+          setTests(items);
+          setCatalogTotal(total);
         }
       } catch (err) {
         if (mounted) {
           setError(err?.message || 'Unable to load tests.');
           setTests([]);
+          setCatalogTotal(0);
         }
       } finally {
         if (mounted) setLoading(false);
@@ -69,6 +107,12 @@ export default function StudentTestsPage() {
   }, []);
 
   const subjectOptions = useMemo(() => collectTestSubjectOptions(tests), [tests]);
+
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    subjectId !== 'all' ||
+    dateFilter !== 'all' ||
+    attemptFilter !== 'all';
 
   const filteredTests = useMemo(
     () =>
@@ -87,6 +131,7 @@ export default function StudentTestsPage() {
   );
 
   const showGrouped = attemptFilter === 'all';
+  const totalCount = Math.max(catalogTotal, tests.length);
 
   function clearFilters() {
     setSearch('');
@@ -97,19 +142,17 @@ export default function StudentTestsPage() {
 
   return (
     <section className="student-tests-page sp-panel sp-card">
-      <div className="student-page-header student-tests-page__header">
-        <div className="student-tests-page__header-copy">
+      <header className="student-tests-page__header">
+        <div className="student-tests-page__heading-row">
           <h2 className="heading-3 student-tests-page__title">Practice tests</h2>
-          <p className="student-tests-page__lead">
-            Filter by subject or date, search by name, and see what is new versus already completed.
-          </p>
-        </div>
-        <div className="student-page-header__actions">
-          <Link className="sp-btn sp-btn--secondary sp-btn--sm" to="/dashboard/tests/history">
+          <Link className="sp-btn sp-btn--secondary sp-btn--sm student-tests-page__results-btn" to="/dashboard/tests/history">
             View results
           </Link>
         </div>
-      </div>
+        <p className="student-tests-page__lead">
+          Filter by subject or date, search by name, and see what is new versus already completed.
+        </p>
+      </header>
 
       <StudentTestFilters
         search={search}
@@ -118,7 +161,8 @@ export default function StudentTestsPage() {
         attemptFilter={attemptFilter}
         subjects={subjectOptions}
         resultCount={filteredTests.length}
-        totalCount={tests.length}
+        totalCount={totalCount}
+        loading={loading}
         onSearchChange={setSearch}
         onSubjectChange={setSubjectId}
         onDateFilterChange={setDateFilter}
@@ -126,7 +170,6 @@ export default function StudentTestsPage() {
         onClear={clearFilters}
       />
 
-      {loading ? <p className="student-tests-page__status">Loading tests…</p> : null}
       {error ? (
         <p className="admin-error" role="alert">
           {error}
@@ -138,6 +181,9 @@ export default function StudentTestsPage() {
           available={available}
           completed={completed}
           showGrouped={showGrouped}
+          hasActiveFilters={hasActiveFilters}
+          totalCount={totalCount}
+          onClearFilters={clearFilters}
         />
       ) : null}
     </section>

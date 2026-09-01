@@ -95,6 +95,7 @@
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-900);
+  overflow-wrap: anywhere;
 }
 
 .student-mobile-card__meta {
@@ -184,9 +185,11 @@
 
 .student-notifications-list__title {
   margin: 0;
+  min-width: 0;
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-900);
+  overflow-wrap: anywhere;
 }
 
 .student-notifications-list__badge {
@@ -204,6 +207,7 @@
   font-size: var(--fs-14);
   color: var(--color-ink-600);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .student-notifications-list__time {
@@ -248,7 +252,7 @@
   }
 
   .student-bottom-nav {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .student-bottom-nav__item {
@@ -333,7 +337,158 @@
 }
 
 @media (min-width: 961px) {
-  .student-sidebar__footer {
+  .student-shell:not(.student-shell--v2) .student-sidebar__footer {
     display: none;
+  }
+}
+
+/* ============================================================
+   Text containment — keep copy inside cards, nav, and buttons
+   ============================================================ */
+
+.student-shell,
+.student-shell .student-content,
+.student-shell .sp-portal-content,
+.student-shell .sp-route-view {
+  min-width: 0;
+}
+
+.student-shell:not(.student-shell--v2),
+.student-shell:not(.student-shell--v2) .student-main,
+.student-shell:not(.student-shell--v2) .student-content {
+  max-width: 100%;
+}
+
+.student-shell--v2,
+.student-shell--v2 .student-main,
+.student-shell--v2 .student-content {
+  min-width: 0;
+  max-width: none;
+}
+
+.student-shell--v2 .student-content.sp-portal-content {
+  max-width: var(--sp-content-max);
+}
+
+.student-shell h1,
+.student-shell h2,
+.student-shell h3,
+.student-shell h4,
+.student-shell h5,
+.student-shell h6,
+.student-shell p,
+.student-shell li,
+.student-shell dt,
+.student-shell dd,
+.student-shell label,
+.student-shell legend,
+.student-shell .heading-1,
+.student-shell .heading-2,
+.student-shell .heading-3,
+.student-shell .heading-4,
+.student-shell .sp-body,
+.student-shell .sp-label,
+.student-shell .sp-panel__title,
+.student-shell .sp-panel__headline,
+.student-shell .admin-error,
+.student-shell .admin-stat-card__label,
+.student-shell .admin-stat-card__value {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.student-shell .sp-card,
+.student-shell .sp-panel,
+.student-shell .admin-card,
+.student-shell .student-mobile-card,
+.student-shell .student-test-card,
+.student-shell .student-feature-card,
+.student-shell .student-notes-card,
+.student-shell .sp-settings-card,
+.student-shell .sp-my-courses-card,
+.student-shell .th-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.student-shell .sp-btn,
+.student-shell .btn {
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+}
+
+.student-shell .sp-badge {
+  height: auto;
+  min-height: 20px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  padding-block: 0.2rem;
+}
+
+.student-shell .student-nav__item,
+.student-shell .student-bottom-nav__item {
+  min-width: 0;
+}
+
+.student-shell .student-nav__label,
+.student-shell .student-bottom-nav__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.student-shell .student-page-header {
+  min-width: 0;
+}
+
+.student-shell .student-page-header > div,
+.student-shell .student-page-header__actions {
+  min-width: 0;
+}
+
+.student-shell input,
+.student-shell select,
+.student-shell textarea {
+  max-width: 100%;
+}
+
+.student-shell img,
+.student-shell svg,
+.student-shell iframe,
+.student-shell video {
+  max-width: 100%;
+}
+
+@media (max-width: 480px) {
+  .student-shell .heading-1 {
+    font-size: 1.125rem;
+    line-height: 1.25;
+  }
+
+  .student-shell .heading-2 {
+    font-size: 1.0625rem;
+  }
+
+  .student-shell .heading-3 {
+    font-size: 0.9375rem;
+  }
+
+  .student-shell .sp-btn,
+  .student-shell .btn {
+    min-height: 2.5rem;
+  }
+
+  .student-shell .student-page-header__actions .sp-btn,
+  .student-shell .student-page-header__actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 }

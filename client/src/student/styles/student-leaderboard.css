@@ -20,6 +20,7 @@
 
 .student-leaderboard-course {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .student-leaderboard-page__lead {
@@ -206,6 +207,8 @@
   align-items: center;
   gap: 0.4rem;
   font-weight: 650;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .student-leaderboard-score {
@@ -339,7 +342,7 @@
   .student-leaderboard-table thead th,
   .student-leaderboard-td,
   .student-leaderboard-section th {
-    font-size: 0.625rem;
+    font-size: var(--sp-text-xs);
   }
 
   .student-leaderboard-rank-icon {

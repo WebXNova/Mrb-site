@@ -31,3 +31,13 @@ export function useIsStudentTabletNav() {
 export function useIsStudentOverlayNav() {
   return useMediaQuery('(max-width: 1023px)');
 }
+
+/** Laptop: persistent collapsible sidebar (1024px–1279px). */
+export function useIsStudentLaptopNav() {
+  return useMediaQuery('(min-width: 1024px) and (max-width: 1279px)');
+}
+
+/** Large desktop: expanded sidebar by default (>=1280px). */
+export function useIsStudentLargeDesktopNav() {
+  return useMediaQuery('(min-width: 1280px)');
+}

@@ -21,6 +21,7 @@ export default function StudentTestFilters({
   subjects,
   resultCount,
   totalCount,
+  loading = false,
   onSearchChange,
   onSubjectChange,
   onDateFilterChange,
@@ -33,9 +34,13 @@ export default function StudentTestFilters({
     dateFilter !== 'all' ||
     attemptFilter !== 'all';
 
+  const countLabel = loading
+    ? 'Loading tests…'
+    : `Showing ${resultCount} of ${totalCount} test${totalCount === 1 ? '' : 's'}`;
+
   return (
     <div className="student-lecture-filters student-test-filters">
-      <div className="student-lecture-filters__row">
+      <div className="student-lecture-filters__row student-test-filters__row">
         <label className="student-lecture-filters__field student-lecture-filters__field--search">
           <span className="student-lecture-filters__label">Search</span>
           <div className="student-lecture-filters__search-wrap sp-search">
@@ -99,17 +104,18 @@ export default function StudentTestFilters({
             ))}
           </select>
         </label>
+      </div>
 
+      <div className="student-test-filters__footer">
+        <p className="student-lecture-filters__count student-test-filters__count" aria-live="polite">
+          {countLabel}
+        </p>
         {hasActiveFilters ? (
-          <button type="button" className="btn btn--ghost btn--sm student-lecture-filters__clear" onClick={onClear}>
+          <button type="button" className="btn btn--ghost btn--sm student-test-filters__clear" onClick={onClear}>
             Clear filters
           </button>
         ) : null}
       </div>
-
-      <p className="student-lecture-filters__count student-test-filters__count">
-        Showing {resultCount} of {totalCount} test{totalCount === 1 ? '' : 's'}
-      </p>
     </div>
   );
 }

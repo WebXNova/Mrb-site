@@ -1,41 +1,108 @@
 /**
- * Student shell layout — persistent sidebar, sticky header, bottom nav
+ * Student shell layout — collapsible sidebar, sticky header, overlay nav
+ *
+ * Viewport
+ *   → .student-shell--v2 (grid)
+ *     → aside.student-sidebar (in-flow on ≥1024, overlay below)
+ *     → .student-main (minmax(0, 1fr) remaining width)
+ *       → header.sp-app-header
+ *       → main.student-content
  */
 
 .student-shell--v2 {
+  display: grid;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   min-height: 100dvh;
+  flex: 1 1 auto;
+  --sp-sidebar-current-width: var(--sp-sidebar-width);
+}
+
+.student-shell--v2.student-shell--overlay-nav {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.student-shell--v2.student-shell--persistent-nav {
+  grid-template-columns: var(--sp-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  transition: grid-template-columns 0.28s var(--sp-ease, cubic-bezier(0.25, 0.46, 0.45, 0.94));
+}
+
+.student-shell--v2.student-shell--persistent-nav.student-shell--sidebar-collapsed {
+  grid-template-columns: var(--sp-sidebar-collapsed-width) minmax(0, 1fr);
 }
 
 .student-shell--v2 .student-main {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  min-width: 0;
-  overflow-x: clip;
-}
-
-.student-shell--persistent-nav {
-  display: grid;
-  grid-template-columns: 1fr;
-}
-
-.student-shell--persistent-nav .student-main {
   grid-column: 1;
+  grid-row: 1;
+  background: var(--sp-bg-secondary, #f8fafc);
+}
+
+.student-shell--v2 .student-nav.sp-sidebar__nav,
+.student-shell--v2 .student-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.student-shell--v2 .student-content.sp-portal-content,
+.student-shell--v2 main.student-content {
+  overflow-x: visible;
+  overflow-y: visible;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--sp-content-max);
+}
+
+.student-shell--v2.student-shell--persistent-nav .student-main {
+  grid-column: 2;
+}
+
+.student-shell--v2 .admin-card,
+.student-shell--v2 .student-lectures-page,
+.student-shell--v2 .student-tests-page {
+  width: 100%;
+  min-width: 0;
+}
+
+.student-shell--v2 .student-nav__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.student-shell--v2 .student-nav__label,
+.student-shell--v2 .student-bottom-nav__label {
+  min-width: 0;
+  line-height: 1.25;
 }
 
 /* ── Sticky app header ── */
 .sp-app-header {
   position: sticky;
   top: 0;
-  z-index: var(--sp-z-header);
+  z-index: calc(var(--sp-z-sidebar) + 8);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-space-3);
+  flex: 0 0 auto;
+  height: var(--sp-header-height);
   min-height: var(--sp-header-height);
-  padding: var(--sp-space-2) var(--sp-container-px);
+  max-height: var(--sp-header-height);
+  padding: 0 var(--sp-container-px);
   background: var(--sp-surface-header);
   border-bottom: 1px solid var(--sp-border);
   backdrop-filter: blur(12px);
@@ -47,6 +114,15 @@
   display: flex;
   align-items: center;
   gap: var(--sp-space-2);
+  min-width: 0;
+}
+
+.sp-app-header__start {
+  flex: 1 1 auto;
+}
+
+.sp-app-header__end {
+  flex: 0 0 auto;
 }
 
 .sp-app-header__center {
@@ -55,13 +131,30 @@
   justify-content: center;
 }
 
+.sp-app-header__title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sp-font-sans, inherit);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--sp-navy);
+}
+
 .sp-app-header__menu,
 .sp-app-header__theme,
 .sp-header-search-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  width: var(--sp-touch-min);
   min-width: var(--sp-touch-min);
+  height: var(--sp-touch-min);
   min-height: var(--sp-touch-min);
   padding: 0;
   border: none;
@@ -76,6 +169,57 @@
 .sp-app-header__theme:hover,
 .sp-header-search-toggle:hover {
   background: var(--sp-off-white);
+}
+
+.sp-app-header__menu:focus-visible,
+.sp-app-header__theme:focus-visible {
+  outline: 2px solid var(--sp-accent);
+  outline-offset: 2px;
+}
+
+/* Animated hamburger — visible on laptop, tablet, and mobile */
+.sp-nav-toggle {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 14px;
+}
+
+.sp-nav-toggle__bar {
+  position: absolute;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  transition: transform 0.22s var(--sp-ease, ease), opacity 0.22s ease, top 0.22s ease;
+}
+
+.sp-nav-toggle__bar:nth-child(1) {
+  top: 0;
+}
+
+.sp-nav-toggle__bar:nth-child(2) {
+  top: 6px;
+}
+
+.sp-nav-toggle__bar:nth-child(3) {
+  top: 12px;
+}
+
+.sp-app-header__menu--open .sp-nav-toggle__bar:nth-child(1) {
+  top: 6px;
+  transform: rotate(45deg);
+}
+
+.sp-app-header__menu--open .sp-nav-toggle__bar:nth-child(2) {
+  opacity: 0;
+}
+
+.sp-app-header__menu--open .sp-nav-toggle__bar:nth-child(3) {
+  top: 6px;
+  transform: rotate(-45deg);
 }
 
 .sp-app-header__brand {
@@ -219,9 +363,7 @@
 .sp-header-search__result-label {
   font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .sp-header-search__result-type {
@@ -270,7 +412,7 @@
   text-align: center;
 }
 
-/* Route transition */
+/* Route transition — opacity only so transform does not create a containing block */
 .sp-route-view {
   animation: spRouteIn var(--sp-duration-route) var(--sp-ease-out) both;
 }
@@ -278,71 +420,156 @@
 @keyframes spRouteIn {
   from {
     opacity: 0;
-    transform: scale(0.99) translateY(6px);
   }
 
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
   }
 }
 
-/* Persistent sidebar — desktop */
-@media (min-width: 1024px) {
-  .student-shell--persistent-nav {
-    grid-template-columns: var(--sp-sidebar-width) 1fr;
-  }
-
-  .student-shell--persistent-nav .student-sidebar.sp-sidebar {
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    height: 100dvh;
-    transform: none;
-    grid-row: 1;
-    grid-column: 1;
-  }
-
-  .student-shell--persistent-nav .student-main {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .student-shell--persistent-nav .sp-app-header__menu {
-    display: none;
-  }
+/* Persistent sidebar — in-flow, width owned by the shell grid */
+.student-shell--v2.student-shell--persistent-nav .student-sidebar.sp-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: var(--sp-z-sidebar);
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  transform: none;
+  overflow: hidden;
 }
 
-/* Overlay sidebar — tablet/mobile */
+.student-shell--v2.student-shell--sidebar-collapsed .student-sidebar.sp-sidebar,
+.student-shell--v2.student-shell--sidebar-collapsed .sp-sidebar__nav {
+  overflow: visible;
+}
+
+/* Overlay sidebar — tablet/mobile drawer */
+.student-shell--v2 .student-sidebar-overlay {
+  top: var(--sp-header-height);
+  z-index: var(--sp-z-overlay);
+}
+
+.student-shell--v2.student-shell--overlay-nav .student-sidebar.sp-sidebar {
+  position: fixed;
+  inset: var(--sp-header-height) auto 0 0;
+  z-index: var(--sp-z-sidebar);
+  width: min(var(--sp-sidebar-width), 88vw);
+  height: auto;
+  transform: translateX(-105%);
+  transition: transform 0.3s var(--sp-ease);
+}
+
+.student-shell--v2.student-shell--overlay-nav.student-shell--nav-open .student-sidebar.sp-sidebar {
+  transform: translateX(0);
+}
+
+.student-shell--v2.student-shell--overlay-nav .student-content.sp-portal-content {
+  padding-bottom: calc(var(--sp-bottom-nav-height) + var(--sp-space-4));
+}
+
 @media (max-width: 1023px) {
-  .student-shell--overlay-nav .student-sidebar.sp-sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: var(--sp-z-sidebar);
-    width: min(var(--sp-sidebar-width), 88vw);
-    height: 100vh;
-    height: 100dvh;
-    transform: translateX(-105%);
-    transition: transform 0.3s var(--sp-ease);
+  .student-shell--v2 .student-bottom-nav.sp-bottom-nav {
+    display: grid;
   }
+}
 
-  .student-shell--overlay-nav.student-shell--nav-open .student-sidebar.sp-sidebar {
-    transform: translateX(0);
-  }
+/* Collapsed icon-only rail */
+.student-shell--sidebar-collapsed .sp-sidebar__brand-link {
+  justify-content: center;
+}
 
-  .student-shell--overlay-nav .student-content.sp-portal-content {
-    padding-bottom: calc(var(--sp-bottom-nav-height) + var(--sp-space-4));
-  }
+.student-shell--sidebar-collapsed .sp-sidebar__brand-wordmark,
+.student-shell--sidebar-collapsed .student-nav__label,
+.student-shell--sidebar-collapsed .sp-sidebar__logout-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.student-shell--sidebar-collapsed .student-nav__item {
+  justify-content: center;
+  padding: 0.55rem 0.35rem;
+}
+
+.student-shell--sidebar-collapsed .student-nav__item--active {
+  box-shadow: none;
+  background: var(--sp-accent-soft);
+}
+
+.student-shell--sidebar-collapsed .sp-sidebar__logout {
+  justify-content: center;
+  padding-inline: 0.35rem;
+}
+
+.student-shell--sidebar-collapsed .student-nav__item::after {
+  content: attr(data-nav-label);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: calc(var(--sp-z-sidebar) + 2);
+  padding: 0.3rem 0.55rem;
+  border-radius: 8px;
+  background: var(--sp-slate);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: var(--sp-shadow-md);
+  transition: opacity 0.15s ease;
+}
+
+.student-shell--sidebar-collapsed .student-nav__item:hover::after,
+.student-shell--sidebar-collapsed .student-nav__item:focus-visible::after {
+  opacity: 1;
+}
+
+[data-student-theme='dark'] .student-shell--sidebar-collapsed .student-nav__item::after {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.student-shell--v2 .sp-app-header .student-profile-menu__trigger {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.student-shell--v2 .sp-app-header .student-profile-menu__avatar {
+  width: 2rem;
+  height: 2rem;
+  font-size: 12px;
 }
 
 @media (max-width: 767px) {
   .sp-sidebar__brand-wordmark {
     height: 22px;
   }
+
+  .sp-app-header__title {
+    font-size: 0.875rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sp-route-view {
     animation: none;
+  }
+
+  .student-shell--v2.student-shell--persistent-nav,
+  .sp-nav-toggle__bar {
+    transition: none;
   }
 }

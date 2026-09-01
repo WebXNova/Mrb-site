@@ -20,6 +20,7 @@
   font-weight: 650;
   color: var(--sp-text-primary);
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .sp-settings__subtitle {
@@ -62,12 +63,17 @@
 
 .sp-settings-card {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-space-3);
   padding: var(--sp-space-4);
   text-decoration: none;
   color: inherit;
+  min-width: 0;
+}
+
+.sp-settings-card__copy {
+  min-width: 0;
 }
 
 .sp-settings-card__icon {
@@ -84,6 +90,7 @@
   font-size: 1.125rem;
   font-weight: 650;
   color: var(--sp-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .sp-settings-card__desc {
@@ -93,6 +100,7 @@
   color: var(--sp-text-secondary);
   overflow: visible;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .sp-profile-sessions__intro {
@@ -134,6 +142,7 @@
   font-size: 1.05rem;
   font-weight: 650;
   color: var(--sp-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .sp-profile-session-card__meta {
@@ -205,6 +214,10 @@
   border: 1px solid var(--sp-border);
 }
 
+.sp-my-courses-hero__copy {
+  min-width: 0;
+}
+
 @media (min-width: 768px) {
   .sp-my-courses-hero {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -218,6 +231,7 @@
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--sp-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .sp-my-courses-hero__lead {
@@ -226,13 +240,15 @@
   line-height: 1.65;
   color: var(--sp-text-secondary);
   max-width: 40rem;
+  overflow-wrap: anywhere;
 }
 
 .sp-my-courses-hero__badge {
   display: grid;
   justify-items: center;
   gap: 0.15rem;
-  min-width: 7.5rem;
+  min-width: 0;
+  max-width: 100%;
   padding: 1rem 1.25rem;
   border-radius: 12px;
   background: var(--sp-accent);
@@ -330,6 +346,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-space-2);
+  min-width: 0;
+}
+
+.sp-my-courses-card__copy {
+  min-width: 0;
+  flex: 1 1 12rem;
 }
 
 .sp-my-courses-card__title {
@@ -337,6 +359,7 @@
   font-size: 1rem;
   font-weight: 650;
   color: var(--sp-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .sp-my-courses-card__badges {
@@ -383,6 +406,7 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--sp-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .sp-my-courses-card__actions {
@@ -390,6 +414,11 @@
   flex-wrap: wrap;
   gap: 0.65rem;
   margin-top: var(--sp-space-3);
+  min-width: 0;
+}
+
+.sp-my-courses-card__actions .sp-btn {
+  max-width: 100%;
 }
 
 .sp-profile-page {
@@ -405,6 +434,7 @@
   margin: 0 0 var(--sp-space-3);
   font-size: 1.125rem;
   font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .sp-profile-fields {
@@ -437,8 +467,24 @@
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--sp-text-primary);
+  overflow-wrap: anywhere;
 }
 
 [data-student-theme='dark'] .sp-my-courses-hero {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+@media (max-width: 480px) {
+  .sp-settings-card {
+    align-items: flex-start;
+  }
+
+  .sp-my-courses-card__actions .sp-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sp-my-courses-hero__badge {
+    justify-self: stretch;
+  }
 }

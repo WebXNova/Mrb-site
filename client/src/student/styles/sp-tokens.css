@@ -27,10 +27,12 @@
   --sp-text-label: 0.6875rem;
   --sp-text-small: 0.75rem;
 
-  --sp-sidebar-width: 232px;
-  --sp-header-height: 52px;
+  --sp-sidebar-width: 220px;
+  --sp-sidebar-collapsed-width: 72px;
+  --sp-sidebar-current-width: var(--sp-sidebar-width);
+  --sp-header-height: 56px;
   --sp-bottom-nav-height: 56px;
-  --sp-content-max: 1280px;
+  --sp-content-max: 1120px;
 
   --sp-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --sp-ease-out: cubic-bezier(0.22, 1, 0.36, 1);

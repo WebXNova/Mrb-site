@@ -132,7 +132,7 @@ function CourseEnrollmentCard({ enrollment, delay }) {
 
       <div className="sp-my-courses-card__body">
         <div className="sp-my-courses-card__head">
-          <div>
+          <div className="sp-my-courses-card__copy">
             <p className="sp-label">Course</p>
             <h2 className="sp-my-courses-card__title">{title}</h2>
           </div>

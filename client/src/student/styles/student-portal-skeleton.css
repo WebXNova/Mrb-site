@@ -134,11 +134,17 @@
 
 @media (min-width: 1024px) {
   .sp-portal-skeleton {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 72px minmax(0, 1fr);
   }
 
   .sp-portal-skeleton__sidebar {
     display: flex;
+  }
+}
+
+@media (min-width: 1280px) {
+  .sp-portal-skeleton {
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 }
 

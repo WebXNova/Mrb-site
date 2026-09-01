@@ -61,6 +61,25 @@ export function IconClipboardCheck(props) {
   );
 }
 
+export function IconClipboardList(props) {
+  return (
+    <IconBase {...props}>
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M16 4h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1" />
+      <path d="M9 12h6M9 16h6" />
+    </IconBase>
+  );
+}
+
+export function IconCheckCircle(props) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </IconBase>
+  );
+}
+
 export function IconBarChart(props) {
   return (
     <IconBase {...props}>
@@ -226,6 +245,8 @@ const ICON_MAP = {
   'book-open': IconBookOpen,
   video: IconVideo,
   'clipboard-check': IconClipboardCheck,
+  'clipboard-list': IconClipboardList,
+  'check-circle': IconCheckCircle,
   'bar-chart': IconBarChart,
   'help-circle': IconHelpCircle,
   user: IconUser,

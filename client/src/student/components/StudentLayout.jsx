@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { studentApi } from '../../api/studentApi';
 import { clearStudentAuth, broadcastRoleLogout } from '../../auth/session';
 import MrbEmblemImage, { MRB_LOGO_WORDMARK_SRC } from '../../components/brand/MrbEmblemImage';
 import { StudentThemeProvider } from '../context/StudentThemeContext';
-import { studentBottomNavItems, studentNavItems } from '../config/studentNavConfig';
-import { useIsStudentMobileNav, useIsStudentOverlayNav } from '../hooks/useMediaQuery';
+import { getStudentPageTitle, studentBottomNavItems, studentNavItems } from '../config/studentNavConfig';
+import { useIsStudentMobileNav } from '../hooks/useMediaQuery';
+import { useStudentShellNav } from '../hooks/useStudentShellNav';
 import StudentHeader from './layout/StudentHeader';
 import StudentIcon from './icons/StudentIcons';
 import '../../styles/global.css';
@@ -19,7 +20,7 @@ import '../styles/student-layout.css';
 import '../styles/student-dashboard.css';
 import '../styles/student-settings.css';
 
-function StudentNavLinks({ onNavigate }) {
+function StudentNavLinks({ onNavigate, collapsed }) {
   const location = useLocation();
 
   return studentNavItems.map((item) => (
@@ -35,9 +36,12 @@ function StudentNavLinks({ onNavigate }) {
         return `student-nav__item${active ? ' student-nav__item--active' : ''}`;
       }}
       onClick={onNavigate}
+      title={collapsed ? item.label : undefined}
+      data-nav-label={item.label}
+      aria-label={collapsed ? item.label : undefined}
     >
       <StudentIcon name={item.icon} size={20} className="student-nav__icon" />
-      {item.label}
+      <span className="student-nav__label">{item.label}</span>
     </NavLink>
   ));
 }
@@ -46,12 +50,12 @@ function StudentLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobileNav = useIsStudentMobileNav();
-  const isOverlayNav = useIsStudentOverlayNav();
-  const [navOpen, setNavOpen] = useState(false);
+  const { isOverlayNav, navOpen, sidebarCollapsed, toggleNav, closeNav } = useStudentShellNav();
+  const pageTitle = getStudentPageTitle(location.pathname);
 
   useEffect(() => {
-    setNavOpen(false);
-  }, [location.pathname]);
+    closeNav();
+  }, [location.pathname, closeNav]);
 
   useEffect(() => {
     if (!navOpen || !isOverlayNav) return undefined;
@@ -64,11 +68,11 @@ function StudentLayoutInner() {
 
   useEffect(() => {
     function onKeyDown(event) {
-      if (event.key === 'Escape' && navOpen) setNavOpen(false);
+      if (event.key === 'Escape' && navOpen) closeNav();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [navOpen]);
+  }, [navOpen, closeNav]);
 
   async function handleLogout() {
     try {
@@ -81,18 +85,18 @@ function StudentLayoutInner() {
     navigate('/login', { replace: true });
   }
 
-  function toggleNav() {
-    setNavOpen((open) => !open);
-  }
-
-  function closeNav() {
-    setNavOpen(false);
-  }
+  const shellClass = [
+    'student-shell',
+    'student-shell--v2',
+    isOverlayNav ? 'student-shell--overlay-nav' : 'student-shell--persistent-nav',
+    navOpen ? 'student-shell--nav-open' : '',
+    sidebarCollapsed ? 'student-shell--sidebar-collapsed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <div
-      className={`student-shell student-shell--v2${navOpen ? ' student-shell--nav-open' : ''}${isOverlayNav ? ' student-shell--overlay-nav' : ' student-shell--persistent-nav'}`}
-    >
+    <div className={shellClass}>
       {navOpen && isOverlayNav ? (
         <button
           type="button"
@@ -119,11 +123,21 @@ function StudentLayoutInner() {
           </Link>
         </div>
         <nav className="student-nav sp-sidebar__nav" aria-label="Main">
-          <StudentNavLinks onNavigate={isOverlayNav ? closeNav : undefined} />
+          <StudentNavLinks
+            onNavigate={isOverlayNav ? closeNav : undefined}
+            collapsed={sidebarCollapsed}
+          />
         </nav>
         <div className="student-sidebar__footer sp-sidebar__footer">
-          <button className="sp-btn sp-btn--secondary sp-btn--full" type="button" onClick={handleLogout}>
-            Sign out
+          <button
+            className="sp-sidebar__logout"
+            type="button"
+            onClick={handleLogout}
+            title={sidebarCollapsed ? 'Sign out' : undefined}
+            aria-label="Sign out"
+          >
+            <StudentIcon name="log-out" size={18} className="sp-sidebar__logout-icon" />
+            <span className="sp-sidebar__logout-label">Sign out</span>
           </button>
         </div>
       </aside>
@@ -132,6 +146,9 @@ function StudentLayoutInner() {
         <StudentHeader
           onToggleNav={toggleNav}
           navOpen={navOpen}
+          sidebarCollapsed={sidebarCollapsed}
+          isOverlayNav={isOverlayNav}
+          pageTitle={pageTitle}
           onLogout={handleLogout}
         />
 
@@ -161,7 +178,7 @@ function StudentLayoutInner() {
                 className={`student-bottom-nav__item sp-bottom-nav__item${isActive ? ' student-bottom-nav__item--active sp-bottom-nav__item--active' : ''}`}
               >
                 <StudentIcon name={item.icon} size={20} className="sp-bottom-nav__icon" />
-                {item.label}
+                <span className="student-bottom-nav__label">{item.label}</span>
               </NavLink>
             );
           })}

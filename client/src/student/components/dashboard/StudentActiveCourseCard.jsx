@@ -51,7 +51,7 @@ export default function StudentActiveCourseCard({ data }) {
 
       <div className="sp-active-course__body">
         <div className="sp-active-course__header">
-          <div>
+          <div className="sp-active-course__copy">
             <p className="sp-label">Active course</p>
             <h2 className="sp-active-course__title">{title}</h2>
             <p className="sp-active-course__subject">{subject}</p>

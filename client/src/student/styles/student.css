@@ -1,4 +1,4 @@
-.student-shell {
+.student-shell:not(.student-shell--v2) {
   min-height: 100vh;
   display: block;
 }
@@ -71,6 +71,7 @@
 .student-topbar__title {
   font-size: var(--fs-20);
   font-weight: var(--fw-bold);
+  overflow-wrap: anywhere;
 }
 
 .student-topbar__subtitle {
@@ -122,6 +123,7 @@
   font-size: var(--fs-17);
   font-weight: var(--fw-semibold);
   margin-top: var(--space-2);
+  overflow-wrap: anywhere;
 }
 
 .student-activity-list {
@@ -201,6 +203,7 @@
   color: var(--color-ink-600);
   line-height: 1.55;
   max-width: 48rem;
+  overflow-wrap: anywhere;
 }
 
 .student-my-course__meta-row {
@@ -308,6 +311,7 @@
   font-size: var(--fs-14);
   line-height: 1.5;
   max-width: 42rem;
+  overflow-wrap: anywhere;
 }
 
 .student-lectures-page__status {
@@ -326,9 +330,19 @@
 
 .student-lecture-filters__row {
   display: grid;
-  grid-template-columns: minmax(12rem, 1.6fr) repeat(2, minmax(9rem, 1fr)) auto;
+  grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr)) auto;
   gap: 0.75rem;
   align-items: end;
+}
+
+@media (min-width: 961px) and (max-width: 1279px) {
+  .student-shell--v2 .student-lecture-filters__row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .student-shell--v2 .student-lecture-filters__field--search {
+    grid-column: 1 / -1;
+  }
 }
 
 .student-lecture-filters__field {
@@ -366,7 +380,7 @@
 
 .student-lecture-filters__clear {
   align-self: end;
-  white-space: nowrap;
+  max-width: 100%;
 }
 
 .student-lecture-filters__count {
@@ -391,6 +405,11 @@
   font-size: var(--fs-13);
   font-weight: var(--fw-semibold);
   cursor: pointer;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.3;
 }
 
 .student-lecture-tab--active {
@@ -423,22 +442,28 @@
 
 .student-lecture-playlist__subject-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
   background: var(--sp-surface-muted, var(--sp-bg-secondary));
   border-bottom: 1px solid var(--sp-border, var(--color-ink-100));
+  min-width: 0;
 }
 
 .student-lecture-playlist__subject-title {
   margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: var(--fs-16);
   font-weight: var(--fw-bold);
+  line-height: 1.35;
   color: var(--color-ink-900);
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-playlist__subject-count {
+  flex: 0 0 auto;
   font-size: var(--fs-12);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-500);
@@ -455,9 +480,12 @@
 
 .student-lecture-playlist__chapter-title {
   margin: 0 0 0.65rem;
+  min-width: 0;
   font-size: var(--fs-14);
   font-weight: var(--fw-semibold);
+  line-height: 1.35;
   color: var(--color-primary);
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-playlist__chapter-list,
@@ -476,12 +504,13 @@
 
 .student-lecture-playlist__link {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
   padding: 0.55rem 0.65rem;
   border-radius: var(--radius-md);
   text-decoration: none;
   color: inherit;
+  min-width: 0;
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -534,6 +563,7 @@
   font-weight: var(--fw-semibold);
   color: var(--color-ink-900);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-playlist__breadcrumb,
@@ -541,6 +571,7 @@
   font-size: var(--fs-12);
   color: var(--color-ink-500);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-playlist__empty {
@@ -556,6 +587,19 @@
   margin: 0.35rem 0 0;
   font-size: var(--fs-13);
   color: var(--color-ink-500);
+  overflow-wrap: anywhere;
+}
+
+.student-complete-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.student-complete-check {
+  flex-shrink: 0;
 }
 
 /* Lecture player */
@@ -572,10 +616,12 @@
 
 .student-lecture-player__top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
+  min-width: 0;
 }
 
 .student-lecture-player__back {
@@ -591,7 +637,9 @@
 
 .student-lecture-player__nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .student-lecture-player__card {
@@ -602,6 +650,7 @@
   margin: 0;
   font-size: var(--fs-13);
   color: var(--color-ink-500);
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-player__title {
@@ -609,6 +658,7 @@
   font-size: clamp(1.05rem, 2vw, 1.25rem);
   line-height: 1.25;
   color: var(--color-ink-900);
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-player__topic {
@@ -659,7 +709,9 @@
 .student-lecture-player__actions {
   margin-top: 0.85rem;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .student-lecture-player__sidebar {
@@ -714,12 +766,14 @@
   margin-top: 0.75rem;
   font-size: var(--fs-18);
   font-weight: var(--fw-bold);
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-card__title {
   margin-top: 0.35rem;
   font-size: var(--fs-24);
   font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
 }
 
 .student-lecture-card__link {
@@ -757,7 +811,7 @@
   inset: auto 0 0 0;
   z-index: 30;
   display: none;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   background: var(--sp-surface-card, var(--sp-white));
   border-top: 1px solid var(--sp-border, var(--color-ink-100));
   box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.08);
@@ -770,6 +824,7 @@
   padding: 0.55rem 0.2rem;
   font-size: 0.6875rem;
   font-weight: var(--fw-semibold);
+  min-width: 0;
 }
 
 .student-bottom-nav__item--active {
@@ -777,7 +832,7 @@
 }
 
 @media (max-width: 960px) {
-  .student-shell {
+  .student-shell:not(.student-shell--v2) {
     grid-template-columns: 1fr;
   }
 
@@ -803,12 +858,17 @@
     max-height: none;
   }
 
+  .student-lecture-player__nav .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
   .student-lecture-card__course {
     font-size: var(--fs-16);
   }
 
   .student-lecture-card__title {
-    font-size: var(--fs-22);
+    font-size: var(--fs-20);
   }
 
   .student-bottom-nav {

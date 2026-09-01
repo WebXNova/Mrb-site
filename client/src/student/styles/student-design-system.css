@@ -131,14 +131,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 20px;
-  padding: 0 8px;
+  height: auto;
+  min-height: 20px;
+  padding: 0.2rem 8px;
   border-radius: 999px;
   font-size: var(--sp-text-xs);
   font-weight: 700;
   letter-spacing: 0.02em;
-  line-height: 1;
-  white-space: nowrap;
+  line-height: 1.25;
+  white-space: normal;
+  max-width: 100%;
+  text-align: center;
 }
 
 .sp-badge--burgundy,
@@ -209,8 +212,8 @@
 .student-shell .student-nav__item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  transition: var(--sp-transition);
+  gap: 0.65rem;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .student-shell .student-nav__icon {
