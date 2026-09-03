@@ -43,7 +43,6 @@ const StudentMyCoursePage = lazy(() => import('../pages/StudentMyCoursePage'));
 const StudentTestsPage = lazy(() => import('../pages/StudentTestsPage'));
 const StudentLecturesPage = lazy(() => import('../pages/StudentLecturesPage'));
 const StudentNotesPage = lazy(() => import('../pages/StudentNotesPage'));
-const StudentResultsPage = lazy(() => import('../pages/StudentResultsPage'));
 const StudentQuestionsPage = lazy(() => import('../pages/StudentQuestionsPage'));
 const StudentQuestionDetailPage = lazy(() => import('../pages/StudentQuestionDetailPage'));
 const StudentProfilePage = lazy(() => import('../pages/StudentProfilePage'));
@@ -393,7 +392,6 @@ export default function AppRouter({ authStatus }) {
             <Route path="notes" element={<StudentNotesPage />} />
             <Route path="lectures" element={<StudentLecturesPage />} />
             <Route path="lectures/:id" element={<StudentLecturePlayerPage />} />
-            <Route path="results" element={<StudentResultsPage />} />
             <Route path="tests/:id/results/:attemptId" element={<StudentResultDetailPage />} />
             <Route path="questions" element={<StudentQuestionsRedirect />} />
             <Route path="questions/ask" element={<StudentQuestionsRedirect />} />
