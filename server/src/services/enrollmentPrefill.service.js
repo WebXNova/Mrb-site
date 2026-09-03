@@ -273,7 +273,7 @@ export async function resolveEnrollmentPrefillData({
     sourceCourseId: sourceCourseId != null ? String(sourceCourseId) : null,
     sourceCourseName,
     sourceEnrollmentId: sourceEnrollment?.id ?? null,
-    prefilledFieldNames,
+    prefillFieldNames,
     discardedFields,
     omittedSourceFields: omitted,
     availableSources,

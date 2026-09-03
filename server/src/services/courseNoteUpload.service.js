@@ -23,7 +23,7 @@ export function buildCourseNoteFileUrl(filename) {
   if (!base || base !== filename || base.includes('..') || /[\\/]/.test(base)) {
     throw new UploadRejectedError('Invalid generated filename.');
   }
-  return `/api/admin/notes/files/${base}`;
+  return `/uploads/course-notes/${base}`;
 }
 
 export async function ensureCourseNotesUploadDir() {
