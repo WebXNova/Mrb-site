@@ -41,8 +41,8 @@ function AllQuestionsView({
         if (nextId) onQuestionVisible(nextId);
       },
       {
-        root: isFullscreen ? scrollRootRef?.current || null : null,
-        rootMargin: '-72px 0px -48% 0px',
+        root: rootEl.closest('.tt-exam__body') || (isFullscreen ? scrollRootRef?.current || null : null),
+        rootMargin: '-8px 0px -48% 0px',
         threshold: [0, 0.2, 0.5],
       }
     );

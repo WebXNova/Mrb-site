@@ -19,6 +19,9 @@ export function markFreeSessionGuest(slug, isGuest) {
 }
 
 export function isFreeGuestRuntime(slug) {
+  if (typeof window !== 'undefined' && isFreeSessionReturnPath(window.location.pathname)) {
+    return true;
+  }
   try {
     return sessionStorage.getItem(GUEST_KEY(slug)) === '1';
   } catch {
@@ -27,7 +30,11 @@ export function isFreeGuestRuntime(slug) {
 }
 
 export function freeSessionPostSubmitPath(slug, payload = {}) {
-  if (isFreeGuestRuntime(slug) || payload?.nextStep === 'enrollment' || payload?.nextStep === 'account') {
+  const freePath =
+    isFreeGuestRuntime(slug) ||
+    payload?.nextStep === 'enrollment' ||
+    payload?.nextStep === 'account';
+  if (freePath) {
     if (payload?.nextStep === 'account') return freeTestPath(slug, 'claim');
     if (payload?.nextStep === 'result') {
       return payload?.resultAvailable === false ? freeTestPath(slug, 'submitted') : freeTestPath(slug, 'result');

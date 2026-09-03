@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 import { sanitizeStudentRichHtml } from '../../../security/sanitizeStudentRichHtml.js';
 import { stripExamContentLabels } from '../utils/examContentDisplay.js';
 
@@ -9,16 +9,6 @@ function QuestionOptions({
   onSelectOption,
   disabled,
 }) {
-  const handleKeyDown = useCallback(
-    (event, optionId) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        if (!disabled) onSelectOption(questionId, optionId);
-      }
-    },
-    [disabled, onSelectOption, questionId]
-  );
-
   if (!options?.length) {
     return (
       <p className="tt-options__empty" role="alert">
@@ -32,15 +22,15 @@ function QuestionOptions({
       <legend className="visually-hidden">Select one answer</legend>
       {options.map((option, index) => {
         const optionId = String(option.id);
-        const isSelected = selectedOptionId === optionId;
         const letter = String.fromCharCode(65 + index);
         const optionHtml = stripExamContentLabels(option.text ?? '');
         const optionLooksLikeHtml = /<[a-z][\s\S]*>/i.test(optionHtml);
+        const selected = selectedOptionId != null && String(selectedOptionId) === optionId;
 
         return (
           <label
-            key={optionId}
-            className={`tt-option ${isSelected ? 'tt-option--selected' : ''}`}
+            key={`${questionId}-${optionId}-${index}`}
+            className={`tt-option ${selected ? 'tt-option--selected' : ''}`}
             htmlFor={`tt-option-${questionId}-${optionId}`}
           >
             <input
@@ -48,9 +38,10 @@ function QuestionOptions({
               type="radio"
               name={`question-${questionId}`}
               value={optionId}
-              checked={isSelected}
-              onChange={() => onSelectOption(questionId, optionId)}
-              onKeyDown={(event) => handleKeyDown(event, optionId)}
+              checked={selected}
+              onChange={() => {
+                if (!disabled) onSelectOption(questionId, optionId);
+              }}
               disabled={disabled}
             />
             <span className="tt-option__marker" aria-hidden="true">

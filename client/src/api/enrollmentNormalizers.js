@@ -29,6 +29,7 @@ export function normalizeEnrollmentState(raw) {
     targetEnrollmentType: raw.targetEnrollmentType ?? null,
     enrollmentId: raw.enrollmentId ?? null,
     orderId: raw.orderId ?? null,
+    hideFreeCourses: raw.hideFreeCourses === true || raw.enrollmentType === 'premium',
     courseId: raw.courseId ?? raw.targetCourseId ?? null,
     courseName: raw.courseName ?? null,
     admissionStatus,

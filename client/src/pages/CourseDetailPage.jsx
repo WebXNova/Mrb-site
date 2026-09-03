@@ -51,7 +51,7 @@ function instructorInitial(name) {
   return t ? t.charAt(0).toUpperCase() : '?';
 }
 
-function PricingCard({ pricingDisplay, courseId, courseAdmission }) {
+function PricingCard({ pricingDisplay, courseId, courseAdmission, courseTitle }) {
   if (!pricingDisplay) return null;
   const discountPct =
     !pricingDisplay.isFree && pricingDisplay.original
@@ -83,6 +83,8 @@ function PricingCard({ pricingDisplay, courseId, courseAdmission }) {
       <div className="sales-pricing__actions">
         <CourseEnrollmentCtaButton
           courseId={courseId}
+          courseTitle={courseTitle}
+          isFreeCourse={Boolean(pricingDisplay?.isFree)}
           labelContext="pricing"
           size="lg"
           fullWidth
@@ -455,6 +457,7 @@ export default function CourseDetailPage() {
                 <PricingCard
                   pricingDisplay={pricingDisplay}
                   courseId={routeId}
+                  courseTitle={course.title}
                   courseAdmission={courseAdmission}
                 />
               </aside>
@@ -604,6 +607,9 @@ export default function CourseDetailPage() {
                 ) : null}
                 <CourseEnrollmentCtaButton
                   courseId={routeId}
+                  course={course}
+                  courseTitle={course.title}
+                  isFreeCourse={Boolean(pricingDisplay?.isFree)}
                   labelContext="bottom"
                   size="lg"
                   courseAdmission={courseAdmission}
@@ -629,6 +635,9 @@ export default function CourseDetailPage() {
           </div>
           <CourseEnrollmentCtaButton
             courseId={routeId}
+            course={course}
+            courseTitle={course.title}
+            isFreeCourse={Boolean(pricingDisplay?.isFree)}
             labelContext="sticky"
             size="md"
             courseAdmission={courseAdmission}

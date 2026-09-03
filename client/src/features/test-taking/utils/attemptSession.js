@@ -4,5 +4,6 @@
 export {
   clearAttemptSession,
   getAttemptSession,
+  normalizeAttemptId,
   setAttemptSession,
 } from '../../test-instructions/utils/attemptSession.js';

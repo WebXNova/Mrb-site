@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PageLayout from '../../components/layout/PageLayout';
 import { usePageSeo } from '../../seo/SeoContext';
@@ -38,6 +38,9 @@ export default function FreeTestLandingPage() {
   const [nameError, setNameError] = useState('');
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState('');
+  const startingRef = useRef(false);
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   usePageSeo({
     title: meta?.title ? `${meta.title} | MRB Classes` : 'Free session | MRB Classes',
@@ -45,14 +48,15 @@ export default function FreeTestLandingPage() {
     noindex: true,
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (maybeCancelled) => {
+    const isCancelled = typeof maybeCancelled === 'function' ? maybeCancelled : () => false;
     const normalized = String(slug || '').trim();
     if (!normalized) {
       setStatus('empty');
       setError('Invalid test link.');
       return;
     }
-    setStatus('loading');
+    setStatus((prev) => (startingRef.current ? prev : 'loading'));
     setError('');
     try {
       markStandaloneSession(normalized, 'free_standalone');
@@ -60,6 +64,7 @@ export default function FreeTestLandingPage() {
         standaloneTestsApi.publicDetail(normalized),
         standaloneTestsApi.freeSessionStatus(normalized).catch(() => null),
       ]);
+      if (isCancelled() || startingRef.current) return;
       const detail = detailResponse?.data;
       if (!detail?.title || detail.accessKind !== 'free_standalone') {
         setMeta(null);
@@ -82,17 +87,17 @@ export default function FreeTestLandingPage() {
           expiresAt: session.expiresAt ?? null,
           accessKind: 'free_standalone',
         });
-        navigate(freeTestPath(normalized, 'start'), { replace: true });
+        navigateRef.current(freeTestPath(normalized, 'start'), { replace: true });
         return;
       }
       if (session?.nextStep === 'enrollment') {
         markFreeSessionGuest(normalized, true);
-        navigate(freeTestPath(normalized, 'enroll'), { replace: true });
+        navigateRef.current(freeTestPath(normalized, 'enroll'), { replace: true });
         return;
       }
       if (session?.nextStep === 'account') {
         markFreeSessionGuest(normalized, true);
-        navigate(freeTestPath(normalized, 'claim'), { replace: true });
+        navigateRef.current(freeTestPath(normalized, 'claim'), { replace: true });
         return;
       }
       if (session?.studentName) setStudentName(session.studentName);
@@ -103,17 +108,23 @@ export default function FreeTestLandingPage() {
       }
       setStatus('ready');
     } catch (err) {
+      if (isCancelled() || startingRef.current) return;
       setError(getTestAccessErrorMessage(err, 'This test is not available.'));
       setStatus('error');
     }
-  }, [navigate, slug]);
+  }, [slug]);
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    load(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   async function onStart(event) {
     event.preventDefault();
+    if (startingRef.current) return;
     const invalid = validateName(studentName);
     if (invalid) {
       setNameError(invalid);
@@ -121,13 +132,14 @@ export default function FreeTestLandingPage() {
     }
     setNameError('');
     setStartError('');
+    startingRef.current = true;
     setIsStarting(true);
     try {
       const response = await standaloneTestsApi.freeSessionStart(slug, { studentName: studentName.trim() });
       const data = response?.data;
       if (data?.submitted || data?.nextStep === 'enrollment' || data?.nextStep === 'account') {
         markFreeSessionGuest(slug, true);
-        navigate(freeTestPath(slug, data.nextStep === 'account' ? 'claim' : 'enroll'), { replace: true });
+        navigateRef.current(freeTestPath(slug, data.nextStep === 'account' ? 'claim' : 'enroll'), { replace: true });
         return;
       }
       if (!data?.attemptId) {
@@ -140,11 +152,11 @@ export default function FreeTestLandingPage() {
         expiresAt: data.expiresAt ?? null,
         accessKind: 'free_standalone',
       });
-      navigate(freeTestPath(slug, 'start'), { replace: true });
+      navigateRef.current(freeTestPath(slug, 'start'), { replace: true });
     } catch (err) {
-      setStartError(getTestAccessErrorMessage(err, 'Unable to start the test.'));
-    } finally {
+      startingRef.current = false;
       setIsStarting(false);
+      setStartError(getTestAccessErrorMessage(err, 'Unable to start the test.'));
     }
   }
 

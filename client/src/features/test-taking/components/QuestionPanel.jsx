@@ -39,7 +39,10 @@ function QuestionPanel({
       <div
         className="tt-question__text"
         dangerouslySetInnerHTML={{
-          __html: sanitizeStudentRichHtml(stripExamContentLabels(question.questionText || '')),
+          __html: sanitizeStudentRichHtml(
+            stripExamContentLabels(question.questionText || '') ||
+              '<p>This question could not be displayed.</p>'
+          ),
         }}
       />
 

@@ -13,8 +13,13 @@ const stateCache = new Map();
  * @param {string|number|null|undefined} courseId
  */
 export function useEnrollment(courseId) {
-  const [state, setState] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [state, setState] = useState(() => stateCache.get(String(courseId)) ?? null);
+  const [loading, setLoading] = useState(() => {
+    const id = Number(String(courseId || '').trim());
+    if (!Number.isInteger(id) || id <= 0) return false;
+    if (!getStudentToken()) return false;
+    return !stateCache.has(String(courseId));
+  });
   const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {

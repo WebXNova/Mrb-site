@@ -4,17 +4,28 @@
 .tt-exam {
   --tt-sticky-offset: 5.75rem;
   position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   background: var(--color-bg-alt);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow: hidden;
+}
+
+html.tt-exam-shell-active,
+html.tt-exam-shell-active body,
+html.tt-exam-shell-active #root,
+html.tt-exam-fullscreen-active,
+html.tt-exam-fullscreen-active body,
+html.tt-exam-fullscreen-active #root {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 /*
- * Fullscreen uses ONE scroll container: .tt-exam itself.
- * Children must grow with content (not flex:1 clip) so later questions remain reachable.
+ * Fullscreen keeps the same exam shell: header + scrollable body + footer.
  */
 .tt-exam:fullscreen,
 .tt-exam:-webkit-full-screen,
@@ -24,32 +35,25 @@
   height: 100%;
   max-height: 100%;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   touch-action: pan-y;
   background: var(--color-bg-alt);
   padding-bottom: 0;
 }
 
-html.tt-exam-fullscreen-active,
-html.tt-exam-fullscreen-active body,
-html.tt-exam-fullscreen-active #root {
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden;
-}
-
 html.tt-exam-fullscreen-active #root {
   isolation: auto;
 }
 
+html.tt-exam-shell-active .tt-exam,
 html.tt-exam-fullscreen-active .tt-exam {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
 }
 
+html.tt-exam-shell-active .mobile-whatsapp-button,
 html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   display: none;
 }
@@ -57,9 +61,10 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 .tt-exam:fullscreen .tt-exam__body,
 .tt-exam:-webkit-full-screen .tt-exam__body,
 .tt-exam--is-fullscreen .tt-exam__body {
-  flex: 0 0 auto;
-  min-height: auto;
-  overflow: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .tt-exam:fullscreen .tt-exam__main,
@@ -81,6 +86,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
 .tt-exam--needs-fs .tt-header,
 .tt-exam--needs-fs .tt-exam__body,
+.tt-exam--needs-fs .tt-exam__footer,
 .tt-exam--needs-fs .tt-banner,
 .tt-exam--needs-fs .tt-offline-banner {
   pointer-events: none;
@@ -134,7 +140,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 }
 
 .tt-exam--locked .tt-header,
-.tt-exam--locked .tt-exam__body {
+.tt-exam--locked .tt-exam__body,
+.tt-exam--locked .tt-exam__footer {
   pointer-events: none;
   user-select: none;
 }
@@ -147,14 +154,18 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 }
 
 .tt-exam__body {
-  flex: 1;
-  width: min(100%, 1280px);
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   margin: 0 auto;
   padding: var(--space-3) var(--space-4) var(--space-4);
   display: grid;
   gap: var(--space-4);
   align-items: start;
   min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .tt-exam__main {
@@ -162,16 +173,29 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
+  overflow: visible;
+  max-width: none;
+}
+
+.tt-exam__footer {
+  flex: 0 0 auto;
+  width: 100%;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-ink-100);
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-sticky);
 }
 
 .tt-exam__sidebar {
   display: none;
 }
 
-/* Sticky header */
+/* Exam header stays in the flex shell so the timer cannot scroll away. */
 .tt-header {
-  position: sticky;
-  top: 0;
+  flex: 0 0 auto;
+  position: relative;
   z-index: var(--z-sticky);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-ink-100);
@@ -244,11 +268,19 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   transition: width var(--transition-base);
 }
 
+.tt-header__subject {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+}
+
 .tt-header__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-3);
+  flex: 0 0 auto;
 }
 
 .tt-header__palette-btn,
@@ -261,7 +293,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 6.5rem;
+  flex-shrink: 0;
+  min-width: 7.5rem;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-bg-soft);
@@ -579,12 +612,20 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
 .tt-option input {
   position: absolute;
+  inset: 0;
   opacity: 0;
-  width: 1px;
-  height: 1px;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
 }
 
 .tt-option input:focus-visible + .tt-option__marker {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tt-option:has(input:focus-visible) {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
@@ -713,8 +754,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 }
 
 .tt-all-questions__block {
-  scroll-margin-top: var(--tt-sticky-offset);
-  scroll-margin-bottom: 5.5rem;
+  scroll-margin-top: 0.5rem;
+  scroll-margin-bottom: 1rem;
 }
 
 .tt-nav-wrap--submit-only .tt-nav {
@@ -727,16 +768,28 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
 .tt-nav__progress {
   margin: 0;
-  flex: 1 1 auto;
   min-width: 7rem;
   text-align: center;
   font-size: var(--fs-13);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-600);
-  align-self: center;
 }
 
-/* Navigation */
+.tt-nav__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.tt-nav__counts {
+  margin: 0;
+  font-size: var(--fs-12);
+  color: var(--color-ink-500);
+}
+
 .tt-nav-wrap {
   min-width: 0;
 }
@@ -744,11 +797,10 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 .tt-nav {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-ink-100);
-  border-radius: var(--radius-lg);
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
 .tt-nav .btn {
@@ -1002,6 +1054,42 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   }
 }
 
+.tt-skeleton-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 42rem;
+  width: min(100% - 2rem, 42rem);
+  margin: 4rem auto 0;
+  padding: 0 1rem;
+}
+
+.tt-skeleton-screen__brand {
+  margin: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+}
+
+.tt-skeleton-screen__title {
+  margin: 0 0 0.75rem;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-ink-900, var(--color-ink));
+}
+
+.tt-skeleton--question {
+  height: 6.5rem;
+}
+
+.tt-skeleton--option {
+  height: 3rem;
+}
+
 .tt-skeleton--header {
   height: 5rem;
 }
@@ -1034,24 +1122,26 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   border: 0;
 }
 
-/* Mobile — sticky nav, compact header, palette sheet */
+/* Mobile — compact header, always-visible timer, footer submit */
 @media (max-width: 767px) {
   .tt-header {
     padding: var(--space-3) var(--space-4);
   }
 
   .tt-header__primary {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-start;
     gap: var(--space-3);
   }
 
   .tt-header__info {
     min-width: 0;
+    flex: 1 1 auto;
   }
 
   .tt-header__title {
-    font-size: var(--fs-18);
+    font-size: var(--fs-16);
     overflow-wrap: anywhere;
   }
 
@@ -1061,7 +1151,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   }
 
   .tt-header__actions {
-    width: 100%;
+    width: auto;
+    flex: 0 0 auto;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1078,7 +1169,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
     padding: var(--space-1) var(--space-2);
   }
 
-  .tt-nav__progress {
+  .tt-nav__meta {
     flex: 1 1 100%;
     order: -1;
     min-width: 0;
@@ -1091,7 +1182,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   }
 
   .tt-timer {
-    min-width: 4.75rem;
+    min-width: 5.25rem;
     padding: var(--space-1) var(--space-2);
   }
 
@@ -1101,35 +1192,23 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
   .tt-exam__body {
     padding: var(--space-3) var(--space-4);
-    padding-bottom: 0;
+    padding-bottom: var(--space-3);
     gap: var(--space-3);
+  }
+
+  .tt-exam__footer {
+    padding: var(--space-2) var(--space-3);
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
   }
 
   .tt-question {
     padding: var(--space-4);
   }
 
-  .tt-nav-wrap {
-    position: sticky;
-    bottom: 0;
-    z-index: calc(var(--z-sticky) - 1);
-    margin: 0 calc(-1 * var(--space-4));
-    padding: var(--space-3) var(--space-4);
-    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
-    background: var(--color-surface);
-    border-top: 1px solid var(--color-ink-100);
-    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
-  }
-
   .tt-nav {
     flex-direction: row;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: var(--space-2);
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
   }
 
   .tt-nav .btn {
@@ -1142,11 +1221,6 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   .tt-nav__submit {
     margin-left: 0;
     flex: 1.15;
-  }
-
-  /* Room for fixed WhatsApp FAB above sticky nav */
-  .tt-exam {
-    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .tt-palette__grid {
@@ -1180,16 +1254,16 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   .tt-exam__sidebar {
     display: block;
     position: sticky;
-    top: calc(5.5rem + var(--space-4));
-    max-height: calc(100vh - 7rem);
-    overflow: hidden;
+    top: 0;
+    max-height: 100%;
+    overflow: auto;
   }
 
   .tt-exam:fullscreen .tt-exam__sidebar,
   .tt-exam:-webkit-full-screen .tt-exam__sidebar,
   .tt-exam--is-fullscreen .tt-exam__sidebar {
-    top: calc(var(--tt-sticky-offset) + var(--space-4));
-    max-height: calc(100% - 7rem);
+    top: 0;
+    max-height: 100%;
     overflow: auto;
   }
 

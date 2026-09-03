@@ -4,6 +4,7 @@
  */
 
 export const EXAM_FULLSCREEN_HTML_CLASS = 'tt-exam-fullscreen-active';
+export const EXAM_SHELL_HTML_CLASS = 'tt-exam-shell-active';
 
 export function prefersReducedMotion() {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -22,10 +23,12 @@ export function getFullscreenElement() {
 
 /**
  * Canonical scroll root for jump-to-question.
- * Returns the exam node when it is (or should be) the scrolling container.
+ * The exam shell always scrolls `.tt-exam__body` so the timer and submit bar stay visible.
  */
 export function getExamScrollContainer(examNode) {
   if (!examNode || typeof document === 'undefined') return null;
+  const body = examNode.querySelector?.('.tt-exam__body');
+  if (body instanceof HTMLElement) return body;
   const active = getFullscreenElement();
   if (active === examNode || examNode.contains(active) || examNode.classList?.contains('tt-exam--is-fullscreen')) {
     return examNode;
@@ -66,7 +69,7 @@ export function scrollQuestionIntoView(questionNode, examNode) {
     return;
   }
 
-  const headerHeight = measureStickyHeaderHeight(container);
+  const headerHeight = 0;
   const nextTop = computeQuestionScrollTop({
     containerScrollTop: container.scrollTop,
     questionTop: questionNode.getBoundingClientRect().top,
@@ -85,4 +88,10 @@ export function scrollQuestionIntoView(questionNode, examNode) {
 export function applyExamFullscreenDocumentClass(active) {
   if (typeof document === 'undefined') return;
   document.documentElement.classList.toggle(EXAM_FULLSCREEN_HTML_CLASS, Boolean(active));
+}
+
+/** Lock document scroll so the exam shell (header + timer + footer) stays on screen. */
+export function applyExamShellDocumentClass(active) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle(EXAM_SHELL_HTML_CLASS, Boolean(active));
 }

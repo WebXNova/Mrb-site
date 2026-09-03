@@ -2,6 +2,7 @@ import SaveStatusBadge from './SaveStatusBadge';
 
 export default function ExamHeader({
   title,
+  subject,
   currentIndex,
   totalQuestions,
   answeredCount,
@@ -32,6 +33,7 @@ export default function ExamHeader({
         <div className="tt-header__info">
           <p className="tt-header__eyebrow">Exam in progress</p>
           <h1 className="tt-header__title">{title}</h1>
+          {subject ? <p className="tt-header__subject">{subject}</p> : null}
           <p className="tt-header__progress">
             {isScrollAll ? (
               <>

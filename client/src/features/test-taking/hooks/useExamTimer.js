@@ -1,33 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { testTakingApi } from '../api/testTakingApi';
 import { getAttemptErrorMessage, isAttemptTokenError } from '../utils/apiErrors';
+import { loadAnswerDraft, saveAnswerDraft } from '../utils/answerDraft';
+import { logExamError } from '../utils/examDebug';
 import { computeRemainingSeconds, formatExamTime } from '../utils/formatTime';
+import { withTimeout } from '../utils/withTimeout';
 
 const SAVE_DEBOUNCE_MS = 450;
+const SAVE_TIMEOUT_MS = 15_000;
+const TIMER_TICK_MS = 250;
+const LOW_TIME_SECONDS = 600;
+const CRITICAL_TIME_SECONDS = 120;
 
 /**
  * Timer driven exclusively by server-provided expires_at.
  * Canonical exam clock for slug test-taking (there is no useTestTimer hook).
+ * Remaining time is always END_TIME - CURRENT_TIME, never a decrementing counter.
  */
 export function useExamTimer(expiresAtIso, { onExpire, enabled = true } = {}) {
   const expiresRef = useRef(expiresAtIso);
   const onExpireRef = useRef(onExpire);
   const [secondsRemaining, setSecondsRemaining] = useState(() =>
-    enabled ? computeRemainingSeconds(expiresAtIso) : null
+    expiresAtIso ? computeRemainingSeconds(expiresAtIso) : null
   );
   const expiredRef = useRef(false);
 
   useEffect(() => {
-    expiresRef.current = expiresAtIso;
-    if (enabled && expiresAtIso) {
-      setSecondsRemaining(computeRemainingSeconds(expiresAtIso));
-      expiredRef.current = false;
-    }
-  }, [enabled, expiresAtIso]);
-
-  useEffect(() => {
     onExpireRef.current = onExpire;
   }, [onExpire]);
+
+  useEffect(() => {
+    const prev = expiresRef.current;
+    expiresRef.current = expiresAtIso;
+
+    if (!expiresAtIso) {
+      setSecondsRemaining(null);
+      return;
+    }
+
+    const remaining = computeRemainingSeconds(expiresAtIso);
+    setSecondsRemaining(remaining);
+    if (prev !== expiresAtIso && remaining > 0) {
+      expiredRef.current = false;
+    }
+  }, [expiresAtIso]);
 
   useEffect(() => {
     if (!enabled || !expiresRef.current) return undefined;
@@ -43,24 +59,28 @@ export function useExamTimer(expiresAtIso, { onExpire, enabled = true } = {}) {
     };
 
     tick();
-    const intervalId = window.setInterval(tick, 1000);
+    const intervalId = window.setInterval(tick, TIMER_TICK_MS);
     const resync = () => {
-      if (document.visibilityState === 'hidden') return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       tick();
     };
     document.addEventListener('visibilitychange', resync);
     window.addEventListener('focus', resync);
+    window.addEventListener('pageshow', resync);
     return () => {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', resync);
       window.removeEventListener('focus', resync);
+      window.removeEventListener('pageshow', resync);
     };
-  }, [enabled, expiresAtIso]);
+  }, [enabled]);
 
-  const formatted = secondsRemaining == null ? '--:--' : formatExamTime(secondsRemaining);
-  const isLowTime = secondsRemaining != null && secondsRemaining > 0 && secondsRemaining <= 300;
-  const isCritical = secondsRemaining != null && secondsRemaining > 0 && secondsRemaining <= 60;
-  const isExpired = secondsRemaining === 0;
+  const formatted = secondsRemaining == null ? '—' : formatExamTime(secondsRemaining);
+  const isLowTime =
+    secondsRemaining != null && secondsRemaining > 0 && secondsRemaining <= LOW_TIME_SECONDS;
+  const isCritical =
+    secondsRemaining != null && secondsRemaining > 0 && secondsRemaining <= CRITICAL_TIME_SECONDS;
+  const isExpired = Boolean(enabled && secondsRemaining != null && secondsRemaining <= 0);
 
   return {
     secondsRemaining,
@@ -88,6 +108,16 @@ export function useAnswerAutosave({
   const inFlightRef = useRef(false);
   const inFlightPromiseRef = useRef(/** @type {Promise<void>|null} */ (null));
   const submitLockRef = useRef(false);
+  const hydratedRef = useRef(false);
+  const answersRef = useRef({});
+
+  const persistDraft = useCallback(
+    (nextAnswers) => {
+      answersRef.current = nextAnswers;
+      saveAnswerDraft(slug, attemptId, nextAnswers);
+    },
+    [attemptId, slug]
+  );
 
   const flushQueue = useCallback(async () => {
     if (inFlightPromiseRef.current) {
@@ -96,6 +126,7 @@ export function useAnswerAutosave({
     }
     if (pendingRef.current.size === 0) return;
     if (disabled && !submitLockRef.current) return;
+    if (!slug || attemptId == null || attemptId === '') return;
 
     const work = (async () => {
       inFlightRef.current = true;
@@ -107,16 +138,21 @@ export function useAnswerAutosave({
 
       try {
         for (const [questionId, selectedOption] of entries) {
-          await testTakingApi.saveAnswer(slug, attemptId, {
-            questionId: Number(questionId),
-            selectedOption: String(selectedOption),
-          });
+          await withTimeout(
+            testTakingApi.saveAnswer(slug, attemptId, {
+              questionId: Number(questionId),
+              selectedOption: String(selectedOption),
+            }),
+            SAVE_TIMEOUT_MS,
+            'Save timed out'
+          );
         }
         setSaveStatus('saved');
       } catch (err) {
         for (const [questionId, selectedOption] of entries) {
           pendingRef.current.set(questionId, selectedOption);
         }
+        logExamError('autosave-failed', err, { slug, attemptId });
 
         if (isAttemptTokenError(err) && !submitLockRef.current) {
           try {
@@ -176,12 +212,34 @@ export function useAnswerAutosave({
 
   const selectAnswer = useCallback(
     (questionId, selectedOption) => {
+      if (disabled || submitLockRef.current) return;
       const qid = String(questionId);
-      setAnswers((prev) => ({ ...prev, [qid]: String(selectedOption) }));
-      scheduleSave(qid, selectedOption);
+      const option = String(selectedOption);
+      setAnswers((prev) => {
+        const next = { ...prev, [qid]: option };
+        persistDraft(next);
+        return next;
+      });
+      scheduleSave(qid, option);
     },
-    [scheduleSave, setAnswers]
+    [disabled, persistDraft, scheduleSave, setAnswers]
   );
+
+  useEffect(() => {
+    if (!attemptId || hydratedRef.current) return;
+    hydratedRef.current = true;
+    const draft = loadAnswerDraft(slug, attemptId);
+    for (const [questionId, selectedOption] of Object.entries(draft)) {
+      if (selectedOption) pendingRef.current.set(String(questionId), String(selectedOption));
+    }
+  }, [attemptId, slug]);
+
+  useEffect(() => {
+    if (disabled || submitLockRef.current) return;
+    if (pendingRef.current.size > 0) {
+      void flushQueue();
+    }
+  }, [disabled, flushQueue]);
 
   useEffect(
     () => () => {

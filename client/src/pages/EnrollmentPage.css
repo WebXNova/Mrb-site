@@ -97,6 +97,16 @@
   border: 1px solid rgb(245 158 11 / 30%);
 }
 
+.enrollment-status-panel--blocked {
+  background: rgb(214 40 40 / 6%);
+  border: 1px solid rgb(214 40 40 / 22%);
+}
+
+.enrollment-status-panel--switch {
+  background: rgb(30 136 229 / 6%);
+  border: 1px solid rgb(30 136 229 / 22%);
+}
+
 .enrollment-status-message {
   margin: 0;
   color: var(--color-ink-600);

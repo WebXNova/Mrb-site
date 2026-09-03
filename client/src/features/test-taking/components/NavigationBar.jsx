@@ -5,9 +5,19 @@ export default function NavigationBar({
   onNext,
   onSubmit,
   isSubmitting,
+  submitStatus,
   disabled,
   progressLabel,
+  answeredCount,
+  unansweredCount,
 }) {
+  const submitLabel =
+    submitStatus === 'success'
+      ? 'Submitted'
+      : isSubmitting
+        ? 'Submitting Test...'
+        : 'Submit Test';
+
   return (
     <nav className="tt-nav" aria-label="Question navigation">
       <button
@@ -18,11 +28,18 @@ export default function NavigationBar({
       >
         Previous
       </button>
-      {progressLabel ? (
-        <p className="tt-nav__progress" aria-live="polite">
-          {progressLabel}
-        </p>
-      ) : null}
+      <div className="tt-nav__meta">
+        {progressLabel ? (
+          <p className="tt-nav__progress" aria-live="polite">
+            {progressLabel}
+          </p>
+        ) : null}
+        {Number.isFinite(answeredCount) && Number.isFinite(unansweredCount) ? (
+          <p className="tt-nav__counts">
+            {answeredCount} answered · {unansweredCount} unanswered
+          </p>
+        ) : null}
+      </div>
       <button
         type="button"
         className="btn btn--secondary"
@@ -36,8 +53,9 @@ export default function NavigationBar({
         className="btn btn--primary tt-nav__submit"
         onClick={onSubmit}
         disabled={disabled || isSubmitting}
+        aria-busy={isSubmitting}
       >
-        Submit test
+        {submitLabel}
       </button>
     </nav>
   );

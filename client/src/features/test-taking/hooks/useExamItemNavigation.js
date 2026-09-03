@@ -15,15 +15,15 @@ export function useExamItemNavigation(examItems) {
     currentItem?.type === 'question' ? String(currentItem.question.id) : null;
 
   useEffect(() => {
-    if (currentItem?.type !== 'question') return;
-    const qid = String(currentItem.question.id);
+    if (!currentQuestionId) return;
+    const qid = String(currentQuestionId);
     setVisitedQuestionIds((prev) => {
       if (prev.has(qid)) return prev;
       const next = new Set(prev);
       next.add(qid);
       return next;
     });
-  }, [currentItem]);
+  }, [currentQuestionId]);
 
   useEffect(() => {
     focusRef.current?.focus({ preventScroll: true });

@@ -3,9 +3,17 @@
   inset: 0;
   z-index: var(--z-modal, 900);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 1rem;
+  padding: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 640px) {
+  .enrollment-switch-modal {
+    align-items: center;
+    padding: 1.25rem;
+  }
 }
 
 .enrollment-switch-modal__backdrop {
@@ -17,20 +25,71 @@
 .enrollment-switch-modal__panel {
   position: relative;
   width: min(100%, 28rem);
-  padding: 1.5rem;
-  border-radius: 0.75rem;
+  max-height: min(92vh, 36rem);
+  overflow-y: auto;
+  padding: 1.35rem 1.25rem 1.25rem;
+  border-radius: 1rem;
   background: var(--color-surface, #fff);
   box-shadow: 0 20px 45px rgb(15 23 42 / 18%);
 }
 
+.enrollment-switch-modal__panel:focus {
+  outline: none;
+}
+
+.enrollment-switch-modal__panel:focus-visible {
+  outline: 2px solid var(--color-primary, #4f46e5);
+  outline-offset: 2px;
+}
+
+.enrollment-switch-modal__body {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0.85rem 0 0;
+}
+
+.enrollment-switch-modal__body p {
+  margin: 0;
+  color: var(--color-ink-700, #334155);
+  line-height: 1.55;
+}
+
+.enrollment-switch-modal__body strong {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--color-ink-900, #0f172a);
+  font-weight: 700;
+}
+
 .enrollment-switch-modal__warning {
-  color: var(--color-text-muted, #6b7280);
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.75rem;
+  background: rgb(245 158 11 / 10%);
+  border: 1px solid rgb(245 158 11 / 28%);
+  color: var(--color-ink-800, #1e293b);
   font-size: 0.9375rem;
 }
 
 .enrollment-switch-modal__actions {
   display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
+  flex-direction: column-reverse;
+  gap: 0.65rem;
   margin-top: 1.25rem;
+}
+
+.enrollment-switch-modal__actions .btn {
+  width: 100%;
+  min-height: 48px;
+}
+
+@media (min-width: 480px) {
+  .enrollment-switch-modal__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .enrollment-switch-modal__actions .btn {
+    width: auto;
+    min-width: 8.5rem;
+  }
 }

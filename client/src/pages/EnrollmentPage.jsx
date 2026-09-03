@@ -10,7 +10,7 @@ import { ENROLLMENT_BUTTON_STATE } from '../course/courseEnrollmentCta';
 import { extractCourseAdmission, isAdmissionOpen } from '../course/courseAdmissionPresentation';
 import { useEnrollment } from '../hooks/useEnrollment';
 import { useEnrollmentPrefill } from '../hooks/useEnrollmentPrefill';
-import { getUserFacingErrorMessage } from '../utils/errorHandler';
+import { getUserFacingErrorMessage, extractErrorCode, ERROR_CODES } from '../utils/errorHandler';
 import { buildEnrollmentPaymentPath } from '../utils/enrollmentPaymentRoute.js';
 import './EnrollmentPage.css';
 
@@ -67,7 +67,7 @@ function validateForm(form) {
 
 export default function EnrollmentPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { courseId: routeCourseId } = useParams();
   const confirmSwitch = searchParams.get('confirmSwitch') === '1';
   const targetCourseIdParam = searchParams.get('targetCourseId');
@@ -119,8 +119,19 @@ export default function EnrollmentPage() {
   const admissionsClosedForProspect =
     !isEnrolled &&
     (buttonState === ENROLLMENT_BUTTON_STATE.ADMISSIONS_CLOSED || !admissionsOpen);
+  const isPremiumBlockingFree = buttonState === ENROLLMENT_BUTTON_STATE.PREMIUM_BLOCKS_FREE;
+  const needsSwitchConfirm =
+    !isEnrolled &&
+    !isPremiumBlockingFree &&
+    Boolean(enrollmentState?.requiresSwitchConfirmation) &&
+    !confirmSwitch;
   const pageLoading = courseLoading || enrollmentLoading;
-  const formEnabled = !pageLoading && !isEnrolled && !admissionsClosedForProspect;
+  const formEnabled =
+    !pageLoading &&
+    !isEnrolled &&
+    !admissionsClosedForProspect &&
+    !isPremiumBlockingFree &&
+    !needsSwitchConfirm;
 
   const {
     loading: prefillLoading,
@@ -199,6 +210,7 @@ export default function EnrollmentPage() {
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return;
     const nextErrors = validateForm(form);
     setErrors(nextErrors);
     setSubmitError('');
@@ -208,6 +220,12 @@ export default function EnrollmentPage() {
     }
     if (admissionsClosedForProspect) {
       setSubmitError(courseAdmission.enrollment_message || 'Enrollment is closed for this course.');
+      return;
+    }
+    if (isPremiumBlockingFree) {
+      setSubmitError(
+        'You have an active paid course. Free course enrollment is not available because it would replace your current access.'
+      );
       return;
     }
     if (enrollmentState?.requiresSwitchConfirmation && !confirmSwitch) {
@@ -274,7 +292,14 @@ export default function EnrollmentPage() {
         }
       );
     } catch (error) {
-      setSubmitError(getUserFacingErrorMessage(error, 'Failed to submit enrollment.'));
+      const code = extractErrorCode(error);
+      if (confirmSwitch && code !== ERROR_CODES.PREMIUM_ACCESS_PROTECTED && Number(error?.status) !== 422) {
+        setSubmitError(
+          'Unable to change your course. Your current course access has not been changed.'
+        );
+      } else {
+        setSubmitError(getUserFacingErrorMessage(error, 'Failed to submit enrollment.'));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -336,9 +361,72 @@ export default function EnrollmentPage() {
             </div>
           ) : null}
 
+          {!pageLoading && isPremiumBlockingFree ? (
+            <div className="enrollment-status-panel enrollment-status-panel--blocked" role="alert">
+              <h2 className="heading-4">Free enrollment is not available</h2>
+              <p className="enrollment-status-message">
+                You already have an active paid course
+                {enrollmentState?.enrolledCourseName ? (
+                  <>
+                    {' '}
+                    (<strong>{enrollmentState.enrolledCourseName}</strong>)
+                  </>
+                ) : null}
+                . Enrolling in a free course would replace that access, so this enrollment is blocked.
+                Your current course has not been changed.
+              </p>
+              <div className="enrollment-status-actions">
+                <Button as={Link} to="/dashboard/lectures" variant="primary" size="md">
+                  Continue Learning
+                </Button>
+                <Button as={Link} to="/courses" variant="secondary" size="md">
+                  Browse paid courses
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {!pageLoading && needsSwitchConfirm ? (
+            <div className="enrollment-status-panel enrollment-status-panel--switch" role="status">
+              <h2 className="heading-4">
+                {buttonState === ENROLLMENT_BUTTON_STATE.UPGRADE_COURSE ? 'Upgrade Course?' : 'Change Course?'}
+              </h2>
+              <p className="enrollment-status-message">
+                You are currently enrolled in{' '}
+                <strong>{enrollmentState?.enrolledCourseName || 'another course'}</strong>
+                {course?.title ? (
+                  <>
+                    {' '}
+                    and are about to move to <strong>{course.title}</strong>
+                  </>
+                ) : null}
+                . Changing your course removes access to your current course after the new enrollment
+                completes. Your current access stays unchanged until then.
+              </p>
+              <div className="enrollment-status-actions">
+                <Button as={Link} to={courseId ? `/courses/${courseId}` : '/courses'} variant="secondary" size="md">
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="accent"
+                  size="md"
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('confirmSwitch', '1');
+                    if (courseId) next.set('targetCourseId', String(courseId));
+                    setSearchParams(next, { replace: true });
+                  }}
+                >
+                  {buttonState === ENROLLMENT_BUTTON_STATE.UPGRADE_COURSE ? 'Upgrade Course' : 'Change Course'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           {submitError ? <p className="enrollment-error">{submitError}</p> : null}
 
-          {!pageLoading && !isEnrolled && !admissionsClosedForProspect ? (
+          {formEnabled ? (
             <>
               {prefillLoading ? (
                 <p className="enrollment-status-message">Loading your saved information…</p>

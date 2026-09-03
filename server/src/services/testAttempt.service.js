@@ -1261,6 +1261,7 @@ export async function saveAttemptAnswer({
     tokenNonce,
     guestSessionHash,
     requireInProgress: true,
+    expiryGraceMs: SUBMIT_GRACE_MS,
     auditContext: 'testAttempt.saveAttemptAnswer',
   });
 
@@ -1482,10 +1483,23 @@ export async function submitAttempt({
         ]
       );
       if (Number(guestSubmit?.affectedRows ?? 0) === 0) {
-        await connection.commit();
-        return buildSlugSubmitSuccess(ctx, null, {
-          nextStep: 'enrollment',
-          identityStatus: FREE_SESSION_IDENTITY.ENROLLMENT_PENDING,
+        const [statusRows] = await connection.query(
+          `SELECT status, identity_status FROM test_attempts WHERE id = ? LIMIT 1`,
+          [ctx.attempt.id]
+        );
+        const currentStatus = String(statusRows[0]?.status || '');
+        if (currentStatus === 'submitted') {
+          await connection.commit();
+          return buildSlugSubmitSuccess(ctx, null, {
+            nextStep: 'enrollment',
+            identityStatus:
+              statusRows[0]?.identity_status || FREE_SESSION_IDENTITY.ENROLLMENT_PENDING,
+          });
+        }
+        throw new ApiError(409, 'Your test could not be submitted. Please try again.', {
+          code: 'ATTEMPT_INVALID_STATE',
+          reason: 'guest_submit_lock_failed',
+          status: currentStatus,
         });
       }
       await connection.commit();

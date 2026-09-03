@@ -25,7 +25,7 @@ const FRIENDLY_MESSAGES = Object.freeze({
   [ERROR_CODES.ENROLLMENT_SWITCH_CONFIRMATION_REQUIRED]:
     'Please confirm the course switch before completing enrollment.',
   [ERROR_CODES.PREMIUM_ACCESS_PROTECTED]:
-    'Your premium course access cannot be replaced without explicit confirmation.',
+    'You have an active paid course. Free course enrollment is not available because it would replace your current access.',
   [ERROR_CODES.ENROLLMENT_ACTIVATION_DENIED]: 'This enrollment action is not allowed.',
   [ERROR_CODES.CONFLICT]: 'This action conflicts with your current enrollment.',
 });
@@ -75,9 +75,14 @@ export function getUserFacingErrorMessage(err, fallback = 'Something went wrong.
   }
 
   const code = extractErrorCode(err);
+  const msg = typeof err.message === 'string' ? err.message.trim() : '';
+
+  if (code === ERROR_CODES.PREMIUM_ACCESS_PROTECTED && msg) {
+    return msg;
+  }
+
   if (code && FRIENDLY_MESSAGES[code]) return FRIENDLY_MESSAGES[code];
 
-  const msg = typeof err.message === 'string' ? err.message.trim() : '';
   return msg || fallback;
 }
 

@@ -532,5 +532,6 @@ export function toEnrollmentStateResponse(state) {
     targetEnrollmentType: state.targetEnrollmentType,
     enrollmentId: state.courseEnrollment?.id ?? null,
     orderId: state.courseEnrollment?.orderId ?? null,
+    hideFreeCourses: state.enrollmentType === 'premium',
   };
 }

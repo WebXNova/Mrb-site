@@ -122,6 +122,8 @@ export default function CourseCard({ course }) {
       <div className="course-card__actions">
         <CourseEnrollmentCtaButton
           courseId={id}
+          course={course}
+          isFreeCourse={Boolean(pricingDisplay?.isFree)}
           labelContext="card"
           size="lg"
           courseAdmission={courseAdmission}

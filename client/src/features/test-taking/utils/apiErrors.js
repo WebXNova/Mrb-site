@@ -79,11 +79,23 @@ export function getAttemptErrorMessage(err, fallback = 'Something went wrong.') 
   if (isNetworkError(err)) {
     return 'Connection lost. Your answers are saved locally and will sync when you reconnect.';
   }
-  return String(err?.message || fallback);
+  return sanitizePublicError(err?.message, fallback);
+}
+
+function sanitizePublicError(message, fallback) {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  if (text.length > 180) return fallback;
+  if (/sql|errno|stack|sequelize|econn|etimedout/i.test(text)) return fallback;
+  return text;
+}
+
+function readHttpStatus(err) {
+  return Number(err?.status ?? err?.statusCode ?? 0);
 }
 
 /** @param {unknown} err */
-export function getSubmitErrorMessage(err, fallback = 'Submission failed.') {
+export function getSubmitErrorMessage(err, fallback = 'Your test could not be submitted. Please try again.') {
   if (isAttemptExpiredError(err)) {
     return 'Time ran out. Your answers were saved, but submission wasn\'t accepted in time.';
   }
@@ -91,13 +103,29 @@ export function getSubmitErrorMessage(err, fallback = 'Submission failed.') {
     return 'Your test session was interrupted. Please return to the test start page to resume.';
   }
   if (isStudentAuthError(err)) {
-    return 'Your login session expired. Please sign in again, then return to the test start page.';
+    return 'Your session has expired. Please log in again.';
   }
   if (isTimeoutError(err)) {
     return 'Submission timed out. Your answers are saved — please try again.';
   }
   if (isNetworkError(err)) {
-    return 'Network error during submission. Your answers are saved — please try again.';
+    return 'Network connection problem. Please check your connection and try again.';
   }
-  return String(err?.message || fallback);
+  const status = readHttpStatus(err);
+  if (status === 429) {
+    return 'Too many submission attempts. Please wait a moment and try again.';
+  }
+  if (status === 503) {
+    return 'The submission service is temporarily unavailable. Please try again.';
+  }
+  if (status === 403) {
+    return 'You are not allowed to submit this test from this session.';
+  }
+  if (status === 404) {
+    return 'This test attempt could not be found. Return to the test start page and try again.';
+  }
+  if (status === 409) {
+    return sanitizePublicError(err?.message, 'This test was already submitted or cannot be submitted in its current state.');
+  }
+  return sanitizePublicError(err?.message, fallback);
 }

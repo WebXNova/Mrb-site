@@ -139,6 +139,18 @@ export async function processCourseEnrollment(profile, options = {}) {
 
   const { pricingCategory } = await assertCoursePricingValid(courseId);
 
+  // Paid students must never fall into free enrollment, even if a stale
+  // client skipped the homepage hide. Activation is the moment access would
+  // replace the current course; reject here before any row mutation for free.
+  if (pricingCategory === ENROLLMENT_PRICING_CATEGORY.FREE) {
+    await assertEnrollmentActionAllowed({
+      userId,
+      courseId,
+      confirmSwitch,
+      isActivation: true,
+    });
+  }
+
   const { enrollment: existing, created } = await getOrCreateEnrollment({
     userId,
     courseId,

@@ -112,7 +112,7 @@ assert.match(takingPage, /itemNav\.goNext/);
 assert.match(takingPage, /itemNav\.goPrevious/);
 assert.match(nav, /Previous/);
 assert.match(nav, /Next/);
-assert.match(nav, /Submit test/);
+assert.match(nav, /Submit [Tt]est/);
 assert.match(nav, /progressLabel/);
 assert.match(takingPage, /canGoPreviousQuestion/);
 assert.match(takingPage, /canGoNextQuestion/);

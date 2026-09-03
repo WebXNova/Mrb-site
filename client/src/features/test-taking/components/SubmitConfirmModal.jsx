@@ -33,6 +33,8 @@ export default function SubmitConfirmModal({
 
   const titleId = 'tt-submit-modal-title';
   const descId = 'tt-submit-modal-desc';
+  const allAnswered = unansweredCount <= 0;
+  const unansweredCopy = unansweredCount === 1 ? '1 question remains unanswered.' : `${unansweredCount} questions remain unanswered.`;
 
   return (
     <div className="tt-submit-modal" role="presentation">
@@ -58,15 +60,15 @@ export default function SubmitConfirmModal({
             !
           </div>
           <h2 id={titleId} className="tt-submit-modal__title">
-            {timedOut ? 'Time is up' : 'Submit test?'}
+            {timedOut ? 'Time is up' : 'Submit Test?'}
           </h2>
         </header>
 
         <div id={descId} className="tt-submit-modal__body">
           <p className="tt-submit-modal__warning">
             {timedOut
-              ? 'Time is up. Your answered questions are being submitted automatically.'
-              : `You have answered ${answeredCount} of ${totalQuestions} questions. You cannot change answers after submission.`}
+              ? 'Time is up. Your test is being submitted...'
+              : `You have answered ${answeredCount} of ${totalQuestions} questions. Once submitted, you cannot change your answers.`}
           </p>
 
           <dl className="tt-submit-modal__stats">
@@ -84,10 +86,11 @@ export default function SubmitConfirmModal({
             </div>
           </dl>
 
-          {unansweredCount > 0 && !isSubmitting && !timedOut ? (
+          {!timedOut && !isSubmitting ? (
             <p className="tt-submit-modal__note" role="status">
-              {unansweredCount} question{unansweredCount === 1 ? '' : 's'} still unanswered.
-              You can continue the test or submit anyway.
+              {allAnswered
+                ? 'You have answered all questions.'
+                : unansweredCopy}
             </p>
           ) : null}
 
@@ -99,7 +102,7 @@ export default function SubmitConfirmModal({
 
           {isSubmitting ? (
             <p className="tt-submit-modal__loading" role="status" aria-live="polite">
-              {timedOut ? 'Time is up. Your test is being submitted.' : 'Submitting your test… Please do not close this page.'}
+              {timedOut ? 'Time is up. Your test is being submitted...' : 'Submitting Test... Please do not close this page.'}
             </p>
           ) : null}
         </div>
@@ -112,7 +115,7 @@ export default function SubmitConfirmModal({
               onClick={onContinue}
               disabled={isSubmitting}
             >
-              Continue test
+              Go back
             </button>
           ) : null}
 
@@ -133,9 +136,18 @@ export default function SubmitConfirmModal({
               disabled={isSubmitting}
               aria-busy={isSubmitting}
             >
-              {isSubmitting ? 'Submitting…' : 'Submit test'}
+              {isSubmitting ? 'Submitting Test...' : 'Submit Test'}
             </button>
-          ) : null}
+          ) : isSubmitting ? null : (
+            <button
+              type="button"
+              className="btn btn--primary tt-submit-modal__btn"
+              onClick={onRetry}
+              disabled={isSubmitting}
+            >
+              Try again
+            </button>
+          )}
         </footer>
       </div>
     </div>

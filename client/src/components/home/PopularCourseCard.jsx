@@ -7,44 +7,24 @@ import {
   isAdmissionOpen,
 } from '../../course/courseAdmissionPresentation';
 import { buildPricingDisplay } from '../../course/coursePresentation';
+import {
+  formatCourseDuration,
+  formatCourseTypeLabel,
+  isCatalogCourseFree,
+} from '../../course/courseDiscovery';
+import { ENROLLMENT_BUTTON_STATE } from '../../course/courseEnrollmentCta';
+import { useEnrollmentState } from '../../hooks/useEnrollmentState';
 import './PopularCourseCard.css';
 
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.75" />
-      <path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.75" />
-      <path d="M12 8v4.5l2.5 1.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function formatSchedulePoint(iso) {
+function formatScheduleDate(iso) {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  const date = d.toLocaleString('en-PK', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-  const time = d
-    .toLocaleString('en-PK', { hour: 'numeric', minute: '2-digit', hour12: true })
-    .replace(/\s/g, ' ')
-    .toUpperCase();
-  return { date, time };
+  return d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function inferSubject(course) {
-  const text = `${course.title} ${course.summary}`.toLowerCase();
+  const text = `${course.title || ''} ${course.summary || ''}`.toLowerCase();
   if (text.includes('physics')) return 'Physics';
   if (text.includes('chemistry')) return 'Chemistry';
   if (text.includes('biology')) return 'Biology';
@@ -52,15 +32,9 @@ function inferSubject(course) {
   return null;
 }
 
-export default function PopularCourseCard({
-  course,
-  badge,
-  badgeTone = 'red',
-  buttonStyle = 'primary',
-  showSubject = true,
-  style,
-}) {
+export default function PopularCourseCard({ course, isCurrent = false, style }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const { state: enrollmentState } = useEnrollmentState(course.id);
   const {
     id,
     title,
@@ -76,10 +50,12 @@ export default function PopularCourseCard({
   } = course;
 
   const pricingDisplay = buildPricingDisplay(pricing);
+  const isFree = isCatalogCourseFree(course);
   const admissionsOpen = isAdmissionOpen(course);
   const subject = inferSubject(course);
-  const start = formatSchedulePoint(startDate);
-  const end = formatSchedulePoint(endDate);
+  const duration = formatCourseDuration(startDate, endDate);
+  const startLabel = formatScheduleDate(startDate);
+  const endLabel = formatScheduleDate(endDate);
   const showCoverImage = Boolean(thumbnailUrl) && !imageFailed;
   const coursePath = `/courses/${encodeURIComponent(String(id))}`;
   const courseAdmission = {
@@ -90,88 +66,85 @@ export default function PopularCourseCard({
     end_date: endDate,
   };
 
-  const buttonClass = [
-    'pc-card__cta',
-    buttonStyle === 'primary' && 'pc-card__cta--primary',
-    buttonStyle === 'outline' && 'pc-card__cta--outline',
-    buttonStyle === 'free' && 'pc-card__cta--free',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const current =
+    isCurrent || enrollmentState?.buttonState === ENROLLMENT_BUTTON_STATE.CONTINUE_LEARNING;
+  const typeLabel = formatCourseTypeLabel(course);
 
   return (
     <article
-      className={`pc-card pc-card--${badgeTone}`}
+      className={`pc-card${current ? ' pc-card--current' : ''}${isFree ? ' pc-card--free' : ''}`}
       style={style}
     >
-      <span className="pc-card__accent" aria-hidden="true" />
-
       <Link to={coursePath} className="pc-card__link">
-        <div className={`pc-card__cover ${showCoverImage ? 'pc-card__cover--image' : ''}`}>
+        <div className={`pc-card__cover${showCoverImage ? ' pc-card__cover--image' : ''}`}>
           {showCoverImage ? (
             <img
               src={thumbnailUrl}
               alt={`${title} course thumbnail`}
+              width={640}
+              height={360}
               loading="lazy"
               decoding="async"
               onError={() => setImageFailed(true)}
             />
           ) : (
             <div className="pc-card__cover-fallback" aria-hidden="true">
-              {title.slice(0, 1)}
+              {String(title || 'C').slice(0, 1)}
             </div>
           )}
-          <div className="pc-card__cover-shade" aria-hidden="true" />
         </div>
 
         <div className="pc-card__body">
           <div className="pc-card__badges">
-            {badge ? (
-              <span className={`pc-card__badge pc-card__badge--${badgeTone}`}>{badge}</span>
-            ) : null}
+            {current ? <span className="pc-card__badge pc-card__badge--current">Current course</span> : null}
+            <span className={`pc-card__badge pc-card__badge--type${isFree ? ' pc-card__badge--free' : ''}`}>
+              {typeLabel}
+            </span>
             <span className={`pc-card__status pc-card__status--${admissionBadgeTone(admissionStatus)}`}>
               {admissionBadgeLabel(admissionStatus)}
             </span>
-            {level ? (
-              <span className="pc-card__level">{level}</span>
-            ) : null}
-            {pricingDisplay?.isFree ? (
-              <span className="pc-card__price pc-card__price--free">Free</span>
-            ) : pricingDisplay ? (
-              <span className="pc-card__price">
-                {pricingDisplay.currency} {pricingDisplay.amount.toLocaleString('en-PK')}
-              </span>
-            ) : null}
           </div>
 
           <h3 className="pc-card__title">{title}</h3>
 
-          {showSubject && subject ? (
-            <span className="pc-card__subject">{subject}</span>
-          ) : null}
+          {subject ? <span className="pc-card__subject">{subject}</span> : null}
 
-          {(start || end) && (
-            <div className="pc-card__schedule">
-              {start ? (
-                <div className="pc-card__schedule-row">
-                  <CalendarIcon />
-                  <span>
-                    <strong>Starts:</strong> {start.date}, {start.time}
-                  </span>
-                </div>
-              ) : null}
-              {end ? (
-                <div className="pc-card__schedule-row">
-                  <ClockIcon />
-                  <span>
-                    <strong>Ends:</strong> {end.date}, {end.time}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          )}
+          {summary ? <p className="pc-card__summary">{summary}</p> : <p className="pc-card__summary pc-card__summary--empty">&nbsp;</p>}
 
-          {summary ? <p className="pc-card__summary">{summary}</p> : null}
+          <ul className="pc-card__meta">
+            {pricingDisplay && !pricingDisplay.isFree ? (
+              <li>
+                <span>Price</span>
+                <strong>
+                  {pricingDisplay.currency} {pricingDisplay.amount.toLocaleString('en-PK')}
+                </strong>
+              </li>
+            ) : (
+              <li>
+                <span>Price</span>
+                <strong>Free</strong>
+              </li>
+            )}
+            {duration ? (
+              <li>
+                <span>Duration</span>
+                <strong>{duration}</strong>
+              </li>
+            ) : startLabel || endLabel ? (
+              <li>
+                <span>Dates</span>
+                <strong>
+                  {startLabel || '—'} – {endLabel || '—'}
+                </strong>
+              </li>
+            ) : null}
+            {level ? (
+              <li>
+                <span>Level</span>
+                <strong>{level}</strong>
+              </li>
+            ) : null}
+          </ul>
 
           {!admissionsOpen && enrollmentMessage ? (
             <p className="pc-card__note" role="status">
@@ -182,12 +155,18 @@ export default function PopularCourseCard({
       </Link>
 
       <div className="pc-card__actions">
+        <Link to={coursePath} className="pc-card__view">
+          View Course
+        </Link>
         <CourseEnrollmentCtaButton
           courseId={id}
+          course={course}
+          courseTitle={title}
+          isFreeCourse={isFree}
           labelContext="card"
           size="lg"
           fullWidth
-          className={buttonClass}
+          className="pc-card__cta"
           courseAdmission={courseAdmission}
         />
       </div>

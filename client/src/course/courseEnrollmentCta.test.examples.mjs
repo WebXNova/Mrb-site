@@ -16,9 +16,9 @@ function test(name, fn) {
 
 console.log('courseEnrollmentCta — backend-driven button state');
 
-test('guest / logged out → Enroll Now', () => {
-  const cta = buildCourseEnrollmentCtaFromState(null, { courseId: 42 });
-  assert.equal(cta.label, 'Enroll Now');
+test('guest / logged out → Get Started', () => {
+  const cta = buildCourseEnrollmentCtaFromState(null, { courseId: 42, isGuest: true });
+  assert.equal(cta.label, 'Get Started');
   assert.equal(cta.buttonState, ENROLLMENT_BUTTON_STATE.ENROLL_NOW);
 });
 
@@ -42,7 +42,7 @@ test('continue_learning never shows Enroll Now', () => {
   }
 });
 
-test('switch_course → Switch Course with confirmation', () => {
+test('switch_course → Change Course with confirmation', () => {
   const cta = buildCourseEnrollmentCtaFromState(
     {
       buttonState: ENROLLMENT_BUTTON_STATE.SWITCH_COURSE,
@@ -51,7 +51,7 @@ test('switch_course → Switch Course with confirmation', () => {
     },
     { courseId: 5 }
   );
-  assert.equal(cta.label, 'Switch Course');
+  assert.equal(cta.label, 'Change Course');
   assert.equal(cta.requiresSwitchConfirmation, true);
 });
 
@@ -85,13 +85,22 @@ test('admissions_closed → Enrollment Closed (disabled)', () => {
   assert.equal(cta.disabled, true);
 });
 
-test('premium_blocks_free → disabled with tooltip', () => {
+test('premium_blocks_free → disabled Not available', () => {
   const cta = buildCourseEnrollmentCtaFromState(
     { buttonState: ENROLLMENT_BUTTON_STATE.PREMIUM_BLOCKS_FREE },
     { courseId: 3 }
   );
   assert.equal(cta.disabled, true);
-  assert.match(cta.tooltip, /premium course/i);
+  assert.equal(cta.label, 'Not available');
+  assert.match(cta.tooltip, /paid course/i);
+});
+
+test('free course enroll_now → Enroll Free', () => {
+  const cta = buildCourseEnrollmentCtaFromState(
+    { buttonState: ENROLLMENT_BUTTON_STATE.ENROLL_NOW, targetEnrollmentType: 'free' },
+    { courseId: 4, isFreeCourse: true }
+  );
+  assert.equal(cta.label, 'Enroll Free');
 });
 
 console.log('courseEnrollmentCta backend-driven tests passed');

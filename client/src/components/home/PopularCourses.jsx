@@ -1,83 +1,43 @@
-import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { catalogApi } from '../../api/catalogApi';
-import { buildPricingDisplay, mapCatalogCourseToCardProps } from '../../course/coursePresentation';
+import { useHomeCourseDiscovery } from '../../hooks/useHomeCourseDiscovery';
+import { CatalogCourseGridSkeleton } from '../catalog/CatalogCourseCardSkeleton';
 import { useInView } from '../../hooks/useInView';
-import { prefetchEnrollmentStates } from '../../hooks/useEnrollment';
 import PopularCourseCard from './PopularCourseCard';
+import CourseShowcase from './CourseShowcase';
 import './PopularCourses.css';
 
-const PAID_BADGES = ['Bestseller', 'New', 'Trending'];
-
-function splitCourses(courses) {
-  const paid = [];
-  const free = [];
-
-  for (const course of courses) {
-    const display = buildPricingDisplay(course.pricing);
-    if (display?.isFree) free.push(course);
-    else paid.push(course);
-  }
-
-  return { paid, free };
-}
-
 export default function PopularCourses() {
-  const [courses, setCourses] = useState([]);
-  const [error, setError] = useState('');
-  const [sectionRef, inView] = useInView({ threshold: 0.1 });
-  const { paid } = useMemo(() => splitCourses(courses), [courses]);
+  const [sectionRef, inView] = useInView({ threshold: 0.08 });
+  const {
+    courses,
+    featuredCourse,
+    activeEnrollment,
+    copy,
+    loading,
+    error,
+    reload,
+  } = useHomeCourseDiscovery();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await catalogApi.listCourses();
-        const rows = Array.isArray(res?.data) ? res.data : [];
-        if (!cancelled) {
-          const mapped = rows.map(mapCatalogCourseToCardProps).filter(Boolean);
-          setCourses(mapped);
-          prefetchEnrollmentStates(mapped.map((c) => c.id));
-        }
-      } catch (e) {
-        if (!cancelled) setError(e?.message || 'Failed to load courses');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const hasCourses = paid.length > 0;
-  if (!error && !hasCourses) {
-    return null;
-  }
+  const currentCourseId = activeEnrollment?.courseId ?? null;
+  const gridCourses = featuredCourse
+    ? courses.filter((course) => Number(course.id) !== Number(featuredCourse.id))
+    : courses;
 
   return (
     <section
+      id="courses"
       ref={sectionRef}
-      className={`popular-courses ${inView ? 'popular-courses--visible' : ''}`}
+      className={`popular-courses${inView ? ' popular-courses--visible' : ''}`}
       aria-labelledby="popular-courses-heading"
     >
-      <div className="popular-courses__backdrop" aria-hidden="true">
-        <div className="popular-courses__glow popular-courses__glow--red" />
-        <div className="popular-courses__glow popular-courses__glow--blue" />
-        <div className="popular-courses__grid-bg" />
-      </div>
-
       <div className="container popular-courses__inner">
         <header className="popular-courses__head">
           <div className="popular-courses__head-copy">
-            <span className="popular-courses__eyebrow">
-              <span className="popular-courses__eyebrow-bar" aria-hidden="true" />
-              Popular This Season
-            </span>
+            <span className="popular-courses__eyebrow">{copy.eyebrow}</span>
             <h2 id="popular-courses-heading" className="popular-courses__title">
-              Courses students are loving.
+              {copy.title}
             </h2>
-            <p className="popular-courses__lead">
-              Premium MDCAT prep — pick your path and start today.
-            </p>
+            <p className="popular-courses__lead">{copy.lead}</p>
           </div>
           <Link to="/courses" className="popular-courses__view-all">
             View all courses
@@ -85,32 +45,61 @@ export default function PopularCourses() {
           </Link>
         </header>
 
-        {error ? <p className="popular-courses__error">{error}</p> : null}
-
-        {!hasCourses && !error ? (
-          <p className="popular-courses__empty">
-            No published courses yet. Add one in the admin dashboard.
-          </p>
+        {error ? (
+          <div className="popular-courses__status" role="alert">
+            <p>Unable to load courses right now.</p>
+            <button type="button" className="popular-courses__retry" onClick={reload}>
+              Try Again
+            </button>
+          </div>
         ) : null}
 
-        {paid.length > 0 ? (
+        {loading && !error ? (
+          <div className="popular-courses__loading">
+            <CatalogCourseGridSkeleton count={3} />
+          </div>
+        ) : null}
+
+        {!loading && !error && courses.length === 0 ? (
+          <div className="popular-courses__status" role="status">
+            <p>Courses are being prepared. Please check back soon.</p>
+            <Link to="/courses" className="popular-courses__retry">
+              View all courses
+            </Link>
+          </div>
+        ) : null}
+
+        {!loading && !error && featuredCourse ? (
+          <CourseShowcase
+            course={featuredCourse}
+            isCurrent={Number(featuredCourse.id) === Number(currentCourseId)}
+          />
+        ) : null}
+
+        {!loading && !error && gridCourses.length > 0 ? (
           <div className="popular-courses__group">
-            <div className="popular-courses__group-label">
-              <span className="popular-courses__group-dot popular-courses__group-dot--red" />
-              Paid Courses
-            </div>
-            <div className="popular-courses__grid popular-courses__grid--paid">
-              {paid.slice(0, 6).map((course, index) => (
+            <p className="popular-courses__group-label">
+              {currentCourseId ? 'Explore other courses' : 'Choose your course'}
+            </p>
+            <div className="popular-courses__grid">
+              {gridCourses.slice(0, 8).map((course, index) => (
                 <PopularCourseCard
                   key={String(course.id)}
                   course={course}
-                  badge={PAID_BADGES[index] || 'Trending'}
-                  badgeTone="red"
-                  buttonStyle={index === 0 ? 'primary' : 'outline'}
+                  isCurrent={Number(course.id) === Number(currentCourseId)}
                   style={{ '--card-i': index }}
                 />
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {!loading && !error && courses.length > 0 ? (
+          <div className="popular-courses__footer">
+            <Link to="/courses" className="popular-courses__view-all">
+              View all courses
+              <span aria-hidden="true">→</span>
+            </Link>
           </div>
         ) : null}
       </div>

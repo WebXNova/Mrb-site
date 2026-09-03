@@ -45,12 +45,12 @@ assert.equal(getSubmitErrorMessage(tokenErr()), SESSION_INTERRUPTED);
 assert.equal(isStudentAuthError(studentAuthErr()), true);
 assert.equal(isAttemptTokenError(studentAuthErr()), false);
 assert.equal(isAttemptExpiredError(studentAuthErr()), false);
-assert.match(getSubmitErrorMessage(studentAuthErr()), /sign in again/i);
+assert.match(getSubmitErrorMessage(studentAuthErr()), /log in again/i);
 
 const genericExpired401 = { status: 401, message: 'Session expired' };
 assert.equal(isAttemptTokenError(genericExpired401), false);
 assert.equal(isStudentAuthError(genericExpired401), true);
-assert.match(getSubmitErrorMessage(genericExpired401), /login session expired/i);
+assert.match(getSubmitErrorMessage(genericExpired401), /session has expired/i);
 
 const conflictExpired = { status: 409, errorCode: 'ATTEMPT_EXPIRED', message: 'This test attempt has expired.' };
 assert.equal(isAttemptExpiredError(conflictExpired), true);

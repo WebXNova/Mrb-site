@@ -11,6 +11,7 @@ import {
   resolveEnrollmentButtonState,
   mapEnrollmentSourceToType,
   mapPricingCategoryToType,
+  toEnrollmentStateResponse,
 } from './enrollmentState.service.js';
 import { ENROLLMENT_PRICING_CATEGORY } from '../constants/coursePricingTypes.js';
 import { ENROLLMENT_SOURCE } from '../constants/enrollmentSource.js';
@@ -114,6 +115,16 @@ const premiumToPremiumSwitch = resolveEnrollmentButtonState({
   courseEnrollment: null,
 });
 eq('premium → premium → switch_course', premiumToPremiumSwitch.buttonState, ENROLLMENT_BUTTON_STATE.SWITCH_COURSE);
+eq(
+  'premium student state hides free catalog',
+  toEnrollmentStateResponse(premiumToFreeSwitch).hideFreeCourses,
+  true
+);
+eq(
+  'un-enrolled state does not hide free catalog',
+  toEnrollmentStateResponse(firstEnrollment).hideFreeCourses,
+  false
+);
 
 const paymentPending = resolveEnrollmentButtonState({
   targetCourseId: 30,

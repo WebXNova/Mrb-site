@@ -9,19 +9,30 @@ const SESSION_PREFIX = 'test_attempt_';
  */
 
 /**
+ * Canonical numeric attempt id. Prevents "5" vs 5 from retriggering load effects.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+export function normalizeAttemptId(value) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric <= 0) return null;
+  return numeric;
+}
+
+/**
  * @param {string} slug
- * @returns {{ attemptId?: number|null, expiresAt?: string|null, accessKind?: string|null }}
+ * @returns {{ attemptId: number|null, expiresAt: string|null, accessKind: string|null }}
  */
 export function getAttemptSession(slug) {
   try {
     const raw = JSON.parse(sessionStorage.getItem(`${SESSION_PREFIX}${slug}`) || '{}');
     return {
-      attemptId: raw.attemptId ?? null,
+      attemptId: normalizeAttemptId(raw.attemptId),
       expiresAt: raw.expiresAt ?? null,
       accessKind: raw.accessKind ?? null,
     };
   } catch {
-    return {};
+    return { attemptId: null, expiresAt: null, accessKind: null };
   }
 }
 
@@ -40,7 +51,7 @@ export function setAttemptSession(slug, payload) {
     }
   }
   const safe = {
-    attemptId: payload.attemptId ?? null,
+    attemptId: normalizeAttemptId(payload.attemptId),
     expiresAt: payload.expiresAt ?? null,
     accessKind,
   };
