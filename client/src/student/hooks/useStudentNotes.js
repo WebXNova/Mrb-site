@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { studentApi } from '../../api/studentApi';
 
+function positiveId(value) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 function pickFetcher({ courseId, subjectId, chapterId, lectureId }) {
-  if (!courseId) return null;
-  if (lectureId) {
-    return () => studentApi.lectureNotes(courseId, lectureId);
+  const cid = positiveId(courseId);
+  if (!cid) return null;
+  const lid = positiveId(lectureId);
+  if (lid) {
+    return () => studentApi.lectureNotes(cid, lid);
   }
-  if (chapterId) {
-    return () => studentApi.chapterNotes(courseId, chapterId);
+  const chid = positiveId(chapterId);
+  if (chid) {
+    return () => studentApi.chapterNotes(cid, chid);
   }
-  if (subjectId) {
-    return () => studentApi.subjectNotes(courseId, subjectId);
+  const sid = positiveId(subjectId);
+  if (sid) {
+    return () => studentApi.subjectNotes(cid, sid);
   }
-  return () => studentApi.courseNotes(courseId);
+  return () => studentApi.courseNotes(cid);
 }
 
 export function useStudentNotes({ courseId, subjectId = null, chapterId = null, lectureId = null }) {
@@ -72,6 +81,8 @@ export function useStudentNotes({ courseId, subjectId = null, chapterId = null, 
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+    } catch {
+      /* Keep the notes list visible if a single file download fails. */
     } finally {
       setDownloadingId(null);
     }

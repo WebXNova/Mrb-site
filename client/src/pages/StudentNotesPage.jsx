@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import StudentIcon from '../student/components/icons/StudentIcons';
 import StudentNotesHierarchy from '../student/components/notes/StudentNotesHierarchy';
-import { useStudentLectures } from '../student/hooks/useStudentLectures';
+import { useStudentEnrolledCourses } from '../student/hooks/useStudentEnrolledCourses';
 import { useStudentNotes } from '../student/hooks/useStudentNotes';
 import {
   buildNotesHierarchy,
@@ -12,39 +12,33 @@ import {
 import '../student/styles/student-notes.css';
 
 export default function StudentNotesPage() {
-  const { lectures, loading: lecturesLoading } = useStudentLectures();
+  const { courses: courseTabs, loading: coursesLoading, error: coursesError } = useStudentEnrolledCourses();
   const [courseId, setCourseId] = useState('all');
   const [search, setSearch] = useState('');
-
-  const courseTabs = useMemo(() => {
-    const rows = [];
-    const seen = new Set();
-    for (const lecture of lectures) {
-      const id = String(lecture.courseId ?? '');
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      rows.push({
-        id,
-        label: lecture.courseTitle || `Course ${id}`,
-      });
-    }
-    rows.sort((a, b) => a.label.localeCompare(b.label));
-    return rows;
-  }, [lectures]);
 
   useEffect(() => {
     if (courseTabs.length === 1) {
       setCourseId(courseTabs[0].id);
+      return;
     }
-  }, [courseTabs]);
+    if (courseId !== 'all' && !courseTabs.some((tab) => tab.id === courseId)) {
+      setCourseId('all');
+    }
+  }, [courseTabs, courseId]);
 
   const activeCourseId = useMemo(() => {
-    if (courseId !== 'all') return Number(courseId);
-    if (courseTabs.length === 1) return Number(courseTabs[0].id);
+    if (courseId !== 'all') {
+      const selected = Number(courseId);
+      return Number.isInteger(selected) && selected > 0 ? selected : null;
+    }
+    if (courseTabs.length === 1) {
+      const only = Number(courseTabs[0].id);
+      return Number.isInteger(only) && only > 0 ? only : null;
+    }
     return null;
   }, [courseId, courseTabs]);
 
-  const { groups, loading, error, downloadingId, downloadNote, totalNotes } = useStudentNotes({
+  const { groups, loading, error: notesError, downloadingId, downloadNote, totalNotes } = useStudentNotes({
     courseId: activeCourseId,
   });
 
@@ -58,8 +52,10 @@ export default function StudentNotesPage() {
     [filteredHierarchy]
   );
 
-  const pageLoading = lecturesLoading || (activeCourseId != null && loading);
-  const needsCoursePick = courseTabs.length > 1 && courseId === 'all';
+  const pageLoading = coursesLoading || (activeCourseId != null && loading);
+  const error = coursesError || notesError;
+  const needsCoursePick = !coursesLoading && courseTabs.length > 1 && courseId === 'all';
+  const noEnrolledCourse = !coursesLoading && !error && courseTabs.length === 0;
 
   return (
     <section className="student-notes-page sp-panel sp-card">
@@ -122,10 +118,20 @@ export default function StudentNotesPage() {
         </div>
       ) : null}
 
+      {noEnrolledCourse ? (
+        <div className="student-notes__empty">
+          <DescriptionOutlinedIcon className="student-notes__empty-icon" aria-hidden />
+          <p className="student-notes__empty-title">No notes available</p>
+          <p className="student-notes__empty-hint">
+            Notes appear here after you have an active course enrollment.
+          </p>
+        </div>
+      ) : null}
+
       {!pageLoading && !error && !needsCoursePick && activeCourseId != null && totalNotes === 0 ? (
         <div className="student-notes__empty">
           <DescriptionOutlinedIcon className="student-notes__empty-icon" aria-hidden />
-          <p className="student-notes__empty-title">No notes available yet</p>
+          <p className="student-notes__empty-title">No notes available</p>
           <p className="student-notes__empty-hint">
             Study materials will appear here when your instructor uploads them.
           </p>
