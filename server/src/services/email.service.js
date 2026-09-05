@@ -5,6 +5,17 @@ import { ApiError } from '../utils/apiError.js';
 import { getEmailQueue } from '../config/queue.js';
 import { logActivity } from './activityLog.service.js';
 import { mysqlPool } from '../config/mysql.js';
+import {
+  EMAIL_QUEUE_ADD_TIMEOUT_MS,
+  EMAIL_SEND_TIMEOUT_MS,
+  SENDGRID_TIMEOUT_MS,
+  SMTP_CONNECTION_TIMEOUT_MS,
+  SMTP_GREETING_TIMEOUT_MS,
+  SMTP_SOCKET_TIMEOUT_MS,
+} from '../config/reliabilityTimeouts.js';
+import { withDeadline } from '../utils/withDeadline.js';
+import { ExternalRequestTimeoutError } from '../errors/external/ExternalRequestTimeoutError.js';
+import { RedisUnavailableError } from '../errors/redis/RedisUnavailableError.js';
 
 let transporter = null;
 let sendgridInitialized = false;
@@ -83,6 +94,9 @@ function getTransporter() {
     host: env.email.host,
     port: env.email.port,
     secure: env.email.secure,
+    connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+    greetingTimeout: SMTP_GREETING_TIMEOUT_MS,
+    socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
     auth: {
       user: env.email.user,
       pass: env.email.pass,
@@ -149,18 +163,25 @@ export async function sendEmailNow({ to, subject, html, text, outboxId = null, u
   if (usingSendGrid()) {
     try {
       initSendGrid();
-      const [response] = await sgMail.send({
-        to,
-        from: buildSendGridMailFrom(env.email.from),
-        subject,
-        html,
-        text,
-        mailSettings: {
-          sandboxMode: {
-            enable: env.email.sendgridSandboxMode,
+      const [response] = await withDeadline(
+        sgMail.send({
+          to,
+          from: buildSendGridMailFrom(env.email.from),
+          subject,
+          html,
+          text,
+          mailSettings: {
+            sandboxMode: {
+              enable: env.email.sendgridSandboxMode,
+            },
           },
-        },
-      });
+        }),
+        Math.min(SENDGRID_TIMEOUT_MS, EMAIL_SEND_TIMEOUT_MS),
+        {
+          dependency: 'sendgrid',
+          message: 'Email provider timed out. Please retry shortly.',
+        }
+      );
       console.log('[email] SendGrid accepted message', {
         to,
         outboxId,
@@ -169,6 +190,13 @@ export async function sendEmailNow({ to, subject, html, text, outboxId = null, u
       });
       return;
     } catch (error) {
+      if (error instanceof ExternalRequestTimeoutError) {
+        throw new EmailDeliveryError(error.message, {
+          retryable: true,
+          provider: 'sendgrid',
+          statusCode: 504,
+        });
+      }
       const classified = classifySendgridError(error);
       console.error('[email] SendGrid rejected message', {
         to,
@@ -184,14 +212,28 @@ export async function sendEmailNow({ to, subject, html, text, outboxId = null, u
   }
   try {
     const transport = getTransporter();
-    await transport.sendMail({
-      from: env.email.from,
-      to,
-      subject,
-      html,
-      text,
-    });
+    await withDeadline(
+      transport.sendMail({
+        from: env.email.from,
+        to,
+        subject,
+        html,
+        text,
+      }),
+      EMAIL_SEND_TIMEOUT_MS,
+      {
+        dependency: 'smtp',
+        message: 'Email provider timed out. Please retry shortly.',
+      }
+    );
   } catch (error) {
+    if (error instanceof ExternalRequestTimeoutError) {
+      throw new EmailDeliveryError(error.message, {
+        retryable: true,
+        provider: 'smtp',
+        statusCode: 504,
+      });
+    }
     throw new EmailDeliveryError(error?.message || 'smtp_delivery_failed', {
       retryable: true,
       provider: 'smtp',
@@ -247,16 +289,45 @@ export async function sendEmail({ to, subject, html, text, userId = null, templa
     }
     return;
   }
-  await queue.add(
-    'send-email',
-    { to, subject, html, text, userId, outboxId },
+  await withDeadline(
+    queue.add(
+      'send-email',
+      { to, subject, html, text, userId, outboxId },
+      {
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 1500 },
+        removeOnComplete: 1000,
+        removeOnFail: 5000,
+      }
+    ),
+    EMAIL_QUEUE_ADD_TIMEOUT_MS,
     {
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 1500 },
-      removeOnComplete: 1000,
-      removeOnFail: 5000,
+      dependency: 'email_queue',
+      buildError: () =>
+        new RedisUnavailableError({
+          reason: 'email_queue_add_timeout',
+        }),
     }
-  );
+  ).catch(async (error) => {
+    await mysqlPool.query(
+      `UPDATE email_outbox
+       SET status = 'failed', attempts = attempts + 1, last_error = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [String(error?.message || 'queue_add_failed').slice(0, 255), outboxId]
+    );
+    console.error({
+      tag: '[email]',
+      message: 'queue_add_failed',
+      outboxId,
+      err: error instanceof Error ? error.message : String(error),
+    });
+    throw error instanceof RedisUnavailableError || error instanceof ExternalRequestTimeoutError
+      ? new ApiError(503, 'Email service temporarily unavailable. Please retry shortly.', {
+          code: 'EMAIL_QUEUE_UNAVAILABLE',
+          error_code: 'EMAIL_QUEUE_UNAVAILABLE',
+        })
+      : error;
+  });
   await logActivity({
     userId,
     role: userId ? 'student' : 'system',

@@ -99,11 +99,56 @@ import { buildPresentationSettings } from '../../utils/testPresentation.js';
  * @property {boolean} [requireInProgress]
  * @property {boolean} [requireSubmitted]
  * @property {boolean} [forUpdate]
+ * @property {boolean} [skipSubjectPresentation] — skip subjects join (autosave/submit hot paths)
+ * @property {boolean} [skipEntitlementRevalidate] — trust CEE-provided entitlement (autosave/submit hot paths)
  * @property {import('mysql2/promise').PoolConnection} [connection]
  * @property {string} [auditContext]
  * @property {number} [nowMs] — authoritative UTC ms (from getAvailabilityNowMs)
  * @property {number} [expiryGraceMs] — extra ms after expires_at still treated as in-progress (submit only)
  */
+
+/**
+ * Lock only the attempt row. Never lock the shared `tests` row — class-wide submits
+ * must not serialize on one test metadata row.
+ *
+ * @param {import('mysql2/promise').Pool | import('mysql2/promise').PoolConnection} executor
+ * @param {{ attemptId: number, userId?: number|null, guestSessionHash?: string|null }} params
+ */
+async function lockAttemptRowOnly(executor, { attemptId, userId = null, guestSessionHash = null }) {
+  if (guestSessionHash) {
+    const [rows] = await executor.query(
+      `SELECT id FROM test_attempts
+       WHERE id = ? AND guest_session_hash = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [attemptId, guestSessionHash]
+    );
+    return rows[0] ?? null;
+  }
+
+  const [rows] = await executor.query(
+    `SELECT id FROM test_attempts
+     WHERE id = ? AND user_id = ?
+     LIMIT 1
+     FOR UPDATE`,
+    [attemptId, userId]
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * @param {ResolveSecureAttemptInput} input
+ * @param {number} testId
+ * @returns {Promise<string|null>}
+ */
+async function resolveSubjectLabel(input, testId) {
+  if (input.skipSubjectPresentation) return null;
+  const presentation = await loadTestSubjectPresentation(
+    Number(testId),
+    input.connection ?? mysqlPool
+  );
+  return presentation.displayLabel;
+}
 
 const ATTEMPT_TEST_SELECT = `
   SELECT a.id,
@@ -337,11 +382,14 @@ function auditAttemptDenial(reason, input, extra = {}) {
  */
 async function resolvePaidStandaloneAttemptContext(input, attemptId, userId) {
   const executor = input.connection ?? mysqlPool;
-  let sql = ATTEMPT_PAID_TEST_SELECT;
   if (input.forUpdate) {
-    sql = `${sql} FOR UPDATE`;
+    const locked = await lockAttemptRowOnly(executor, { attemptId, userId });
+    if (!locked) {
+      auditAttemptDenial('paid_standalone_attempt_not_found', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
+      throw new AttemptNotFoundError({ attemptId, userId, slug: input.slug ?? null });
+    }
   }
-  const [rows] = await executor.query(sql, [attemptId, userId]);
+  const [rows] = await executor.query(ATTEMPT_PAID_TEST_SELECT, [attemptId, userId]);
   const row = rows[0];
   if (!row) {
     auditAttemptDenial('paid_standalone_attempt_not_found', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
@@ -393,8 +441,8 @@ async function resolvePaidStandaloneAttemptContext(input, attemptId, userId) {
     userId,
     courseId: null,
   });
-  const subjectPresentation = await loadTestSubjectPresentation(Number(row.t_id));
-  const ctx = mapRowToSecureContext(row, entitlement, subjectPresentation.displayLabel);
+  const subjectLabel = await resolveSubjectLabel(input, Number(row.t_id));
+  const ctx = mapRowToSecureContext(row, entitlement, subjectLabel);
 
   const nowMs =
     input.nowMs != null && Number.isFinite(input.nowMs)
@@ -448,11 +496,14 @@ async function resolvePaidStandaloneAttemptContext(input, attemptId, userId) {
 
 async function resolveGuestFreeSessionAttemptContext(input, attemptId, guestSessionHash) {
   const executor = input.connection ?? mysqlPool;
-  let sql = ATTEMPT_GUEST_FREE_SELECT;
   if (input.forUpdate) {
-    sql = `${sql} FOR UPDATE`;
+    const locked = await lockAttemptRowOnly(executor, { attemptId, guestSessionHash });
+    if (!locked) {
+      auditAttemptDenial('guest_free_session_attempt_not_found', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
+      throw new AttemptNotFoundError({ attemptId, slug: input.slug ?? null, reason: 'guest_attempt_not_found' });
+    }
   }
-  const [rows] = await executor.query(sql, [attemptId, guestSessionHash]);
+  const [rows] = await executor.query(ATTEMPT_GUEST_FREE_SELECT, [attemptId, guestSessionHash]);
   const row = rows[0];
   if (!row) {
     auditAttemptDenial('guest_free_session_attempt_not_found', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
@@ -479,8 +530,8 @@ async function resolveGuestFreeSessionAttemptContext(input, attemptId, guestSess
     userId: 0,
     courseId: null,
   });
-  const subjectPresentation = await loadTestSubjectPresentation(Number(row.t_id));
-  const ctx = mapRowToSecureContext(row, entitlement, subjectPresentation.displayLabel);
+  const subjectLabel = await resolveSubjectLabel(input, Number(row.t_id));
+  const ctx = mapRowToSecureContext(row, entitlement, subjectLabel);
 
   const nowMs =
     input.nowMs != null && Number.isFinite(input.nowMs)
@@ -584,7 +635,7 @@ export async function resolveSecureAttemptContext(input) {
       });
     }
     entitlement = await assertCourseAccess(userId, courseIdHint);
-  } else {
+  } else if (!input.skipEntitlementRevalidate) {
     entitlement = await assertCourseAccess(userId, entitlement.courseId);
     if (courseIdHint != null && Number(courseIdHint) !== Number(entitlement.courseId)) {
       auditAttemptDenial('course_id_mismatch', input, { errorCode: 'COURSE_SCOPE_VIOLATION' });
@@ -595,6 +646,28 @@ export async function resolveSecureAttemptContext(input) {
         entitledCourseId: entitlement.courseId,
       });
     }
+  } else if (courseIdHint != null && Number(courseIdHint) !== Number(entitlement.courseId)) {
+    auditAttemptDenial('course_id_mismatch', input, { errorCode: 'COURSE_SCOPE_VIOLATION' });
+    throw new CourseScopeViolationError({
+      userId,
+      attemptId,
+      requestedCourseId: courseIdHint,
+      entitledCourseId: entitlement.courseId,
+    });
+  }
+
+  const executor = input.connection ?? mysqlPool;
+  if (input.forUpdate) {
+    const locked = await lockAttemptRowOnly(executor, { attemptId, userId });
+    if (!locked) {
+      auditAttemptDenial('attempt_not_found_or_out_of_scope', input, { errorCode: 'ATTEMPT_NOT_FOUND' });
+      throw new AttemptNotFoundError({
+        attemptId,
+        userId,
+        courseId: entitlement.courseId,
+        slug: input.slug ?? null,
+      });
+    }
   }
 
   const db = createAttemptScopedQuery(
@@ -603,12 +676,7 @@ export async function resolveSecureAttemptContext(input) {
     input.connection
   );
 
-  let sql = ATTEMPT_TEST_SELECT;
-  if (input.forUpdate) {
-    sql = `${sql} FOR UPDATE`;
-  }
-
-  const rows = await db.rows(sql, [entitlement.courseId, attemptId, userId]);
+  const rows = await db.rows(ATTEMPT_TEST_SELECT, [entitlement.courseId, attemptId, userId]);
   const row = rows[0];
 
   if (!row) {
@@ -668,10 +736,9 @@ export async function resolveSecureAttemptContext(input) {
     }
   }
 
-  const subjectPresentation = await loadTestSubjectPresentation(Number(row.t_id));
-  const ctx = mapRowToSecureContext(row, entitlement, subjectPresentation.displayLabel);
+  const subjectLabel = await resolveSubjectLabel(input, Number(row.t_id));
+  const ctx = mapRowToSecureContext(row, entitlement, subjectLabel);
 
-  const executor = input.connection ?? mysqlPool;
   const nowMs =
     input.nowMs != null && Number.isFinite(input.nowMs)
       ? input.nowMs

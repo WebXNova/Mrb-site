@@ -15,6 +15,8 @@ export default function ExamHeader({
   onRetrySave,
   onOpenPalette,
   showPaletteToggle,
+  onOpenProgress,
+  showProgressToggle,
   displayMode = 'all',
   isFullscreen = false,
   onToggleFullscreen,
@@ -32,7 +34,9 @@ export default function ExamHeader({
       <div className="tt-header__primary">
         <div className="tt-header__info">
           <p className="tt-header__eyebrow">Exam in progress</p>
-          <h1 className="tt-header__title">{title}</h1>
+          <h1 className="tt-header__title" title={title}>
+            {title}
+          </h1>
           {subject ? <p className="tt-header__subject">{subject}</p> : null}
           <p className="tt-header__progress">
             {isScrollAll ? (
@@ -78,6 +82,17 @@ export default function ExamHeader({
               aria-pressed={isFullscreen}
             >
               {isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            </button>
+          ) : null}
+
+          {showProgressToggle && onOpenProgress ? (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm tt-header__progress-btn"
+              onClick={onOpenProgress}
+              aria-haspopup="dialog"
+            >
+              Progress
             </button>
           ) : null}
 

@@ -29,13 +29,13 @@ function assert(condition, message) {
 
 function mustContain(fileRel, needle) {
   const text = readFileSync(path.join(serverRoot, fileRel), 'utf8');
-  assert(`${fileRel} contains "${needle}"`, text.includes(needle));
+  assert(text.includes(needle), `${fileRel} contains "${needle}"`);
 }
 
 console.log('ensurePerformanceIndexesSchema tests\n');
 
 console.log('[index registry]');
-assert(PERFORMANCE_INDEX_DEFINITIONS.length === 3, 'defines three performance indexes');
+assert(PERFORMANCE_INDEX_DEFINITIONS.length === 6, 'defines six performance indexes');
 assert(
   PERFORMANCE_INDEX_DEFINITIONS.some((d) => d.name === 'idx_test_attempts_test_student_status'),
   'includes test_id, student_id, status index'
@@ -45,16 +45,37 @@ assert(
   'includes user_id, status index'
 );
 assert(
+  PERFORMANCE_INDEX_DEFINITIONS.some((d) => d.name === 'idx_test_attempts_user_test_status'),
+  'includes user_id, test_id, status index'
+);
+assert(
+  PERFORMANCE_INDEX_DEFINITIONS.some((d) => d.name === 'idx_lectures_course_active'),
+  'includes lectures course_id, is_active index'
+);
+assert(
+  PERFORMANCE_INDEX_DEFINITIONS.some((d) => d.name === 'idx_tests_course_status_deleted'),
+  'includes tests course_id, status, deleted_at index'
+);
+assert(
   PERFORMANCE_INDEX_DEFINITIONS.some((d) => d.name === 'idx_activity_logs_user_created_at'),
   'includes activity_logs user_id, created_at index'
 );
 
 console.log('\n[schema.sql fresh install]');
 mustContain('src/sql/schema.sql', 'idx_test_attempts_user_status (user_id, status)');
+mustContain('src/sql/schema.sql', 'idx_test_attempts_user_test_status (user_id, test_id, status)');
+mustContain('src/sql/schema.sql', 'idx_lectures_course_active (course_id, is_active)');
+mustContain('src/sql/schema.sql', 'idx_tests_course_status_deleted (course_id, status, deleted_at)');
 mustContain('src/sql/schema.sql', 'idx_activity_logs_user_created_at (user_id, created_at)');
 
 console.log('\n[startup wiring]');
 mustContain('src/server.js', 'ensurePerformanceIndexesSchema(mysqlPool)');
+const serverSrc = readFileSync(path.join(serverRoot, 'src/server.js'), 'utf8');
+assert(
+  !serverSrc.includes('//  await ensurePerformanceIndexesSchema(mysqlPool)') &&
+    !serverSrc.includes('// await ensurePerformanceIndexesSchema(mysqlPool)'),
+  'performance indexes ensure is not commented out'
+);
 
 console.log('\n[idempotent apply — missing indexes only]');
 const result = await ensurePerformanceIndexesSchema(
@@ -73,7 +94,7 @@ const result = await ensurePerformanceIndexesSchema(
   },
   { dryRun: true }
 );
-assert(result.steps.length === 2, 'plans only missing indexes');
+assert(result.steps.length === 5, 'plans only missing indexes');
 assert(
   result.steps.every((s) => s.name !== 'add_idx_test_attempts_test_student_status'),
   'skips existing test_student_status index'

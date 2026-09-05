@@ -10,13 +10,18 @@ import { env } from './config/env.js';
 import { verifyMySqlConnection, mysqlPool, getMysqlPoolConfig } from './config/mysql.js';
 import { checkPortInUse, waitForPortAvailable } from './utils/checkPortInUse.js';
 import { releaseDevPortListeners } from './utils/releaseDevPort.js';
-import { connectRedis, disconnectRedis, isRedisReady } from './config/redis.js';
+import { connectRedis, isRedisReady } from './config/redis.js';
 import { validateTeacherThreadSecretAtStartup } from './security/teacherThreadSecret.js';
 import { validateEmailWebhookConfigAtStartup } from './security/emailWebhookConfig.js';
-import { startEmailQueueWorker, stopEmailQueueWorker } from './services/emailQueueWorker.service.js';
+import { startEmailQueueWorker } from './services/emailQueueWorker.service.js';
 import { getEmailProviderStatus } from './services/email.service.js';
 import { startQaUploadCleanupScheduler } from './jobs/qaUploadCleanupScheduler.js';
 import { startProductionCleanupSchedulers } from './jobs/productionCleanupSchedulers.js';
+import {
+  isPm2BackgroundLeader,
+  shouldStartBackgroundJobs,
+  shouldStartEmailQueueWorker,
+} from './utils/pm2InstanceRole.js';
 import { seedLocationTables } from './services/locationSeed.service.js';
 import { ensureEnrollmentAccessSchema } from './db/ensureEnrollmentAccessSchema.js';
 import { ensureEnrollmentSourceSchema } from './db/ensureEnrollmentSourceSchema.js';
@@ -73,13 +78,21 @@ import {
 } from './config/validateProductionStartup.js';
 import { validateAdminSecretPathAtStartup } from './config/adminSecretPath.config.js';
 import { validateMysqlPoolConfigAtStartup } from './config/mysqlPoolConfig.js';
-import { registerGracefulShutdownHandlers } from './utils/registerGracefulShutdownHandlers.js';
+import { registerGracefulShutdownHandlers, runGracefulShutdown } from './utils/registerGracefulShutdownHandlers.js';
+import { registerFatalShutdownRunner } from './bootstrapFatalHandlers.js';
+import {
+  getHttpServerTimeoutConfig,
+  STARTUP_DEADLINE_MS,
+} from './config/reliabilityTimeouts.js';
+import { raceWithTimeout } from './config/mysqlTimeout.util.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /** Strong ref so the process stays alive (avoids edge cases with GC / tooling). */
 let activeHttpServer = null;
+/** Set when startup deadline wins — prevents late listen after failed boot. */
+let startupAbandoned = false;
 
 async function runSchema() {
   const schemaPath = path.join(__dirname, 'sql', 'schema.sql');
@@ -147,6 +160,21 @@ async function startServer() {
     return;
   }
 
+  const bootStartedAt = Date.now();
+  console.warn('[startup] begin', { deadlineMs: STARTUP_DEADLINE_MS });
+
+  await raceWithTimeout(
+    startServerInner(bootStartedAt),
+    STARTUP_DEADLINE_MS,
+    () => new Error(`Startup exceeded deadline of ${STARTUP_DEADLINE_MS}ms`),
+    () => {
+      startupAbandoned = true;
+      console.error('[startup] deadline exceeded — abandoning late boot work');
+    }
+  );
+}
+
+async function startServerInner(bootStartedAt) {
   validateProductionStartupConfig();
   validateAdminSecretPathAtStartup();
   validateMysqlPoolConfigAtStartup(getMysqlPoolConfig());
@@ -236,7 +264,7 @@ async function startServer() {
   await ensureTestsCourseSchema(mysqlPool);
   await ensureTestsApplicationSchema(mysqlPool);
   await ensurePaidStandaloneSchema(mysqlPool);
-//  await ensurePerformanceIndexesSchema(mysqlPool);
+  await ensurePerformanceIndexesSchema(mysqlPool);
   await ensureTestSubjectsSchema(mysqlPool);
   await ensureTeacherSubjectsSchema(mysqlPool);
   await ensureStudentQuestionsSchema(mysqlPool);
@@ -275,6 +303,10 @@ async function startServer() {
     throw new Error('Production startup blocked: Redis is required but not ready after connect');
   }
 
+  if (startupAbandoned) {
+    throw new Error('Startup abandoned after deadline');
+  }
+
   const listenHostRaw = process.env.LISTEN_HOST ? String(process.env.LISTEN_HOST).trim() : '';
   /** Same host semantics for IPv4 vs IPv6; LISTEN_HOST unset = Node default (often :: dual-stack). */
   const listenHost = listenHostRaw || undefined;
@@ -282,7 +314,19 @@ async function startServer() {
   global.__server_started__ = true;
 
   await new Promise((resolve, reject) => {
+    if (startupAbandoned) {
+      reject(new Error('Startup abandoned after deadline'));
+      return;
+    }
     const server = http.createServer(app);
+    const httpTimeouts = getHttpServerTimeoutConfig();
+    server.keepAliveTimeout = httpTimeouts.keepAliveTimeout;
+    server.headersTimeout = httpTimeouts.headersTimeout;
+    if (typeof server.requestTimeout === 'number' || 'requestTimeout' in server) {
+      server.requestTimeout = httpTimeouts.requestTimeout;
+    }
+    console.warn('[startup] http_timeouts', httpTimeouts);
+
     server.once('error', (err) => {
       if (err?.code === 'EADDRINUSE') {
         console.error(`Port ${env.port} is already in use.${listenHost ? ` (LISTEN_HOST=${listenHost})` : ''}`);
@@ -292,7 +336,22 @@ async function startServer() {
       reject(err);
     });
     const onListening = () => {
-      const worker = startEmailQueueWorker();
+      if (startupAbandoned) {
+        try {
+          server.close();
+        } catch {
+          /* ignore */
+        }
+        reject(new Error('Startup abandoned after deadline'));
+        return;
+      }
+      const worker = shouldStartEmailQueueWorker() ? startEmailQueueWorker() : null;
+      if (!worker && !shouldStartEmailQueueWorker()) {
+        console.log('[email] Queue worker skipped on non-leader PM2 instance', {
+          nodeAppInstance: process.env.NODE_APP_INSTANCE ?? null,
+          leader: isPm2BackgroundLeader(),
+        });
+      }
       const emailStatus = getEmailProviderStatus();
       console.log(`[email] Active provider: ${emailStatus.provider}`);
       console.log('[email] Provider config status:', {
@@ -302,12 +361,32 @@ async function startServer() {
         sendgridInitialized: emailStatus.sendgridInitialized,
       });
       console.log('[email] Queue delivery mode:', worker ? 'redis_worker_enabled' : 'direct_send_fallback');
-      startQaUploadCleanupScheduler();
-      startProductionCleanupSchedulers();
+      if (shouldStartBackgroundJobs()) {
+        startQaUploadCleanupScheduler();
+        startProductionCleanupSchedulers();
+      } else {
+        console.log('[cleanup-schedulers] skipped on non-leader PM2 instance', {
+          nodeAppInstance: process.env.NODE_APP_INSTANCE ?? null,
+        });
+      }
       const suffix = listenHost ? listenHost : 'default bind';
       console.log(`MRB API listening on ${suffix}, port ${env.port} (try http://127.0.0.1:${env.port})`);
       activeHttpServer = server;
       registerGracefulShutdownHandlers(() => activeHttpServer);
+      registerFatalShutdownRunner(async (kind) => {
+        console.error({ tag: '[process.fatal]', message: 'running_graceful_shutdown', kind });
+        await runGracefulShutdown(() => activeHttpServer, `fatal:${kind}`);
+      });
+      console.warn('[startup] ready', {
+        elapsedMs: Date.now() - bootStartedAt,
+        port: env.port,
+        listenHost: listenHost || null,
+        pm2Instance: process.env.NODE_APP_INSTANCE ?? null,
+        backgroundLeader: isPm2BackgroundLeader(),
+      });
+      if (typeof process.send === 'function') {
+        process.send('ready');
+      }
       resolve(server);
     };
     if (listenHost) {

@@ -32,6 +32,9 @@ export function normaliseStudentDashboard(raw) {
   const testsCompleted = Number.isFinite(Number(raw.testsCompleted)) ? Number(raw.testsCompleted) : 0;
   const lecturesCompleted = Number.isFinite(Number(raw.lecturesCompleted)) ? Number(raw.lecturesCompleted) : 0;
   const questionsAsked = Number.isFinite(Number(raw.questionsAsked)) ? Number(raw.questionsAsked) : 0;
+  const resultsCount = Number.isFinite(Number(raw.resultsCount))
+    ? Number(raw.resultsCount)
+    : testsCompleted;
 
   return {
     ...base,
@@ -39,6 +42,7 @@ export function normaliseStudentDashboard(raw) {
     lectures,
     tests,
     results,
+    resultsCount,
     questions,
     courses,
     notifications,

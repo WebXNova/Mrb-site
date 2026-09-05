@@ -13,6 +13,7 @@ import {
   isCatalogCourseFree,
 } from '../../course/courseDiscovery';
 import { ENROLLMENT_BUTTON_STATE } from '../../course/courseEnrollmentCta';
+import { getCourseTitleInitials, pickCourseThumbnailUrl } from '../../course/courseThumbnail';
 import { useEnrollmentState } from '../../hooks/useEnrollmentState';
 import './PopularCourseCard.css';
 
@@ -39,7 +40,7 @@ export default function PopularCourseCard({ course, isCurrent = false, style }) 
     id,
     title,
     summary,
-    thumbnail_url: thumbnailUrl,
+    thumbnail_url: mappedThumbnail,
     level,
     pricing,
     admission_status: admissionStatus,
@@ -56,6 +57,7 @@ export default function PopularCourseCard({ course, isCurrent = false, style }) 
   const duration = formatCourseDuration(startDate, endDate);
   const startLabel = formatScheduleDate(startDate);
   const endLabel = formatScheduleDate(endDate);
+  const thumbnailUrl = pickCourseThumbnailUrl(course) || mappedThumbnail;
   const showCoverImage = Boolean(thumbnailUrl) && !imageFailed;
   const coursePath = `/courses/${encodeURIComponent(String(id))}`;
   const courseAdmission = {
@@ -89,7 +91,7 @@ export default function PopularCourseCard({ course, isCurrent = false, style }) 
             />
           ) : (
             <div className="pc-card__cover-fallback" aria-hidden="true">
-              {String(title || 'C').slice(0, 1)}
+              {getCourseTitleInitials(title)}
             </div>
           )}
         </div>

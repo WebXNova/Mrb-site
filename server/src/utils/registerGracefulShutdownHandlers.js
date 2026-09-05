@@ -1,9 +1,14 @@
 /**
  * Graceful shutdown for PM2 SIGTERM and local dev (Ctrl+C / SIGINT).
+ *
+ * Production: stop accepting new connections, drain in-flight requests up to
+ * HTTP_SHUTDOWN_DRAIN_MS, then force-close leftovers and tear down worker/Redis/MySQL.
  */
 
 import { mysqlPool } from '../config/mysql.js';
 import { disconnectRedis } from '../config/redis.js';
+import { disconnectQueueRedis } from '../config/queue.js';
+import { HTTP_SHUTDOWN_DEADLINE_MS, HTTP_SHUTDOWN_DRAIN_MS } from '../config/reliabilityTimeouts.js';
 import { stopDataRetentionCleanupScheduler } from '../jobs/dataRetentionCleanupScheduler.js';
 import { stopIdempotencyCleanupScheduler } from '../jobs/idempotencyCleanupScheduler.js';
 import { stopQaUploadCleanupScheduler } from '../jobs/qaUploadCleanupScheduler.js';
@@ -15,7 +20,7 @@ function isDevRuntime() {
   return String(process.env.NODE_ENV || 'development') !== 'production';
 }
 
-function closeHttpServerFast(server) {
+function closeHttpServer(server, drainMs) {
   return new Promise((resolve) => {
     if (!server) {
       resolve(undefined);
@@ -29,17 +34,53 @@ function closeHttpServerFast(server) {
       resolve(undefined);
     };
 
-    if (typeof server.closeAllConnections === 'function') {
-      server.closeAllConnections();
-    }
-
     server.close(() => {
-      console.log('[shutdown] HTTP server closed');
+      console.warn('[shutdown] HTTP server closed');
       finish();
     });
 
-    setTimeout(finish, 1200);
+    setTimeout(() => {
+      if (settled) return;
+      if (typeof server.closeAllConnections === 'function') {
+        console.warn('[shutdown] drain window elapsed — closing remaining HTTP connections');
+        server.closeAllConnections();
+      }
+      setTimeout(finish, 400);
+    }, drainMs);
   });
+}
+
+/**
+ * @param {() => import('http').Server | null} getHttpServer
+ * @param {string} [signal]
+ */
+export async function runGracefulShutdown(getHttpServer, signal = 'shutdown') {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.warn(`[shutdown] Received ${signal}, draining in-flight requests…`);
+
+  stopQaUploadCleanupScheduler();
+  stopDataRetentionCleanupScheduler();
+  stopIdempotencyCleanupScheduler();
+
+  const server = getHttpServer();
+  await closeHttpServer(server, HTTP_SHUTDOWN_DRAIN_MS);
+
+  if (isDevRuntime()) {
+    process.exit(0);
+    return;
+  }
+
+  await stopEmailQueueWorker();
+  await disconnectQueueRedis();
+  await disconnectRedis();
+
+  try {
+    await mysqlPool.end();
+    console.warn('[shutdown] MySQL pool closed');
+  } catch (error) {
+    console.warn('[shutdown] MySQL pool close error:', error?.message || error);
+  }
 }
 
 /**
@@ -47,34 +88,13 @@ function closeHttpServerFast(server) {
  */
 export function registerGracefulShutdownHandlers(getHttpServer) {
   const shutdown = async (signal) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`[shutdown] Received ${signal}, closing…`);
-
-    stopQaUploadCleanupScheduler();
-    stopDataRetentionCleanupScheduler();
-    stopIdempotencyCleanupScheduler();
-
-    const server = getHttpServer();
-    await closeHttpServerFast(server);
-
-    if (isDevRuntime()) {
-      // Nodemon restart: release the port immediately; pool/redis teardown is unnecessary locally.
+    const deadline = new Promise((resolve) => {
+      setTimeout(resolve, HTTP_SHUTDOWN_DEADLINE_MS);
+    });
+    await Promise.race([runGracefulShutdown(getHttpServer, signal), deadline]);
+    if (String(process.env.NODE_ENV || '') === 'production' || !isDevRuntime()) {
       process.exit(0);
-      return;
     }
-
-    await stopEmailQueueWorker();
-    await disconnectRedis();
-
-    try {
-      await mysqlPool.end();
-      console.log('[shutdown] MySQL pool closed');
-    } catch (error) {
-      console.warn('[shutdown] MySQL pool close error:', error?.message || error);
-    }
-
-    process.exit(0);
   };
 
   process.once('SIGTERM', () => {

@@ -5,44 +5,16 @@ import { mysqlPool } from '../config/mysql.js';
 
 let worker = null;
 
-export function startEmailQueueWorker() {
-  if (worker) return worker;
-  console.log('[email-worker] Starting email queue worker');
-  worker = startEmailWorker(async (job) => {
-    console.log('[email-worker] Processing job', {
-      jobId: job?.id || null,
-      outboxId: job?.data?.outboxId || null,
-      to: job?.data?.to || null,
-    });
-    if (job.data?.outboxId) {
-      await mysqlPool.query(`UPDATE email_outbox SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [
-        job.data.outboxId,
-      ]);
-    }
-    await sendEmailNow(job.data);
-    if (job.data?.outboxId) {
-      await mysqlPool.query(`UPDATE email_outbox SET status = 'sent', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [
-        job.data.outboxId,
-      ]);
-    }
-    await logActivity({
-      userId: job.data.userId || null,
-      role: job.data.userId ? 'student' : 'system',
-      action: 'email.sendgrid.accepted',
-      entityType: 'email',
-      metadata: { to: job.data.to, outboxId: job.data?.outboxId || null },
-    });
-    console.log('[email-worker] Job sent successfully', {
-      jobId: job?.id || null,
-      outboxId: job?.data?.outboxId || null,
-    });
-  });
-  if (!worker) {
-    console.warn('[email-worker] Worker disabled because Redis queue connection is unavailable');
-    return null;
-  }
-  worker.on('failed', async (job, error) => {
-    let terminal = isTerminalEmailError(error);
+/**
+ * Persist email failure state. Never throws to EventEmitter callers —
+ * rejections here previously became unhandledRejection → process.exit.
+ *
+ * @param {import('bullmq').Job | undefined} job
+ * @param {Error} error
+ */
+async function handleEmailJobFailed(job, error) {
+  let terminal = isTerminalEmailError(error);
+  try {
     if (job?.data?.outboxId) {
       const attempts = Number(job.attemptsMade || 0);
       terminal = terminal || attempts >= Number(job.opts?.attempts || 5);
@@ -79,16 +51,74 @@ export function startEmailQueueWorker() {
         retryable: terminal ? false : true,
       },
     });
-    console.error('[email-worker] Job failed', {
+  } catch (persistError) {
+    console.error({
+      tag: '[email-worker]',
+      message: 'failed_handler_persist_error',
       jobId: job?.id || null,
       outboxId: job?.data?.outboxId || null,
-      statusCode: error?.statusCode || null,
-      retryable: terminal ? false : true,
-      reason: String(error?.message || 'delivery_failed').slice(0, 255),
-      providerErrors: error?.details?.providerErrors || null,
-      responseBody: error?.details?.responseBody || null,
+      err: persistError instanceof Error ? persistError.message : String(persistError),
+    });
+  }
+
+  console.error('[email-worker] Job failed', {
+    jobId: job?.id || null,
+    outboxId: job?.data?.outboxId || null,
+    statusCode: error?.statusCode || null,
+    retryable: terminal ? false : true,
+    reason: String(error?.message || 'delivery_failed').slice(0, 255),
+    providerErrors: error?.details?.providerErrors || null,
+    responseBody: error?.details?.responseBody || null,
+  });
+}
+
+export function startEmailQueueWorker() {
+  if (worker) return worker;
+  console.log('[email-worker] Starting email queue worker');
+  worker = startEmailWorker(async (job) => {
+    console.log('[email-worker] Processing job', {
+      jobId: job?.id || null,
+      outboxId: job?.data?.outboxId || null,
+      to: job?.data?.to || null,
+    });
+    if (job.data?.outboxId) {
+      await mysqlPool.query(`UPDATE email_outbox SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [
+        job.data.outboxId,
+      ]);
+    }
+    await sendEmailNow(job.data);
+    if (job.data?.outboxId) {
+      await mysqlPool.query(`UPDATE email_outbox SET status = 'sent', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [
+        job.data.outboxId,
+      ]);
+    }
+    await logActivity({
+      userId: job.data.userId || null,
+      role: job.data.userId ? 'student' : 'system',
+      action: 'email.sendgrid.accepted',
+      entityType: 'email',
+      metadata: { to: job.data.to, outboxId: job.data?.outboxId || null },
+    });
+    console.log('[email-worker] Job sent successfully', {
+      jobId: job?.id || null,
+      outboxId: job?.data?.outboxId || null,
     });
   });
+  if (!worker) {
+    console.warn('[email-worker] Worker disabled because Redis queue connection is unavailable');
+    return null;
+  }
+
+  worker.on('failed', (job, error) => {
+    void handleEmailJobFailed(job, error).catch((handlerError) => {
+      console.error({
+        tag: '[email-worker]',
+        message: 'failed_handler_unhandled',
+        err: handlerError instanceof Error ? handlerError.message : String(handlerError),
+      });
+    });
+  });
+
   return worker;
 }
 
@@ -104,4 +134,3 @@ export async function stopEmailQueueWorker() {
     console.warn('[email-worker] Worker stop error:', error?.message || error);
   }
 }
-

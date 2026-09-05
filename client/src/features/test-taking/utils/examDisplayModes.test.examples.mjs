@@ -81,6 +81,12 @@ assert.match(fullscreen, /requestFullscreen/);
 assert.match(css, /overflow-y:\s*auto/);
 assert.match(css, /tt-exam--is-fullscreen/);
 assert.match(css, /flex:\s*0 0 auto/);
+assert.match(css, /@media \(max-width: 1023px\)/);
+assert.match(css, /\.tt-exam__sidebar\.tt-palette/);
+assert.doesNotMatch(
+  css,
+  /\.tt-header__primary \{[^}]*flex-direction:\s*row;[^}]*flex-wrap:\s*nowrap/
+);
 assert.doesNotMatch(takingPage, /requestPointerLock/);
 assert.doesNotMatch(fullscreen, /requestPointerLock/);
 assert.doesNotMatch(takingPage, /shuffle_questions/);

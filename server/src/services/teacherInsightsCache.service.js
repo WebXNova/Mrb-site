@@ -61,6 +61,11 @@ export async function withTeacherInsightsCache(key, loader, { ttlMs = DEFAULT_TT
     if (oldest) memoryCache.delete(oldest);
   }
 
+  if (env.nodeEnv === 'production' && memoryCache.size > 200) {
+    const oldest = memoryCache.keys().next().value;
+    if (oldest) memoryCache.delete(oldest);
+  }
+
   return data;
 }
 

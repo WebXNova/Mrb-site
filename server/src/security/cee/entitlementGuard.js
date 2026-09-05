@@ -12,6 +12,7 @@ import {
   auditEntitlementFailure,
   auditEntitlementGranted,
 } from './audit/entitlementAudit.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
 
 /**
  * Full CEE stack: identity → entitlement → attach req.cee → audit grant
@@ -19,7 +20,7 @@ import {
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
-export async function entitlementGuard(req, res, next) {
+export const entitlementGuard = asyncHandler(async function entitlementGuard(req, res, next) {
   try {
     await assertStudentIdentity(req, res, { requireVerified: true });
 
@@ -29,23 +30,39 @@ export async function entitlementGuard(req, res, next) {
     });
 
     attachEntitlementToRequest(req, entitlement);
-    await auditEntitlementGranted(entitlement, req, { context: 'cee.entitlementGuard' });
+    try {
+      await auditEntitlementGranted(entitlement, req, { context: 'cee.entitlementGuard' });
+    } catch (auditError) {
+      console.error({
+        tag: '[cee.entitlementGuard]',
+        message: 'grant_audit_failed',
+        err: auditError instanceof Error ? auditError.message : String(auditError),
+      });
+    }
     return next();
   } catch (error) {
-    await auditEntitlementFailure(error, req, { context: 'cee.entitlementGuard' });
+    try {
+      await auditEntitlementFailure(error, req, { context: 'cee.entitlementGuard' });
+    } catch (auditError) {
+      console.error({
+        tag: '[cee.entitlementGuard]',
+        message: 'failure_audit_failed',
+        err: auditError instanceof Error ? auditError.message : String(auditError),
+      });
+    }
     return next(error);
   }
-}
+});
 
 /**
  * Identity only (enrollment flows: create enrollment, start payment before access granted).
  * Admission status is enforced in courseEnrollment.service — not here.
  */
-export async function identityOnlyGuard(req, res, next) {
+export const identityOnlyGuard = asyncHandler(async function identityOnlyGuard(req, res, next) {
   try {
     await assertStudentIdentity(req, res, { requireVerified: false });
     return next();
   } catch (error) {
     return next(error);
   }
-}
+});

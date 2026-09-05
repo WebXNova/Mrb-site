@@ -7,7 +7,7 @@ import { computeRemainingSeconds, formatExamTime } from '../utils/formatTime';
 import { withTimeout } from '../utils/withTimeout';
 
 const SAVE_DEBOUNCE_MS = 450;
-const SAVE_TIMEOUT_MS = 15_000;
+const SAVE_TIMEOUT_MS = 30_000;
 const TIMER_TICK_MS = 250;
 const LOW_TIME_SECONDS = 600;
 const CRITICAL_TIME_SECONDS = 120;

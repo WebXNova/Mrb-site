@@ -2,7 +2,7 @@ export const studentNavItems = [
   { to: '/dashboard', label: 'Dashboard', end: true, icon: 'dashboard' },
   { to: '/dashboard/lectures', label: 'Lectures', icon: 'video' },
   { to: '/dashboard/tests', label: 'Tests', icon: 'clipboard-check' },
-  { to: '/tests/my-results', label: 'My Results', icon: 'clipboard-check' },
+  { to: '/dashboard/tests/history', label: 'Results', icon: 'bar-chart' },
   { to: '/dashboard/notes', label: 'Notes', icon: 'file-text' },
   { to: '/dashboard/leaderboard', label: 'Leaderboard', icon: 'trophy' },
   { to: '/student/questions', label: 'Doubts', icon: 'help-circle' },
@@ -12,6 +12,7 @@ export const studentBottomNavItems = [
   { to: '/dashboard', label: 'Home', end: true, icon: 'dashboard' },
   { to: '/dashboard/lectures', label: 'Learn', icon: 'video' },
   { to: '/dashboard/tests', label: 'Tests', icon: 'clipboard-check' },
+  { to: '/dashboard/tests/history', label: 'Results', icon: 'bar-chart' },
 ];
 
 export function getStudentPageTitle(pathname) {

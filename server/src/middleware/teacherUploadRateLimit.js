@@ -7,6 +7,7 @@ import { writeQaAuditEventFromReq } from '../services/qaAuditLog.service.js';
 import { checkSlidingWindowLimit } from '../services/slidingWindowRateLimit.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { getClientIp } from '../utils/network.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const KEY_PREFIX = 'rl:teacher-upload';
 
@@ -73,7 +74,11 @@ async function logUploadRateLimitViolation(req, meta) {
 /**
  * Fail closed in production when Redis is required but unavailable.
  */
-export async function requireRedisForTeacherUploads(req, res, next) {
+export const requireRedisForTeacherUploads = asyncHandler(async function requireRedisForTeacherUploads(
+  req,
+  res,
+  next
+) {
   const config = getTeacherUploadRateLimitConfig();
   if (!config.requireRedis || !isProductionNodeEnv(env.nodeEnv)) {
     return next();
@@ -88,7 +93,7 @@ export async function requireRedisForTeacherUploads(req, res, next) {
   }
 
   return next();
-}
+});
 
 /**
  * @param {{
@@ -102,7 +107,7 @@ export async function requireRedisForTeacherUploads(req, res, next) {
  * }} spec
  */
 function createTeacherUploadLimit(spec) {
-  return async function teacherUploadRateLimit(req, res, next) {
+  return asyncHandler(async function teacherUploadRateLimit(req, res, next) {
     const key = buildRateLimitKey(spec.mediaType, spec.scope, req);
     const result = await checkSlidingWindowLimit(key, spec.windowMs, spec.max);
 
@@ -125,7 +130,7 @@ function createTeacherUploadLimit(spec) {
     }
 
     return next();
-  };
+  });
 }
 
 function buildImageLimits() {

@@ -256,7 +256,7 @@ try {
   );
   mustContain(
     'src/services/studentPortal.service.js',
-    ['getCourseRowById', 'toCoursePublicDto'],
+    ['getCourseRowById', 'toCourseStudentDto'],
     'student portal'
   );
 

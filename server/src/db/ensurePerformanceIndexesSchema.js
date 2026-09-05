@@ -1,5 +1,6 @@
 /**
  * Idempotent performance indexes — additive only (no column/table changes).
+ * Student-facing hot paths only: attempts, lectures, tests, activity logs.
  */
 
 const MIGRATION_NAME = 'performance_indexes';
@@ -9,14 +10,32 @@ export const PERFORMANCE_INDEX_DEFINITIONS = Object.freeze([
   Object.freeze({
     table: 'test_attempts',
     name: 'idx_test_attempts_test_student_status',
-    columns: 'test_id, user_id, status',
-    ddl: 'ALTER TABLE test_attempts ADD KEY idx_test_attempts_test_student_status (test_id, user_id, status)',
+    columns: 'test_id, student_id, status',
+    ddl: 'ALTER TABLE test_attempts ADD KEY idx_test_attempts_test_student_status (test_id, student_id, status)',
   }),
   Object.freeze({
     table: 'test_attempts',
     name: 'idx_test_attempts_user_status',
     columns: 'user_id, status',
     ddl: 'ALTER TABLE test_attempts ADD KEY idx_test_attempts_user_status (user_id, status)',
+  }),
+  Object.freeze({
+    table: 'test_attempts',
+    name: 'idx_test_attempts_user_test_status',
+    columns: 'user_id, test_id, status',
+    ddl: 'ALTER TABLE test_attempts ADD KEY idx_test_attempts_user_test_status (user_id, test_id, status)',
+  }),
+  Object.freeze({
+    table: 'lectures',
+    name: 'idx_lectures_course_active',
+    columns: 'course_id, is_active',
+    ddl: 'ALTER TABLE lectures ADD KEY idx_lectures_course_active (course_id, is_active)',
+  }),
+  Object.freeze({
+    table: 'tests',
+    name: 'idx_tests_course_status_deleted',
+    columns: 'course_id, status, deleted_at',
+    ddl: 'ALTER TABLE tests ADD KEY idx_tests_course_status_deleted (course_id, status, deleted_at)',
   }),
   Object.freeze({
     table: 'activity_logs',

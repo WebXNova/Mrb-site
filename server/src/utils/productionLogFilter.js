@@ -1,6 +1,6 @@
 /**
- * Production log filter — suppresses non-essential console output in production.
- * Imported first in server.js so it takes effect before any other module code runs.
+ * Production log filter — keeps operational reliability events visible.
+ * Never throws (JSON.stringify of circular values must not crash the process).
  */
 
 if (process.env.NODE_ENV === 'production') {
@@ -16,11 +16,42 @@ if (process.env.NODE_ENV === 'production') {
     /DB Connected/i,
     /Admin logged in/i,
     /pool configured/i,
+    /\[startup\]/,
+    /\[shutdown\]/,
+    /\[redis/,
+    /\[mysql/,
+    /\[email/,
+    /\[http\.error/,
+    /\[process\.fatal/,
+    /\[cleanup-schedulers\]/,
+    /\[safepay\]/,
+    /\[cee\./,
+    /MRB API listening/,
+    /UNCAUGHT/,
+    /UNHANDLED/,
+    /Failed to start server/,
   ];
 
+  function safeJoin(args) {
+    try {
+      return args
+        .map((a) => {
+          if (typeof a === 'string') return a;
+          try {
+            return JSON.stringify(a);
+          } catch {
+            return '[unserializable]';
+          }
+        })
+        .join(' ');
+    } catch {
+      return '';
+    }
+  }
+
   function isAllowed(...args) {
-    const joined = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-    return ALLOWED_PATTERNS.some(p => p.test(joined));
+    const joined = safeJoin(args);
+    return ALLOWED_PATTERNS.some((p) => p.test(joined));
   }
 
   console.log = function (...args) {
@@ -29,7 +60,12 @@ if (process.env.NODE_ENV === 'production') {
     }
   };
 
-  console.info = function () {};
+  console.info = function (...args) {
+    if (isAllowed(...args)) {
+      _original.info.apply(console, args);
+    }
+  };
+
   console.debug = function () {};
   console.time = function () {};
   console.timeEnd = function () {};

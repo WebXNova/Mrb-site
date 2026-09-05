@@ -1,6 +1,6 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
-import { getStudentDashboard, getStudentMyCourse, getStudentResultByAttempt } from '../services/studentPortal.service.js';
+import { getStudentDashboard, getStudentLectures, getStudentMyCourse, getStudentResultByAttempt } from '../services/studentPortal.service.js';
 import { listAuthSessionsForUser } from '../services/authSession.service.js';
 import { resolveActiveEntitlement } from '../services/entitlement.service.js';
 import { mysqlPool } from '../config/mysql.js';
@@ -101,6 +101,20 @@ export const getStudentDashboardData = asyncHandler(async (req, res) => {
         recentActivity: [],
         notifications: [],
       });
+      return;
+    }
+    throw error;
+  }
+});
+
+/** Full lecture catalog for the player (includes youtube URLs). */
+export const getStudentLecturesData = asyncHandler(async (req, res) => {
+  try {
+    const data = await getStudentLectures(req.user.id);
+    sendSuccess(res, data);
+  } catch (error) {
+    if (error instanceof EnrollmentNotFoundError) {
+      sendSuccess(res, { lectures: [], progress: { percent: 0, lecturesCompleted: 0, testsCompleted: 0 } });
       return;
     }
     throw error;

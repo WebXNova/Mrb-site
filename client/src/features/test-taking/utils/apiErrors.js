@@ -116,6 +116,10 @@ export function getSubmitErrorMessage(err, fallback = 'Your test could not be su
     return 'Too many submission attempts. Please wait a moment and try again.';
   }
   if (status === 503) {
+    const code = readErrorCode(err);
+    if (code === 'SUBMIT_BACKPRESSURE') {
+      return 'Too many exam submissions in progress. Please wait a moment and try again.';
+    }
     return 'The submission service is temporarily unavailable. Please try again.';
   }
   if (status === 403) {

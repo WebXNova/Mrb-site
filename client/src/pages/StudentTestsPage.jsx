@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { studentApi } from '../api/studentApi';
 import { useDebouncedValue } from '../components/admin/useDebouncedValue';
 import StudentTestFilters from '../student/components/tests/StudentTestFilters';
+import StudentTestSectionHeader from '../student/components/tests/StudentTestSectionHeader';
 import StudentTestSections from '../student/components/tests/StudentTestSections';
 import {
   collectTestSubjectOptions,
@@ -141,18 +142,19 @@ export default function StudentTestsPage() {
   }
 
   return (
-    <section className="student-tests-page sp-panel sp-card">
-      <header className="student-tests-page__header">
-        <div className="student-tests-page__heading-row">
-          <h2 className="heading-3 student-tests-page__title">Practice tests</h2>
-          <Link className="sp-btn sp-btn--secondary sp-btn--sm student-tests-page__results-btn" to="/dashboard/tests/history">
+    <section className="student-tests-page">
+      <StudentTestSectionHeader
+        id="tests-practice-heading"
+        variant="page"
+        title="Practice tests"
+        count={loading ? null : totalCount}
+        subtitle="Filter by subject or date, search by name, and see what is new versus already completed."
+        action={
+          <Link className="student-tests-page__results-btn" to="/dashboard/tests/history">
             View results
           </Link>
-        </div>
-        <p className="student-tests-page__lead">
-          Filter by subject or date, search by name, and see what is new versus already completed.
-        </p>
-      </header>
+        }
+      />
 
       <StudentTestFilters
         search={search}

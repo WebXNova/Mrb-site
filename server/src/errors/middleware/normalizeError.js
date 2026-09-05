@@ -10,6 +10,9 @@ import { MySqlTransactionTimeoutError } from '../mysql/MySqlTransactionTimeoutEr
 import { isMysqlPoolQueueExhaustedError } from '../../config/mysqlPoolExhaustion.js';
 import { isMysqlQueryTimeoutError } from '../../config/mysqlTimeout.util.js';
 import { RateLimitRedisUnavailableError } from '../../services/slidingWindowRateLimit.service.js';
+import { RedisCommandTimeoutError } from '../redis/RedisCommandTimeoutError.js';
+import { RedisUnavailableError } from '../redis/RedisUnavailableError.js';
+import { ExternalRequestTimeoutError } from '../external/ExternalRequestTimeoutError.js';
 import {
   BAD_REQUEST,
   CONFLICT,
@@ -95,6 +98,18 @@ export function normalizeError(err) {
   }
 
   if (err instanceof MySqlTransactionTimeoutError) {
+    return err;
+  }
+
+  if (err instanceof RedisCommandTimeoutError) {
+    return err;
+  }
+
+  if (err instanceof RedisUnavailableError) {
+    return err;
+  }
+
+  if (err instanceof ExternalRequestTimeoutError) {
     return err;
   }
 

@@ -1,11 +1,12 @@
 import StudentIcon from '../icons/StudentIcons';
 import StudentTestCard from './StudentTestCard.jsx';
+import StudentTestSectionHeader from './StudentTestSectionHeader.jsx';
 
 function TestGrid({ tests, emptyIcon, emptyTitle, emptyMessage, emptyAction = null }) {
   if (!tests.length) {
     return (
       <div className="student-test-sections__empty" role="status">
-        <StudentIcon name={emptyIcon} size={28} className="student-test-sections__empty-icon" />
+        <StudentIcon name={emptyIcon} size={40} className="student-test-sections__empty-icon" />
         <p className="student-test-sections__empty-title">{emptyTitle}</p>
         <p className="student-test-sections__empty-hint">{emptyMessage}</p>
         {emptyAction}
@@ -14,8 +15,8 @@ function TestGrid({ tests, emptyIcon, emptyTitle, emptyMessage, emptyAction = nu
   }
   return (
     <div className="student-test-sections__grid">
-      {tests.map((test) => (
-        <StudentTestCard key={test.id} test={test} />
+      {tests.map((test, index) => (
+        <StudentTestCard key={test.id} test={test} index={index} />
       ))}
     </div>
   );
@@ -92,14 +93,12 @@ export default function StudentTestSections({
   return (
     <div className="student-test-sections">
       <section className="student-test-sections__block" aria-labelledby="tests-available-heading">
-        <header className="student-test-sections__header">
-          <h2 id="tests-available-heading" className="student-test-sections__title">
-            Available to take
-          </h2>
-          <p className="student-test-sections__subtitle">
-            New tests you have not finished yet, including any in-progress attempts.
-          </p>
-        </header>
+        <StudentTestSectionHeader
+          id="tests-available-heading"
+          title="Available to take"
+          count={available.length}
+          subtitle="New tests you have not finished yet, including any in-progress attempts."
+        />
         <TestGrid
           tests={available}
           emptyIcon="clipboard-list"
@@ -110,14 +109,12 @@ export default function StudentTestSections({
       </section>
 
       <section className="student-test-sections__block" aria-labelledby="tests-completed-heading">
-        <header className="student-test-sections__header">
-          <h2 id="tests-completed-heading" className="student-test-sections__title">
-            Completed
-          </h2>
-          <p className="student-test-sections__subtitle">
-            Tests you have already submitted. View detailed scores in Results.
-          </p>
-        </header>
+        <StudentTestSectionHeader
+          id="tests-completed-heading"
+          title="Completed"
+          count={completed.length}
+          subtitle="Tests you have already submitted. View detailed scores in Results."
+        />
         <TestGrid
           tests={completed}
           emptyIcon="check-circle"

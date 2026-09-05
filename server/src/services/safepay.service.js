@@ -4,6 +4,9 @@ import { TextDecoder } from 'node:util';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
 import { majorUnitsToMinorUnits } from './safepayWebhookSettlement.js';
+import { SAFEPAY_REQUEST_TIMEOUT_MS } from '../config/reliabilityTimeouts.js';
+import { withDeadline } from '../utils/withDeadline.js';
+import { ExternalRequestTimeoutError } from '../errors/external/ExternalRequestTimeoutError.js';
 
 function safepayApiHost() {
   return env.safepay.apiHost;
@@ -118,8 +121,18 @@ export async function createSafepayHostedCheckoutSession({
 
   let sessionRes;
   try {
-    sessionRes = await client.payments.session.setup(sessionPayload);
+    sessionRes = await withDeadline(client.payments.session.setup(sessionPayload), SAFEPAY_REQUEST_TIMEOUT_MS, {
+      dependency: 'safepay',
+      message: 'Payment gateway timed out. Please retry shortly.',
+    });
   } catch (err) {
+    if (err instanceof ExternalRequestTimeoutError) {
+      console.error('[safepay] payments.session.setup timed out');
+      throw new ApiError(503, 'Payment gateway timed out. Please retry shortly.', {
+        code: 'SAFEPAY_TIMEOUT',
+        error_code: 'SAFEPAY_TIMEOUT',
+      });
+    }
     console.error('[safepay] payments.session.setup failed:', sdkErrorMessage(err));
     if (shouldLogSafepayVerbose()) console.error('[safepay] session.setup error raw:', err);
     throw new ApiError(500, sdkErrorMessage(err));
@@ -137,8 +150,18 @@ export async function createSafepayHostedCheckoutSession({
 
   let passportRes;
   try {
-    passportRes = await client.client.passport.create({});
+    passportRes = await withDeadline(client.client.passport.create({}), SAFEPAY_REQUEST_TIMEOUT_MS, {
+      dependency: 'safepay',
+      message: 'Payment gateway timed out. Please retry shortly.',
+    });
   } catch (err) {
+    if (err instanceof ExternalRequestTimeoutError) {
+      console.error('[safepay] client.passport.create timed out');
+      throw new ApiError(503, 'Payment gateway timed out. Please retry shortly.', {
+        code: 'SAFEPAY_TIMEOUT',
+        error_code: 'SAFEPAY_TIMEOUT',
+      });
+    }
     console.error('[safepay] client.passport.create failed:', sdkErrorMessage(err));
     if (shouldLogSafepayVerbose()) console.error('[safepay] passport.create error raw:', err);
     throw new ApiError(500, sdkErrorMessage(err));

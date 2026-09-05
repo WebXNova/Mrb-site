@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { catalogApi } from '../../api/catalogApi';
 import CourseEnrollmentCtaButton from '../course/CourseEnrollmentCtaButton';
 import { buildPricingDisplay } from '../../course/coursePresentation';
 import { isAdmissionOpen } from '../../course/courseAdmissionPresentation';
 import { buildTrustBadges, formatSalesAmount, formatSalesDate, pickFeaturedBatch } from '../../course/courseSalesPage';
-import { formatCourseDuration, isCatalogCourseFree } from '../../course/courseDiscovery';
-import { useInView } from '../../hooks/useInView';
+import { formatCourseDuration, formatCourseTypeLabel, isCatalogCourseFree } from '../../course/courseDiscovery';
+import { getCourseTitleInitials, pickCourseThumbnailUrl } from '../../course/courseThumbnail';
 import './CourseShowcase.css';
 
 function asList(payload) {
@@ -17,18 +18,62 @@ function asList(payload) {
   return [];
 }
 
+function mergeCourseDetail(base, extra) {
+  const merged = { ...(base || {}), ...(extra || {}) };
+  const url = pickCourseThumbnailUrl(extra) || pickCourseThumbnailUrl(base);
+  if (url) merged.thumbnail_url = url;
+  return merged;
+}
+
+export function CourseShowcaseSkeleton() {
+  return (
+    <article className="course-showcase course-showcase--skeleton" aria-hidden="true">
+      <div className="course-showcase__visual">
+        <div className="course-showcase__pulse course-showcase__pulse--media" />
+      </div>
+      <div className="course-showcase__copy">
+        <div className="course-showcase__pulse course-showcase__pulse--badge" />
+        <div className="course-showcase__pulse course-showcase__pulse--title" />
+        <div className="course-showcase__pulse course-showcase__pulse--line" />
+        <div className="course-showcase__pulse course-showcase__pulse--line course-showcase__pulse--line-short" />
+        <div className="course-showcase__pulse-row">
+          <div className="course-showcase__pulse course-showcase__pulse--meta" />
+          <div className="course-showcase__pulse course-showcase__pulse--meta" />
+          <div className="course-showcase__pulse course-showcase__pulse--meta" />
+        </div>
+        <div className="course-showcase__pulse-row">
+          <div className="course-showcase__pulse course-showcase__pulse--chip" />
+          <div className="course-showcase__pulse course-showcase__pulse--chip" />
+          <div className="course-showcase__pulse course-showcase__pulse--chip" />
+        </div>
+        <div className="course-showcase__pulse-row">
+          <div className="course-showcase__pulse course-showcase__pulse--btn" />
+          <div className="course-showcase__pulse course-showcase__pulse--btn" />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function CourseShowcase({ course, isCurrent = false }) {
-  const [sectionRef, inView] = useInView({ threshold: 0.12 });
+  const reduceMotion = useReducedMotion();
   const [detail, setDetail] = useState(course);
   const [batches, setBatches] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [imageFailed, setImageFailed] = useState(false);
+  const [hydrating, setHydrating] = useState(Boolean(course?.id));
 
   useEffect(() => {
-    if (!course?.id) return undefined;
+    if (!course?.id) {
+      setDetail(course);
+      setHydrating(false);
+      return undefined;
+    }
+
     let cancelled = false;
     setDetail(course);
     setImageFailed(false);
+    setHydrating(true);
 
     (async () => {
       try {
@@ -38,14 +83,15 @@ export default function CourseShowcase({ course, isCurrent = false }) {
           catalogApi.listCourseSubjects(course.id).catch(() => ({ data: [] })),
         ]);
         if (cancelled) return;
-        const mapped = detailRes?.data || course;
-        setDetail(mapped);
+        setDetail(mergeCourseDetail(course, detailRes?.data || course));
         setBatches(asList(batchRes?.data ?? batchRes));
         setSubjects(asList(subjectRes?.data ?? subjectRes));
       } catch {
         if (!cancelled) {
           setDetail(course);
         }
+      } finally {
+        if (!cancelled) setHydrating(false);
       }
     })();
 
@@ -67,9 +113,11 @@ export default function CourseShowcase({ course, isCurrent = false }) {
   );
   const duration = formatCourseDuration(detail?.start_date, detail?.end_date);
   const admissionsOpen = detail ? isAdmissionOpen(detail) : false;
-  const thumbnailUrl = detail?.thumbnail_url;
+  const thumbnailUrl = pickCourseThumbnailUrl(detail);
   const showImage = Boolean(thumbnailUrl) && !imageFailed;
-  const categories = Array.isArray(detail?.categories) ? detail.categories : [];
+  const title = detail?.title || 'Course';
+  const initials = getCourseTitleInitials(title);
+  const description = detail?.summary || detail?.short_description || detail?.description || '';
   const subjectTitles = subjects
     .map((row) => row.title || row.name)
     .filter(Boolean)
@@ -84,92 +132,99 @@ export default function CourseShowcase({ course, isCurrent = false }) {
       }
     : null;
 
+  const metaItems = [];
+  if (detail) {
+    metaItems.push({ label: 'Type', value: formatCourseTypeLabel(detail) });
+    if (pricingDisplay) {
+      metaItems.push({
+        label: 'Price',
+        value: pricingDisplay.isFree
+          ? 'Free'
+          : formatSalesAmount(pricingDisplay.amount, pricingDisplay.currency),
+      });
+    }
+    if (subjects.length > 0) {
+      metaItems.push({
+        label: 'Units',
+        value: `${subjects.length} subject${subjects.length === 1 ? '' : 's'}`,
+      });
+    } else if (duration) {
+      metaItems.push({ label: 'Duration', value: duration });
+    } else if (detail.start_date) {
+      metaItems.push({ label: 'Starts', value: formatSalesDate(detail.start_date) });
+    }
+  }
+
+  const enter = reduceMotion
+    ? { opacity: 1, y: 0 }
+    : { opacity: 0, y: 16 };
+  const entered = { opacity: 1, y: 0 };
+
   if (!detail) return null;
+  if (hydrating && !detail.title) return <CourseShowcaseSkeleton />;
 
   return (
-    <article
-      ref={sectionRef}
-      className={`course-showcase${inView ? ' course-showcase--visible' : ''}${isCurrent ? ' course-showcase--current' : ''}`}
+    <motion.article
+      className={`course-showcase${isCurrent ? ' course-showcase--current' : ''}`}
+      initial={enter}
+      animate={entered}
+      transition={{ duration: 0.4, ease: 'easeOut' }}
     >
       <div className="course-showcase__visual">
-        {showImage ? (
-          <img
-            src={thumbnailUrl}
-            alt={`${detail.title} course`}
-            width={800}
-            height={500}
-            loading="lazy"
-            decoding="async"
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <div className="course-showcase__fallback" aria-hidden="true">
-            {String(detail.title || 'C').slice(0, 1)}
-          </div>
-        )}
+        <div className="course-showcase__media">
+          {showImage ? (
+            <img
+              src={thumbnailUrl}
+              alt={title}
+              width={800}
+              height={500}
+              loading="lazy"
+              decoding="async"
+              className="course-showcase__image"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <div className="course-showcase__fallback" aria-hidden="true">
+              <span>{initials}</span>
+            </div>
+          )}
+          <div className="course-showcase__overlay" aria-hidden="true" />
+          {isCurrent ? (
+            <span className="course-showcase__badge">Your current course</span>
+          ) : (
+            <span className="course-showcase__badge course-showcase__badge--spotlight">Course spotlight</span>
+          )}
+        </div>
       </div>
 
       <div className="course-showcase__copy">
-        <p className="course-showcase__eyebrow">
-          {isCurrent ? 'Your current course' : 'Course spotlight'}
-        </p>
-        <h3 className="course-showcase__title">{detail.title}</h3>
-        {detail.summary ? <p className="course-showcase__lead">{detail.summary}</p> : null}
+        <h3 className="course-showcase__title">{title}</h3>
+        {description ? <p className="course-showcase__lead">{description}</p> : null}
 
-        {categories.length > 0 ? (
-          <p className="course-showcase__audience">
-            For {categories.map((category) => category.name).filter(Boolean).join(', ')}
-          </p>
+        {metaItems.length > 0 ? (
+          <dl className="course-showcase__facts">
+            {metaItems.map((item) => (
+              <div key={item.label}>
+                <dt>{item.label}</dt>
+                <dd>{item.value}</dd>
+              </div>
+            ))}
+          </dl>
         ) : null}
 
-        <dl className="course-showcase__facts">
-          <div>
-            <dt>Type</dt>
-            <dd>{isCatalogCourseFree(detail) ? 'Free' : 'Paid'}</dd>
-          </div>
-          {pricingDisplay && !pricingDisplay.isFree ? (
-            <div>
-              <dt>Price</dt>
-              <dd>{formatSalesAmount(pricingDisplay.amount, pricingDisplay.currency)}</dd>
-            </div>
-          ) : null}
-          {duration ? (
-            <div>
-              <dt>Duration</dt>
-              <dd>{duration}</dd>
-            </div>
-          ) : null}
-          {detail.start_date ? (
-            <div>
-              <dt>Starts</dt>
-              <dd>{formatSalesDate(detail.start_date)}</dd>
-            </div>
-          ) : null}
-          {subjects.length > 0 ? (
-            <div>
-              <dt>Units</dt>
-              <dd>
-                {subjects.length} subject{subjects.length === 1 ? '' : 's'}
-              </dd>
-            </div>
-          ) : null}
-          {featuredBatch?.instructor_name ? (
-            <div>
-              <dt>Instructor</dt>
-              <dd>{featuredBatch.instructor_name}</dd>
-            </div>
-          ) : null}
-        </dl>
-
         {subjectTitles.length > 0 ? (
-          <div className="course-showcase__topics">
-            <h4>What you&apos;ll study</h4>
-            <ul>
-              {subjectTitles.map((title) => (
-                <li key={title}>{title}</li>
-              ))}
-            </ul>
-          </div>
+          <ul className="course-showcase__topics">
+            {subjectTitles.map((subjectTitle, index) => (
+              <motion.li
+                key={subjectTitle}
+                initial={reduceMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * 0.05, duration: 0.3, ease: 'easeOut' }}
+              >
+                {subjectTitle}
+              </motion.li>
+            ))}
+          </ul>
         ) : null}
 
         {trustBadges.length > 0 ? (
@@ -185,20 +240,21 @@ export default function CourseShowcase({ course, isCurrent = false }) {
         ) : null}
 
         <div className="course-showcase__actions">
-          <Link to={`/courses/${encodeURIComponent(String(detail.id))}`} className="course-showcase__view">
-            View Course
-          </Link>
           <CourseEnrollmentCtaButton
             courseId={detail.id}
             course={detail}
-            courseTitle={detail.title}
+            courseTitle={title}
             isFreeCourse={isCatalogCourseFree(detail)}
             labelContext="hero"
             size="lg"
             courseAdmission={courseAdmission}
+            className="course-showcase__cta"
           />
+          <Link to={`/courses/${encodeURIComponent(String(detail.id))}`} className="course-showcase__view">
+            View Course
+          </Link>
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 }

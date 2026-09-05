@@ -45,7 +45,7 @@ export default function StudentLearningActionGrid({ data, notificationCount = 0 
         to="/dashboard/my-courses"
         items={[
           { label: 'Lectures', value: `${data?.lecturesCompleted ?? 0}${progress.lecturesTotal ? ` / ${progress.lecturesTotal}` : ''}` },
-          { label: 'Results', value: data?.results?.length ?? 0 },
+          { label: 'Results', value: data?.resultsCount ?? data?.testsCompleted ?? data?.results?.length ?? 0 },
           { label: 'Doubts', value: data?.questionsAsked ?? 0 },
           { label: 'Completion', value: `${completion}%` },
         ]}

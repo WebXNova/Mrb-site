@@ -12,7 +12,8 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const COURSE_NOTES_UPLOAD_NAMESPACE = 'course-notes';
-export const COURSE_NOTES_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
+/** Align with Nginx client_max_body_size 12m — do not accept bodies the proxy will already reject. */
+export const COURSE_NOTES_UPLOAD_MAX_BYTES = 12 * 1024 * 1024;
 export const COURSE_NOTES_UPLOAD_DIR = path.resolve(__dirname, '../../uploads/course-notes');
 
 /**

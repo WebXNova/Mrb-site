@@ -22,9 +22,28 @@ function QuestionPalette({
   visited,
   onJump,
   className = '',
+  examTitle,
+  subject,
+  answeredCount,
+  totalQuestions,
 }) {
+  const total = totalQuestions ?? questionIds.length;
+  const answered = answeredCount ?? 0;
+
   return (
     <aside className={`tt-palette ${className}`.trim()} aria-labelledby="tt-palette-heading">
+      <div className="tt-palette__exam-meta">
+        <p className="tt-palette__eyebrow">Exam progress</p>
+        {examTitle ? <p className="tt-palette__exam-title">{examTitle}</p> : null}
+        {subject ? <p className="tt-palette__exam-subject">{subject}</p> : null}
+        <p className="tt-palette__exam-stats">
+          <strong>{answered}</strong>
+          {' of '}
+          <strong>{total}</strong>
+          {' answered'}
+        </p>
+      </div>
+
       <h2 className="tt-palette__heading" id="tt-palette-heading">
         Question Navigator
       </h2>

@@ -188,6 +188,23 @@ export function toCoursePublicDto(row) {
   return toCoursePublicApi(normalizeCourseRow(row));
 }
 
+/**
+ * Entitled student course payload — always expose a usable thumbnail, even when
+ * public catalog media is hidden.
+ * @param {Record<string, unknown>|null|undefined} row
+ */
+export function toCourseStudentDto(row) {
+  const n = normalizeCourseRow(row);
+  const pub = toCoursePublicApi(n);
+  if (!pub) return null;
+  const raw = n?.thumbnail_url;
+  if (!raw) return pub;
+  if (parseCatalogMediaUploadPath(raw)) {
+    return { ...pub, thumbnail_url: signCatalogMediaUrl(raw) };
+  }
+  return { ...pub, thumbnail_url: String(raw) };
+}
+
 export function toCourseAdminDto(row) {
   return toCourseAdminApi(normalizeCourseRow(row));
 }

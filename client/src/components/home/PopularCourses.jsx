@@ -3,7 +3,7 @@ import { useHomeCourseDiscovery } from '../../hooks/useHomeCourseDiscovery';
 import { CatalogCourseGridSkeleton } from '../catalog/CatalogCourseCardSkeleton';
 import { useInView } from '../../hooks/useInView';
 import PopularCourseCard from './PopularCourseCard';
-import CourseShowcase from './CourseShowcase';
+import CourseShowcase, { CourseShowcaseSkeleton } from './CourseShowcase';
 import './PopularCourses.css';
 
 export default function PopularCourses() {
@@ -56,6 +56,7 @@ export default function PopularCourses() {
 
         {loading && !error ? (
           <div className="popular-courses__loading">
+            <CourseShowcaseSkeleton />
             <CatalogCourseGridSkeleton count={3} />
           </div>
         ) : null}

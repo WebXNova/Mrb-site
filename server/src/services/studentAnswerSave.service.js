@@ -17,7 +17,10 @@ import {
   TOUCH_ATTEMPT_LAST_ACTIVITY_SQL,
   UPSERT_STUDENT_ANSWER_SQL,
 } from './studentAnswerSave.queries.js';
-import { AttemptNotFoundError } from '../errors/testAttempt/TestAttemptErrors.js';
+import {
+  AttemptInvalidStateError,
+  AttemptNotFoundError,
+} from '../errors/testAttempt/TestAttemptErrors.js';
 import {
   resolveAttemptExamSnapshot,
   assertAnswerBelongsToExamSnapshot,
@@ -77,7 +80,22 @@ export async function saveStudentAttemptAnswer(input) {
     optionId: selectedOptionId,
   });
 
-  await mysqlPool.query(UPSERT_STUDENT_ANSWER_SQL, [attemptId, questionId, selectedOptionId]);
+  const [upsertResult] = await mysqlPool.query(UPSERT_STUDENT_ANSWER_SQL, [
+    questionId,
+    selectedOptionId,
+    attemptId,
+    studentId,
+    studentId,
+  ]);
+
+  if (Number(upsertResult?.affectedRows ?? 0) === 0) {
+    throw new AttemptInvalidStateError({
+      attemptId,
+      status: 'not_in_progress',
+      required: 'in_progress',
+      reason: 'autosave_rejected_after_submit_or_expiry',
+    });
+  }
 
   const [touchResult] = await mysqlPool.query(TOUCH_ATTEMPT_LAST_ACTIVITY_SQL, [
     attemptId,
@@ -85,10 +103,13 @@ export async function saveStudentAttemptAnswer(input) {
     studentId,
   ]);
 
+  // Answer is durable after UPSERT. Touch is best-effort — submit may have claimed
+  // the attempt between UPSERT and touch under rare interleaving after unlock.
   if (Number(touchResult?.affectedRows ?? 0) === 0) {
-    throw new AttemptNotFoundError({
-      attemptId,
+    logger.warn('student answer saved but last_activity touch skipped', {
       studentId,
+      attemptId,
+      questionId,
       reason: 'attempt_not_in_progress_after_save',
     });
   }

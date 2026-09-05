@@ -17,7 +17,8 @@ export const SUBMIT_STATUS = {
   ERROR: 'error',
 };
 
-const SUBMIT_TIMEOUT_MS = 45_000;
+/** Outer guard ≥ HTTP submit timeout (75s). Server claim TX ≤60s; grade+persist can follow. */
+const SUBMIT_TIMEOUT_MS = 80_000;
 
 function submitWithTimeout(slug, attemptId) {
   return withTimeout(

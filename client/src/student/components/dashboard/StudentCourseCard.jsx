@@ -50,7 +50,9 @@ export default function StudentCourseCard({ data }) {
           <span className="sp-course-card__metric-label">Tests available</span>
         </div>
         <div className="sp-course-card__metric">
-          <span className="sp-course-card__metric-value">{data?.results?.length ?? 0}</span>
+          <span className="sp-course-card__metric-value">
+            {data?.resultsCount ?? data?.testsCompleted ?? data?.results?.length ?? 0}
+          </span>
           <span className="sp-course-card__metric-label">Results recorded</span>
         </div>
         <div className="sp-course-card__metric">

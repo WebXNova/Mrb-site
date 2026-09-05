@@ -4,6 +4,7 @@ import { evaluateAccessRequest } from '../services/authDecisionEngine.js';
 import { env } from '../config/env.js';
 import { sanitizePath } from '../utils/logSanitizer.js';
 import { logBearerTokenRejected, isProductionAuthMode } from '../services/authSecurity.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 function hasBearerAuthorization(req) {
   return typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ');
@@ -16,7 +17,7 @@ function inferBearerRejectionRole(req) {
   return 'admin';
 }
 
-export async function requireAdmin(req, res, next) {
+export const requireAdmin = asyncHandler(async function requireAdmin(req, res, next) {
   try {
     const payload = await evaluateAccessRequest(req, { expectedRole: 'admin' });
     req.user = payload;
@@ -31,9 +32,9 @@ export async function requireAdmin(req, res, next) {
     if (error instanceof ApiError) return next(error);
     return next(new ApiError(401, 'Invalid or expired token'));
   }
-}
+});
 
-export async function requireTeacher(req, res, next) {
+export const requireTeacher = asyncHandler(async function requireTeacher(req, res, next) {
   try {
     const payload = await evaluateAccessRequest(req, { expectedRole: 'teacher' });
     req.user = payload;
@@ -48,9 +49,9 @@ export async function requireTeacher(req, res, next) {
     if (error instanceof ApiError) return next(error);
     return next(new ApiError(401, 'Invalid or expired token'));
   }
-}
+});
 
-export async function requireStudent(req, res, next) {
+export const requireStudent = asyncHandler(async function requireStudent(req, res, next) {
   try {
     const payload = await evaluateAccessRequest(req, { expectedRole: 'student' });
     req.user = payload;
@@ -65,9 +66,9 @@ export async function requireStudent(req, res, next) {
     if (error instanceof ApiError) return next(error);
     return next(new ApiError(401, 'Invalid or expired token'));
   }
-}
+});
 
-export async function authMiddleware(req, res, next) {
+export const authMiddleware = asyncHandler(async function authMiddleware(req, res, next) {
   if (isProductionAuthMode() && hasBearerAuthorization(req)) {
     await logBearerTokenRejected(req, 'student');
     return next(
@@ -96,7 +97,7 @@ export async function authMiddleware(req, res, next) {
     });
     return next(new ApiError(401, 'Invalid or expired token'));
   }
-}
+});
 
 export function rejectAuthHeaderInProduction(req, res, next) {
   if (isProductionAuthMode() && hasBearerAuthorization(req)) {

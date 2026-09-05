@@ -204,6 +204,7 @@ async function main() {
     const publicNotReady = buildReadinessResponse(publicReq, { redis: false, mysql: true, emailQueue: true });
     eq('public not-ready status 503', publicNotReady.statusCode, 503);
     ok('public body has no redis key', publicNotReady.body.ready === false);
+    ok('public body exposes alive liveness', publicNotReady.body.alive === true);
     ok(
       'public body is boolean readiness only',
       typeof publicNotReady.body.ready === 'boolean' && publicNotReady.body.redis === undefined
@@ -237,7 +238,7 @@ async function main() {
 
   console.log('\nHealth endpoint — public-safe payload');
   {
-    mustContain('src/app.js', ["sendSuccess(res, { status: 'ok' }"], 'health minimal response');
+    mustContain('src/app.js', ["alive: true", "/api/health"], 'health liveness response');
   }
 
   console.log('\nWiring');

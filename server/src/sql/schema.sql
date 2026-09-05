@@ -255,7 +255,8 @@ CREATE TABLE IF NOT EXISTS lectures (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_lectures_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-  KEY idx_lectures_chapter_id (chapter_id)
+  KEY idx_lectures_chapter_id (chapter_id),
+  KEY idx_lectures_course_active (course_id, is_active)
 );
 
 CREATE TABLE IF NOT EXISTS lecture_progress (
@@ -319,6 +320,7 @@ CREATE TABLE IF NOT EXISTS tests (
   deleted_at TIMESTAMP NULL DEFAULT NULL,
   UNIQUE KEY idx_tests_public_slug (public_slug),
   KEY idx_course (course_id),
+  KEY idx_tests_course_status_deleted (course_id, status, deleted_at),
   KEY idx_tests_access_type (test_access_type),
   KEY idx_status (status),
   KEY idx_dates (start_date, end_date),
@@ -590,6 +592,7 @@ CREATE TABLE IF NOT EXISTS test_attempts (
   KEY idx_status (status),
   KEY idx_test_attempts_test_student_status (test_id, student_id, status),
   KEY idx_test_attempts_user_status (user_id, status),
+  KEY idx_test_attempts_user_test_status (user_id, test_id, status),
   KEY idx_test_attempts_guest_session (guest_session_hash, test_id),
   CONSTRAINT fk_attempt_test FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
   CONSTRAINT fk_attempt_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE

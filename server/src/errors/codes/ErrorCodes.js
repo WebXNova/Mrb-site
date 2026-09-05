@@ -96,6 +96,12 @@ export const MYSQL_POOL_ACQUIRE_TIMEOUT = 'MYSQL_POOL_ACQUIRE_TIMEOUT';
 export const MYSQL_QUERY_TIMEOUT = 'MYSQL_QUERY_TIMEOUT';
 /** Transaction exceeded MYSQL_TRANSACTION_TIMEOUT_MS */
 export const MYSQL_TRANSACTION_TIMEOUT = 'MYSQL_TRANSACTION_TIMEOUT';
+/** Redis command exceeded REDIS_COMMAND_TIMEOUT_MS */
+export const REDIS_COMMAND_TIMEOUT = 'REDIS_COMMAND_TIMEOUT';
+/** Redis client missing, disconnected, or command failed closed */
+export const REDIS_UNAVAILABLE = 'REDIS_UNAVAILABLE';
+/** External HTTP/API deadline exceeded */
+export const EXTERNAL_REQUEST_TIMEOUT = 'EXTERNAL_REQUEST_TIMEOUT';
 
 /** Media */
 export const MEDIA_ACCESS_DENIED = 'MEDIA_ACCESS_DENIED';

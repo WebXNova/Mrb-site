@@ -11,7 +11,7 @@ import {
   loadTestSubjectPresentationBatch,
 } from './testSubjectPresentation.service.js';
 import { getCourseRowById } from './courseCatalogQueries.service.js';
-import { toCoursePublicDto } from '../dto/course.dto.js';
+import { toCourseStudentDto } from '../dto/course.dto.js';
 import { toCourseBatchPublicDto } from '../dto/courseBatch.dto.js';
 import { parseBatchTimestamp } from '../utils/batchDateTime.js';
 import {
@@ -65,7 +65,7 @@ async function loadEntitledCourse(courseId) {
       context: 'student_dashboard',
     });
   }
-  const dto = toCoursePublicDto(row);
+  const dto = toCourseStudentDto(row);
   if (!dto) {
     throw new CourseNotAccessibleError({
       courseId,
@@ -82,9 +82,10 @@ async function loadEntitledCourse(courseId) {
  * @param {number} courseId
  * @param {number|null} [studentId]
  */
-async function loadEntitledLectures(courseId, studentId = null) {
+async function loadEntitledLectures(courseId, studentId = null, { includeMedia = true } = {}) {
+  const mediaSelect = includeMedia ? 'l.youtube_url,' : 'NULL AS youtube_url,';
   const sql = `
-    SELECT l.id, l.course_id, l.chapter_id, l.title, l.youtube_url, l.topic, l.sort_order,
+    SELECT l.id, l.course_id, l.chapter_id, l.title, ${mediaSelect} l.topic, l.sort_order,
             c.title AS course_title,
             ch.title AS chapter_title,
             ch.order_index AS chapter_order_index,
@@ -124,8 +125,9 @@ async function loadEntitledLectures(courseId, studentId = null) {
 /**
  * Course-scoped published tests for entitled dashboard (CEE).
  * @param {number} courseId
+ * @param {{ includeSubjectPresentation?: boolean }} [opts]
  */
-async function loadEntitledTests(courseId) {
+async function loadEntitledTests(courseId, { includeSubjectPresentation = true } = {}) {
   const db = scopedQuery({ courseId, context: 'studentPortal.loadEntitledTests' });
   const rows = await db.rows(
     `SELECT id, title, category, test_type, duration_minutes, max_attempts, public_slug
@@ -134,6 +136,13 @@ async function loadEntitledTests(courseId) {
      ORDER BY updated_at DESC`,
     [courseId]
   );
+  if (!includeSubjectPresentation) {
+    return rows.map((row) => ({
+      ...row,
+      subject_label: null,
+      subject_ids: [],
+    }));
+  }
   const { loadTestSubjectPresentationBatch } = await import('./testSubjectPresentation.service.js');
   const presentationByTestId = await loadTestSubjectPresentationBatch(rows.map((row) => Number(row.id)));
   return rows.map((row) => {
@@ -148,10 +157,13 @@ async function loadEntitledTests(courseId) {
 
 /**
  * Entitlement-scoped results — course_id + user_id (no cross-course leakage).
+ * Bounded for dashboard payloads; full history lives on result detail / listing endpoints.
  * @param {number} studentId
  * @param {number} courseId
+ * @param {{ limit?: number }} [opts]
  */
-async function loadEntitledStudentResults(studentId, courseId) {
+async function loadEntitledStudentResults(studentId, courseId, { limit = 25 } = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
   const db = scopedQuery({
     courseId,
     context: 'studentPortal.loadEntitledStudentResults',
@@ -166,12 +178,37 @@ async function loadEntitledStudentResults(studentId, courseId) {
      INNER JOIN test_results r ON r.attempt_id = a.id
      INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
      WHERE a.user_id = ?
-     ORDER BY a.submitted_at DESC`,
-    [courseId, studentId]
+     ORDER BY a.submitted_at DESC
+     LIMIT ?`,
+    [courseId, studentId, safeLimit]
   );
 }
 
-function mapLectureRow(row, completedIds = null) {
+/**
+ * @param {number} studentId
+ * @param {number} courseId
+ * @returns {Promise<number|null>}
+ */
+async function loadEntitledStudentResultsAverage(studentId, courseId) {
+  const db = scopedQuery({
+    courseId,
+    context: 'studentPortal.loadEntitledStudentResultsAverage',
+    userId: studentId,
+  });
+  const rows = await db.rows(
+    `SELECT AVG(r.percentage) AS avg_percentage
+     FROM test_attempts a
+     INNER JOIN test_results r ON r.attempt_id = a.id
+     INNER JOIN tests t ON t.id = a.test_id AND t.course_id = ?
+     WHERE a.user_id = ?
+       AND r.percentage IS NOT NULL`,
+    [courseId, studentId]
+  );
+  const avg = Number(rows[0]?.avg_percentage);
+  return Number.isFinite(avg) ? Math.round(avg) : null;
+}
+
+function mapLectureRow(row, completedIds = null, { includeMedia = true } = {}) {
   const lectureId = Number(row.id);
   const locked = Boolean(row._locked);
   const unlockReason = row._unlockReason != null ? String(row._unlockReason) : null;
@@ -184,7 +221,7 @@ function mapLectureRow(row, completedIds = null) {
     subjectId: Number(row.subject_id),
     subjectTitle: String(row.subject_title),
     title: row.title,
-    youtubeUrl: locked ? null : row.youtube_url,
+    youtubeUrl: includeMedia && !locked ? row.youtube_url ?? null : null,
     topic: row.topic,
     sortOrder: row.sort_order,
     completed: completedIds ? completedIds.has(lectureId) : false,
@@ -368,26 +405,34 @@ export async function getStudentDashboard(studentId) {
   const entitlement = await requireDashboardEntitlement(studentId);
   const courseId = entitlement.courseId;
 
-  const [course, lecturesRows, tests, results, questionsAsked, progressSummary, streak] = await Promise.all([
-    loadEntitledCourse(courseId),
-    loadEntitledLectures(courseId, studentId),
-    loadEntitledTests(courseId),
-    loadEntitledStudentResults(studentId, courseId),
-    countStudentQuestions(studentId),
-    buildCourseProgressSummary(studentId, courseId),
-    recordAndGetLearningStreak(studentId),
-  ]);
+  const [course, lecturesRows, tests, results, questionsAsked, progressSummary, streak, batchRow, averageTestScore] =
+    await Promise.all([
+      loadEntitledCourse(courseId),
+      loadEntitledLectures(courseId, null, { includeMedia: false }),
+      // Dashboard search only needs titles/slugs — skip subject presentation batch.
+      loadEntitledTests(courseId, { includeSubjectPresentation: false }),
+      loadEntitledStudentResults(studentId, courseId, { limit: 25 }),
+      countStudentQuestions(studentId),
+      buildCourseProgressSummary(studentId, courseId),
+      recordAndGetLearningStreak(studentId),
+      fetchEntitledCourseBatchRow(courseId),
+      loadEntitledStudentResultsAverage(studentId, courseId),
+    ]);
 
   const completedIds = new Set(progressSummary.completedLectureIds);
+  const lockStates = computeLectureLockStates(lecturesRows || [], {
+    batch: batchRow,
+    completedIds,
+  });
+  const lecturesWithLocks = (lecturesRows || []).map((row) => {
+    const state = lockStates.get(Number(row.id)) || { locked: false, unlockReason: null };
+    return {
+      ...row,
+      _locked: state.locked,
+      _unlockReason: state.unlockReason,
+    };
+  });
   const progress = mapProgressPayload(progressSummary);
-
-  const scored = (results || []).filter(
-    (r) => Number.isFinite(Number(r.percentage))
-  );
-  const averageTestScore =
-    scored.length > 0
-      ? Math.round(scored.reduce((sum, r) => sum + Number(r.percentage), 0) / scored.length)
-      : null;
 
   return {
     entitlement: {
@@ -399,7 +444,8 @@ export async function getStudentDashboard(studentId) {
     /** Single entitled course only (array for existing client normalisers). */
     courses: [course],
     course,
-    lectures: (lecturesRows || []).map((row) => mapLectureRow(row, completedIds)),
+    // Lean lectures: no youtube URLs (player loads GET /student/lectures).
+    lectures: lecturesWithLocks.map((row) => mapLectureRow(row, completedIds, { includeMedia: false })),
     tests: (tests || []).map(mapTestRow),
     results: (results || []).map((row) => {
       const redacted = redactStudentResultListItem(row);
@@ -415,6 +461,7 @@ export async function getStudentDashboard(studentId) {
         status: redacted.status,
       };
     }),
+    resultsCount: progress.testsCompleted,
     questionsAsked: Number(questionsAsked) || 0,
     progress,
     progressPercent: progress.percent,
@@ -428,6 +475,41 @@ export async function getStudentDashboard(studentId) {
 }
 
 /**
+ * Full entitled lecture list for the lectures player (includes playable media URLs).
+ * Dashboard returns lean lectures without youtubeUrl — use this for playback.
+ * @param {number} studentId
+ */
+export async function getStudentLectures(studentId) {
+  const entitlement = await requireDashboardEntitlement(studentId);
+  const courseId = entitlement.courseId;
+
+  const [lecturesRows, progressSummary, batchRow] = await Promise.all([
+    loadEntitledLectures(courseId, null, { includeMedia: true }),
+    buildCourseProgressSummary(studentId, courseId),
+    fetchEntitledCourseBatchRow(courseId),
+  ]);
+
+  const completedIds = new Set(progressSummary.completedLectureIds);
+  const lockStates = computeLectureLockStates(lecturesRows || [], {
+    batch: batchRow,
+    completedIds,
+  });
+  const lecturesWithLocks = (lecturesRows || []).map((row) => {
+    const state = lockStates.get(Number(row.id)) || { locked: false, unlockReason: null };
+    return {
+      ...row,
+      _locked: state.locked,
+      _unlockReason: state.unlockReason,
+    };
+  });
+
+  return {
+    lectures: lecturesWithLocks.map((row) => mapLectureRow(row, completedIds, { includeMedia: true })),
+    progress: mapProgressPayload(progressSummary),
+  };
+}
+
+/**
  * Rich course overview for the student portal "My Course" page.
  * @param {number} studentId
  */
@@ -437,56 +519,27 @@ export async function getStudentMyCourse(studentId) {
 
   const [
     course,
-    batch,
+    batchRow,
     enrollment,
-    lecturesRows,
-    tests,
-    resultsRows,
     questionsAsked,
     subjectsTotal,
     chaptersTotal,
     progressSummary,
+    averageTestScore,
   ] = await Promise.all([
     loadEntitledCourse(courseId),
-    loadEntitledCourseBatch(courseId),
+    fetchEntitledCourseBatchRow(courseId),
     loadEntitledEnrollmentMeta(entitlement.enrollmentId, courseId, studentId),
-    loadEntitledLectures(courseId, studentId),
-    loadEntitledTests(courseId),
-    loadEntitledStudentResults(studentId, courseId),
     countStudentQuestions(studentId),
     loadEntitledSubjectCount(courseId),
     loadEntitledChapterCount(courseId),
     buildCourseProgressSummary(studentId, courseId),
+    loadEntitledStudentResultsAverage(studentId, courseId),
   ]);
 
-  const completedIds = new Set(progressSummary.completedLectureIds);
-  const lectures = (lecturesRows || []).map((row) => mapLectureRow(row, completedIds));
-  const testsMapped = (tests || []).map(mapTestRow);
-  const results = (resultsRows || []).map((row) => {
-    const redacted = redactStudentResultListItem(row);
-    return {
-      attemptId: row.attempt_id,
-      testTitle: row.test_title,
-      slug: row.public_slug,
-      submittedAt: row.submitted_at,
-      resultAvailable: redacted.resultAvailable,
-      score: redacted.score,
-      maxScore: redacted.maxScore,
-      percentage: redacted.percentage,
-      status: redacted.status,
-    };
-  });
-
+  const batch = batchRow ? toCourseBatchPublicDto(batchRow) : null;
   const schedule = computeCourseSchedule(batch);
   const progress = mapProgressPayload(progressSummary);
-
-  const scored = results.filter(
-    (r) => r.resultAvailable !== false && Number.isFinite(Number(r.percentage))
-  );
-  const averageTestScore =
-    scored.length > 0
-      ? Math.round(scored.reduce((sum, r) => sum + Number(r.percentage), 0) / scored.length)
-      : null;
 
   return {
     entitlement: {

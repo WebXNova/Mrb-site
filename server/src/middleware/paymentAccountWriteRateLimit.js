@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { isProductionNodeEnv } from '../config/validateProductionStartup.js';
 import { checkSlidingWindowLimit } from '../services/slidingWindowRateLimit.service.js';
 import { getClientIp } from '../utils/network.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const KEY_PREFIX = 'rl:admin:payment-accounts:write';
 
@@ -13,7 +14,11 @@ const KEY_PREFIX = 'rl:admin:payment-accounts:write';
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
-export async function paymentAccountWriteRateLimit(req, res, next) {
+export const paymentAccountWriteRateLimit = asyncHandler(async function paymentAccountWriteRateLimit(
+  req,
+  res,
+  next
+) {
   const config = getPaymentAccountRateLimitConfig();
   if (config.requireRedis && isProductionNodeEnv(env.nodeEnv) && !isRedisReady()) {
     return next(
@@ -59,4 +64,4 @@ export async function paymentAccountWriteRateLimit(req, res, next) {
   }
 
   return next();
-}
+});

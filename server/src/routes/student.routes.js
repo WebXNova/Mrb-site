@@ -7,6 +7,7 @@ import { studentLeaderboardReadLimit } from '../middleware/courseLeaderboardRate
 import {
   getStudentDashboardData,
   getStudentEnrollmentStatus,
+  getStudentLecturesData,
   getStudentMyCourseData,
   getStudentNotifications,
   getStudentResultDetail,
@@ -63,6 +64,7 @@ router.use(rejectStudentBearerInProduction);
 router.use(enforcePolicy({ auth: 'student', verified: true, maxRisk: 'elevated' }));
 router.get('/enrollment-status', getStudentEnrollmentStatus);
 router.get('/dashboard', getStudentDashboardData);
+router.get('/lectures', getStudentLecturesData);
 router.get('/notifications', getStudentNotifications);
 router.get('/my-course', getStudentMyCourseData);
 router.get('/sessions', getStudentSessions);

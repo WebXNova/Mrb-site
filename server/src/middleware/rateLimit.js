@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { isProductionNodeEnv } from '../config/validateProductionStartup.js';
 import { getClientAsn, getClientIp, getIpSubnet } from '../utils/network.js';
 import { startAuthTrace } from '../utils/authProfiling.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const buckets = new Map();
 const WINDOW_MS = 60 * 1000;
@@ -202,7 +203,7 @@ setInterval(() => {
   }
 }, WINDOW_MS).unref();
 
-export async function authRateLimit(req, res, next) {
+export const authRateLimit = asyncHandler(async function authRateLimit(req, res, next) {
   const trace = startAuthTrace(`authRateLimit:${req.path}`, req);
   if (isProductionRateLimitRedisUnavailable()) {
     trace.end('redis-unavailable');
@@ -244,9 +245,9 @@ export async function authRateLimit(req, res, next) {
 
   trace.end('ok', { count: current.count });
   return next();
-}
+});
 
-export async function signupAbuseRateLimit(req, res, next) {
+export const signupAbuseRateLimit = asyncHandler(async function signupAbuseRateLimit(req, res, next) {
   if (isProductionRateLimitRedisUnavailable()) {
     return next(productionRateLimitRedisUnavailable503());
   }
@@ -283,14 +284,14 @@ export async function signupAbuseRateLimit(req, res, next) {
     }
   }
   return next();
-}
+});
 
 async function enforceSlidingLimit({ key, windowMs, limit }) {
   const allowed = await incrementCounter(key, windowMs);
   return allowed.count <= limit;
 }
 
-export async function verifyEmailRateLimit(req, res, next) {
+export const verifyEmailRateLimit = asyncHandler(async function verifyEmailRateLimit(req, res, next) {
   if (isProductionRateLimitRedisUnavailable()) {
     return next(productionRateLimitRedisUnavailable503());
   }
@@ -316,9 +317,9 @@ export async function verifyEmailRateLimit(req, res, next) {
     return next(new ApiError(429, 'Too many verification attempts. Please try again shortly.'));
   }
   return next();
-}
+});
 
-export async function resendVerificationRateLimit(req, res, next) {
+export const resendVerificationRateLimit = asyncHandler(async function resendVerificationRateLimit(req, res, next) {
   if (isProductionRateLimitRedisUnavailable()) {
     return next(productionRateLimitRedisUnavailable503());
   }
@@ -344,9 +345,9 @@ export async function resendVerificationRateLimit(req, res, next) {
     return next(new ApiError(429, 'Too many resend attempts. Please try again later.'));
   }
   return next();
-}
+});
 
-export async function forgotPasswordRateLimit(req, res, next) {
+export const forgotPasswordRateLimit = asyncHandler(async function forgotPasswordRateLimit(req, res, next) {
   if (isProductionRateLimitRedisUnavailable()) {
     return next(productionRateLimitRedisUnavailable503());
   }
@@ -380,9 +381,9 @@ export async function forgotPasswordRateLimit(req, res, next) {
     return next(new ApiError(429, 'Too many password reset attempts. Please try again later.'));
   }
   return next();
-}
+});
 
-export async function resetPasswordRateLimit(req, res, next) {
+export const resetPasswordRateLimit = asyncHandler(async function resetPasswordRateLimit(req, res, next) {
   if (isProductionRateLimitRedisUnavailable()) {
     return next(productionRateLimitRedisUnavailable503());
   }
@@ -416,7 +417,7 @@ export async function resetPasswordRateLimit(req, res, next) {
     return next(new ApiError(429, 'Too many password reset attempts. Please try again shortly.'));
   }
   return next();
-}
+});
 
 /** Per-recipient hourly cap (enumeration-safe — caller swallows denial). */
 export async function consumeForgotPasswordEmailRateLimit(email) {
@@ -429,7 +430,7 @@ export async function consumeForgotPasswordEmailRateLimit(email) {
   });
 }
 
-export async function providerWebhookRateLimit(req, res, next) {
+export const providerWebhookRateLimit = asyncHandler(async function providerWebhookRateLimit(req, res, next) {
   if (isProductionRateLimitRedisUnavailable()) {
     return next(productionRateLimitRedisUnavailable503());
   }
@@ -443,10 +444,10 @@ export async function providerWebhookRateLimit(req, res, next) {
     return next(new ApiError(429, 'Webhook rate limited'));
   }
   return next();
-}
+});
 
 /** Sliding window per IP for Safepay payment webhook (abuse / burst control). */
-export async function safepayPaymentWebhookRateLimit(req, res, next) {
+export const safepayPaymentWebhookRateLimit = asyncHandler(async function safepayPaymentWebhookRateLimit(req, res, next) {
   if (isProductionRateLimitRedisUnavailable()) {
     return next(productionRateLimitRedisUnavailable503());
   }
@@ -462,4 +463,4 @@ export async function safepayPaymentWebhookRateLimit(req, res, next) {
     return next(new ApiError(429, 'Payment webhook rate limited'));
   }
   return next();
-}
+});

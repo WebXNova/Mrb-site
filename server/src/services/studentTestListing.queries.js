@@ -6,6 +6,9 @@
  * Discovery is enrollment-based. Admin-only (private) tests never appear.
  * Available (public) tests appear only for the student's actively enrolled course.
  * start_date / end_date are selected for display only — they are not list filters.
+ *
+ * Marks and attempt aggregates are loaded in batch for the page of test IDs only
+ * (not via global GROUP BY over all test_questions / all student attempts).
  */
 
 import { BLOCKING_ENROLLMENT_STATUSES } from '../errors/entitlement/index.js';
@@ -43,35 +46,37 @@ export const COUNT_STUDENT_ELIGIBLE_TESTS_SQL = `
 `;
 
 /**
- * Per-student attempt aggregates — one grouped scan (uses idx_user / idx_student / idx_test).
- * Placeholders: (studentId, studentId) for user_id OR student_id match.
+ * Per-student attempt aggregates for a set of test IDs (authenticated listing).
+ * Uses user_id only (index-friendly) — student portal attempts always set user_id.
+ * Kept name + GROUP BY for listing verification / no-N+1 contract.
  */
 export const STUDENT_TEST_ATTEMPT_AGGREGATE_JOIN_SQL = `
-  LEFT JOIN (
-    SELECT
-      a.test_id,
-      COUNT(*) AS attempts_used,
-      MAX(CASE WHEN a.status = 'in_progress' THEN a.id END) AS active_attempt_id
-    FROM test_attempts a
-    WHERE a.user_id = ? OR a.student_id = ?
-    GROUP BY a.test_id
-  ) att ON att.test_id = t.id
-`;
-
-export const STUDENT_TEST_TOTAL_MARKS_JOIN_SQL = `
-  LEFT JOIN (
-    SELECT tq.test_id,
-           COALESCE(SUM(COALESCE(tq.marks_override, qb.marks, 1)), 0) AS total_marks,
-           COUNT(*) AS question_count
-    FROM test_questions tq
-    INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
-    GROUP BY tq.test_id
-  ) tm ON tm.test_id = t.id
+  SELECT
+    a.test_id,
+    COUNT(*) AS attempts_used,
+    MAX(CASE WHEN a.status = 'in_progress' THEN a.id END) AS active_attempt_id
+  FROM test_attempts a
+  WHERE a.user_id = ?
+    AND a.test_id IN (/* placeholders */)
+  GROUP BY a.test_id
 `;
 
 /**
- * Page eligible tests with attempt status aggregates for a student.
- * Params: studentId, ...blockingStatuses, publishedStatus, studentId, studentId, limit, offset
+ * Marks + question counts for a set of test IDs only (not a global scan).
+ */
+export const STUDENT_TEST_TOTAL_MARKS_JOIN_SQL = `
+  SELECT tq.test_id,
+         COALESCE(SUM(COALESCE(tq.marks_override, qb.marks, 1)), 0) AS total_marks,
+         COUNT(*) AS question_count
+  FROM test_questions tq
+  INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+  WHERE tq.test_id IN (/* placeholders */)
+  GROUP BY tq.test_id
+`;
+
+/**
+ * Page eligible tests — lightweight list without global marks/attempt aggregates.
+ * Params: studentId, ...blockingStatuses, publishedStatus, limit, offset
  */
 export const LIST_STUDENT_ELIGIBLE_TESTS_SQL = `
   SELECT
@@ -82,22 +87,61 @@ export const LIST_STUDENT_ELIGIBLE_TESTS_SQL = `
     t.max_attempts,
     t.allow_retake,
     t.passing_marks,
-    COALESCE(tm.total_marks, 0) AS total_marks,
-    COALESCE(tm.question_count, 0) AS question_count,
     t.public_slug,
     t.start_date,
     t.end_date,
-    t.updated_at,
-    COALESCE(att.attempts_used, 0) AS attempts_used,
-    att.active_attempt_id
+    t.updated_at
   FROM tests t
   ${STUDENT_OWNED_COURSES_JOIN_SQL}
-  ${STUDENT_TEST_ATTEMPT_AGGREGATE_JOIN_SQL}
-  ${STUDENT_TEST_TOTAL_MARKS_JOIN_SQL}
   ${STUDENT_ELIGIBLE_TEST_WHERE_SQL}
   ORDER BY t.updated_at DESC, t.id DESC
   LIMIT ? OFFSET ?
 `;
+
+/**
+ * @param {number[]} testIds
+ * @returns {{ sql: string, params: number[] } | null}
+ */
+export function buildStudentAttemptAggregatesForTestsSql(studentId, testIds) {
+  const ids = [...new Set(testIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  if (!ids.length) return null;
+  const placeholders = ids.map(() => '?').join(',');
+  return {
+    sql: `
+  SELECT
+    a.test_id,
+    COUNT(*) AS attempts_used,
+    MAX(CASE WHEN a.status = 'in_progress' THEN a.id END) AS active_attempt_id
+  FROM test_attempts a
+  WHERE a.user_id = ?
+    AND a.test_id IN (${placeholders})
+  GROUP BY a.test_id
+`,
+    params: [studentId, ...ids],
+  };
+}
+
+/**
+ * @param {number[]} testIds
+ * @returns {{ sql: string, params: number[] } | null}
+ */
+export function buildStudentTestMarksForTestsSql(testIds) {
+  const ids = [...new Set(testIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  if (!ids.length) return null;
+  const placeholders = ids.map(() => '?').join(',');
+  return {
+    sql: `
+  SELECT tq.test_id,
+         COALESCE(SUM(COALESCE(tq.marks_override, qb.marks, 1)), 0) AS total_marks,
+         COUNT(*) AS question_count
+  FROM test_questions tq
+  INNER JOIN question_bank qb ON qb.id = tq.question_id AND qb.deleted_at IS NULL
+  WHERE tq.test_id IN (${placeholders})
+  GROUP BY tq.test_id
+`,
+    params: ids,
+  };
+}
 
 /**
  * @param {number} studentId
@@ -106,7 +150,7 @@ export const LIST_STUDENT_ELIGIBLE_TESTS_SQL = `
  * @returns {unknown[]}
  */
 export function buildListStudentEligibleTestsParams(studentId, limit, offset) {
-  return [studentId, ...STUDENT_OWNED_COURSES_BLOCKING_PARAMS, studentId, studentId, STUDENT_ELIGIBLE_TEST_STATUS, limit, offset];
+  return [studentId, ...STUDENT_OWNED_COURSES_BLOCKING_PARAMS, STUDENT_ELIGIBLE_TEST_STATUS, limit, offset];
 }
 
 /**

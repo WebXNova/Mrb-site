@@ -9,6 +9,7 @@ import { isProductionNodeEnv } from '../config/validateProductionStartup.js';
 import { RATE_LIMIT_EXCEEDED } from '../errors/codes/ErrorCodes.js';
 import { AppError } from '../errors/base/AppError.js';
 import { ApiError } from '../utils/apiError.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import { getClientIp } from '../utils/network.js';
 import {
   checkEnrollmentCreateRateLimits,
@@ -20,7 +21,7 @@ import {
 /**
  * Fail closed in production when Redis is required but unavailable.
  */
-export async function requireRedisForEnrollmentCreate(req, res, next) {
+export const requireRedisForEnrollmentCreate = asyncHandler(async function requireRedisForEnrollmentCreate(req, res, next) {
   const config = getEnrollmentCreateRateLimitConfig();
   if (!config.requireRedis || !isProductionNodeEnv(env.nodeEnv)) {
     return next();
@@ -36,7 +37,7 @@ export async function requireRedisForEnrollmentCreate(req, res, next) {
   }
 
   return next();
-}
+});
 
 /**
  * @param {import('express').Request} req
@@ -46,7 +47,7 @@ function parseUserId(req) {
   return Number.isInteger(userId) && userId > 0 ? userId : null;
 }
 
-export async function enrollmentCreateRateLimit(req, res, next) {
+export const enrollmentCreateRateLimit = asyncHandler(async function enrollmentCreateRateLimit(req, res, next) {
   const userId = parseUserId(req);
   if (!userId) {
     return next();
@@ -92,4 +93,4 @@ export async function enrollmentCreateRateLimit(req, res, next) {
       },
     })
   );
-}
+});

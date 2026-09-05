@@ -4,8 +4,11 @@
 .tt-exam {
   --tt-sticky-offset: 5.75rem;
   position: relative;
+  width: 100%;
+  max-width: 100%;
   height: 100vh;
   height: 100dvh;
+  min-width: 0;
   min-height: 0;
   background: var(--color-bg-alt);
   display: flex;
@@ -49,6 +52,7 @@ html.tt-exam-fullscreen-active #root {
 html.tt-exam-shell-active .tt-exam,
 html.tt-exam-fullscreen-active .tt-exam {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   height: 100%;
 }
@@ -160,6 +164,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   margin: 0 auto;
   padding: var(--space-3) var(--space-4) var(--space-4);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
   min-width: 0;
@@ -172,6 +177,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  width: 100%;
   min-width: 0;
   overflow: visible;
   max-width: none;
@@ -188,6 +194,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   z-index: var(--z-sticky);
 }
 
+/* Palette lives in the header "Questions" drawer below the desktop breakpoint. */
 .tt-exam__sidebar {
   display: none;
 }
@@ -197,6 +204,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   flex: 0 0 auto;
   position: relative;
   z-index: var(--z-sticky);
+  width: 100%;
+  min-width: 0;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-ink-100);
   box-shadow: var(--shadow-sm);
@@ -205,6 +214,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
 .tt-header__primary {
   width: min(100%, 1280px);
+  max-width: 100%;
+  min-width: 0;
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
@@ -234,7 +245,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   font-weight: var(--fw-bold);
   color: var(--color-ink-900);
   line-height: var(--lh-snug);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .tt-header__progress {
@@ -284,8 +295,11 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 }
 
 .tt-header__palette-btn,
-.tt-header__fs-btn {
+.tt-header__fs-btn,
+.tt-header__progress-btn {
   display: inline-flex;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Timer */
@@ -818,6 +832,60 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   box-shadow: var(--shadow-sm);
+  min-width: 0;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+}
+
+.tt-palette__exam-meta {
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-ink-100);
+  min-width: 0;
+}
+
+.tt-palette__eyebrow {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-11, 0.6875rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-palette__exam-title,
+.tt-palette__exam-subject,
+.tt-palette__exam-stats {
+  margin: 0;
+  min-width: 0;
+  writing-mode: horizontal-tb;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.tt-palette__exam-title {
+  margin-top: var(--space-1);
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-900);
+  line-height: var(--lh-snug);
+}
+
+.tt-palette__exam-subject {
+  margin-top: var(--space-1);
+  font-size: var(--fs-13);
+  color: var(--color-ink-500);
+}
+
+.tt-palette__exam-stats {
+  margin-top: var(--space-2);
+  font-size: var(--fs-13);
+  color: var(--color-ink-600);
 }
 
 .tt-palette__heading {
@@ -825,6 +893,9 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-800);
+  writing-mode: horizontal-tb;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .tt-palette__legend {
@@ -1001,6 +1072,62 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   max-height: none;
 }
 
+.tt-palette--sheet .tt-palette__exam-meta {
+  display: none;
+}
+
+.tt-progress-sheet {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  writing-mode: horizontal-tb;
+}
+
+.tt-progress-sheet__title {
+  margin: 0;
+  font-size: var(--fs-18);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-900);
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.tt-progress-sheet__subject {
+  margin: 0;
+  font-size: var(--fs-14);
+  color: var(--color-ink-500);
+}
+
+.tt-progress-sheet__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+
+.tt-progress-sheet__facts div {
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-ink-100);
+}
+
+.tt-progress-sheet__facts dt {
+  font-size: var(--fs-11, 0.6875rem);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+  white-space: nowrap;
+}
+
+.tt-progress-sheet__facts dd {
+  margin: var(--space-1) 0 0;
+  font-weight: var(--fw-bold);
+  color: var(--color-ink-900);
+}
+
 /* States */
 .tt-state {
   width: min(100%, 520px);
@@ -1122,42 +1249,119 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   border: 0;
 }
 
+/*
+ * Below desktop: hide the palette sidebar, give the exam full width, and
+ * collapse header info into a top bar so long titles cannot wrap character-by-character.
+ */
+@media (max-width: 1023px) {
+  .tt-exam__body,
+  .tt-exam:fullscreen .tt-exam__body,
+  .tt-exam:-webkit-full-screen .tt-exam__body,
+  .tt-exam--is-fullscreen .tt-exam__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tt-exam__main {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .tt-exam__sidebar,
+  .tt-exam__sidebar.tt-palette,
+  .tt-exam__sidebar--skeleton,
+  .tt-exam:fullscreen .tt-exam__sidebar,
+  .tt-exam:-webkit-full-screen .tt-exam__sidebar,
+  .tt-exam--is-fullscreen .tt-exam__sidebar {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .tt-header__primary {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .tt-header__actions {
+    order: -1;
+    width: 100%;
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-2);
+  }
+
+  .tt-header__info {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tt-header__eyebrow,
+  .tt-header__title,
+  .tt-header__subject {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+  }
+
+  .tt-timer {
+    margin-right: auto;
+    flex-shrink: 0;
+  }
+
+  .tt-header__fs-btn,
+  .tt-header__palette-btn,
+  .tt-header__progress-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
 /* Mobile — compact header, always-visible timer, footer submit */
 @media (max-width: 767px) {
+  .tt-exam__body,
+  .tt-exam:fullscreen .tt-exam__body,
+  .tt-exam:-webkit-full-screen .tt-exam__body,
+  .tt-exam--is-fullscreen .tt-exam__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tt-exam__main {
+    width: 100%;
+  }
+
+  .tt-exam__sidebar,
+  .tt-exam__sidebar.tt-palette,
+  .tt-exam__sidebar--skeleton {
+    display: none !important;
+  }
+
   .tt-header {
     padding: var(--space-3) var(--space-4);
   }
 
-  .tt-header__primary {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: flex-start;
-    gap: var(--space-3);
-  }
-
-  .tt-header__info {
-    min-width: 0;
-    flex: 1 1 auto;
+  .tt-header__eyebrow {
+    display: none;
   }
 
   .tt-header__title {
     font-size: var(--fs-16);
-    overflow-wrap: anywhere;
   }
 
   .tt-header__progress {
     font-size: var(--fs-13);
     line-height: var(--lh-normal);
-  }
-
-  .tt-header__actions {
-    width: auto;
-    flex: 0 0 auto;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--space-2);
+    white-space: normal;
   }
 
   .tt-save-status {
@@ -1176,8 +1380,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   }
 
   .tt-header__fs-btn,
-  .tt-header__palette-btn {
-    white-space: nowrap;
+  .tt-header__palette-btn,
+  .tt-header__progress-btn {
     padding-inline: var(--space-3);
   }
 
@@ -1230,6 +1434,10 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
   .tt-palette__btn {
     min-height: 2.75rem;
   }
+
+  .tt-progress-sheet__facts {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Tablet */
@@ -1281,7 +1489,8 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
     display: block;
   }
 
-  .tt-header__palette-btn {
+  .tt-header__palette-btn,
+  .tt-header__progress-btn {
     display: none;
   }
 
@@ -1296,7 +1505,7 @@ html.tt-exam-fullscreen-active .mobile-whatsapp-button {
 
 @media (min-width: 768px) and (max-width: 1023px) {
   .tt-exam__body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tt-nav {

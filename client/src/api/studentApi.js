@@ -36,6 +36,7 @@ export const studentApi = {
   me: () => studentRequest('/auth/student/me', { retryOnUnauthorized: true }),
   studentEnrollmentStatus: () => studentRequest('/student/enrollment-status'),
   dashboard: () => studentRequest('/student/dashboard'),
+  lectures: () => studentRequest('/student/lectures'),
   myCourse: () => studentRequest('/student/my-course'),
   courseNotes: (courseId) => studentRequest(`/courses/${encodeURIComponent(courseId)}/notes`),
   subjectNotes: (courseId, subjectId) =>

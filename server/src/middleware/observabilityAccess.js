@@ -2,6 +2,7 @@ import { rejectAdminBearer } from '../security/admin/rejectAdminBearer.js';
 import { requireAdmin } from './auth.js';
 import { ApiError } from '../utils/apiError.js';
 import { evaluateMetricsAccess } from './observabilityAccess.util.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 export {
   evaluateMetricsAccess,
@@ -25,7 +26,7 @@ function runMiddleware(middleware, req, res) {
  *
  * @type {import('express').RequestHandler}
  */
-export async function requireMetricsAccess(req, res, next) {
+export const requireMetricsAccess = asyncHandler(async function requireMetricsAccess(req, res, next) {
   const decision = evaluateMetricsAccess(req);
   if (decision.allowed) {
     return next();
@@ -41,14 +42,14 @@ export async function requireMetricsAccess(req, res, next) {
     }
     return next(new ApiError(401, 'Metrics access denied'));
   }
-}
+});
 
 /**
  * Sets req.user when a valid admin session is present; never fails the request.
  *
  * @type {import('express').RequestHandler}
  */
-export async function optionalAdminContext(req, res, next) {
+export const optionalAdminContext = asyncHandler(async function optionalAdminContext(req, res, next) {
   try {
     await runMiddleware(rejectAdminBearer, req, res);
     await runMiddleware(requireAdmin, req, res);
@@ -56,4 +57,4 @@ export async function optionalAdminContext(req, res, next) {
     /* anonymous readiness probe */
   }
   return next();
-}
+});

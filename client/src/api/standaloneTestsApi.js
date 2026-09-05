@@ -53,19 +53,30 @@ export const standaloneTestsApi = {
       body: payload || {},
     }),
   getStartData: (slug, attemptId) =>
-    studentRequest(`/standalone-tests/${encodeURIComponent(slug)}/attempts/${encodeURIComponent(attemptId)}/start`),
+    studentRequest(`/standalone-tests/${encodeURIComponent(slug)}/attempts/${encodeURIComponent(attemptId)}/start`, {
+      timeoutMs: 45_000,
+      retryOnUnauthorized: false,
+    }),
   saveAnswer: (slug, attemptId, payload) =>
     studentRequest(`/standalone-tests/${encodeURIComponent(slug)}/attempts/${encodeURIComponent(attemptId)}/answers`, {
       method: 'PATCH',
       body: payload,
+      timeoutMs: 30_000,
+      retryOnUnauthorized: false,
     }),
   submitAttempt: (slug, attemptId) =>
     studentRequest(`/standalone-tests/${encodeURIComponent(slug)}/attempts/${encodeURIComponent(attemptId)}/submit`, {
       method: 'POST',
       body: {},
+      // ≥ MySQL claim txn window (60s) + grade/persist; under Nginx proxy_read_timeout 95s
+      timeoutMs: 75_000,
+      retryOnUnauthorized: false,
     }),
   getResult: (slug, attemptId) =>
-    studentRequest(`/standalone-tests/${encodeURIComponent(slug)}/attempts/${encodeURIComponent(attemptId)}/result`),
+    studentRequest(`/standalone-tests/${encodeURIComponent(slug)}/attempts/${encodeURIComponent(attemptId)}/result`, {
+      timeoutMs: 45_000,
+      retryOnUnauthorized: false,
+    }),
   reportIntegrityEvent: (slug, attemptId) =>
     studentRequest(
       `/standalone-tests/${encodeURIComponent(slug)}/attempts/${encodeURIComponent(attemptId)}/integrity-events`,
@@ -90,17 +101,18 @@ export const standaloneTestsApi = {
     }),
   freeSessionStartData: (slug, attemptId) =>
     guestRequest(
-      `/standalone-tests/${encodeURIComponent(slug)}/free-session/attempts/${encodeURIComponent(attemptId)}/start`
+      `/standalone-tests/${encodeURIComponent(slug)}/free-session/attempts/${encodeURIComponent(attemptId)}/start`,
+      { timeoutMs: 45_000 }
     ),
   freeSessionSaveAnswer: (slug, attemptId, payload) =>
     guestRequest(
       `/standalone-tests/${encodeURIComponent(slug)}/free-session/attempts/${encodeURIComponent(attemptId)}/answers`,
-      { method: 'PATCH', body: payload }
+      { method: 'PATCH', body: payload, timeoutMs: 30_000 }
     ),
   freeSessionSubmitAttempt: (slug, attemptId) =>
     guestRequest(
       `/standalone-tests/${encodeURIComponent(slug)}/free-session/attempts/${encodeURIComponent(attemptId)}/submit`,
-      { method: 'POST', body: {} }
+      { method: 'POST', body: {}, timeoutMs: 75_000 }
     ),
   freeSessionIntegrityEvent: (slug, attemptId) =>
     guestRequest(

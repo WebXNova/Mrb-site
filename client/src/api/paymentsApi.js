@@ -32,5 +32,6 @@ export const paymentsApi = {
     studentRequest(`/payments/manual/${encodeURIComponent(orderId)}/submit`, {
       method: 'POST',
       body: formData,
+      timeoutMs: 60_000,
     }),
 };

@@ -96,7 +96,7 @@ console.log('\nBootstrap isolation — one scheduler failure does not throw');
 
 mustContain(
   'src/server.js',
-  ['startProductionCleanupSchedulers', 'onListening'],
+  ['startProductionCleanupSchedulers', 'shouldStartBackgroundJobs', 'onListening'],
   'server startup wiring'
 );
 

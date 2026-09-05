@@ -128,6 +128,8 @@
 }
 
 .popular-courses__loading {
+  display: grid;
+  gap: 1.5rem;
   margin-bottom: 1.5rem;
 }
 

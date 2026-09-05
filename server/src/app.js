@@ -130,7 +130,8 @@ app.use(studentRuntimeMetricsMiddleware);
 app.use('/api/uploads', secureMediaRoutes);
 
 app.get('/api/health', (req, res) => {
-  sendSuccess(res, { status: 'ok' }, 200, { requestId: req.requestId });
+  // Liveness only — process is accepting HTTP. Dependency readiness is /api/ready.
+  sendSuccess(res, { status: 'ok', alive: true }, 200, { requestId: req.requestId });
 });
 
 app.get('/api/metrics', requireMetricsAccess, getMetrics);

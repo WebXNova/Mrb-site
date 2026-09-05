@@ -1,6 +1,9 @@
 import { OAuth2Client } from 'google-auth-library';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
+import { GOOGLE_AUTH_TIMEOUT_MS } from '../config/reliabilityTimeouts.js';
+import { withDeadline } from '../utils/withDeadline.js';
+import { ExternalRequestTimeoutError } from '../errors/external/ExternalRequestTimeoutError.js';
 
 let oauthClient = null;
 
@@ -27,11 +30,24 @@ export async function verifyGoogleIdToken(idToken) {
 
   let ticket;
   try {
-    ticket = await getOAuthClient().verifyIdToken({
-      idToken: token,
-      audience: env.google.clientId,
-    });
-  } catch {
+    ticket = await withDeadline(
+      getOAuthClient().verifyIdToken({
+        idToken: token,
+        audience: env.google.clientId,
+      }),
+      GOOGLE_AUTH_TIMEOUT_MS,
+      {
+        dependency: 'google_auth',
+        message: 'Google Sign-In timed out. Please retry shortly.',
+      }
+    );
+  } catch (error) {
+    if (error instanceof ExternalRequestTimeoutError) {
+      throw new ApiError(503, 'Google Sign-In timed out. Please retry shortly.', {
+        code: 'GOOGLE_AUTH_TIMEOUT',
+        error_code: 'GOOGLE_AUTH_TIMEOUT',
+      });
+    }
     throw new ApiError(401, 'Invalid Google credential');
   }
 

@@ -1,7 +1,7 @@
 /**
  * Student test listing — eligible published tests for owned courses (Phase 1C + 1D status).
  *
- * Attempt status is derived from a single aggregated JOIN (no N+1).
+ * Page of eligible tests first, then batch attempt + marks aggregates for those IDs only (no N+1).
  */
 
 import { mysqlPool } from '../config/mysql.js';
@@ -14,6 +14,8 @@ import {
   LIST_STUDENT_ELIGIBLE_TESTS_SQL,
   buildStudentEligibleTestsBaseParams,
   buildListStudentEligibleTestsParams,
+  buildStudentAttemptAggregatesForTestsSql,
+  buildStudentTestMarksForTestsSql,
 } from './studentTestListing.queries.js';
 import { computeStudentTestListingStatus } from './studentTestListingStatus.js';
 
@@ -58,12 +60,50 @@ export async function listStudentEligibleTests(studentId, query) {
     }
 
     const [rows] = await mysqlPool.query(LIST_STUDENT_ELIGIBLE_TESTS_SQL, listParams);
+    const testIds = rows.map((row) => Number(row.id));
 
-    const presentationByTestId = await loadTestSubjectPresentationBatch(rows.map((row) => Number(row.id)));
+    const attemptQuery = buildStudentAttemptAggregatesForTestsSql(uid, testIds);
+    const marksQuery = buildStudentTestMarksForTestsSql(testIds);
+
+    const [attemptRows, marksRows, presentationByTestId] = await Promise.all([
+      attemptQuery
+        ? mysqlPool.query(attemptQuery.sql, attemptQuery.params).then(([r]) => r)
+        : Promise.resolve([]),
+      marksQuery
+        ? mysqlPool.query(marksQuery.sql, marksQuery.params).then(([r]) => r)
+        : Promise.resolve([]),
+      loadTestSubjectPresentationBatch(testIds),
+    ]);
+
+    /** @type {Map<number, { attempts_used: number, active_attempt_id: unknown }>} */
+    const attemptsByTestId = new Map();
+    for (const row of attemptRows) {
+      attemptsByTestId.set(Number(row.test_id), {
+        attempts_used: Number(row.attempts_used ?? 0),
+        active_attempt_id: row.active_attempt_id ?? null,
+      });
+    }
+
+    /** @type {Map<number, { total_marks: number, question_count: number }>} */
+    const marksByTestId = new Map();
+    for (const row of marksRows) {
+      marksByTestId.set(Number(row.test_id), {
+        total_marks: Number(row.total_marks ?? 0),
+        question_count: Number(row.question_count ?? 0),
+      });
+    }
+
     const enrichedRows = rows.map((row) => {
-      const presentation = presentationByTestId.get(Number(row.id));
+      const tid = Number(row.id);
+      const presentation = presentationByTestId.get(tid);
+      const attempts = attemptsByTestId.get(tid);
+      const marks = marksByTestId.get(tid);
       return {
         ...row,
+        total_marks: marks?.total_marks ?? 0,
+        question_count: marks?.question_count ?? 0,
+        attempts_used: attempts?.attempts_used ?? 0,
+        active_attempt_id: attempts?.active_attempt_id ?? null,
         subject_label: presentation?.displayLabel ?? null,
         subject_ids: presentation?.subjectIds ?? [],
       };

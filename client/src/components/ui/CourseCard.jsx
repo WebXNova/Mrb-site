@@ -9,6 +9,7 @@ import {
   admissionBadgeTone,
   isAdmissionOpen,
 } from '../../course/courseAdmissionPresentation';
+import { pickCourseThumbnailUrl } from '../../course/courseThumbnail';
 import './CourseCard.css';
 
 function levelBadgeTone(level) {
@@ -47,7 +48,7 @@ export default function CourseCard({ course }) {
     id,
     title,
     summary,
-    thumbnail_url: thumbnailUrl,
+    thumbnail_url: mappedThumbnail,
     level,
     pricing,
     admission_status: admissionStatus,
@@ -59,6 +60,7 @@ export default function CourseCard({ course }) {
   const pricingDisplay = buildPricingDisplay(pricing);
   const admissionsOpen = isAdmissionOpen(course);
 
+  const thumbnailUrl = pickCourseThumbnailUrl(course) || mappedThumbnail;
   const showCoverImage = Boolean(thumbnailUrl) && !imageFailed;
   const coursePath = `/courses/${encodeURIComponent(String(id))}`;
   const courseAdmission = {

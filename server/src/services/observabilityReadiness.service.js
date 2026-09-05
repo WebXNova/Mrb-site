@@ -66,6 +66,7 @@ export function buildReadinessResponse(req, components) {
     return {
       statusCode,
       body: {
+        alive: true,
         ready: {
           redis: components.redis,
           mysql: components.mysql,
@@ -79,7 +80,7 @@ export function buildReadinessResponse(req, components) {
 
   return {
     statusCode,
-    body: { ready: isReady },
+    body: { alive: true, ready: isReady },
     message: isReady ? undefined : 'Service is not ready.',
     code: isReady ? undefined : 'SERVICE_NOT_READY',
   };

@@ -1,6 +1,9 @@
 import { ApiError } from '../utils/apiError.js';
 import { env } from '../config/env.js';
 import { getRedisClient } from '../config/redis.js';
+import { TURNSTILE_TIMEOUT_MS } from '../config/reliabilityTimeouts.js';
+import { fetchWithDeadline } from '../utils/withDeadline.js';
+import { ExternalRequestTimeoutError } from '../errors/external/ExternalRequestTimeoutError.js';
 
 const memoryCounters = new Map();
 
@@ -40,18 +43,35 @@ export async function assertCaptchaIfRequired({ action, ipAddress, captchaToken 
   }
   const token = String(captchaToken || '').trim();
   if (!token) throw new ApiError(429, 'Challenge required');
-  const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      secret: env.abuse.captchaSecret,
-      response: token,
-      remoteip: String(ipAddress || ''),
-    }),
-  });
+
+  let response;
+  try {
+    response = await fetchWithDeadline('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        secret: env.abuse.captchaSecret,
+        response: token,
+        remoteip: String(ipAddress || ''),
+      }),
+      timeoutMs: TURNSTILE_TIMEOUT_MS,
+      dependency: 'turnstile',
+    });
+  } catch (error) {
+    if (error instanceof ExternalRequestTimeoutError) {
+      throw new ApiError(503, 'Challenge verification timed out. Please retry shortly.', {
+        code: 'TURNSTILE_TIMEOUT',
+        error_code: 'TURNSTILE_TIMEOUT',
+      });
+    }
+    throw new ApiError(503, 'Challenge verification unavailable. Please retry shortly.', {
+      code: 'TURNSTILE_UNAVAILABLE',
+      error_code: 'TURNSTILE_UNAVAILABLE',
+    });
+  }
+
   const parsed = await response.json();
   if (!parsed?.success) {
     throw new ApiError(429, 'Challenge verification failed');
   }
 }
-

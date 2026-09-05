@@ -240,6 +240,22 @@ export function IconMenu(props) {
   );
 }
 
+export function IconSliders(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 8h10M18 8h2M14 6v4M4 16h4M12 16h8M8 14v4" />
+    </IconBase>
+  );
+}
+
+export function IconChevronDown(props) {
+  return (
+    <IconBase {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </IconBase>
+  );
+}
+
 const ICON_MAP = {
   dashboard: IconDashboard,
   'book-open': IconBookOpen,
@@ -264,6 +280,8 @@ const ICON_MAP = {
   trending: IconTrending,
   lightbulb: IconLightbulb,
   menu: IconMenu,
+  sliders: IconSliders,
+  'chevron-down': IconChevronDown,
   'file-text': IconFileText,
 };
 

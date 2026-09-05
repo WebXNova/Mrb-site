@@ -77,12 +77,15 @@ function StudentLayoutInner() {
   async function handleLogout() {
     try {
       await studentApi.logout();
-    } catch {
-      /* ignore */
+      clearStudentAuth();
+      broadcastRoleLogout('student');
+      navigate('/login', { replace: true });
+    } catch (err) {
+      // Keep local session — httpOnly cookies may still be valid. Clearing UI-only
+      // state would look logged-out while the server session remains.
+      console.warn('[student] logout failed; session kept until retry succeeds', err?.message || err);
+      window.alert('Sign out failed. Please check your connection and try again.');
     }
-    clearStudentAuth();
-    broadcastRoleLogout('student');
-    navigate('/login', { replace: true });
   }
 
   const shellClass = [
@@ -167,9 +170,12 @@ function StudentLayoutInner() {
       {isOverlayNav ? (
         <nav className="student-bottom-nav sp-bottom-nav" aria-label="Student mobile navigation">
           {studentBottomNavItems.map((item) => {
-            const isActive = item.end
-              ? location.pathname === item.to
-              : location.pathname.startsWith(item.to);
+            const isActive =
+              item.to === '/dashboard/tests'
+                ? location.pathname === '/dashboard/tests'
+                : item.end
+                  ? location.pathname === item.to
+                  : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
             return (
               <NavLink
                 key={item.to}
@@ -177,7 +183,8 @@ function StudentLayoutInner() {
                 end={item.end}
                 className={`student-bottom-nav__item sp-bottom-nav__item${isActive ? ' student-bottom-nav__item--active sp-bottom-nav__item--active' : ''}`}
               >
-                <StudentIcon name={item.icon} size={20} className="sp-bottom-nav__icon" />
+                <span className="student-bottom-nav__indicator" aria-hidden="true" />
+                <StudentIcon name={item.icon} size={22} className="sp-bottom-nav__icon" />
                 <span className="student-bottom-nav__label">{item.label}</span>
               </NavLink>
             );

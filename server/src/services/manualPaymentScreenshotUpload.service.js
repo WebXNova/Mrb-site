@@ -139,6 +139,9 @@ function studentScreenshotRejectionMessage(error) {
   if (code === 'IMAGE_DIMENSIONS_EXCEEDED') {
     return 'Screenshot image dimensions are too large.';
   }
+  if (code === 'SHARP_BUSY') {
+    return 'Screenshot processing is busy. Please try again in a moment.';
+  }
   if (code === 'POLYGLOT_REJECTED') {
     return 'Screenshot was rejected.';
   }

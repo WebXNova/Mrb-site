@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { studentApi } from '../../api/studentApi';
 import { mockStudentDashboard } from '../data/mockStudentData';
-import { normaliseStudentDashboard } from '../utils/normaliseStudentDashboard';
+
+function normaliseLecturesPayload(raw) {
+  const lectures = Array.isArray(raw?.lectures) ? raw.lectures : [];
+  return lectures;
+}
 
 export function useStudentLectures() {
   const [lectures, setLectures] = useState(mockStudentDashboard.lectures);
@@ -12,10 +16,10 @@ export function useStudentLectures() {
     setLoading(true);
     setError('');
     try {
-      const response = await studentApi.dashboard();
-      const norm = normaliseStudentDashboard(response?.data || mockStudentDashboard);
-      setLectures(norm.lectures);
-      return norm;
+      const response = await studentApi.lectures();
+      const list = normaliseLecturesPayload(response?.data || { lectures: mockStudentDashboard.lectures });
+      setLectures(list);
+      return { lectures: list };
     } catch (err) {
       setError(err.message || 'Failed to load lectures.');
       return null;

@@ -69,6 +69,16 @@ if (listSrc.includes('STUDENT_TEST_ATTEMPT_AGGREGATE_JOIN_SQL') && listSrc.inclu
   fail('missing attempt aggregate join');
 }
 
+if (
+  listSrc.includes('buildStudentTestMarksForTestsSql') &&
+  listSrc.includes('WHERE tq.test_id IN') &&
+  !LIST_STUDENT_ELIGIBLE_TESTS_SQL.includes('test_questions')
+) {
+  ok('marks aggregated only for page test IDs (no global test_questions scan in list SQL)');
+} else {
+  fail('marks must not be a global join on the list query');
+}
+
 const statusSrc = await fs.readFile(path.join(root, '../src/services/studentTestListingStatus.js'), 'utf8');
 if (statusSrc.includes('in_progress') && statusSrc.includes('computeStudentTestListingStatus')) {
   ok('status calculation module present');

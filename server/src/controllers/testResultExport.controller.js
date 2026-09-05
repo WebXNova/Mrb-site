@@ -14,6 +14,14 @@ import {
   generateExportId,
 } from '../db/ensureExportLogsSchema.js';
 
+/**
+ * Sync in-memory XLSX builds the full workbook in heap. Cap attempts so an admin
+ * export cannot OOM the shared student API process (PM2 max_memory_restart).
+ */
+export const MAX_SYNC_XLSX_EXPORT_ATTEMPTS = 1500;
+
+let exportInFlight = false;
+
 function nowDbString() {
   return new Date().toISOString().replace('T', ' ').replace(/\..+$/, '') + '.000000';
 }
@@ -80,6 +88,24 @@ export const getTestResultsExport = asyncHandler(async (req, res) => {
     return res.status(204).json({ message: 'No completed attempts to export.' });
   }
 
+  if (completedCount > MAX_SYNC_XLSX_EXPORT_ATTEMPTS) {
+    throw new ApiError(
+      413,
+      `This export is too large for a live download (${completedCount} attempts). Use a filtered CSV export or contact support.`,
+      {
+        code: 'EXPORT_TOO_LARGE',
+        completedCount,
+        maxAttempts: MAX_SYNC_XLSX_EXPORT_ATTEMPTS,
+      }
+    );
+  }
+
+  if (exportInFlight) {
+    throw new ApiError(429, 'Another results export is already running. Try again shortly.', {
+      code: 'EXPORT_BUSY',
+    });
+  }
+
   const exportId = generateExportId();
   const startedAt = nowDbString();
   await createAuditLog(userId, testId, exportId, startedAt);
@@ -88,6 +114,7 @@ export const getTestResultsExport = asyncHandler(async (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
+  exportInFlight = true;
   try {
     const result = await buildXlsxBuffer(testId);
     if (!result) {
@@ -99,5 +126,7 @@ export const getTestResultsExport = asyncHandler(async (req, res) => {
   } catch (error) {
     await failAuditLog(exportId, error instanceof Error ? error.message : String(error));
     throw error;
+  } finally {
+    exportInFlight = false;
   }
 });

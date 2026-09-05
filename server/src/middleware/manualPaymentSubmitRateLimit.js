@@ -7,6 +7,7 @@ import {
   checkSlidingWindowLimit,
   RateLimitRedisUnavailableError,
 } from '../services/slidingWindowRateLimit.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 function rateLimitUnavailableError() {
   return new ApiError(503, 'Payment submission temporarily unavailable, please try again shortly.', {
@@ -24,7 +25,11 @@ function parseOrderId(req) {
 /**
  * @type {import('express').RequestHandler}
  */
-export async function manualPaymentSubmitRateLimit(req, _res, next) {
+export const manualPaymentSubmitRateLimit = asyncHandler(async function manualPaymentSubmitRateLimit(
+  req,
+  _res,
+  next
+) {
   const config = getManualPaymentRateLimitConfig();
   if (config.requireRedis && isProductionNodeEnv(env.nodeEnv) && !isRedisReady()) {
     return next(rateLimitUnavailableError());
@@ -76,4 +81,4 @@ export async function manualPaymentSubmitRateLimit(req, _res, next) {
   }
 
   return next();
-}
+});

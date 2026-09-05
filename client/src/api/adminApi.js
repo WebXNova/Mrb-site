@@ -634,21 +634,26 @@ export const testsApi = {
     http.get(`/tests/${slug}/attempts/${attemptId}/start`, {
       authScope: 'student',
       retryOnUnauthorized: false,
+      timeoutMs: 45_000,
     }),
   saveAnswer: (slug, attemptId, payload) =>
     http.patch(`/tests/${slug}/attempts/${attemptId}/answers`, payload, {
       authScope: 'student',
       retryOnUnauthorized: false,
+      timeoutMs: 30_000,
     }),
   submitAttempt: (slug, attemptId) =>
     http.post(`/tests/${slug}/attempts/${attemptId}/submit`, {}, {
       authScope: 'student',
       retryOnUnauthorized: false,
+      // ≥ MySQL claim txn window (60s) + grade/persist; under Nginx proxy_read_timeout 95s
+      timeoutMs: 75_000,
     }),
   getResult: (slug, attemptId) =>
     http.get(`/tests/${slug}/attempts/${attemptId}/result`, {
       authScope: 'student',
       retryOnUnauthorized: false,
+      timeoutMs: 45_000,
     }),
   reportIntegrityEvent: (slug, attemptId) =>
     http.post(`/tests/${slug}/attempts/${attemptId}/integrity-events`, {}, {

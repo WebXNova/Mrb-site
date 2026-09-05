@@ -9,6 +9,7 @@ import { isProductionNodeEnv } from '../config/validateProductionStartup.js';
 import { RATE_LIMIT_EXCEEDED } from '../errors/codes/ErrorCodes.js';
 import { AppError } from '../errors/base/AppError.js';
 import { ApiError } from '../utils/apiError.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import { getClientIp } from '../utils/network.js';
 import {
   checkPaymentCheckoutRateLimits,
@@ -20,7 +21,11 @@ import {
 /**
  * Fail closed in production when Redis is required but unavailable.
  */
-export async function requireRedisForPaymentCheckout(req, res, next) {
+export const requireRedisForPaymentCheckout = asyncHandler(async function requireRedisForPaymentCheckout(
+  req,
+  res,
+  next
+) {
   const config = getPaymentCheckoutRateLimitConfig();
   if (!config.requireRedis || !isProductionNodeEnv(env.nodeEnv)) {
     return next();
@@ -36,7 +41,7 @@ export async function requireRedisForPaymentCheckout(req, res, next) {
   }
 
   return next();
-}
+});
 
 /**
  * @param {import('express').Request} req
@@ -55,7 +60,7 @@ function parseEnrollmentId(req) {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-export async function paymentCheckoutRateLimit(req, res, next) {
+export const paymentCheckoutRateLimit = asyncHandler(async function paymentCheckoutRateLimit(req, res, next) {
   const userId = parseUserId(req);
   if (!userId) {
     return next();
@@ -103,4 +108,4 @@ export async function paymentCheckoutRateLimit(req, res, next) {
       },
     })
   );
-}
+});

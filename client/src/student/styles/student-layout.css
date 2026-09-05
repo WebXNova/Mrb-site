@@ -474,7 +474,33 @@
 @media (max-width: 1023px) {
   .student-shell--v2 .student-bottom-nav.sp-bottom-nav {
     display: grid;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid #f3f4f6;
   }
+
+  .student-shell--v2 .student-bottom-nav__item,
+  .student-shell--v2 .sp-bottom-nav__item {
+    color: #9ca3af;
+  }
+
+  .student-shell--v2 .student-bottom-nav__item--active,
+  .student-shell--v2 .sp-bottom-nav__item--active {
+    color: #dc2626;
+  }
+
+  .student-shell--v2 .student-bottom-nav__label {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.1;
+    overflow-wrap: normal;
+  }
+}
+
+[data-student-theme='dark'] .student-shell--v2 .student-bottom-nav.sp-bottom-nav {
+  background: rgba(15, 23, 42, 0.92);
+  border-top-color: #1e293b;
 }
 
 /* Collapsed icon-only rail */

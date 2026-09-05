@@ -216,20 +216,24 @@ export async function countComposedTestQuestions(testId, executor = mysqlPool) {
  * @param {Array<{ questionId: number, questionText: string, marks: number, displayOrder: number, options: Array<{ optionId: number, optionText: string }> }>} composed
  */
 export function mapComposedQuestionsForStudentAttempt(composed) {
-  return composed.map((q) => ({
-    id: q.questionId,
-    questionText: q.questionText,
-    questionImageUrl: q.questionImageUrl ?? null,
-    sectionId: q.sectionId ?? null,
-    tipHtml: q.tipHtml ?? null,
-    options: (q.options || []).map((o) => ({
-      id: o.optionId,
-      text: o.optionText,
-    })),
-    marks: q.effectiveMarks ?? q.marks,
-    effectiveMarks: q.effectiveMarks ?? q.marks,
-    orderIndex: q.displayOrder,
-  }));
+  return composed.map((q) => {
+    const tip = q.tipHtml != null && String(q.tipHtml).trim() !== '' ? String(q.tipHtml) : null;
+    return {
+      id: q.questionId,
+      questionText: q.questionText,
+      questionImageUrl: q.questionImageUrl ?? null,
+      sectionId: q.sectionId ?? null,
+      ...(tip ? { tipHtml: tip } : {}),
+      options: (q.options || []).map((o) => ({
+        id: o.optionId,
+        text: o.optionText,
+        ...(o.imageUrl ? { imageUrl: o.imageUrl } : {}),
+      })),
+      marks: q.effectiveMarks ?? q.marks,
+      effectiveMarks: q.effectiveMarks ?? q.marks,
+      orderIndex: q.displayOrder,
+    };
+  });
 }
 
 /**

@@ -47,6 +47,7 @@ function TestTakingContent() {
   const navigate = useNavigate();
   const examRef = useRef(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [autoSubmitActive, setAutoSubmitActive] = useState(false);
   const autoSubmittedRef = useRef(false);
@@ -376,6 +377,10 @@ function TestTakingContent() {
     answers,
     visited: paletteVisited,
     onJump: handleJump,
+    examTitle: payload?.test?.title || 'Test',
+    subject: payload?.test?.subject,
+    answeredCount,
+    totalQuestions: questions.length,
   };
 
   const footerNav = (
@@ -452,8 +457,18 @@ function TestTakingContent() {
         saveStatus={saveStatus}
         saveError={saveError}
         onRetrySave={retryFailedSaves}
-        onOpenPalette={() => !uiLocked && setPaletteOpen(true)}
+        onOpenPalette={() => {
+          if (uiLocked) return;
+          setProgressOpen(false);
+          setPaletteOpen(true);
+        }}
         showPaletteToggle
+        onOpenProgress={() => {
+          if (uiLocked) return;
+          setPaletteOpen(false);
+          setProgressOpen(true);
+        }}
+        showProgressToggle
         displayMode={displayMode}
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => (isFullscreen ? exitFullscreen() : enterFullscreen())}
@@ -534,8 +549,41 @@ function TestTakingContent() {
       <MobilePaletteSheet
         isOpen={paletteOpen && !uiLocked}
         onClose={() => setPaletteOpen(false)}
+        title="Questions"
+        ariaLabel="Question navigator"
       >
         <QuestionPalette {...paletteProps} className="tt-palette--sheet" />
+      </MobilePaletteSheet>
+
+      <MobilePaletteSheet
+        isOpen={progressOpen && !uiLocked}
+        onClose={() => setProgressOpen(false)}
+        title="Progress"
+        ariaLabel="Exam progress"
+      >
+        <div className="tt-progress-sheet">
+          <p className="tt-palette__eyebrow">Exam progress</p>
+          <p className="tt-progress-sheet__title">{payload?.test?.title || 'Test'}</p>
+          {payload?.test?.subject ? (
+            <p className="tt-progress-sheet__subject">{payload.test.subject}</p>
+          ) : null}
+          <dl className="tt-progress-sheet__facts">
+            <div>
+              <dt>Answered</dt>
+              <dd>
+                {answeredCount} / {questions.length}
+              </dd>
+            </div>
+            <div>
+              <dt>Remaining</dt>
+              <dd>{unansweredCount}</dd>
+            </div>
+            <div>
+              <dt>Time</dt>
+              <dd>{timer.formatted}</dd>
+            </div>
+          </dl>
+        </div>
       </MobilePaletteSheet>
 
       <SubmitConfirmModal

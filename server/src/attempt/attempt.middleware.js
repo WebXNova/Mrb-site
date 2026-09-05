@@ -14,13 +14,14 @@ import { ApiError } from '../utils/apiError.js';
 import { StructuredLogger } from '../utils/requestId.js';
 import { validateAttemptAccess } from './attempt.service.js';
 import { parsePositiveInt, readAttemptBearerToken } from './attempt.util.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const logger = new StructuredLogger({ service: 'attemptCoreGuard' });
 
 /**
  * Express middleware — fail-closed attempt session validation.
  */
-export async function attemptGuard(req, res, next) {
+export const attemptGuard = asyncHandler(async function attemptGuard(req, res, next) {
   try {
     const studentId = parsePositiveInt(req.user?.id);
     if (studentId == null) {
@@ -60,4 +61,4 @@ export async function attemptGuard(req, res, next) {
   } catch (error) {
     next(error);
   }
-}
+});
